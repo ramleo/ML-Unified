@@ -785,19 +785,36 @@ function setWizardFile(f) {
 
 // ── Analyze CSV ───────────────────────────────────────────────
 async function analyzeCSV() {
-  const btn = document.getElementById('analyzeBtn');
-  btn.innerHTML = '<span class="spinner"></span> Analyzing\u2026';
-  btn.disabled  = true;
+  document.getElementById('main').innerHTML = `
+    <div class="wizard" style="text-align:center;padding:3rem 1rem">
+      ${wizardStepsHTML(1, false)}
+      <div style="font-size:2.5rem;margin-bottom:1rem">&#x1F50D;</div>
+      <div style="font-size:1rem;font-weight:700;margin-bottom:0.5rem">Analysing your dataset&hellip;</div>
+      <div id="analyzeSubMsg" style="font-size:0.82rem;color:var(--text3);margin-bottom:1.5rem">Reading columns and detecting types</div>
+      <span class="spinner" style="width:22px;height:22px;border-width:3px"></span>
+    </div>`;
+  const wake = setTimeout(() => {
+    const el = document.getElementById('analyzeSubMsg');
+    if (el) el.textContent = 'Waking up server — this can take up to 60 s on the free tier…';
+  }, 5000);
   const form = new FormData();
   form.append('file', wizardFile);
   try {
     const res = await fetch(API + '/analyze', { method: 'POST', body: form });
+    clearTimeout(wake);
     if (!res.ok) { const t = await res.text(); throw new Error(t); }
     wizardAnalysis = await res.json();
     renderWizardStep2();
   } catch(e) {
-    btn.innerHTML = 'Next \u2192'; btn.disabled = false;
-    alert('Analysis failed: ' + e.message);
+    clearTimeout(wake);
+    document.getElementById('main').innerHTML = `
+      <div class="wizard" style="text-align:center;padding:3rem 1rem">
+        ${wizardStepsHTML(1, false)}
+        <div style="font-size:2rem;margin-bottom:1rem">&#x26A0;</div>
+        <div style="font-size:0.95rem;font-weight:700;margin-bottom:0.5rem;color:#f87171">Analysis failed</div>
+        <div style="font-size:0.82rem;color:var(--text3);margin-bottom:1.5rem;max-width:360px;margin-left:auto;margin-right:auto">${e.message}</div>
+        <button class="btn btn-clear" onclick="renderWizardStep1()">← Try again</button>
+      </div>`;
   }
 }
 
@@ -832,11 +849,11 @@ function renderWizardStep2() {
           <input type="radio" name="wTask" id="wReg" value="regression" ${a.suggested_task === 'regression' ? 'checked' : ''} onchange="updateAlgorithms('regression');toggleClusteringMode(false)">
           <label for="wReg">Regression</label>
           <input type="radio" name="wTask" id="wClust" value="clustering" onchange="updateAlgorithms('clustering');toggleClusteringMode(true)">
-          <label for="wClust">Clustering</label>
+          <label for="wClust">Unsupervised</label>
         </div>
       </div>
       <div class="wizard-section" id="wClustersSection" style="display:none">
-        <label class="wizard-label" for="wNClusters">Number of Clusters (k)</label>
+        <label class="wizard-label" for="wNClusters">Number of Clusters (k) <span id="wNClustNote" style="color:var(--text3);font-size:0.78rem">&mdash; K-Means &amp; DBSCAN only</span></label>
         <input type="number" class="field-input" id="wNClusters" value="3" min="2" max="15" step="1" style="width:100px">
       </div>
       <div class="wizard-section">
@@ -860,7 +877,7 @@ function renderWizardStep2() {
 
 function algorithmOptions(task) {
   if (task === 'classification') return '<option>Random Forest</option><option>Gradient Boosting</option>';
-  if (task === 'clustering')     return '<option>K-Means</option>';
+  if (task === 'clustering')     return '<option>K-Means</option><option>DBSCAN</option><option>t-SNE</option><option>PCA</option>';
   return '<option>Gradient Boosting</option><option>Random Forest</option>';
 }
 

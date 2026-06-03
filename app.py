@@ -8,8 +8,9 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import (RandomForestClassifier, GradientBoostingClassifier,
                                RandomForestRegressor, GradientBoostingRegressor)
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, DBSCAN
 from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, mean_absolute_error, silhouette_score
 from typing import Any, Dict
@@ -141,10 +142,17 @@ async def predict(model_id: str, request: Request):
             "class_names": schema.get("output", {}).get("class_names"),
         }
     elif schema["task"] == "clustering":
-        cluster = int(pipeline.predict(df)[0])
+        algo = schema.get("model", "K-Means")
+        if algo in ("t-SNE", "PCA"):
+            return {"prediction": -1, "cluster_label": "Visualization only", "n_clusters": "N/A"}
+        try:
+            cluster = int(pipeline.predict(df)[0])
+        except Exception:
+            cluster = -1
+        label = "Noise" if cluster == -1 else f"Cluster {cluster + 1}"
         return {
             "prediction":    cluster,
-            "cluster_label": f"Cluster {cluster + 1}",
+            "cluster_label": label,
             "n_clusters":    schema.get("output", {}).get("n_clusters", "?"),
         }
     else:
@@ -247,17 +255,42 @@ async def train_model(
     plot_data = None
 
     if task == "clustering":
-        km        = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-        pipeline  = Pipeline([("prep", preprocessor), ("model", km)])
-        pipeline.fit(X)
-        labels    = pipeline.predict(X).tolist()
-        X_prep    = pipeline.named_steps["prep"].transform(X)
-        sil       = silhouette_score(X_prep, labels) if n_clusters > 1 and len(set(labels)) > 1 else 0.0
-        metric       = f"{sil:.2f}"
-        metric_label = "Silhouette"
-        n_comp    = min(2, X_prep.shape[1])
-        pca       = PCA(n_components=n_comp)
-        coords    = pca.fit_transform(X_prep)
+        preprocessor.fit(X)
+        X_prep = preprocessor.transform(X)
+        n_comp = min(2, X_prep.shape[1])
+
+        if algorithm == "t-SNE":
+            reducer = TSNE(n_components=n_comp, random_state=42, perplexity=min(30, max(5, len(X)//10)))
+            coords  = reducer.fit_transform(X_prep)
+            labels  = [-1] * len(X)
+            metric, metric_label = "N/A", "Visualization"
+            pipeline = Pipeline([("prep", preprocessor)])
+        elif algorithm == "PCA":
+            reducer = PCA(n_components=n_comp)
+            coords  = reducer.fit_transform(X_prep)
+            labels  = [-1] * len(X)
+            ev      = reducer.explained_variance_ratio_
+            metric, metric_label = f"{sum(ev)*100:.1f}%", "Variance Explained"
+            pipeline = Pipeline([("prep", preprocessor)])
+        elif algorithm == "DBSCAN":
+            db      = DBSCAN(eps=0.5, min_samples=5)
+            labels  = db.fit_predict(X_prep).tolist()
+            n_found = len(set(l for l in labels if l >= 0))
+            sil     = silhouette_score(X_prep, labels) if n_found > 1 and len(set(labels)) > 1 else 0.0
+            metric, metric_label = f"{sil:.2f}", "Silhouette"
+            pca_viz = PCA(n_components=n_comp)
+            coords  = pca_viz.fit_transform(X_prep)
+            pipeline = Pipeline([("prep", preprocessor)])
+        else:  # K-Means
+            km       = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+            pipeline = Pipeline([("prep", preprocessor), ("model", km)])
+            pipeline.fit(X)
+            labels   = pipeline.predict(X).tolist()
+            sil      = silhouette_score(X_prep, labels) if n_clusters > 1 and len(set(labels)) > 1 else 0.0
+            metric, metric_label = f"{sil:.2f}", "Silhouette"
+            pca_viz  = PCA(n_components=n_comp)
+            coords   = pca_viz.fit_transform(X_prep)
+
         if n_comp == 1:
             plot_data = [{"x": round(float(coords[i, 0]), 4), "y": 0.0, "cluster": int(labels[i])} for i in range(len(coords))]
         else:
