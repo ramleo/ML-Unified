@@ -686,7 +686,7 @@ function renderResult(result) {
       <div class="result-reg-main">
         <div class="result-reg-label">${label}</div>
         <div class="result-reg-value" style="color:${m.accent}">${unit}${val}</div>
-        <div class="result-reg-unit">Annual Premium Estimate</div>
+        <div class="result-reg-unit">${output.sublabel || 'Predicted Value'}</div>
       </div>
     `;
   }
