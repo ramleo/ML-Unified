@@ -263,13 +263,31 @@ async def run_unsupervised(
         stats.update({"n_clusters": k, "silhouette": round(sil, 3), "cluster_sizes": sizes})
 
     elif algorithm == "DBSCAN":
-        eps_val = max(0.01, eps)
-        db      = DBSCAN(eps=eps_val, min_samples=min_samples)
-        cluster_ids = db.fit_predict(X_prep).tolist()
+        # Run on PCA-reduced space — full high-dimensional distances make eps=0.5 useless
+        n_comp_db = min(max(2, n_dims), X_prep.shape[1])
+        pca_db    = PCA(n_components=n_comp_db)
+        coords_db = pca_db.fit_transform(X_prep)
+        eps_val   = max(0.01, eps)
+        db        = DBSCAN(eps=eps_val, min_samples=min_samples)
+        cluster_ids = db.fit_predict(coords_db).tolist()
         n_found  = len(set(c for c in cluster_ids if c >= 0))
         n_noise  = cluster_ids.count(-1)
-        sil = silhouette_score(X_prep, cluster_ids) if n_found > 1 and len(set(cluster_ids)) > 1 else 0.0
+        sil = silhouette_score(coords_db, cluster_ids) if n_found > 1 and len(set(cluster_ids)) > 1 else 0.0
         stats.update({"n_clusters": n_found, "n_noise": n_noise, "silhouette": round(sil, 3)})
+        def pt_db(i):
+            p = {"x": round(float(coords_db[i, 0]), 4),
+                 "y": round(float(coords_db[i, 1] if n_comp_db > 1 else 0.0), 4),
+                 "cluster": int(cluster_ids[i]),
+                 "label": color_labels[i] if color_labels else ""}
+            if n_dims >= 3 and n_comp_db >= 3:
+                p["z"] = round(float(coords_db[i, 2]), 4)
+            return p
+        plot_data = [pt_db(i) for i in range(n_samples)]
+        if color_labels:
+            unique_labels = sorted(set(color_labels))
+            stats["color_labels"] = unique_labels
+        stats["color_col"] = color_col if color_col else ""
+        return {"plot_data": plot_data, "stats": stats}
 
     elif algorithm == "t-SNE":
         perp   = min(float(perplexity), max(5.0, (n_samples - 1) / 3))
