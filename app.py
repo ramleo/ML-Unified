@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.ensemble import (RandomForestClassifier, GradientBoostingClassifier,
+                               RandomForestRegressor, GradientBoostingRegressor)
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, mean_absolute_error
 from typing import Any, Dict
-import joblib, pandas as pd, json, os
+import joblib, pandas as pd, json, os, io, re
 
 app = FastAPI(title="ML Unified")
 app.add_middleware(
@@ -19,6 +27,14 @@ MODEL_DIR  = os.path.join(HERE, "models")
 FRONTEND   = os.path.join(HERE, "frontend", "index.html")
 
 MODELS: Dict[str, Any] = {}
+
+ACCENT_PALETTE = [
+    "#818cf8", "#38bdf8", "#34d399", "#fbbf24",
+    "#f87171", "#fb923c", "#a78bfa", "#4ade80",
+]
+
+def slugify(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 def _load():
     for fname in sorted(os.listdir(SCHEMA_DIR)):
@@ -122,6 +138,185 @@ async def predict(model_id: str, request: Request):
     else:
         pred = float(pipeline.predict(df)[0])
         return {"prediction": pred}
+
+@app.post("/analyze")
+async def analyze_csv(file: UploadFile = File(...)):
+    content = await file.read()
+    try:
+        df = pd.read_csv(io.BytesIO(content))
+    except Exception as e:
+        raise HTTPException(400, f"Could not parse CSV: {e}")
+    if len(df.columns) < 2:
+        raise HTTPException(400, "CSV must have at least 2 columns")
+
+    columns = [
+        {
+            "name":       col,
+            "dtype":      str(df[col].dtype),
+            "nunique":    int(df[col].nunique()),
+            "is_numeric": bool(pd.api.types.is_numeric_dtype(df[col])),
+        }
+        for col in df.columns
+    ]
+
+    suggested_target = df.columns[-1]
+    t = df[suggested_target]
+    suggested_task = (
+        "classification"
+        if (not pd.api.types.is_numeric_dtype(t) or t.nunique() <= 10)
+        else "regression"
+    )
+
+    return {
+        "columns":          columns,
+        "suggested_target": suggested_target,
+        "suggested_task":   suggested_task,
+        "rows":             len(df),
+        "accent_palette":   ACCENT_PALETTE,
+    }
+
+
+@app.post("/train")
+async def train_model(
+    file:       UploadFile = File(...),
+    model_name: str        = Form(...),
+    target_col: str        = Form(...),
+    task:       str        = Form(...),
+    algorithm:  str        = Form(...),
+    accent:     str        = Form(...),
+):
+    content = await file.read()
+    try:
+        df = pd.read_csv(io.BytesIO(content))
+    except Exception as e:
+        raise HTTPException(400, f"Could not parse CSV: {e}")
+
+    if target_col not in df.columns:
+        raise HTTPException(400, f"Target column '{target_col}' not found")
+    if task not in ("classification", "regression"):
+        raise HTTPException(400, "task must be 'classification' or 'regression'")
+
+    model_id = slugify(model_name)
+    if not model_id:
+        raise HTTPException(400, "Invalid model name — use letters, numbers, or spaces")
+
+    df = df.dropna(subset=[target_col])
+
+    X = df.drop(columns=[target_col]).copy()
+    y = df[target_col]
+
+    # Drop 100%-unique string columns (IDs / free-text names)
+    id_like = [c for c in X.columns if X[c].dtype == object and X[c].nunique() == len(X)]
+    if id_like:
+        X = X.drop(columns=id_like)
+
+    num_cols = X.select_dtypes(include="number").columns.tolist()
+    cat_cols = X.select_dtypes(exclude="number").columns.tolist()
+
+    transformers = []
+    if num_cols:
+        transformers.append(("num", Pipeline([("imp", SimpleImputer(strategy="median"))]), num_cols))
+    if cat_cols:
+        transformers.append(("cat", Pipeline([
+            ("imp", SimpleImputer(strategy="most_frequent")),
+            ("enc", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+        ]), cat_cols))
+
+    if not transformers:
+        raise HTTPException(400, "No usable feature columns found after cleaning")
+
+    preprocessor = ColumnTransformer(transformers, remainder="drop")
+
+    le = None
+    if task == "classification":
+        le    = LabelEncoder()
+        y_enc = le.fit_transform(y.astype(str))
+        estimator = (
+            RandomForestClassifier(n_estimators=100, random_state=42)
+            if algorithm == "Random Forest"
+            else GradientBoostingClassifier(n_estimators=100, random_state=42)
+        )
+    else:
+        y_num = pd.to_numeric(y, errors="coerce")
+        y_enc = y_num.fillna(float(y_num.median()))
+        estimator = (
+            GradientBoostingRegressor(n_estimators=100, random_state=42)
+            if algorithm == "Gradient Boosting"
+            else RandomForestRegressor(n_estimators=100, random_state=42)
+        )
+
+    pipeline = Pipeline([("prep", preprocessor), ("model", estimator)])
+    split    = 0.2 if len(X) >= 10 else 0.1
+    X_train, X_test, y_train, y_test = train_test_split(X, y_enc, test_size=split, random_state=42)
+    pipeline.fit(X_train, y_train)
+
+    if task == "classification":
+        score        = accuracy_score(y_test, pipeline.predict(X_test))
+        metric       = f"{score * 100:.1f}%"
+        metric_label = "Accuracy"
+    else:
+        mae          = mean_absolute_error(y_test, pipeline.predict(X_test))
+        metric       = f"±{mae:.0f}"
+        metric_label = "MAE"
+
+    # Build schema fields
+    feature_cols = X.columns.tolist()
+    fields, sample = [], {}
+    for col in feature_cols:
+        is_cat = not pd.api.types.is_numeric_dtype(X[col]) or X[col].nunique() <= 15
+        if is_cat:
+            opts = [{"value": str(v), "label": str(v)} for v in sorted(X[col].dropna().unique())]
+            fields.append({"name": col, "label": col, "type": "select", "options": opts})
+            mode = X[col].mode()
+            sample[col] = str(mode[0]) if not mode.empty else ""
+        else:
+            cmin = round(float(X[col].min()), 4)
+            cmax = round(float(X[col].max()), 4)
+            rng  = cmax - cmin
+            step = max(round(rng / 100, 4) if rng > 0 else 1.0, 0.0001)
+            fields.append({"name": col, "label": col, "type": "number",
+                           "min": cmin, "max": cmax, "step": step})
+            sample[col] = round(float(X[col].median()), 4)
+
+    schema = {
+        "id":          model_id,
+        "title":       model_name,
+        "description": f"Auto-trained {task} model using {algorithm}.",
+        "task":        task,
+        "accent":      accent,
+        "model":       algorithm,
+        "metric":      metric,
+        "metricLabel": metric_label,
+        "id_cols":     [],
+        "ensure_cols": [],
+        "fields":      fields,
+        "sample":      sample,
+        "output":      {"type": task},
+    }
+    if task == "classification" and le is not None:
+        schema["output"]["class_names"] = [str(c) for c in le.classes_]
+
+    with open(os.path.join(SCHEMA_DIR, f"{model_id}.json"), "w") as f:
+        json.dump(schema, f, indent=2)
+    joblib.dump(pipeline, os.path.join(MODEL_DIR, f"{model_id}_pipeline.pkl"))
+    if le is not None:
+        joblib.dump(le, os.path.join(MODEL_DIR, f"{model_id}_labels.pkl"))
+
+    MODELS[model_id] = {
+        "pipeline": pipeline,
+        "le":       le,
+        "classes":  le.classes_.tolist() if le is not None else None,
+        "schema":   schema,
+    }
+
+    return {
+        "id":          model_id,
+        "title":       model_name,
+        "metric":      metric,
+        "metricLabel": metric_label,
+        "accent":      accent,
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
