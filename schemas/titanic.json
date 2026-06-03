@@ -26,6 +26,7 @@
   },
   "output": {
     "type": "classification",
+    "target_col": "Survived",
     "class_names": ["Did Not Survive", "Survived"]
   }
 }

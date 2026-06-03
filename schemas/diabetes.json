@@ -25,6 +25,7 @@
   },
   "output": {
     "type": "classification",
+    "target_col": "Outcome",
     "class_names": ["No Diabetes", "Diabetes"]
   }
 }

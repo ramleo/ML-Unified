@@ -20,6 +20,7 @@
   },
   "output": {
     "type": "classification",
+    "target_col": "Species",
     "class_names": ["Setosa", "Versicolor", "Virginica"]
   }
 }

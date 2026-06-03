@@ -656,7 +656,7 @@ function renderResult(result) {
           ${icon}
         </div>
         <div>
-          <div class="result-class-label">Prediction</div>
+          <div class="result-class-label">${schema.output && schema.output.target_col ? schema.output.target_col : 'Prediction'}</div>
           <div class="result-class-value" style="color:${m.accent}">${displayPred}</div>
         </div>
       </div>
@@ -677,7 +677,7 @@ function renderResult(result) {
     // Regression
     const output = schema.output || {};
     const unit   = output.unit  || '';
-    const label  = output.sublabel || output.label || 'Predicted Value';
+    const label  = output.target_col || output.sublabel || output.label || 'Predicted Value';
     const val    = typeof result.prediction === 'number'
       ? result.prediction.toLocaleString('en-IN', { maximumFractionDigits: 0 })
       : result.prediction;

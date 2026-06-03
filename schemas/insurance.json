@@ -47,6 +47,7 @@
   },
   "output": {
     "type": "regression",
+    "target_col": "Premium Amount",
     "unit": "₹",
     "label": "Estimated Annual Premium",
     "sublabel": "Annual Premium Estimate"
