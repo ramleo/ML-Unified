@@ -57,7 +57,10 @@ _load()
 @app.get("/")
 def index():
     if os.path.exists(FRONTEND):
-        return FileResponse(FRONTEND)
+        return FileResponse(
+            FRONTEND,
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+        )
     return {"message": "ML Unified API — see /docs"}
 
 @app.get("/health")
