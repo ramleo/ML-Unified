@@ -8,8 +8,10 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import (RandomForestClassifier, GradientBoostingClassifier,
                                RandomForestRegressor, GradientBoostingRegressor)
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, mean_absolute_error
+from sklearn.metrics import accuracy_score, mean_absolute_error, silhouette_score
 from typing import Any, Dict
 import joblib, pandas as pd, json, os, io, re
 
@@ -138,6 +140,13 @@ async def predict(model_id: str, request: Request):
             "classes":     m["classes"],
             "class_names": schema.get("output", {}).get("class_names"),
         }
+    elif schema["task"] == "clustering":
+        cluster = int(pipeline.predict(df)[0])
+        return {
+            "prediction":    cluster,
+            "cluster_label": f"Cluster {cluster + 1}",
+            "n_clusters":    schema.get("output", {}).get("n_clusters", "?"),
+        }
     else:
         pred = float(pipeline.predict(df)[0])
         return {"prediction": pred}
@@ -183,10 +192,11 @@ async def analyze_csv(file: UploadFile = File(...)):
 async def train_model(
     file:       UploadFile = File(...),
     model_name: str        = Form(...),
-    target_col: str        = Form(...),
+    target_col: str        = Form(""),
     task:       str        = Form(...),
     algorithm:  str        = Form(...),
     accent:     str        = Form(...),
+    n_clusters: int        = Form(3),
 ):
     content = await file.read()
     try:
@@ -194,19 +204,22 @@ async def train_model(
     except Exception as e:
         raise HTTPException(400, f"Could not parse CSV: {e}")
 
-    if target_col not in df.columns:
+    if task not in ("classification", "regression", "clustering"):
+        raise HTTPException(400, "task must be 'classification', 'regression', or 'clustering'")
+    if task != "clustering" and target_col not in df.columns:
         raise HTTPException(400, f"Target column '{target_col}' not found")
-    if task not in ("classification", "regression"):
-        raise HTTPException(400, "task must be 'classification' or 'regression'")
 
     model_id = slugify(model_name)
     if not model_id:
         raise HTTPException(400, "Invalid model name — use letters, numbers, or spaces")
 
-    df = df.dropna(subset=[target_col])
-
-    X = df.drop(columns=[target_col]).copy()
-    y = df[target_col]
+    if task == "clustering":
+        X = df.copy()
+        y = None
+    else:
+        df = df.dropna(subset=[target_col])
+        X = df.drop(columns=[target_col]).copy()
+        y = df[target_col]
 
     # Drop 100%-unique string columns (IDs / free-text names)
     id_like = [c for c in X.columns if X[c].dtype == object and X[c].nunique() == len(X)]
@@ -231,7 +244,25 @@ async def train_model(
     preprocessor = ColumnTransformer(transformers, remainder="drop")
 
     le = None
-    if task == "classification":
+    plot_data = None
+
+    if task == "clustering":
+        km        = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+        pipeline  = Pipeline([("prep", preprocessor), ("model", km)])
+        pipeline.fit(X)
+        labels    = pipeline.predict(X).tolist()
+        X_prep    = pipeline.named_steps["prep"].transform(X)
+        sil       = silhouette_score(X_prep, labels) if n_clusters > 1 and len(set(labels)) > 1 else 0.0
+        metric       = f"{sil:.2f}"
+        metric_label = "Silhouette"
+        n_comp    = min(2, X_prep.shape[1])
+        pca       = PCA(n_components=n_comp)
+        coords    = pca.fit_transform(X_prep)
+        if n_comp == 1:
+            plot_data = [{"x": round(float(coords[i, 0]), 4), "y": 0.0, "cluster": int(labels[i])} for i in range(len(coords))]
+        else:
+            plot_data = [{"x": round(float(coords[i, 0]), 4), "y": round(float(coords[i, 1]), 4), "cluster": int(labels[i])} for i in range(len(coords))]
+    elif task == "classification":
         le    = LabelEncoder()
         y_enc = le.fit_transform(y.astype(str))
         estimator = (
@@ -239,6 +270,13 @@ async def train_model(
             if algorithm == "Random Forest"
             else GradientBoostingClassifier(n_estimators=100, random_state=42)
         )
+        pipeline = Pipeline([("prep", preprocessor), ("model", estimator)])
+        split    = 0.2 if len(X) >= 10 else 0.1
+        X_train, X_test, y_train, y_test = train_test_split(X, y_enc, test_size=split, random_state=42)
+        pipeline.fit(X_train, y_train)
+        score        = accuracy_score(y_test, pipeline.predict(X_test))
+        metric       = f"{score * 100:.1f}%"
+        metric_label = "Accuracy"
     else:
         y_num = pd.to_numeric(y, errors="coerce")
         y_enc = y_num.fillna(float(y_num.median()))
@@ -247,17 +285,10 @@ async def train_model(
             if algorithm == "Gradient Boosting"
             else RandomForestRegressor(n_estimators=100, random_state=42)
         )
-
-    pipeline = Pipeline([("prep", preprocessor), ("model", estimator)])
-    split    = 0.2 if len(X) >= 10 else 0.1
-    X_train, X_test, y_train, y_test = train_test_split(X, y_enc, test_size=split, random_state=42)
-    pipeline.fit(X_train, y_train)
-
-    if task == "classification":
-        score        = accuracy_score(y_test, pipeline.predict(X_test))
-        metric       = f"{score * 100:.1f}%"
-        metric_label = "Accuracy"
-    else:
+        pipeline = Pipeline([("prep", preprocessor), ("model", estimator)])
+        split    = 0.2 if len(X) >= 10 else 0.1
+        X_train, X_test, y_train, y_test = train_test_split(X, y_enc, test_size=split, random_state=42)
+        pipeline.fit(X_train, y_train)
         mae          = mean_absolute_error(y_test, pipeline.predict(X_test))
         metric       = f"±{mae:.0f}"
         metric_label = "MAE"
@@ -281,6 +312,14 @@ async def train_model(
                            "min": cmin, "max": cmax, "step": step})
             sample[col] = round(float(X[col].median()), 4)
 
+    output_meta: dict = {"type": task}
+    if task == "clustering":
+        output_meta["n_clusters"] = n_clusters
+    else:
+        output_meta["target_col"] = target_col
+    if task == "classification" and le is not None:
+        output_meta["class_names"] = [str(c) for c in le.classes_]
+
     schema = {
         "id":          model_id,
         "title":       model_name,
@@ -294,10 +333,8 @@ async def train_model(
         "ensure_cols": [],
         "fields":      fields,
         "sample":      sample,
-        "output":      {"type": task, "target_col": target_col},
+        "output":      output_meta,
     }
-    if task == "classification" and le is not None:
-        schema["output"]["class_names"] = [str(c) for c in le.classes_]
 
     with open(os.path.join(SCHEMA_DIR, f"{model_id}.json"), "w") as f:
         json.dump(schema, f, indent=2)
@@ -312,13 +349,17 @@ async def train_model(
         "schema":   schema,
     }
 
-    return {
+    resp = {
         "id":          model_id,
         "title":       model_name,
         "metric":      metric,
         "metricLabel": metric_label,
         "accent":      accent,
     }
+    if plot_data is not None:
+        resp["plot_data"]  = plot_data
+        resp["n_clusters"] = n_clusters
+    return resp
 
 
 if __name__ == "__main__":
