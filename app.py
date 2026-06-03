@@ -16,7 +16,7 @@ app.add_middleware(
 HERE       = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_DIR = os.path.join(HERE, "schemas")
 MODEL_DIR  = os.path.join(HERE, "models")
-FRONTEND   = os.path.join(HERE, "..", "frontend", "index.html")
+FRONTEND   = os.path.join(HERE, "frontend", "index.html")
 
 MODELS: Dict[str, Any] = {}
 
