@@ -5,3 +5,6 @@ pandas
 numpy
 joblib==1.5.3
 python-multipart
+xgboost
+lightgbm
+catboost

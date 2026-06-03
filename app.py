@@ -8,6 +8,9 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import (RandomForestClassifier, GradientBoostingClassifier,
                                RandomForestRegressor, GradientBoostingRegressor)
+from xgboost import XGBClassifier, XGBRegressor
+from lightgbm import LGBMClassifier, LGBMRegressor
+from catboost import CatBoostClassifier, CatBoostRegressor
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
@@ -439,11 +442,16 @@ async def train_model(
     elif task == "classification":
         le    = LabelEncoder()
         y_enc = le.fit_transform(y.astype(str))
-        estimator = (
-            RandomForestClassifier(n_estimators=100, random_state=42)
-            if algorithm == "Random Forest"
-            else GradientBoostingClassifier(n_estimators=100, random_state=42)
-        )
+        if algorithm == "XGBoost":
+            estimator = XGBClassifier(n_estimators=100, random_state=42, eval_metric="logloss", verbosity=0)
+        elif algorithm == "LightGBM":
+            estimator = LGBMClassifier(n_estimators=100, random_state=42, verbose=-1)
+        elif algorithm == "CatBoost":
+            estimator = CatBoostClassifier(iterations=100, random_seed=42, verbose=0)
+        elif algorithm == "Random Forest":
+            estimator = RandomForestClassifier(n_estimators=100, random_state=42)
+        else:
+            estimator = GradientBoostingClassifier(n_estimators=100, random_state=42)
         pipeline = Pipeline([("prep", preprocessor), ("model", estimator)])
         split    = 0.2 if len(X) >= 10 else 0.1
         X_train, X_test, y_train, y_test = train_test_split(X, y_enc, test_size=split, random_state=42)
@@ -454,11 +462,16 @@ async def train_model(
     else:
         y_num = pd.to_numeric(y, errors="coerce")
         y_enc = y_num.fillna(float(y_num.median()))
-        estimator = (
-            GradientBoostingRegressor(n_estimators=100, random_state=42)
-            if algorithm == "Gradient Boosting"
-            else RandomForestRegressor(n_estimators=100, random_state=42)
-        )
+        if algorithm == "XGBoost":
+            estimator = XGBRegressor(n_estimators=100, random_state=42, verbosity=0)
+        elif algorithm == "LightGBM":
+            estimator = LGBMRegressor(n_estimators=100, random_state=42, verbose=-1)
+        elif algorithm == "CatBoost":
+            estimator = CatBoostRegressor(iterations=100, random_seed=42, verbose=0)
+        elif algorithm == "Gradient Boosting":
+            estimator = GradientBoostingRegressor(n_estimators=100, random_state=42)
+        else:
+            estimator = RandomForestRegressor(n_estimators=100, random_state=42)
         pipeline = Pipeline([("prep", preprocessor), ("model", estimator)])
         split    = 0.2 if len(X) >= 10 else 0.1
         X_train, X_test, y_train, y_test = train_test_split(X, y_enc, test_size=split, random_state=42)

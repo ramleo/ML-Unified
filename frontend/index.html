@@ -911,9 +911,9 @@ function renderWizardStep2() {
 }
 
 function algorithmOptions(task) {
-  if (task === 'classification') return '<option>Random Forest</option><option>Gradient Boosting</option>';
+  if (task === 'classification') return '<option>Random Forest</option><option>Gradient Boosting</option><option>XGBoost</option><option>LightGBM</option><option>CatBoost</option>';
   if (task === 'clustering')     return '<option>K-Means</option><option>DBSCAN</option><option>t-SNE</option><option>PCA</option>';
-  return '<option>Gradient Boosting</option><option>Random Forest</option>';
+  return '<option>Gradient Boosting</option><option>Random Forest</option><option>XGBoost</option><option>LightGBM</option><option>CatBoost</option>';
 }
 
 function updateAlgorithms(task) {
