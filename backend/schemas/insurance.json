@@ -1,0 +1,53 @@
+{
+  "id": "insurance",
+  "title": "Insurance Premium Predictor",
+  "description": "Estimates annual insurance premium based on personal and policy details.",
+  "task": "regression",
+  "accent": "#fbbf24",
+  "model": "Gradient Boosting",
+  "metric": "±668",
+  "metricLabel": "MAE (₹)",
+  "id_cols": [],
+  "ensure_cols": ["Customer Feedback", "psd_year", "psd_month", "psd_day", "psd_day_of_week"],
+  "fields": [
+    { "name": "Age",                  "label": "Age",                     "type": "number", "min": 18,  "max": 85,     "step": 1    },
+    { "name": "Annual Income",        "label": "Annual Income (₹)",       "type": "number", "min": 0,   "max": 500000, "step": 1    },
+    { "name": "Number of Dependents", "label": "Number of Dependents",    "type": "number", "min": 0,   "max": 10,     "step": 1    },
+    { "name": "Health Score",         "label": "Health Score (0–100)",    "type": "number", "min": 0,   "max": 100,    "step": 0.1  },
+    { "name": "Previous Claims",      "label": "Previous Claims",         "type": "number", "min": 0,   "max": 10,     "step": 1    },
+    { "name": "Vehicle Age",          "label": "Vehicle Age (years)",     "type": "number", "min": 0,   "max": 25,     "step": 1    },
+    { "name": "Credit Score",         "label": "Credit Score (300–850)",  "type": "number", "min": 300, "max": 850,    "step": 1    },
+    { "name": "Insurance Duration",   "label": "Insurance Duration (yrs)","type": "number", "min": 1,   "max": 40,     "step": 1    },
+    { "name": "Gender",          "label": "Gender",          "type": "select",
+      "options": [{"value": "Female", "label": "Female"}, {"value": "Male", "label": "Male"}] },
+    { "name": "Marital Status",  "label": "Marital Status",  "type": "select",
+      "options": [{"value": "Divorced", "label": "Divorced"}, {"value": "Married", "label": "Married"}, {"value": "Single", "label": "Single"}] },
+    { "name": "Education Level", "label": "Education Level", "type": "select",
+      "options": [{"value": "High School", "label": "High School"}, {"value": "Bachelor's", "label": "Bachelor's"}, {"value": "Master's", "label": "Master's"}, {"value": "PhD", "label": "PhD"}] },
+    { "name": "Occupation",      "label": "Occupation",      "type": "select",
+      "options": [{"value": "Employed", "label": "Employed"}, {"value": "Self-Employed", "label": "Self-Employed"}, {"value": "Unemployed", "label": "Unemployed"}] },
+    { "name": "Location",        "label": "Location",        "type": "select",
+      "options": [{"value": "Rural", "label": "Rural"}, {"value": "Suburban", "label": "Suburban"}, {"value": "Urban", "label": "Urban"}] },
+    { "name": "Policy Type",     "label": "Policy Type",     "type": "select",
+      "options": [{"value": "Basic", "label": "Basic"}, {"value": "Comprehensive", "label": "Comprehensive"}, {"value": "Premium", "label": "Premium"}] },
+    { "name": "Smoking Status",      "label": "Smoking Status",      "type": "select",
+      "options": [{"value": "No", "label": "No"}, {"value": "Yes", "label": "Yes"}] },
+    { "name": "Exercise Frequency",  "label": "Exercise Frequency",  "type": "select",
+      "options": [{"value": "Daily", "label": "Daily"}, {"value": "Weekly", "label": "Weekly"}, {"value": "Monthly", "label": "Monthly"}, {"value": "Rarely", "label": "Rarely"}] },
+    { "name": "Property Type",       "label": "Property Type",       "type": "select",
+      "options": [{"value": "Apartment", "label": "Apartment"}, {"value": "Condo", "label": "Condo"}, {"value": "House", "label": "House"}] }
+  ],
+  "sample": {
+    "Age": 35, "Annual Income": 75000, "Number of Dependents": 2,
+    "Health Score": 72.5, "Previous Claims": 1, "Vehicle Age": 5,
+    "Credit Score": 680, "Insurance Duration": 8,
+    "Gender": "Male", "Marital Status": "Married", "Education Level": "Bachelor's",
+    "Occupation": "Employed", "Location": "Urban", "Policy Type": "Comprehensive",
+    "Smoking Status": "No", "Exercise Frequency": "Weekly", "Property Type": "House"
+  },
+  "output": {
+    "type": "regression",
+    "unit": "₹",
+    "label": "Estimated Annual Premium"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "id": "diabetes",
+  "title": "Diabetes Risk Predictor",
+  "description": "Predicts diabetes risk using clinical measurements from the Pima Indian Women dataset.",
+  "task": "classification",
+  "accent": "#34d399",
+  "model": "Random Forest",
+  "metric": "77.5%",
+  "metricLabel": "Accuracy",
+  "id_cols": [],
+  "ensure_cols": [],
+  "fields": [
+    { "name": "Pregnancies",              "label": "Pregnancies",                "type": "number", "min": 0,     "max": 17,   "step": 1     },
+    { "name": "Glucose",                  "label": "Glucose (mg/dL)",            "type": "number", "min": 44,    "max": 199,  "step": 1     },
+    { "name": "BloodPressure",            "label": "Blood Pressure (mm Hg)",     "type": "number", "min": 24,    "max": 122,  "step": 1     },
+    { "name": "SkinThickness",            "label": "Skin Thickness (mm)",        "type": "number", "min": 0,     "max": 99,   "step": 1     },
+    { "name": "Insulin",                  "label": "Insulin (mu U/ml)",          "type": "number", "min": 0,     "max": 846,  "step": 1     },
+    { "name": "BMI",                      "label": "BMI (kg/m²)",                "type": "number", "min": 18.2,  "max": 67.1, "step": 0.1   },
+    { "name": "DiabetesPedigreeFunction", "label": "Diabetes Pedigree Function", "type": "number", "min": 0.078, "max": 2.42, "step": 0.001 },
+    { "name": "Age",                      "label": "Age",                        "type": "number", "min": 21,    "max": 81,   "step": 1     }
+  ],
+  "sample": {
+    "Pregnancies": 6, "Glucose": 148, "BloodPressure": 72, "SkinThickness": 35,
+    "Insulin": 0, "BMI": 33.6, "DiabetesPedigreeFunction": 0.627, "Age": 50
+  },
+  "output": {
+    "type": "classification",
+    "class_names": ["No Diabetes", "Diabetes"]
+  }
+}

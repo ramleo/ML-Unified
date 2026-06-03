@@ -1,0 +1,31 @@
+{
+  "id": "titanic",
+  "title": "Titanic Survival Predictor",
+  "description": "Predicts whether a passenger would survive the Titanic disaster.",
+  "task": "classification",
+  "accent": "#38bdf8",
+  "model": "Gradient Boosting",
+  "metric": "82.5%",
+  "metricLabel": "Accuracy",
+  "id_cols": ["PassengerId"],
+  "ensure_cols": ["Name", "Ticket"],
+  "fields": [
+    { "name": "Pclass",   "label": "Passenger Class", "type": "select",
+      "options": [{"value": 1, "label": "1st Class"}, {"value": 2, "label": "2nd Class"}, {"value": 3, "label": "3rd Class"}] },
+    { "name": "Sex",      "label": "Sex", "type": "select",
+      "options": [{"value": "male", "label": "Male"}, {"value": "female", "label": "Female"}] },
+    { "name": "Age",      "label": "Age",                       "type": "number", "min": 0,  "max": 80,     "step": 1    },
+    { "name": "SibSp",    "label": "Siblings / Spouses Aboard", "type": "number", "min": 0,  "max": 8,      "step": 1    },
+    { "name": "Parch",    "label": "Parents / Children Aboard", "type": "number", "min": 0,  "max": 5,      "step": 1    },
+    { "name": "Fare",     "label": "Fare (£)",                  "type": "number", "min": 0,  "max": 512.33, "step": 0.01 },
+    { "name": "Embarked", "label": "Port of Embarkation", "type": "select",
+      "options": [{"value": "C", "label": "Cherbourg"}, {"value": "Q", "label": "Queenstown"}, {"value": "S", "label": "Southampton"}] }
+  ],
+  "sample": {
+    "Pclass": 1, "Sex": "female", "Age": 29, "SibSp": 0, "Parch": 0, "Fare": 211.34, "Embarked": "S"
+  },
+  "output": {
+    "type": "classification",
+    "class_names": ["Did Not Survive", "Survived"]
+  }
+}

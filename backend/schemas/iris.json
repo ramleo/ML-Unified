@@ -1,0 +1,25 @@
+{
+  "id": "iris",
+  "title": "Iris Species Classifier",
+  "description": "Classifies iris flowers into 3 species based on petal and sepal measurements.",
+  "task": "classification",
+  "accent": "#818cf8",
+  "model": "Random Forest",
+  "metric": "96.7%",
+  "metricLabel": "Accuracy",
+  "id_cols": ["Id"],
+  "ensure_cols": [],
+  "fields": [
+    { "name": "SepalLengthCm", "label": "Sepal Length (cm)", "type": "number", "min": 4.3, "max": 7.9, "step": 0.1 },
+    { "name": "SepalWidthCm",  "label": "Sepal Width (cm)",  "type": "number", "min": 2.0, "max": 4.4, "step": 0.1 },
+    { "name": "PetalLengthCm", "label": "Petal Length (cm)", "type": "number", "min": 1.0, "max": 6.9, "step": 0.1 },
+    { "name": "PetalWidthCm",  "label": "Petal Width (cm)",  "type": "number", "min": 0.1, "max": 2.5, "step": 0.1 }
+  ],
+  "sample": {
+    "SepalLengthCm": 5.1, "SepalWidthCm": 3.5, "PetalLengthCm": 1.4, "PetalWidthCm": 0.2
+  },
+  "output": {
+    "type": "classification",
+    "class_names": ["Setosa", "Versicolor", "Virginica"]
+  }
+}
