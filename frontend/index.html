@@ -677,7 +677,7 @@ function renderResult(result) {
     // Regression
     const output = schema.output || {};
     const unit   = output.unit  || '';
-    const label  = output.label || 'Predicted Value';
+    const label  = output.sublabel || output.label || 'Predicted Value';
     const val    = typeof result.prediction === 'number'
       ? result.prediction.toLocaleString('en-IN', { maximumFractionDigits: 0 })
       : result.prediction;
@@ -686,7 +686,6 @@ function renderResult(result) {
       <div class="result-reg-main">
         <div class="result-reg-label">${label}</div>
         <div class="result-reg-value" style="color:${m.accent}">${unit}${val}</div>
-        <div class="result-reg-unit">${output.sublabel || label || 'Predicted Value'}</div>
       </div>
     `;
   }
