@@ -196,6 +196,132 @@ async def analyze_csv(file: UploadFile = File(...)):
     }
 
 
+@app.post("/unsupervised")
+async def run_unsupervised(
+    file:        UploadFile = File(...),
+    algorithm:   str        = Form(...),
+    color_col:   str        = Form(""),
+    n_clusters:  int        = Form(3),
+    eps:         float      = Form(0.5),
+    min_samples: int        = Form(5),
+    perplexity:  float      = Form(30.0),
+):
+    content = await file.read()
+    try:
+        df = pd.read_csv(io.BytesIO(content))
+    except Exception as e:
+        raise HTTPException(400, f"Could not parse CSV: {e}")
+    if len(df.columns) < 2:
+        raise HTTPException(400, "CSV must have at least 2 columns")
+
+    # Optional color column — separate before preprocessing
+    color_labels = None
+    if color_col and color_col in df.columns:
+        color_labels = df[color_col].astype(str).tolist()
+        X = df.drop(columns=[color_col]).copy()
+    else:
+        X = df.copy()
+
+    # Drop 100%-unique string columns
+    id_like = [c for c in X.columns if X[c].dtype == object and X[c].nunique() == len(X)]
+    if id_like:
+        X = X.drop(columns=id_like)
+
+    num_cols = X.select_dtypes(include="number").columns.tolist()
+    cat_cols = X.select_dtypes(exclude="number").columns.tolist()
+    transformers = []
+    if num_cols:
+        transformers.append(("num", Pipeline([("imp", SimpleImputer(strategy="median"))]), num_cols))
+    if cat_cols:
+        transformers.append(("cat", Pipeline([
+            ("imp", SimpleImputer(strategy="most_frequent")),
+            ("enc", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+        ]), cat_cols))
+    if not transformers:
+        raise HTTPException(400, "No usable numeric or categorical columns found")
+
+    prep = ColumnTransformer(transformers, remainder="drop")
+    X_prep = prep.fit_transform(X)
+    n_samples = len(X_prep)
+
+    stats = {"algorithm": algorithm, "rows": n_samples}
+    cluster_ids = None
+
+    if algorithm == "K-Means":
+        k   = max(2, min(n_clusters, n_samples - 1))
+        km  = KMeans(n_clusters=k, random_state=42, n_init=10)
+        cluster_ids = km.fit_predict(X_prep).tolist()
+        sil = silhouette_score(X_prep, cluster_ids) if k > 1 and len(set(cluster_ids)) > 1 else 0.0
+        sizes = {str(i): cluster_ids.count(i) for i in range(k)}
+        stats.update({"n_clusters": k, "silhouette": round(sil, 3), "cluster_sizes": sizes})
+
+    elif algorithm == "DBSCAN":
+        eps_val = max(0.01, eps)
+        db      = DBSCAN(eps=eps_val, min_samples=min_samples)
+        cluster_ids = db.fit_predict(X_prep).tolist()
+        n_found  = len(set(c for c in cluster_ids if c >= 0))
+        n_noise  = cluster_ids.count(-1)
+        sil = silhouette_score(X_prep, cluster_ids) if n_found > 1 and len(set(cluster_ids)) > 1 else 0.0
+        stats.update({"n_clusters": n_found, "n_noise": n_noise, "silhouette": round(sil, 3)})
+
+    elif algorithm == "t-SNE":
+        perp = min(float(perplexity), max(5.0, (n_samples - 1) / 3))
+        tsne = TSNE(n_components=2, random_state=42, perplexity=perp,
+                    max_iter=1000, init="pca" if X_prep.shape[1] >= 2 else "random")
+        coords_2d = tsne.fit_transform(X_prep)
+        stats.update({"perplexity": round(perp, 1), "kl_divergence": round(float(tsne.kl_divergence_), 4)})
+        plot_data = [
+            {"x": round(float(coords_2d[i, 0]), 4), "y": round(float(coords_2d[i, 1]), 4),
+             "cluster": -1, "label": color_labels[i] if color_labels else ""}
+            for i in range(n_samples)
+        ]
+        if color_labels:
+            unique_labels = sorted(set(color_labels))
+            label_to_id   = {l: i for i, l in enumerate(unique_labels)}
+            for p in plot_data:
+                p["cluster"] = label_to_id[p["label"]]
+            stats["color_labels"] = unique_labels
+        return {"plot_data": plot_data, "stats": stats}
+
+    elif algorithm == "PCA":
+        n_comp = min(2, X_prep.shape[1])
+        pca    = PCA(n_components=n_comp)
+        coords_2d = pca.fit_transform(X_prep)
+        ev     = pca.explained_variance_ratio_.tolist()
+        stats.update({
+            "explained_variance": [round(v * 100, 2) for v in ev],
+            "total_variance":     round(sum(ev) * 100, 2),
+        })
+        plot_data = [
+            {"x": round(float(coords_2d[i, 0]), 4),
+             "y": round(float(coords_2d[i, 1] if n_comp > 1 else 0.0), 4),
+             "cluster": -1, "label": color_labels[i] if color_labels else ""}
+            for i in range(n_samples)
+        ]
+        if color_labels:
+            unique_labels = sorted(set(color_labels))
+            label_to_id   = {l: i for i, l in enumerate(unique_labels)}
+            for p in plot_data:
+                p["cluster"] = label_to_id[p["label"]]
+            stats["color_labels"] = unique_labels
+        return {"plot_data": plot_data, "stats": stats}
+    else:
+        raise HTTPException(400, f"Unknown algorithm: {algorithm}")
+
+    # For K-Means and DBSCAN: reduce to 2D with PCA for scatter plot
+    n_comp = min(2, X_prep.shape[1])
+    pca_viz = PCA(n_components=n_comp)
+    coords_2d = pca_viz.fit_transform(X_prep)
+    plot_data = [
+        {"x": round(float(coords_2d[i, 0]), 4),
+         "y": round(float(coords_2d[i, 1] if n_comp > 1 else 0.0), 4),
+         "cluster": int(cluster_ids[i]),
+         "label": color_labels[i] if color_labels else ""}
+        for i in range(n_samples)
+    ]
+    return {"plot_data": plot_data, "stats": stats}
+
+
 @app.post("/train")
 async def train_model(
     file:       UploadFile = File(...),

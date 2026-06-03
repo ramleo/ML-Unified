@@ -364,6 +364,23 @@ body {
 .train-result { text-align: center; padding: 2rem 1rem; }
 .train-result-metric { font-size: 2rem; font-weight: 800; margin-bottom: 0.25rem; }
 .train-result-label  { font-size: 0.8rem; color: var(--text3); margin-bottom: 1.5rem; }
+
+/* ── Unsupervised Panel ── */
+.u-panel { padding: 1.5rem; max-width: 860px; }
+.u-header { display:flex; gap:1rem; align-items:flex-start; margin-bottom:1.5rem; }
+.u-dot    { width:14px; height:14px; border-radius:50%; flex-shrink:0; margin-top:4px; }
+.u-title  { font-size:1.2rem; font-weight:800; }
+.u-subtitle { font-size:0.82rem; color:var(--text3); line-height:1.55; margin-top:0.2rem; max-width:560px; }
+.u-upload-section { margin-bottom:1.25rem; }
+.u-param-row  { display:flex; align-items:center; gap:1rem; margin-bottom:0.75rem; }
+.u-param-row .wizard-label { min-width:220px; margin-bottom:0; }
+.u-result      { display:flex; gap:1.5rem; margin-top:1.5rem; flex-wrap:wrap; }
+.u-result-plot { position:relative; flex:1; min-width:280px; }
+.u-result-stats { min-width:200px; flex:0 0 auto; }
+.u-axis-label  { font-size:0.7rem; color:var(--text3); text-align:center; }
+.u-axis-y      { writing-mode:vertical-rl; transform:rotate(180deg); position:absolute; left:-18px; top:50%; transform:translateX(-50%) rotate(-90deg); }
+.u-stat-row    { display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:0.35rem 0; font-size:0.83rem; color:var(--text2); }
+.u-stat-divider { border-top:1px solid var(--border1); margin:0.5rem 0; }
 </style>
 </head>
 <body>
@@ -442,7 +459,14 @@ async function init() {
 // ── Sidebar ───────────────────────────────────────────────────
 function renderSidebar() {
   const sb = document.getElementById('sidebar');
-  sb.innerHTML = '<div class="sidebar-label">Models</div>' +
+  const UNSUPERVISED = [
+    { id: 'kmeans',  label: 'K-Means',  sub: 'Clustering',            accent: '#818cf8' },
+    { id: 'dbscan',  label: 'DBSCAN',   sub: 'Density Clustering',    accent: '#38bdf8' },
+    { id: 'tsne',    label: 't-SNE',    sub: 'Visualization',         accent: '#f472b6' },
+    { id: 'pca',     label: 'PCA',      sub: 'Dimensionality Reduction', accent: '#34d399' },
+  ];
+  sb.innerHTML =
+    '<div class="sidebar-label">Supervised Models</div>' +
     allModels.map(m => `
       <button class="model-btn" id="btn-${m.id}" onclick="selectModel('${m.id}')">
         <div class="model-dot" style="background:${m.accent}"></div>
@@ -451,6 +475,16 @@ function renderSidebar() {
           <div class="model-btn-sub">${m.model}</div>
         </div>
         <div class="model-badge">${m.metric}</div>
+      </button>
+    `).join('') +
+    '<div class="sidebar-label" style="margin-top:1rem">Unsupervised Analysis</div>' +
+    UNSUPERVISED.map(a => `
+      <button class="model-btn" id="ubtn-${a.id}" onclick="selectUnsupervised('${a.id}','${a.label}','${a.accent}')">
+        <div class="model-dot" style="background:${a.accent}"></div>
+        <div class="model-btn-info">
+          <div class="model-btn-title">${a.label}</div>
+          <div class="model-btn-sub">${a.sub}</div>
+        </div>
       </button>
     `).join('') +
     `<div style="flex:1"></div>
@@ -1021,6 +1055,263 @@ function cancelWizard() {
   else document.getElementById('main').innerHTML =
     '<div class="empty-state"><div class="empty-icon">\u{1F916}</div><div>Select a model from the sidebar to get started</div></div>';
 }
+
+// ── Unsupervised Analysis ──────────────────────────────────────
+let activeUnsupervised = null;
+
+const UNSUPERVISED_META = {
+  kmeans: {
+    label: 'K-Means', accent: '#818cf8',
+    desc:  'Partitions data into k clusters. Every point is assigned to the nearest centroid. Works best when clusters are roughly spherical and similar in size.',
+    params: `
+      <div class="u-param-row">
+        <label class="wizard-label">Number of Clusters (k)</label>
+        <input type="number" class="field-input" id="uNK" value="3" min="2" max="15" step="1" style="width:80px">
+      </div>`
+  },
+  dbscan: {
+    label: 'DBSCAN', accent: '#38bdf8',
+    desc:  'Finds clusters of arbitrary shape based on point density. Automatically detects the number of clusters and labels sparse points as outliers (−1). Sensitive to eps and min_samples.',
+    params: `
+      <div class="u-param-row">
+        <label class="wizard-label">eps <span style="color:var(--text3);font-size:0.78rem">— neighbourhood radius</span></label>
+        <input type="number" class="field-input" id="uEps" value="0.5" min="0.01" max="5" step="0.05" style="width:90px">
+      </div>
+      <div class="u-param-row">
+        <label class="wizard-label">min_samples <span style="color:var(--text3);font-size:0.78rem">— core point threshold</span></label>
+        <input type="number" class="field-input" id="uMinSamples" value="5" min="2" max="50" step="1" style="width:80px">
+      </div>`
+  },
+  tsne: {
+    label: 't-SNE', accent: '#f472b6',
+    desc:  'Non-linear dimensionality reduction for visualization. Preserves local structure — similar points in high dimensions stay close in 2D. Not suitable for prediction; use only to explore data shape.',
+    params: `
+      <div class="u-param-row">
+        <label class="wizard-label">Perplexity <span style="color:var(--text3);font-size:0.78rem">— effective neighbours (5–50)</span></label>
+        <input type="number" class="field-input" id="uPerplexity" value="30" min="5" max="50" step="1" style="width:80px">
+      </div>`
+  },
+  pca: {
+    label: 'PCA', accent: '#34d399',
+    desc:  'Linear dimensionality reduction. Finds directions of maximum variance and projects data onto 2 principal components. Shows how much variance each component explains.',
+    params: ''
+  },
+};
+
+function selectUnsupervised(id, label, accent) {
+  document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('ubtn-' + id);
+  if (btn) btn.classList.add('active');
+  activeUnsupervised = id;
+  renderUnsupervisedPanel(id);
+}
+
+function renderUnsupervisedPanel(id) {
+  const meta   = UNSUPERVISED_META[id];
+  const accent = meta.accent;
+  document.getElementById('main').innerHTML = `
+    <div class="u-panel">
+      <div class="u-header">
+        <div class="u-dot" style="background:${accent}"></div>
+        <div>
+          <div class="u-title">${meta.label}</div>
+          <div class="u-subtitle">${meta.desc}</div>
+        </div>
+      </div>
+      <div class="u-upload-section">
+        <div class="sidebar-label" style="margin-bottom:0.5rem">Upload Dataset</div>
+        <div class="upload-zone" id="uUploadZone">
+          <input type="file" id="uCsvInput" accept=".csv" onchange="handleUFile(event)">
+          <div class="upload-zone-icon">&#x1F4C2;</div>
+          <div class="upload-zone-text">Click to browse or drag &amp; drop</div>
+          <div class="upload-zone-sub">CSV files only</div>
+        </div>
+        <div id="uFileInfo" style="display:none;padding:0.6rem 0.9rem;background:var(--bg-input);border:1px solid var(--border2);border-radius:8px;font-size:0.82rem;color:var(--text2);margin-top:0.75rem"></div>
+      </div>
+      <div id="uColorRow" class="u-param-row" style="display:none">
+        <label class="wizard-label">Color By <span style="color:var(--text3);font-size:0.78rem">— optional column</span></label>
+        <select class="field-select" id="uColorCol" style="width:200px"><option value="">None</option></select>
+      </div>
+      ${meta.params}
+      <div id="uErr" style="margin-top:0.5rem"></div>
+      <div style="margin-top:1.25rem">
+        <button class="btn btn-primary" id="uRunBtn" onclick="runUnsupervisedAnalysis('${id}')" disabled style="opacity:0.4">
+          Run ${meta.label}
+        </button>
+      </div>
+      <div id="uResult"></div>
+    </div>`;
+
+  const zone = document.getElementById('uUploadZone');
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag');
+    const f = e.dataTransfer.files[0];
+    if (f && f.name.toLowerCase().endsWith('.csv')) setUFile(f);
+  });
+}
+
+let uFile = null, uColumns = [];
+
+function handleUFile(e) { const f = e.target.files[0]; if (f) setUFile(f); }
+
+async function setUFile(f) {
+  uFile = f;
+  document.getElementById('uFileInfo').style.display = 'block';
+  document.getElementById('uFileInfo').textContent = '📄 ' + f.name + '  (' + (f.size/1024).toFixed(1) + ' KB)';
+  const btn = document.getElementById('uRunBtn');
+  btn.disabled = false; btn.style.opacity = '1';
+
+  // Quick parse to populate Color By dropdown
+  try {
+    const text = await f.text();
+    const firstLine = text.split('\n')[0];
+    uColumns = firstLine.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+    const sel = document.getElementById('uColorCol');
+    if (sel) {
+      sel.innerHTML = '<option value="">None</option>' + uColumns.map(c => '<option value="' + c + '">' + c + '</option>').join('');
+      document.getElementById('uColorRow').style.display = '';
+    }
+  } catch(e) {}
+}
+
+async function runUnsupervisedAnalysis(id) {
+  const btn = document.getElementById('uRunBtn');
+  btn.disabled = true; btn.style.opacity = '0.5'; btn.textContent = 'Running…';
+  document.getElementById('uErr').innerHTML = '';
+  document.getElementById('uResult').innerHTML = `
+    <div style="text-align:center;padding:2rem 1rem;color:var(--text3)">
+      <span class="spinner" style="width:20px;height:20px;border-width:3px;display:inline-block"></span>
+      <div style="margin-top:0.75rem;font-size:0.82rem">Analysing dataset — this may take up to 60 s on the free tier…</div>
+    </div>`;
+
+  const form = new FormData();
+  form.append('file',      uFile);
+  form.append('algorithm', UNSUPERVISED_META[id].label);
+  form.append('color_col', document.getElementById('uColorCol') ? document.getElementById('uColorCol').value : '');
+  if (id === 'kmeans')  form.append('n_clusters',  document.getElementById('uNK')?.value || 3);
+  if (id === 'dbscan') { form.append('eps', document.getElementById('uEps')?.value || 0.5); form.append('min_samples', document.getElementById('uMinSamples')?.value || 5); }
+  if (id === 'tsne')    form.append('perplexity',   document.getElementById('uPerplexity')?.value || 30);
+
+  try {
+    const res = await fetch(API + '/unsupervised', { method: 'POST', body: form });
+    if (!res.ok) { const t = await res.text(); throw new Error(t); }
+    const data = await res.json();
+    renderUnsupervisedResult(id, data);
+  } catch(e) {
+    document.getElementById('uResult').innerHTML = '';
+    document.getElementById('uErr').innerHTML = '<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">' + e.message + '</div>';
+  } finally {
+    const meta = UNSUPERVISED_META[id];
+    btn.disabled = false; btn.style.opacity = '1'; btn.textContent = 'Run ' + meta.label;
+  }
+}
+
+function renderUnsupervisedResult(id, data) {
+  const meta   = UNSUPERVISED_META[id];
+  const stats  = data.stats || {};
+  const accent = meta.accent;
+
+  let statsHtml = '';
+  if (id === 'kmeans') {
+    const sizes = stats.cluster_sizes || {};
+    statsHtml = `
+      <div class="u-stat-row"><span>Clusters found</span><strong style="color:${accent}">${stats.n_clusters}</strong></div>
+      <div class="u-stat-row"><span>Silhouette score</span><strong style="color:${accent}">${stats.silhouette}</strong></div>
+      <div class="u-stat-divider"></div>
+      ${Object.entries(sizes).map(([k,v]) => `<div class="u-stat-row"><span>Cluster ${parseInt(k)+1}</span><strong>${v} points</strong></div>`).join('')}`;
+  } else if (id === 'dbscan') {
+    statsHtml = `
+      <div class="u-stat-row"><span>Clusters found</span><strong style="color:${accent}">${stats.n_clusters}</strong></div>
+      <div class="u-stat-row"><span>Outliers (noise)</span><strong style="color:#f87171">${stats.n_noise}</strong></div>
+      <div class="u-stat-row"><span>Silhouette score</span><strong style="color:${accent}">${stats.silhouette}</strong></div>`;
+  } else if (id === 'tsne') {
+    statsHtml = `
+      <div class="u-stat-row"><span>Perplexity used</span><strong style="color:${accent}">${stats.perplexity}</strong></div>
+      <div class="u-stat-row"><span>KL divergence</span><strong>${stats.kl_divergence}</strong></div>
+      <div class="u-stat-row"><span style="color:var(--text3);font-size:0.78rem">Lower KL = better fit</span></div>`;
+  } else if (id === 'pca') {
+    const ev = stats.explained_variance || [];
+    statsHtml = `
+      <div class="u-stat-row"><span>PC1 variance</span><strong style="color:${accent}">${ev[0] || 0}%</strong></div>
+      <div class="u-stat-row"><span>PC2 variance</span><strong style="color:${accent}">${ev[1] || 0}%</strong></div>
+      <div class="u-stat-row"><span>Total explained</span><strong style="color:${accent}">${stats.total_variance || 0}%</strong></div>`;
+  }
+
+  const xLabel = id === 'pca' ? `PC1 (${(stats.explained_variance||[0])[0]}%)` : (id === 'tsne' ? 't-SNE 1' : 'Component 1');
+  const yLabel = id === 'pca' ? `PC2 (${(stats.explained_variance||[0,0])[1]}%)` : (id === 'tsne' ? 't-SNE 2' : 'Component 2');
+
+  document.getElementById('uResult').innerHTML = `
+    <div class="u-result">
+      <div class="u-result-plot">
+        <div class="u-axis-label u-axis-y" id="uAxisY">${yLabel}</div>
+        <canvas id="uScatterCanvas" width="480" height="340" style="max-width:100%;border-radius:12px;background:var(--bg-input)"></canvas>
+        <div class="u-axis-label u-axis-x">${xLabel}</div>
+      </div>
+      <div class="u-result-stats">
+        <div class="sidebar-label" style="margin-bottom:0.75rem">${meta.label} Results</div>
+        ${statsHtml}
+        ${stats.color_labels ? '<div class="u-stat-divider"></div><div class="u-stat-row"><span>Colored by</span><strong>' + document.getElementById('uColorCol').value + '</strong></div>' : ''}
+      </div>
+    </div>`;
+
+  drawScatterPlot('uScatterCanvas', data.plot_data, accent, stats.color_labels, id === 'dbscan');
+}
+
+function drawScatterPlot(canvasId, plotData, accent, colorLabels, showNoise) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || !plotData || !plotData.length) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height, PAD = 40;
+
+  const COLORS = ['#818cf8','#38bdf8','#34d399','#fbbf24','#f87171','#fb923c','#a78bfa','#4ade80','#f472b6','#2dd4bf','#facc15','#fb7185'];
+  const NOISE_COLOR = '#6b7280';
+
+  const xs = plotData.map(p => p.x), ys = plotData.map(p => p.y);
+  const xMin = Math.min(...xs), xMax = Math.max(...xs);
+  const yMin = Math.min(...ys), yMax = Math.max(...ys);
+  const xR = xMax - xMin || 1, yR = yMax - yMin || 1;
+  const toX = x => PAD + ((x - xMin) / xR) * (W - PAD*2);
+  const toY = y => H - PAD - ((y - yMin) / yR) * (H - PAD*2);
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(128,128,128,0.1)'; ctx.lineWidth = 1;
+  for (let i = 1; i < 5; i++) {
+    const gx = PAD + (i/5)*(W-PAD*2), gy = PAD + (i/5)*(H-PAD*2);
+    ctx.beginPath(); ctx.moveTo(gx, PAD); ctx.lineTo(gx, H-PAD); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(PAD, gy); ctx.lineTo(W-PAD, gy); ctx.stroke();
+  }
+
+  // Points
+  plotData.forEach(p => {
+    const isNoise = showNoise && p.cluster === -1;
+    const color   = isNoise ? NOISE_COLOR : (p.cluster >= 0 ? COLORS[p.cluster % COLORS.length] : accent);
+    ctx.beginPath();
+    ctx.arc(toX(p.x), toY(p.y), isNoise ? 2.5 : 3.5, 0, Math.PI*2);
+    ctx.fillStyle = color + (isNoise ? '88' : 'cc');
+    ctx.fill();
+  });
+
+  // Legend (if colorLabels or cluster IDs)
+  const ids = [...new Set(plotData.map(p => p.cluster))].sort((a,b) => a-b);
+  if (ids.length > 1 && ids.length <= 12) {
+    let lx = PAD + 8, ly = PAD + 8;
+    ids.forEach(id => {
+      const isNoise = showNoise && id === -1;
+      const color   = isNoise ? NOISE_COLOR : COLORS[id % COLORS.length];
+      const lbl     = colorLabels ? colorLabels[id] : (isNoise ? 'Noise' : 'Cluster ' + (id+1));
+      ctx.beginPath(); ctx.arc(lx+5, ly+5, 4, 0, Math.PI*2);
+      ctx.fillStyle = color + 'cc'; ctx.fill();
+      ctx.fillStyle = 'rgba(200,200,200,0.85)'; ctx.font = '11px sans-serif';
+      ctx.fillText(lbl, lx+14, ly+9);
+      ly += 18;
+    });
+  }
+}
+
 
 init();
 </script>
