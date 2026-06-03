@@ -382,6 +382,7 @@ body {
 .u-stat-row    { display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:0.35rem 0; font-size:0.83rem; color:var(--text2); }
 .u-stat-divider { border-top:1px solid var(--border1); margin:0.5rem 0; }
 </style>
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" defer></script>
 </head>
 <body>
 
@@ -1067,6 +1068,13 @@ const UNSUPERVISED_META = {
       <div class="u-param-row">
         <label class="wizard-label">Number of Clusters (k)</label>
         <input type="number" class="field-input" id="uNK" value="3" min="2" max="15" step="1" style="width:80px">
+      </div>
+      <div class="u-param-row">
+        <label class="wizard-label">Plot Dimensions</label>
+        <div class="task-toggle">
+          <input type="radio" name="uKmDim" id="uKm2d" value="2" checked><label for="uKm2d">2D</label>
+          <input type="radio" name="uKmDim" id="uKm3d" value="3"><label for="uKm3d">3D</label>
+        </div>
       </div>`
   },
   dbscan: {
@@ -1080,6 +1088,13 @@ const UNSUPERVISED_META = {
       <div class="u-param-row">
         <label class="wizard-label">min_samples <span style="color:var(--text3);font-size:0.78rem">— core point threshold</span></label>
         <input type="number" class="field-input" id="uMinSamples" value="5" min="2" max="50" step="1" style="width:80px">
+      </div>
+      <div class="u-param-row">
+        <label class="wizard-label">Plot Dimensions</label>
+        <div class="task-toggle">
+          <input type="radio" name="uDbDim" id="uDb2d" value="2" checked><label for="uDb2d">2D</label>
+          <input type="radio" name="uDbDim" id="uDb3d" value="3"><label for="uDb3d">3D</label>
+        </div>
       </div>`
   },
   tsne: {
@@ -1089,12 +1104,26 @@ const UNSUPERVISED_META = {
       <div class="u-param-row">
         <label class="wizard-label">Perplexity <span style="color:var(--text3);font-size:0.78rem">— effective neighbours (5–50)</span></label>
         <input type="number" class="field-input" id="uPerplexity" value="30" min="5" max="50" step="1" style="width:80px">
+      </div>
+      <div class="u-param-row">
+        <label class="wizard-label">Dimensions</label>
+        <div class="task-toggle">
+          <input type="radio" name="uTsneDim" id="uTsne2d" value="2" checked><label for="uTsne2d">2D</label>
+          <input type="radio" name="uTsneDim" id="uTsne3d" value="3"><label for="uTsne3d">3D</label>
+        </div>
       </div>`
   },
   pca: {
     label: 'PCA', accent: '#34d399',
-    desc:  'Linear dimensionality reduction. Finds directions of maximum variance and projects data onto 2 principal components. Shows how much variance each component explains.',
-    params: ''
+    desc:  'Linear dimensionality reduction. Finds directions of maximum variance. Shows how much variance each principal component explains.',
+    params: `
+      <div class="u-param-row">
+        <label class="wizard-label">Dimensions</label>
+        <div class="task-toggle">
+          <input type="radio" name="uPcaDim" id="uPca2d" value="2" checked><label for="uPca2d">2D</label>
+          <input type="radio" name="uPcaDim" id="uPca3d" value="3"><label for="uPca3d">3D</label>
+        </div>
+      </div>`
   },
 };
 
@@ -1186,10 +1215,19 @@ async function runUnsupervisedAnalysis(id) {
       <div style="margin-top:0.75rem;font-size:0.82rem">Analysing dataset — this may take up to 60 s on the free tier…</div>
     </div>`;
 
+  const nDims = parseInt(
+    (document.querySelector('input[name="uKmDim"]:checked') ||
+     document.querySelector('input[name="uDbDim"]:checked') ||
+     document.querySelector('input[name="uTsneDim"]:checked') ||
+     document.querySelector('input[name="uPcaDim"]:checked') ||
+     {value:'2'}).value
+  ) || 2;
+
   const form = new FormData();
   form.append('file',      uFile);
   form.append('algorithm', UNSUPERVISED_META[id].label);
   form.append('color_col', document.getElementById('uColorCol') ? document.getElementById('uColorCol').value : '');
+  form.append('n_dims',    nDims);
   if (id === 'kmeans')  form.append('n_clusters',  document.getElementById('uNK')?.value || 3);
   if (id === 'dbscan') { form.append('eps', document.getElementById('uEps')?.value || 0.5); form.append('min_samples', document.getElementById('uMinSamples')?.value || 5); }
   if (id === 'tsne')    form.append('perplexity',   document.getElementById('uPerplexity')?.value || 30);
@@ -1242,21 +1280,35 @@ function renderUnsupervisedResult(id, data) {
   const xLabel = id === 'pca' ? `PC1 (${(stats.explained_variance||[0])[0]}%)` : (id === 'tsne' ? 't-SNE 1' : 'Component 1');
   const yLabel = id === 'pca' ? `PC2 (${(stats.explained_variance||[0,0])[1]}%)` : (id === 'tsne' ? 't-SNE 2' : 'Component 2');
 
+  const is3d     = data.plot_data && data.plot_data[0] && data.plot_data[0].z !== undefined;
+  const dbHint   = (id === 'dbscan' && stats.n_clusters === 0)
+    ? '<div style="padding:0.6rem 0.9rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:8px;color:#fbbf24;font-size:0.8rem;margin-bottom:0.75rem">0 clusters found — try increasing <strong>eps</strong> or decreasing <strong>min_samples</strong></div>'
+    : '';
+
   document.getElementById('uResult').innerHTML = `
     <div class="u-result">
       <div class="u-result-plot">
-        <div class="u-axis-label u-axis-y" id="uAxisY">${yLabel}</div>
-        <canvas id="uScatterCanvas" width="480" height="340" style="max-width:100%;border-radius:12px;background:var(--bg-input)"></canvas>
-        <div class="u-axis-label u-axis-x">${xLabel}</div>
+        ${is3d
+          ? '<div id="uPlot3d" style="width:100%;height:400px;border-radius:12px;overflow:hidden"></div>'
+          : `<div class="u-axis-label u-axis-y">${yLabel}</div>
+             <canvas id="uScatterCanvas" width="480" height="340" style="max-width:100%;border-radius:12px;background:var(--bg-input)"></canvas>
+             <div class="u-axis-label u-axis-x">${xLabel}</div>`
+        }
       </div>
       <div class="u-result-stats">
         <div class="sidebar-label" style="margin-bottom:0.75rem">${meta.label} Results</div>
+        ${dbHint}
         ${statsHtml}
-        ${stats.color_labels ? '<div class="u-stat-divider"></div><div class="u-stat-row"><span>Colored by</span><strong>' + document.getElementById('uColorCol').value + '</strong></div>' : ''}
+        ${stats.color_col ? '<div class="u-stat-divider"></div><div class="u-stat-row"><span>Colored by</span><strong>' + stats.color_col + '</strong></div>' : ''}
       </div>
     </div>`;
 
-  drawScatterPlot('uScatterCanvas', data.plot_data, accent, stats.color_labels, id === 'dbscan');
+  if (is3d) {
+    draw3dPlot('uPlot3d', data.plot_data, accent, stats.color_labels, id === 'dbscan', xLabel, yLabel,
+      id === 'pca' ? ('PC3 (' + ((stats.explained_variance||[0,0,0])[2]||0) + '%)') : (id === 'tsne' ? 't-SNE 3' : 'Component 3'));
+  } else {
+    drawScatterPlot('uScatterCanvas', data.plot_data, accent, stats.color_labels, id === 'dbscan');
+  }
 }
 
 function drawScatterPlot(canvasId, plotData, accent, colorLabels, showNoise) {
@@ -1267,6 +1319,11 @@ function drawScatterPlot(canvasId, plotData, accent, colorLabels, showNoise) {
 
   const COLORS = ['#818cf8','#38bdf8','#34d399','#fbbf24','#f87171','#fb923c','#a78bfa','#4ade80','#f472b6','#2dd4bf','#facc15','#fb7185'];
   const NOISE_COLOR = '#6b7280';
+
+  // Build label→index map when Color By is active
+  const labelMap = {};
+  if (colorLabels) colorLabels.forEach((l, i) => { labelMap[l] = i; });
+  const hasLabels = colorLabels && colorLabels.length > 0;
 
   const xs = plotData.map(p => p.x), ys = plotData.map(p => p.y);
   const xMin = Math.min(...xs), xMax = Math.max(...xs);
@@ -1285,31 +1342,80 @@ function drawScatterPlot(canvasId, plotData, accent, colorLabels, showNoise) {
     ctx.beginPath(); ctx.moveTo(PAD, gy); ctx.lineTo(W-PAD, gy); ctx.stroke();
   }
 
-  // Points
+  // Points — color by label if Color By is set, else by cluster
   plotData.forEach(p => {
-    const isNoise = showNoise && p.cluster === -1;
-    const color   = isNoise ? NOISE_COLOR : (p.cluster >= 0 ? COLORS[p.cluster % COLORS.length] : accent);
+    const isNoise   = showNoise && p.cluster === -1 && !hasLabels;
+    const labelIdx  = hasLabels && p.label ? labelMap[p.label] : -1;
+    const color     = isNoise   ? NOISE_COLOR :
+                      labelIdx >= 0 ? COLORS[labelIdx % COLORS.length] :
+                      p.cluster >= 0 ? COLORS[p.cluster % COLORS.length] : accent;
     ctx.beginPath();
     ctx.arc(toX(p.x), toY(p.y), isNoise ? 2.5 : 3.5, 0, Math.PI*2);
     ctx.fillStyle = color + (isNoise ? '88' : 'cc');
     ctx.fill();
   });
 
-  // Legend (if colorLabels or cluster IDs)
-  const ids = [...new Set(plotData.map(p => p.cluster))].sort((a,b) => a-b);
-  if (ids.length > 1 && ids.length <= 12) {
+  // Legend
+  const legendItems = hasLabels
+    ? colorLabels.map((l, i) => ({ color: COLORS[i % COLORS.length], label: l }))
+    : [...new Set(plotData.map(p => p.cluster))].sort((a,b)=>a-b).slice(0,12).map(id => ({
+        color: (showNoise && id === -1) ? NOISE_COLOR : COLORS[id % COLORS.length],
+        label: (showNoise && id === -1) ? 'Noise' : 'Cluster ' + (id+1)
+      }));
+
+  if (legendItems.length > 1 && legendItems.length <= 15) {
     let lx = PAD + 8, ly = PAD + 8;
-    ids.forEach(id => {
-      const isNoise = showNoise && id === -1;
-      const color   = isNoise ? NOISE_COLOR : COLORS[id % COLORS.length];
-      const lbl     = colorLabels ? colorLabels[id] : (isNoise ? 'Noise' : 'Cluster ' + (id+1));
+    legendItems.forEach(item => {
       ctx.beginPath(); ctx.arc(lx+5, ly+5, 4, 0, Math.PI*2);
-      ctx.fillStyle = color + 'cc'; ctx.fill();
+      ctx.fillStyle = item.color + 'cc'; ctx.fill();
       ctx.fillStyle = 'rgba(200,200,200,0.85)'; ctx.font = '11px sans-serif';
-      ctx.fillText(lbl, lx+14, ly+9);
+      ctx.fillText(item.label, lx+14, ly+9);
       ly += 18;
     });
   }
+}
+
+function draw3dPlot(divId, plotData, accent, colorLabels, showNoise, xLabel, yLabel, zLabel) {
+  if (typeof Plotly === 'undefined') {
+    document.getElementById(divId).innerHTML = '<div style="padding:2rem;color:var(--text3);font-size:0.85rem">Plotly.js loading — please wait a moment and re-run.</div>';
+    return;
+  }
+  const COLORS = ['#818cf8','#38bdf8','#34d399','#fbbf24','#f87171','#fb923c','#a78bfa','#4ade80','#f472b6','#2dd4bf','#facc15','#fb7185'];
+  const NOISE = '#6b7280';
+
+  const labelMap = {};
+  if (colorLabels) colorLabels.forEach((l, i) => { labelMap[l] = i; });
+  const hasLabels = colorLabels && colorLabels.length > 0;
+
+  const pointColor = plotData.map(p => {
+    if (showNoise && p.cluster === -1 && !hasLabels) return NOISE;
+    const li = hasLabels && p.label ? labelMap[p.label] : -1;
+    return li >= 0 ? COLORS[li % COLORS.length] : (p.cluster >= 0 ? COLORS[p.cluster % COLORS.length] : accent);
+  });
+
+  const trace = {
+    type: 'scatter3d', mode: 'markers',
+    x: plotData.map(p => p.x),
+    y: plotData.map(p => p.y),
+    z: plotData.map(p => p.z || 0),
+    marker: { size: 3.5, color: pointColor, opacity: 0.8 },
+    hovertemplate: hasLabels ? '%{text}<extra></extra>' : 'Cluster %{marker.color}<extra></extra>',
+    text: hasLabels ? plotData.map(p => p.label) : undefined,
+  };
+
+  const layout = {
+    paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+    scene: {
+      xaxis: { title: xLabel, gridcolor: 'rgba(128,128,128,0.2)', color: '#9ca3af' },
+      yaxis: { title: yLabel, gridcolor: 'rgba(128,128,128,0.2)', color: '#9ca3af' },
+      zaxis: { title: zLabel, gridcolor: 'rgba(128,128,128,0.2)', color: '#9ca3af' },
+      bgcolor: 'rgba(30,30,46,0.6)',
+    },
+    margin: { l:0, r:0, t:0, b:0 },
+    font: { color: '#9ca3af', size: 11 },
+  };
+
+  Plotly.newPlot(divId, [trace], layout, { responsive: true, displayModeBar: false });
 }
 
 

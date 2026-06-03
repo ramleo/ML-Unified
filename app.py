@@ -205,6 +205,7 @@ async def run_unsupervised(
     eps:         float      = Form(0.5),
     min_samples: int        = Form(5),
     perplexity:  float      = Form(30.0),
+    n_dims:      int        = Form(2),
 ):
     content = await file.read()
     try:
@@ -265,16 +266,20 @@ async def run_unsupervised(
         stats.update({"n_clusters": n_found, "n_noise": n_noise, "silhouette": round(sil, 3)})
 
     elif algorithm == "t-SNE":
-        perp = min(float(perplexity), max(5.0, (n_samples - 1) / 3))
-        tsne = TSNE(n_components=2, random_state=42, perplexity=perp,
-                    max_iter=1000, init="pca" if X_prep.shape[1] >= 2 else "random")
-        coords_2d = tsne.fit_transform(X_prep)
-        stats.update({"perplexity": round(perp, 1), "kl_divergence": round(float(tsne.kl_divergence_), 4)})
-        plot_data = [
-            {"x": round(float(coords_2d[i, 0]), 4), "y": round(float(coords_2d[i, 1]), 4),
-             "cluster": -1, "label": color_labels[i] if color_labels else ""}
-            for i in range(n_samples)
-        ]
+        perp   = min(float(perplexity), max(5.0, (n_samples - 1) / 3))
+        t_comp = min(max(2, n_dims), 3)
+        tsne   = TSNE(n_components=t_comp, random_state=42, perplexity=perp,
+                      max_iter=1000, init="pca" if X_prep.shape[1] >= 2 else "random")
+        coords = tsne.fit_transform(X_prep)
+        stats.update({"perplexity": round(perp, 1), "kl_divergence": round(float(tsne.kl_divergence_), 4),
+                       "color_col": color_col if color_col else ""})
+        def pt_tsne(i):
+            p = {"x": round(float(coords[i, 0]), 4), "y": round(float(coords[i, 1]), 4),
+                 "cluster": -1, "label": color_labels[i] if color_labels else ""}
+            if n_dims >= 3 and t_comp >= 3:
+                p["z"] = round(float(coords[i, 2]), 4)
+            return p
+        plot_data = [pt_tsne(i) for i in range(n_samples)]
         if color_labels:
             unique_labels = sorted(set(color_labels))
             label_to_id   = {l: i for i, l in enumerate(unique_labels)}
@@ -284,20 +289,23 @@ async def run_unsupervised(
         return {"plot_data": plot_data, "stats": stats}
 
     elif algorithm == "PCA":
-        n_comp = min(2, X_prep.shape[1])
+        n_comp = min(max(2, n_dims), X_prep.shape[1])
         pca    = PCA(n_components=n_comp)
-        coords_2d = pca.fit_transform(X_prep)
+        coords = pca.fit_transform(X_prep)
         ev     = pca.explained_variance_ratio_.tolist()
         stats.update({
             "explained_variance": [round(v * 100, 2) for v in ev],
             "total_variance":     round(sum(ev) * 100, 2),
+            "color_col":          color_col if color_col else "",
         })
-        plot_data = [
-            {"x": round(float(coords_2d[i, 0]), 4),
-             "y": round(float(coords_2d[i, 1] if n_comp > 1 else 0.0), 4),
-             "cluster": -1, "label": color_labels[i] if color_labels else ""}
-            for i in range(n_samples)
-        ]
+        def pt_pca(i):
+            p = {"x": round(float(coords[i, 0]), 4),
+                 "y": round(float(coords[i, 1] if n_comp > 1 else 0.0), 4),
+                 "cluster": -1, "label": color_labels[i] if color_labels else ""}
+            if n_dims >= 3 and n_comp >= 3:
+                p["z"] = round(float(coords[i, 2]), 4)
+            return p
+        plot_data = [pt_pca(i) for i in range(n_samples)]
         if color_labels:
             unique_labels = sorted(set(color_labels))
             label_to_id   = {l: i for i, l in enumerate(unique_labels)}
@@ -308,17 +316,24 @@ async def run_unsupervised(
     else:
         raise HTTPException(400, f"Unknown algorithm: {algorithm}")
 
-    # For K-Means and DBSCAN: reduce to 2D with PCA for scatter plot
-    n_comp = min(2, X_prep.shape[1])
+    # For K-Means and DBSCAN: reduce to 2D/3D with PCA for scatter plot
+    n_comp  = min(max(2, n_dims), X_prep.shape[1])
     pca_viz = PCA(n_components=n_comp)
-    coords_2d = pca_viz.fit_transform(X_prep)
-    plot_data = [
-        {"x": round(float(coords_2d[i, 0]), 4),
-         "y": round(float(coords_2d[i, 1] if n_comp > 1 else 0.0), 4),
-         "cluster": int(cluster_ids[i]),
-         "label": color_labels[i] if color_labels else ""}
-        for i in range(n_samples)
-    ]
+    coords  = pca_viz.fit_transform(X_prep)
+    def pt_cl(i):
+        p = {"x": round(float(coords[i, 0]), 4),
+             "y": round(float(coords[i, 1] if n_comp > 1 else 0.0), 4),
+             "cluster": int(cluster_ids[i]),
+             "label": color_labels[i] if color_labels else ""}
+        if n_dims >= 3 and n_comp >= 3:
+            p["z"] = round(float(coords[i, 2]), 4)
+        return p
+    plot_data = [pt_cl(i) for i in range(n_samples)]
+    if color_labels:
+        unique_labels = sorted(set(color_labels))
+        label_to_id   = {l: i for i, l in enumerate(unique_labels)}
+        stats["color_labels"] = unique_labels
+    stats["color_col"] = color_col if color_col else ""
     return {"plot_data": plot_data, "stats": stats}
 
 
