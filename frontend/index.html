@@ -1118,10 +1118,10 @@ const UNSUPERVISED_META = {
     desc:  'Linear dimensionality reduction. Finds directions of maximum variance. Shows how much variance each principal component explains.',
     params: `
       <div class="u-param-row">
-        <label class="wizard-label">Dimensions</label>
+        <label class="wizard-label">n_components <span style="color:var(--text3);font-size:0.78rem">— components to extract</span></label>
         <div class="task-toggle">
-          <input type="radio" name="uPcaDim" id="uPca2d" value="2" checked><label for="uPca2d">2D</label>
-          <input type="radio" name="uPcaDim" id="uPca3d" value="3"><label for="uPca3d">3D</label>
+          <input type="radio" name="uPcaDim" id="uPca2d" value="2" checked><label for="uPca2d">2</label>
+          <input type="radio" name="uPcaDim" id="uPca3d" value="3"><label for="uPca3d">3</label>
         </div>
       </div>`
   },

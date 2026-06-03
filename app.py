@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder, LabelEncoder
+from sklearn.preprocessing import OneHotEncoder, LabelEncoder, StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import (RandomForestClassifier, GradientBoostingClassifier,
@@ -235,7 +235,10 @@ async def run_unsupervised(
     cat_cols = X.select_dtypes(exclude="number").columns.tolist()
     transformers = []
     if num_cols:
-        transformers.append(("num", Pipeline([("imp", SimpleImputer(strategy="median"))]), num_cols))
+        transformers.append(("num", Pipeline([
+            ("imp", SimpleImputer(strategy="median")),
+            ("scaler", StandardScaler()),
+        ]), num_cols))
     if cat_cols:
         transformers.append(("cat", Pipeline([
             ("imp", SimpleImputer(strategy="most_frequent")),
