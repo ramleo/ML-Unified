@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Any, Dict
@@ -76,7 +76,8 @@ def get_schema(model_id: str):
     return s
 
 @app.post("/predict/{model_id}")
-def predict(model_id: str, data: Dict[str, Any] = Body(...)):
+async def predict(model_id: str, request: Request):
+    data = await request.json()
     if model_id not in MODELS:
         raise HTTPException(404, "Model not found")
 
