@@ -291,7 +291,7 @@ async def train_model(
         "ensure_cols": [],
         "fields":      fields,
         "sample":      sample,
-        "output":      {"type": task},
+        "output":      {"type": task, "sublabel": target_col},
     }
     if task == "classification" and le is not None:
         schema["output"]["class_names"] = [str(c) for c in le.classes_]
