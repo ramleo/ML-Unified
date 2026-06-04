@@ -1,7 +1,8 @@
 import io
+import os
 import pytest
 from fastapi.testclient import TestClient
-from app import app
+from app import app, MODELS, SCHEMA_DIR, MODEL_DIR
 
 client = TestClient(app)
 
@@ -179,3 +180,85 @@ def test_unsupervised_dbscan():
                     data={"algorithm": "DBSCAN", "eps": "0.5", "min_samples": "2", "n_dims": "2"})
     assert r.status_code == 200
     assert "plot_data" in r.json()
+
+# ── Train ─────────────────────────────────────────────────────────────────────
+
+def _cleanup_model(model_id: str):
+    MODELS.pop(model_id, None)
+    for path in [
+        os.path.join(SCHEMA_DIR, f"{model_id}.json"),
+        os.path.join(MODEL_DIR,  f"{model_id}_pipeline.pkl"),
+        os.path.join(MODEL_DIR,  f"{model_id}_labels.pkl"),
+    ]:
+        if os.path.exists(path):
+            os.remove(path)
+
+def test_train_classification():
+    rows = "\n".join(f"{i},{i * 2},{i % 2}" for i in range(20))
+    csv  = ("feature1,feature2,target\n" + rows + "\n").encode()
+
+    r = client.post("/train",
+        files={"file": ("train.csv", io.BytesIO(csv), "text/csv")},
+        data={"model_name": "CI Test Classifier", "target_col": "target",
+              "task": "classification", "algorithm": "Random Forest",
+              "accent": "#818cf8"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["id"] == "ci-test-classifier"
+    assert "%" in data["metric"]
+    assert data["metricLabel"] == "Accuracy"
+
+    # verify registered in /models
+    ids = [m["id"] for m in client.get("/models").json()]
+    assert "ci-test-classifier" in ids
+
+    # verify it can predict
+    pred = client.post("/predict/ci-test-classifier", json={"feature1": 5.0, "feature2": 10.0})
+    assert pred.status_code == 200
+    assert "prediction" in pred.json()
+
+    _cleanup_model("ci-test-classifier")
+
+def test_train_regression():
+    rows = "\n".join(f"{i},{i * 1.5},{100.0 + i * 23.7}" for i in range(20))
+    csv  = ("feat_a,feat_b,price\n" + rows + "\n").encode()
+
+    r = client.post("/train",
+        files={"file": ("train.csv", io.BytesIO(csv), "text/csv")},
+        data={"model_name": "CI Test Regressor", "target_col": "price",
+              "task": "regression", "algorithm": "Random Forest",
+              "accent": "#34d399"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["id"] == "ci-test-regressor"
+    assert data["metricLabel"] == "MAE"
+    assert "±" in data["metric"]
+
+    # verify registered in /models
+    ids = [m["id"] for m in client.get("/models").json()]
+    assert "ci-test-regressor" in ids
+
+    # verify it can predict
+    pred = client.post("/predict/ci-test-regressor", json={"feat_a": 5.0, "feat_b": 7.5})
+    assert pred.status_code == 200
+    assert isinstance(pred.json()["prediction"], float)
+
+    _cleanup_model("ci-test-regressor")
+
+def test_train_invalid_task():
+    csv = b"a,b,c\n1,2,3\n4,5,6\n"
+    r = client.post("/train",
+        files={"file": ("train.csv", io.BytesIO(csv), "text/csv")},
+        data={"model_name": "Bad Task Model", "target_col": "c",
+              "task": "invalid_task", "algorithm": "Random Forest",
+              "accent": "#818cf8"})
+    assert r.status_code == 400
+
+def test_train_missing_target_col():
+    csv = b"a,b,c\n1,2,3\n4,5,6\n"
+    r = client.post("/train",
+        files={"file": ("train.csv", io.BytesIO(csv), "text/csv")},
+        data={"model_name": "Bad Target Model", "target_col": "nonexistent",
+              "task": "classification", "algorithm": "Random Forest",
+              "accent": "#818cf8"})
+    assert r.status_code == 400
