@@ -270,6 +270,17 @@ def test_list_image_models():
         assert "description" in m
         assert "input_size"  in m
 
+def test_imagenet_classes_endpoint():
+    # Labels file download is skipped in CI — just verify the endpoint exists
+    # and returns 400/500 gracefully or 200 with correct shape
+    r = client.get("/imagenet-classes")
+    assert r.status_code in (200, 500)
+    if r.status_code == 200:
+        data = r.json()
+        assert "classes" in data
+        assert "total"   in data
+        assert data["total"] == len(data["classes"])
+
 def test_classify_image_bad_model():
     jpg = b"\xff\xd8\xff\xe0" + b"\x00" * 100   # minimal JPEG header bytes
     r = client.post("/classify-image",

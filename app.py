@@ -640,6 +640,15 @@ def _ensure_model_file(model_id: str) -> str:
     return path
 
 
+@app.get("/imagenet-classes")
+def list_imagenet_classes():
+    try:
+        _ensure_labels()
+    except Exception as e:
+        raise HTTPException(500, f"Failed to load ImageNet labels: {e}")
+    return {"classes": _IMAGENET_LABELS, "total": len(_IMAGENET_LABELS)}
+
+
 @app.get("/image-models")
 def list_image_models():
     return [
@@ -708,10 +717,14 @@ async def classify_image(
     scores = np.exp(scores - scores.max())
     scores = scores / scores.sum()
 
-    top_idx = scores.argsort()[::-1][:top_k]
+    top_idx        = scores.argsort()[::-1][:top_k]
+    top_confidence = float(scores[top_idx[0]])
+
     return {
-        "model":       model_name,
-        "model_label": cfg["label"],
+        "model":          model_name,
+        "model_label":    cfg["label"],
+        "low_confidence": top_confidence < 0.05,
+        "top_confidence": round(top_confidence, 4),
         "predictions": [
             {
                 "rank":       i + 1,

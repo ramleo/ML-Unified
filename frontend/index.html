@@ -1169,6 +1169,28 @@ function renderImageClassifierPanel() {
       </div>
 
       <div id="vResult"></div>
+
+      <!-- Category browser -->
+      <div style="margin-top:2rem;border-top:1px solid var(--border);padding-top:1.25rem">
+        <button id="vCategoryBtn" onclick="toggleCategoryBrowser()"
+                style="background:none;border:none;color:var(--text3);font-size:0.8rem;
+                       cursor:pointer;padding:0;font-weight:600">
+          Browse 1,000 categories ▸
+        </button>
+        <div id="vCategoryPanel" style="display:none;margin-top:0.75rem">
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.6rem">
+            <input type="text" class="field-input" placeholder="Search categories…"
+                   oninput="renderCategoryList(this.value)"
+                   style="flex:1;font-size:0.82rem;padding:0.4rem 0.65rem">
+            <span id="vCategoryCount" style="font-size:0.72rem;color:var(--text3);white-space:nowrap">1,000 categories</span>
+          </div>
+          <div id="vCategoryGrid"
+               style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+                      gap:0.3rem;max-height:260px;overflow-y:auto;padding:0.5rem;
+                      background:var(--bg-input);border:1px solid var(--border2);border-radius:10px">
+          </div>
+        </div>
+      </div>
     </div>`;
 
   const zone = document.getElementById('vUploadZone');
@@ -1246,9 +1268,18 @@ async function runImageClassify() {
 }
 
 function renderVisionResult(data) {
-  const preds  = data.predictions || [];
-  const accent = '#e879f9';
+  const preds   = data.predictions || [];
+  const accent  = '#e879f9';
   const maxConf = preds.length ? preds[0].confidence : 1;
+  const lowConf = data.low_confidence;
+
+  const lowConfBanner = lowConf ? `
+    <div style="padding:0.65rem 0.9rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);
+                border-radius:8px;color:#fbbf24;font-size:0.82rem;margin-bottom:1rem;line-height:1.5">
+      ⚠️ <strong>No confident match found</strong> — top score is only ${(data.top_confidence*100).toFixed(1)}%.
+      This image likely doesn't belong to any of the 1,000 ImageNet categories,
+      or is too ambiguous for the model to classify reliably.
+    </div>` : '';
 
   const barsHTML = preds.map(p => `
     <div class="proba-row" style="margin-bottom:0.55rem">
@@ -1257,27 +1288,79 @@ function renderVisionResult(data) {
         ${p.label}
       </div>
       <div class="proba-bar-wrap">
-        <div class="proba-bar-fill" style="width:${(p.confidence/maxConf*100).toFixed(1)}%;background:${accent}"></div>
+        <div class="proba-bar-fill" style="width:${(p.confidence/maxConf*100).toFixed(1)}%;background:${lowConf ? '#fbbf24' : accent}"></div>
       </div>
-      <div class="proba-pct" style="color:${accent}">${(p.confidence*100).toFixed(1)}%</div>
+      <div class="proba-pct" style="color:${lowConf ? '#fbbf24' : accent}">${(p.confidence*100).toFixed(1)}%</div>
     </div>`).join('');
 
   document.getElementById('vResult').innerHTML = `
     <div class="result-state" style="display:block;margin-top:0.5rem">
-      <div class="result-accent-bar" style="background:${accent}"></div>
+      <div class="result-accent-bar" style="background:${lowConf ? '#fbbf24' : accent}"></div>
       <div class="result-body">
+        ${lowConfBanner}
         <div class="vision-result-layout">
           <div class="vision-result-thumb">
             <img src="${visionImageURL}" class="vision-preview-img" alt="classified image">
             <div style="font-size:0.68rem;color:var(--text3);margin-top:0.4rem">${data.model_label}</div>
           </div>
           <div class="vision-result-preds">
-            <div class="proba-section-label" style="margin-bottom:0.75rem">Top Predictions</div>
+            <div class="proba-section-label" style="margin-bottom:0.75rem">
+              ${lowConf ? 'Best guesses (unreliable)' : 'Top Predictions'}
+            </div>
             ${barsHTML}
           </div>
         </div>
       </div>
     </div>`;
+}
+
+// ── ImageNet category browser ─────────────────────────────────────────────
+let _imagenetClasses = null;
+
+async function toggleCategoryBrowser() {
+  const panel = document.getElementById('vCategoryPanel');
+  if (!panel) return;
+
+  if (panel.style.display !== 'none') {
+    panel.style.display = 'none';
+    document.getElementById('vCategoryBtn').textContent = 'Browse 1,000 categories ▸';
+    return;
+  }
+
+  document.getElementById('vCategoryBtn').textContent = 'Loading…';
+  if (!_imagenetClasses) {
+    try {
+      const r = await fetch(`${API}/imagenet-classes`);
+      const d = await r.json();
+      _imagenetClasses = d.classes || [];
+    } catch(e) {
+      document.getElementById('vCategoryBtn').textContent = 'Browse 1,000 categories ▸';
+      return;
+    }
+  }
+
+  panel.style.display = 'block';
+  document.getElementById('vCategoryBtn').textContent = 'Browse 1,000 categories ▾';
+  renderCategoryList('');
+}
+
+function renderCategoryList(query) {
+  const grid = document.getElementById('vCategoryGrid');
+  if (!grid || !_imagenetClasses) return;
+  const q = query.toLowerCase();
+  const filtered = q
+    ? _imagenetClasses.filter(c => c.toLowerCase().includes(q))
+    : _imagenetClasses;
+  grid.innerHTML = filtered.length
+    ? filtered.map((c, i) => `
+        <div style="font-size:0.75rem;padding:0.2rem 0.4rem;border-radius:4px;
+                    background:var(--border);color:var(--text2);white-space:nowrap;
+                    overflow:hidden;text-overflow:ellipsis" title="${c}">
+          ${c}
+        </div>`).join('')
+    : '<div style="color:var(--text3);font-size:0.8rem;grid-column:1/-1">No matches</div>';
+  document.getElementById('vCategoryCount').textContent =
+    q ? `${filtered.length} of 1,000 matching` : '1,000 categories';
 }
 
 // ── Unsupervised Analysis ──────────────────────────────────────
