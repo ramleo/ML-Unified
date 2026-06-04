@@ -17,7 +17,12 @@ from sklearn.manifold import TSNE
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, mean_absolute_error, silhouette_score
 from typing import Any, Dict
-import joblib, pandas as pd, json, os, io, re
+import io
+import joblib
+import json
+import os
+import re
+import pandas as pd
 
 app = FastAPI(title="ML Unified")
 app.add_middleware(
@@ -306,7 +311,7 @@ async def run_unsupervised(
         plot_data = [pt_tsne(i) for i in range(n_samples)]
         if color_labels:
             unique_labels = sorted(set(color_labels))
-            label_to_id   = {l: i for i, l in enumerate(unique_labels)}
+            label_to_id   = {lbl: i for i, lbl in enumerate(unique_labels)}
             for p in plot_data:
                 p["cluster"] = label_to_id[p["label"]]
             stats["color_labels"] = unique_labels
@@ -332,7 +337,7 @@ async def run_unsupervised(
         plot_data = [pt_pca(i) for i in range(n_samples)]
         if color_labels:
             unique_labels = sorted(set(color_labels))
-            label_to_id   = {l: i for i, l in enumerate(unique_labels)}
+            label_to_id   = {lbl: i for i, lbl in enumerate(unique_labels)}
             for p in plot_data:
                 p["cluster"] = label_to_id[p["label"]]
             stats["color_labels"] = unique_labels
@@ -355,7 +360,7 @@ async def run_unsupervised(
     plot_data = [pt_cl(i) for i in range(n_samples)]
     if color_labels:
         unique_labels = sorted(set(color_labels))
-        label_to_id   = {l: i for i, l in enumerate(unique_labels)}
+        label_to_id   = {lbl: i for i, lbl in enumerate(unique_labels)}
         stats["color_labels"] = unique_labels
     stats["color_col"] = color_col if color_col else ""
     return {"plot_data": plot_data, "stats": stats}
@@ -440,7 +445,7 @@ async def train_model(
         elif algorithm == "DBSCAN":
             db      = DBSCAN(eps=0.5, min_samples=5)
             labels  = db.fit_predict(X_prep).tolist()
-            n_found = len(set(l for l in labels if l >= 0))
+            n_found = len(set(lbl for lbl in labels if lbl >= 0))
             sil     = silhouette_score(X_prep, labels) if n_found > 1 and len(set(labels)) > 1 else 0.0
             metric, metric_label = f"{sil:.2f}", "Silhouette"
             pca_viz = PCA(n_components=n_comp)
