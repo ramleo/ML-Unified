@@ -976,12 +976,17 @@ async def detect_objects(
         b = boxes[i]
         if norm:
             # (y1, x1, y2, x2) normalised
-            y1 = b[0] * orig_h;  x1 = b[1] * orig_w
-            y2 = b[2] * orig_h;  x2 = b[3] * orig_w
+            y1 = b[0] * orig_h
+            x1 = b[1] * orig_w
+            y2 = b[2] * orig_h
+            x2 = b[3] * orig_w
         else:
-            sx = orig_w / size;  sy = orig_h / size
-            y1 = b[0] * sy;      x1 = b[1] * sx
-            y2 = b[2] * sy;      x2 = b[3] * sx
+            sx = orig_w / size
+            sy = orig_h / size
+            y1 = b[0] * sy
+            x1 = b[1] * sx
+            y2 = b[2] * sy
+            x2 = b[3] * sx
 
         x1, y1 = max(0.0, float(x1)), max(0.0, float(y1))
         x2, y2 = min(float(orig_w), float(x2)), min(float(orig_h), float(y2))
