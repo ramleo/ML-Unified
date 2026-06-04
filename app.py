@@ -863,15 +863,15 @@ _COCO_CLASSES: list = [
 ]  # index 0 = background; 1–80 = COCO classes
 
 _DETECTION_MODEL_CONFIGS: Dict[str, Dict] = {
-    "ssd": {
-        "label":       "SSD",
-        "description": "Single Shot MultiBox Detector — ResNet-34 backbone, COCO 80 classes",
+    "tiny_yolov3": {
+        "label":       "TinyYOLOv3",
+        "description": "Tiny YOLOv3 — lightweight 35 MB model, COCO 80 classes (MIT license)",
         "url": (
             "https://media.githubusercontent.com/media/onnx/models/main/"
-            "validated/vision/object_detection_segmentation/ssd/model/ssd-12.onnx"
+            "validated/vision/object_detection_segmentation/tiny-yolov3/model/tiny-yolov3-11.onnx"
         ),
-        "input_size": 1200,
-        "size_mb":    100,
+        "input_size": 416,
+        "size_mb":    35,
     },
 }
 
@@ -925,7 +925,7 @@ def list_detect_models():
 @app.post("/detect-objects")
 async def detect_objects(
     file:       UploadFile = File(...),
-    model_name: str        = Form("ssd"),
+    model_name: str        = Form("tiny_yolov3"),
     confidence: float      = Form(0.3),
     max_dets:   int        = Form(20),
 ):
@@ -962,63 +962,51 @@ async def detect_objects(
 
     orig_w, orig_h = img.width, img.height
 
-    # Preprocess — same ImageNet normalisation used across all ONNX Model Zoo models
+    # TinyYOLOv3 — preprocess: resize to 416×416, normalise to [0,1] (no ImageNet mean/std)
     resized = img.resize((size, size), PILImage.LANCZOS)
     arr     = np.array(resized, dtype=np.float32) / 255.0
-    mean    = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-    std     = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-    arr     = (arr - mean) / std
-    arr     = arr.transpose(2, 0, 1)        # HWC → CHW
-    arr     = np.expand_dims(arr, axis=0)   # → (1, 3, H, W)
+    arr     = arr.transpose(2, 0, 1)                       # HWC → CHW
+    arr     = np.expand_dims(arr, axis=0)                  # → (1, 3, 416, 416)
+    image_shape = np.array([[orig_h, orig_w]], dtype=np.float32)
 
-    input_name = session.get_inputs()[0].name
     try:
-        outputs = session.run(None, {input_name: arr})
+        outputs = session.run(None, {"input_1": arr, "image_shape": image_shape})
     except Exception as e:
         raise HTTPException(500, f"Inference failed: {e}")
 
-    # SSD-12 outputs: bboxes[1,N,4], labels[1,N], scores[1,N]
-    boxes  = outputs[0][0]   # (N, 4)
-    labels = outputs[1][0]   # (N,)
-    scores = outputs[2][0]   # (N,)
-
-    # Detect whether boxes are normalised [0,1] or absolute [0, input_size]
-    box_max = float(np.abs(boxes).max()) if len(boxes) else 0.0
-    norm    = box_max <= 1.01
+    # TinyYOLOv3 outputs:
+    #   outputs[0] boxes   (1, max_boxes, 4)  — y1,x1,y2,x2 in original pixel coords
+    #   outputs[1] scores  (1, 80, max_boxes) — per-class confidence
+    #   outputs[2] indices (num_det, 3)        — [batch, class_id, box_idx] (post-NMS)
+    boxes   = outputs[0][0]   # (max_boxes, 4)
+    scores  = outputs[1][0]   # (80, max_boxes)
+    indices = outputs[2]      # (num_det, 3)
 
     detections = []
-    for i in range(len(scores)):
-        s = float(scores[i])
+    for row in indices:
+        class_idx = int(row[1])
+        box_idx   = int(row[2])
+        s = float(scores[class_idx, box_idx])
         if s < confidence:
             continue
-        lbl = int(labels[i])
-        if lbl <= 0 or lbl >= len(_COCO_CLASSES):
+
+        name_idx = class_idx + 1           # offset: _COCO_CLASSES[0] = "__background__"
+        if name_idx >= len(_COCO_CLASSES):
             continue
 
-        b = boxes[i]
-        if norm:
-            # (y1, x1, y2, x2) normalised
-            y1 = b[0] * orig_h
-            x1 = b[1] * orig_w
-            y2 = b[2] * orig_h
-            x2 = b[3] * orig_w
-        else:
-            sx = orig_w / size
-            sy = orig_h / size
-            y1 = b[0] * sy
-            x1 = b[1] * sx
-            y2 = b[2] * sy
-            x2 = b[3] * sx
+        b = boxes[box_idx]                 # [y1, x1, y2, x2] in original pixels
+        y1, x1 = float(b[0]), float(b[1])
+        y2, x2 = float(b[2]), float(b[3])
 
-        x1, y1 = max(0.0, float(x1)), max(0.0, float(y1))
-        x2, y2 = min(float(orig_w), float(x2)), min(float(orig_h), float(y2))
+        x1, y1 = max(0.0, x1), max(0.0, y1)
+        x2, y2 = min(float(orig_w), x2), min(float(orig_h), y2)
 
         if x2 <= x1 or y2 <= y1:
             continue
 
         detections.append({
-            "class_id":   lbl,
-            "label":      _COCO_CLASSES[lbl],
+            "class_id":   name_idx,
+            "label":      _COCO_CLASSES[name_idx],
             "confidence": round(s, 4),
             "box":        {"x1": int(x1), "y1": int(y1), "x2": int(x2), "y2": int(y2)},
         })

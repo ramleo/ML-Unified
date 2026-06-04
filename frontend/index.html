@@ -599,7 +599,7 @@ function renderSidebar() {
       <div class="model-dot" style="background:#38bdf8"></div>
       <div class="model-btn-info">
         <div class="model-btn-title">Object Detection</div>
-        <div class="model-btn-sub">SSD · COCO 80 classes</div>
+        <div class="model-btn-sub">TinyYOLOv3 · COCO 80 classes</div>
       </div>
     </button>
     <button class="model-btn" id="vbtn-segmentation" onclick="selectSegmentation()">
@@ -1676,7 +1676,7 @@ function renderObjectDetectionPanel() {
         <div class="u-dot" style="background:#38bdf8"></div>
         <div>
           <div class="u-title">Object Detection</div>
-          <div class="u-subtitle">Upload any photo — detect and locate objects from 80 COCO categories (people, cars, animals, furniture, food…) using a pre-trained SSD model. Bounding boxes are drawn directly on the image.</div>
+          <div class="u-subtitle">Upload any photo — detect and locate objects from 80 COCO categories (people, cars, animals, furniture, food…) using TinyYOLOv3 (35 MB, MIT license). Bounding boxes are drawn directly on the image.</div>
         </div>
       </div>
 
@@ -1741,6 +1741,15 @@ function setDetFile(f) {
   document.getElementById('detErr').innerHTML    = '';
 }
 
+let _detRetryCount = 0;
+let _detRetryTimer = null;
+
+function cancelDetRetry() {
+  if (_detRetryTimer) { clearTimeout(_detRetryTimer); _detRetryTimer = null; }
+  _detRetryCount = 0;
+  document.getElementById('detErr').innerHTML = '';
+}
+
 async function runObjectDetect() {
   if (!detFile) return;
   const btn    = document.getElementById('detRunBtn');
@@ -1755,13 +1764,13 @@ async function runObjectDetect() {
       <span class="spinner" style="width:20px;height:20px;border-width:3px;display:inline-block"></span>
       <div style="margin-top:0.75rem;font-size:0.82rem">
         Running detection…<br>
-        <span style="font-size:0.72rem;opacity:0.7">First call downloads model weights (~100 MB) — may take up to 90 s on free tier</span>
+        <span style="font-size:0.72rem;opacity:0.7">First call downloads model weights (~35 MB) — may take up to 60 s on free tier</span>
       </div>
     </div>`;
 
   const form = new FormData();
   form.append('file',       detFile);
-  form.append('model_name', 'ssd');
+  form.append('model_name', 'tiny_yolov3');
   form.append('confidence', conf);
   form.append('max_dets',   20);
 
@@ -1785,15 +1794,24 @@ async function runObjectDetect() {
   }
 }
 
-function showDetRetry(msg, form) {
-  let secs = 20;
+function showDetRetry(msg) {
   const errEl = document.getElementById('detErr');
   const btn   = document.getElementById('detRunBtn');
   btn.innerHTML = 'Detect Objects →'; btn.disabled = false;
+  if (_detRetryCount >= 3) {
+    _detRetryCount = 0;
+    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">
+      ✗ Model unavailable after 3 attempts. Please try again later.</div>`;
+    return;
+  }
+  _detRetryCount++;
+  let secs = 20;
   const tick = () => {
-    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:10px;color:#fbbf24;font-size:0.83rem">
-      ⏳ ${msg} Auto-retrying in ${secs}s…</div>`;
-    if (secs-- > 0) { setTimeout(tick, 1000); } else { runObjectDetect(); }
+    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:10px;color:#fbbf24;font-size:0.83rem;display:flex;align-items:center;gap:0.75rem">
+      <span>⏳ ${msg} Auto-retrying in ${secs}s… (attempt ${_detRetryCount}/3)</span>
+      <button onclick="cancelDetRetry()" style="padding:0.2rem 0.6rem;border:1px solid #fbbf2466;border-radius:6px;background:transparent;color:#fbbf24;cursor:pointer;font-size:0.78rem;flex-shrink:0">Stop</button>
+    </div>`;
+    if (secs-- > 0) { _detRetryTimer = setTimeout(tick, 1000); } else { runObjectDetect(); }
   };
   tick();
 }
@@ -1917,6 +1935,15 @@ function setSegFile(f) {
   document.getElementById('segErr').innerHTML    = '';
 }
 
+let _segRetryCount = 0;
+let _segRetryTimer = null;
+
+function cancelSegRetry() {
+  if (_segRetryTimer) { clearTimeout(_segRetryTimer); _segRetryTimer = null; }
+  _segRetryCount = 0;
+  document.getElementById('segErr').innerHTML = '';
+}
+
 async function runSegmentation() {
   if (!segFile) return;
   const btn   = document.getElementById('segRunBtn');
@@ -1959,14 +1986,23 @@ async function runSegmentation() {
 }
 
 function showSegRetry(msg) {
-  let secs = 20;
   const errEl = document.getElementById('segErr');
   const btn   = document.getElementById('segRunBtn');
   btn.innerHTML = 'Segment Image →'; btn.disabled = false;
+  if (_segRetryCount >= 3) {
+    _segRetryCount = 0;
+    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">
+      ✗ Model unavailable after 3 attempts. Please try again later.</div>`;
+    return;
+  }
+  _segRetryCount++;
+  let secs = 20;
   const tick = () => {
-    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:10px;color:#fbbf24;font-size:0.83rem">
-      ⏳ ${msg} Auto-retrying in ${secs}s…</div>`;
-    if (secs-- > 0) { setTimeout(tick, 1000); } else { runSegmentation(); }
+    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:10px;color:#fbbf24;font-size:0.83rem;display:flex;align-items:center;gap:0.75rem">
+      <span>⏳ ${msg} Auto-retrying in ${secs}s… (attempt ${_segRetryCount}/3)</span>
+      <button onclick="cancelSegRetry()" style="padding:0.2rem 0.6rem;border:1px solid #fbbf2466;border-radius:6px;background:transparent;color:#fbbf24;cursor:pointer;font-size:0.78rem;flex-shrink:0">Stop</button>
+    </div>`;
+    if (secs-- > 0) { _segRetryTimer = setTimeout(tick, 1000); } else { runSegmentation(); }
   };
   tick();
 }
