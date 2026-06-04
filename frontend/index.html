@@ -1741,6 +1741,65 @@ function setDetFile(f) {
   document.getElementById('detErr').innerHTML    = '';
 }
 
+/* ── Shared XHR progress helper for vision panels ── */
+function _postWithProgress(url, formData, resultId, accent, noteText) {
+  return new Promise((resolve, reject) => {
+    let pct = 0;
+    let inferTid = null;
+    let stopped = false;
+
+    const barEl = () => document.getElementById(resultId + 'PBar');
+    const lblEl = () => document.getElementById(resultId + 'PLbl');
+    const setBar = (p, label) => {
+      const b = barEl(); const l = lblEl();
+      if (b) b.style.width = Math.round(p) + '%';
+      if (l) l.textContent = label + ' · ' + Math.round(p) + '%';
+    };
+
+    document.getElementById(resultId).innerHTML = `
+      <div style="padding:2.5rem 1.5rem;text-align:center">
+        <div id="${resultId}PLbl" style="font-size:0.83rem;color:var(--text2);margin-bottom:0.9rem">Uploading · 0%</div>
+        <div style="height:5px;background:var(--border2);border-radius:3px;overflow:hidden;max-width:300px;margin:0 auto">
+          <div id="${resultId}PBar" style="height:100%;width:0%;background:${accent};border-radius:3px;transition:width 0.18s ease-out"></div>
+        </div>
+        <div style="font-size:0.7rem;color:var(--text3);margin-top:0.7rem;opacity:0.75">${noteText}</div>
+      </div>`;
+
+    const startInfer = () => {
+      const tick = () => {
+        if (stopped) return;
+        pct = Math.min(90, pct + 0.65);
+        setBar(pct, pct < 65 ? 'Running model' : 'Processing');
+        if (pct < 90) inferTid = setTimeout(tick, 260);
+      };
+      pct = 30;
+      tick();
+    };
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+
+    xhr.upload.addEventListener('progress', e => {
+      if (e.lengthComputable) {
+        pct = Math.min(28, Math.round((e.loaded / e.total) * 28));
+        setBar(pct, 'Uploading');
+      }
+    });
+    xhr.upload.addEventListener('load', () => { setBar(29, 'Uploading'); startInfer(); });
+
+    xhr.addEventListener('load', () => {
+      stopped = true; clearTimeout(inferTid); setBar(100, 'Complete');
+      resolve({ status: xhr.status, ok: xhr.status >= 200 && xhr.status < 300,
+        text: () => Promise.resolve(xhr.responseText),
+        json: () => Promise.resolve(JSON.parse(xhr.responseText)) });
+    });
+    xhr.addEventListener('error',  () => { stopped = true; clearTimeout(inferTid); reject(new Error('Network error')); });
+    xhr.addEventListener('abort',  () => { stopped = true; clearTimeout(inferTid); reject(new Error('Request aborted')); });
+
+    xhr.send(formData);
+  });
+}
+
 let _detRetryCount = 0;
 let _detRetryTimer = null;
 
@@ -1759,14 +1818,6 @@ async function runObjectDetect() {
   btn.innerHTML = '<span class="spinner"></span> Detecting…';
   btn.disabled  = true;
   errEl.innerHTML = '';
-  document.getElementById('detResult').innerHTML = `
-    <div style="text-align:center;padding:2rem 1rem;color:var(--text3)">
-      <span class="spinner" style="width:20px;height:20px;border-width:3px;display:inline-block"></span>
-      <div style="margin-top:0.75rem;font-size:0.82rem">
-        Running detection…<br>
-        <span style="font-size:0.72rem;opacity:0.7">First call downloads model weights (~35 MB) — may take up to 60 s on free tier</span>
-      </div>
-    </div>`;
 
   const form = new FormData();
   form.append('file',       detFile);
@@ -1775,7 +1826,9 @@ async function runObjectDetect() {
   form.append('max_dets',   20);
 
   try {
-    const res = await fetch(`${API}/detect-objects`, { method: 'POST', body: form });
+    const res = await _postWithProgress(
+      `${API}/detect-objects`, form, 'detResult', '#38bdf8',
+      'First call downloads ~35 MB — may take up to 60 s on free tier');
     if (!res.ok) {
       const raw = await res.text();
       let msg;
@@ -1952,21 +2005,15 @@ async function runSegmentation() {
   btn.innerHTML = '<span class="spinner"></span> Segmenting…';
   btn.disabled  = true;
   errEl.innerHTML = '';
-  document.getElementById('segResult').innerHTML = `
-    <div style="text-align:center;padding:2rem 1rem;color:var(--text3)">
-      <span class="spinner" style="width:20px;height:20px;border-width:3px;display:inline-block"></span>
-      <div style="margin-top:0.75rem;font-size:0.82rem">
-        Running segmentation…<br>
-        <span style="font-size:0.72rem;opacity:0.7">First call downloads model weights (~135 MB) — may take up to 2 min on free tier</span>
-      </div>
-    </div>`;
 
   const form = new FormData();
   form.append('file',       segFile);
   form.append('model_name', 'fcn_resnet50');
 
   try {
-    const res = await fetch(`${API}/segment-image`, { method: 'POST', body: form });
+    const res = await _postWithProgress(
+      `${API}/segment-image`, form, 'segResult', '#a78bfa',
+      'First call downloads ~135 MB — may take up to 2 min on free tier');
     if (!res.ok) {
       const raw = await res.text();
       let msg;
