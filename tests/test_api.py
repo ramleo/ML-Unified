@@ -1,6 +1,5 @@
 import io
 import os
-import threading
 import numpy as np
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
@@ -447,13 +446,9 @@ def test_detect_objects_inference():
     mock_session.run.return_value = [fake_boxes, fake_labels, fake_scores]
     mock_session.get_inputs.return_value = [MagicMock(name="image")]
 
-    _ready = threading.Event()
-    _ready.set()
     import app as app_module
-    with patch.object(app_module, "_det_cache",    {"session": mock_session}), \
-         patch.object(app_module, "_det_active",   ["ssd"]), \
-         patch.object(app_module, "_det_ready",    _ready), \
-         patch.object(app_module, "_det_load_err", [None]):
+    fake_slot = {"model_type": "det", "model_id": "ssd", "session": mock_session}
+    with patch.object(app_module, "_large_vision_cache", fake_slot):
         r = client.post("/detect-objects",
             files={"file": ("test.png", _make_png(640, 480), "image/png")},
             data={"model_name": "ssd", "confidence": "0.5"})
@@ -481,13 +476,9 @@ def test_detect_objects_confidence_filter():
     mock_session.run.return_value = [fake_boxes, fake_labels, fake_scores]
     mock_session.get_inputs.return_value = [MagicMock(name="image")]
 
-    _ready = threading.Event()
-    _ready.set()
     import app as app_module
-    with patch.object(app_module, "_det_cache",    {"session": mock_session}), \
-         patch.object(app_module, "_det_active",   ["ssd"]), \
-         patch.object(app_module, "_det_ready",    _ready), \
-         patch.object(app_module, "_det_load_err", [None]):
+    fake_slot = {"model_type": "det", "model_id": "ssd", "session": mock_session}
+    with patch.object(app_module, "_large_vision_cache", fake_slot):
         r = client.post("/detect-objects",
             files={"file": ("test.png", _make_png(), "image/png")},
             data={"model_name": "ssd", "confidence": "0.5"})
@@ -531,12 +522,8 @@ def test_segment_image_inference():
     mock_session.get_inputs.return_value  = [MagicMock(name="input")]
     mock_session.get_outputs.return_value = [MagicMock(name="out")]
 
-    _ready = threading.Event()
-    _ready.set()
-    with patch.object(app_module, "_seg_cache",    {"session": mock_session}), \
-         patch.object(app_module, "_seg_active",   ["fcn_resnet50"]), \
-         patch.object(app_module, "_seg_ready",    _ready), \
-         patch.object(app_module, "_seg_load_err", [None]):
+    fake_slot = {"model_type": "seg", "model_id": "fcn_resnet50", "session": mock_session}
+    with patch.object(app_module, "_large_vision_cache", fake_slot):
         r = client.post("/segment-image",
             files={"file": ("test.png", _make_png(64, 64), "image/png")},
             data={"model_name": "fcn_resnet50"})
@@ -568,12 +555,8 @@ def test_segment_image_background_only():
     mock_session.get_inputs.return_value  = [MagicMock(name="input")]
     mock_session.get_outputs.return_value = [MagicMock(name="out")]
 
-    _ready = threading.Event()
-    _ready.set()
-    with patch.object(app_module, "_seg_cache",    {"session": mock_session}), \
-         patch.object(app_module, "_seg_active",   ["fcn_resnet50"]), \
-         patch.object(app_module, "_seg_ready",    _ready), \
-         patch.object(app_module, "_seg_load_err", [None]):
+    fake_slot = {"model_type": "seg", "model_id": "fcn_resnet50", "session": mock_session}
+    with patch.object(app_module, "_large_vision_cache", fake_slot):
         r = client.post("/segment-image",
             files={"file": ("test.png", _make_png(32, 32), "image/png")},
             data={"model_name": "fcn_resnet50"})

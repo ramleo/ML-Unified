@@ -876,10 +876,10 @@ _BOX_PALETTE = [
     "#f472b6", "#2dd4bf", "#facc15", "#a78bfa",
 ]
 
-_det_cache:    Dict[str, Any] = {}
-_det_active:   list = [None]
-_det_ready:    threading.Event = threading.Event()
-_det_load_err: list = [None]
+# Shared slot for large vision models (detection + segmentation).
+# Only ONE model is kept in RAM at a time to stay within Render free tier (512 MB).
+_large_vision_cache:  Dict[str, Any] = {}   # keys: "model_type", "model_id", "session"
+_large_vision_lock:   threading.Lock  = threading.Lock()
 
 
 def _ensure_det_model(model_id: str) -> str:
@@ -890,19 +890,17 @@ def _ensure_det_model(model_id: str) -> str:
     return path
 
 
-def _preload_det() -> None:
-    try:
-        path = _ensure_det_model("ssd")
-        import onnxruntime as ort  # noqa: PLC0415
-        _det_cache["session"] = ort.InferenceSession(path)
-        _det_active[0] = "ssd"
-    except Exception as exc:  # noqa: BLE001
-        _det_load_err[0] = str(exc)
-    finally:
-        _det_ready.set()
-
-
-threading.Thread(target=_preload_det, daemon=True, name="det-preload").start()
+def _load_det_session(model_id: str):
+    """Load detection model into the shared slot, evicting whatever was there."""
+    import onnxruntime as ort  # noqa: PLC0415
+    path = _ensure_det_model(model_id)
+    with _large_vision_lock:
+        _large_vision_cache.clear()
+        session = ort.InferenceSession(path)
+        _large_vision_cache["model_type"] = "det"
+        _large_vision_cache["model_id"]   = model_id
+        _large_vision_cache["session"]    = session
+    return session
 
 
 @app.get("/detect-models")
@@ -929,28 +927,23 @@ async def detect_objects(
     if model_name not in _DETECTION_MODEL_CONFIGS:
         raise HTTPException(400, f"Unknown model '{model_name}'. Choose from: {list(_DETECTION_MODEL_CONFIGS)}")
 
-    if not _det_ready.is_set():
-        raise HTTPException(503, "Detection model is loading (~60 s on first start). Please try again shortly.")
-    if _det_load_err[0]:
-        raise HTTPException(500, f"Model load failed: {_det_load_err[0]}")
-
     confidence = max(0.05, min(float(confidence), 0.95))
     max_dets   = max(1, min(int(max_dets), 50))
     cfg = _DETECTION_MODEL_CONFIGS[model_name]
 
-    # Lazy-load ONNX session — one detection model in memory at a time
-    if _det_active[0] != model_name:
-        _det_cache.clear()
+    # Use shared slot — load only if not already the active model
+    with _large_vision_lock:
+        cached = (
+            _large_vision_cache.get("model_type") == "det"
+            and _large_vision_cache.get("model_id") == model_name
+        )
+        session = _large_vision_cache.get("session") if cached else None
+
+    if session is None:
         try:
-            import onnxruntime as ort  # noqa: PLC0415
-            session           = ort.InferenceSession(_ensure_det_model(model_name),
-                                                     providers=["CPUExecutionProvider"])
-            _det_cache["session"] = session
-            _det_active[0]        = model_name
+            session = _load_det_session(model_name)
         except Exception as e:
             raise HTTPException(500, f"Failed to load model '{model_name}': {e}")
-
-    session = _det_cache["session"]
     size    = cfg["input_size"]
 
     content = await file.read()
@@ -1108,12 +1101,6 @@ _SEGMENTATION_MODEL_CONFIGS: Dict[str, Dict] = {
     },
 }
 
-_seg_cache:    Dict[str, Any] = {}
-_seg_active:   list = [None]
-_seg_ready:    threading.Event = threading.Event()
-_seg_load_err: list = [None]
-
-
 def _ensure_seg_model(model_id: str) -> str:
     import urllib.request  # noqa: PLC0415
     cfg  = _SEGMENTATION_MODEL_CONFIGS[model_id]
@@ -1123,19 +1110,17 @@ def _ensure_seg_model(model_id: str) -> str:
     return path
 
 
-def _preload_seg() -> None:
-    try:
-        path = _ensure_seg_model("fcn_resnet50")
-        import onnxruntime as ort  # noqa: PLC0415
-        _seg_cache["session"] = ort.InferenceSession(path)
-        _seg_active[0] = "fcn_resnet50"
-    except Exception as exc:  # noqa: BLE001
-        _seg_load_err[0] = str(exc)
-    finally:
-        _seg_ready.set()
-
-
-threading.Thread(target=_preload_seg, daemon=True, name="seg-preload").start()
+def _load_seg_session(model_id: str):
+    """Load segmentation model into the shared slot, evicting whatever was there."""
+    import onnxruntime as ort  # noqa: PLC0415
+    path = _ensure_seg_model(model_id)
+    with _large_vision_lock:
+        _large_vision_cache.clear()
+        session = ort.InferenceSession(path)
+        _large_vision_cache["model_type"] = "seg"
+        _large_vision_cache["model_id"]   = model_id
+        _large_vision_cache["session"]    = session
+    return session
 
 
 @app.get("/seg-models")
@@ -1159,11 +1144,6 @@ async def segment_image(
     if model_name not in _SEGMENTATION_MODEL_CONFIGS:
         raise HTTPException(status_code=400, detail=f"Unknown model: {model_name}")
 
-    if not _seg_ready.is_set():
-        raise HTTPException(503, "Segmentation model is loading (~90 s on first start). Please try again shortly.")
-    if _seg_load_err[0]:
-        raise HTTPException(500, f"Model load failed: {_seg_load_err[0]}")
-
     from PIL import Image as PILImage  # noqa: PLC0415
     import numpy as np                 # noqa: PLC0415
     import base64                      # noqa: PLC0415
@@ -1175,19 +1155,23 @@ async def segment_image(
     cfg       = _SEGMENTATION_MODEL_CONFIGS[model_name]
     size      = cfg["input_size"]
 
-    # Resize for inference (preserve aspect ratio, pad to square with reflect)
+    # Resize for inference (preserve aspect ratio)
     img_r = img.copy()
     img_r.thumbnail((size, size), PILImage.LANCZOS)
 
-    # Load / cache model
-    if _seg_active[0] != model_name:
-        _seg_cache.clear()
-        path = _ensure_seg_model(model_name)
-        import onnxruntime as ort  # noqa: PLC0415
-        _seg_cache["session"] = ort.InferenceSession(path)
-        _seg_active[0] = model_name
+    # Use shared slot — load only if not already the active model
+    with _large_vision_lock:
+        cached = (
+            _large_vision_cache.get("model_type") == "seg"
+            and _large_vision_cache.get("model_id") == model_name
+        )
+        session = _large_vision_cache.get("session") if cached else None
 
-    session = _seg_cache["session"]
+    if session is None:
+        try:
+            session = _load_seg_session(model_name)
+        except Exception as e:
+            raise HTTPException(500, f"Failed to load model '{model_name}': {e}")
 
     arr = np.array(img_r, dtype=np.float32) / 255.0
     mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
