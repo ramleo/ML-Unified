@@ -351,6 +351,27 @@ def test_process_image_bad_operation():
         data={"operation": "nonexistent_op"})
     assert r.status_code == 400
 
+# ── Object Detection ─────────────────────────────────────────────────────────
+
+def test_list_detect_models():
+    r = client.get("/detect-models")
+    assert r.status_code == 200
+    models = r.json()
+    ids = [m["id"] for m in models]
+    assert "ssd" in ids
+    for m in models:
+        assert "id"          in m
+        assert "label"       in m
+        assert "description" in m
+        assert "input_size"  in m
+
+def test_detect_objects_bad_model():
+    jpg = b"\xff\xd8\xff\xe0" + b"\x00" * 100
+    r = client.post("/detect-objects",
+        files={"file": ("img.jpg", io.BytesIO(jpg), "image/jpeg")},
+        data={"model_name": "nonexistent_model"})
+    assert r.status_code == 400
+
 def test_train_missing_target_col():
     csv = b"a,b,c\n1,2,3\n4,5,6\n"
     r = client.post("/train",

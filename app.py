@@ -836,6 +836,201 @@ async def process_image(
     }
 
 
+# ── Object Detection ────────────────────────────────────────────────────────
+# Uses SSD-12 (ResNet-34 backbone) from ONNX Model Zoo — Apache 2.0.
+# Draws bounding boxes server-side with PIL and returns annotated image.
+
+_COCO_CLASSES: list = [
+    "__background__",
+    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck",
+    "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench",
+    "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra",
+    "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
+    "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove",
+    "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup",
+    "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
+    "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
+    "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse",
+    "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink",
+    "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
+    "hair drier", "toothbrush",
+]  # index 0 = background; 1–80 = COCO classes
+
+_DETECTION_MODEL_CONFIGS: Dict[str, Dict] = {
+    "ssd": {
+        "label":       "SSD",
+        "description": "Single Shot MultiBox Detector — ResNet-34 backbone, COCO 80 classes",
+        "url": (
+            "https://media.githubusercontent.com/media/onnx/models/main/"
+            "validated/vision/object_detection_segmentation/ssd/model/ssd-12.onnx"
+        ),
+        "input_size": 1200,
+        "size_mb":    100,
+    },
+}
+
+_BOX_PALETTE = [
+    "#e879f9", "#38bdf8", "#34d399", "#fbbf24",
+    "#f87171", "#fb923c", "#818cf8", "#4ade80",
+    "#f472b6", "#2dd4bf", "#facc15", "#a78bfa",
+]
+
+_det_cache:  Dict[str, Any] = {}
+_det_active: list = [None]
+
+
+def _ensure_det_model(model_id: str) -> str:
+    path = os.path.join(VISION_CACHE_DIR, f"det_{model_id}.onnx")
+    if not os.path.exists(path):
+        import urllib.request  # noqa: PLC0415
+        urllib.request.urlretrieve(_DETECTION_MODEL_CONFIGS[model_id]["url"], path)
+    return path
+
+
+@app.get("/detect-models")
+def list_detect_models():
+    return [
+        {
+            "id":          k,
+            "label":       v["label"],
+            "description": v["description"],
+            "input_size":  v["input_size"],
+            "size_mb":     v["size_mb"],
+        }
+        for k, v in _DETECTION_MODEL_CONFIGS.items()
+    ]
+
+
+@app.post("/detect-objects")
+async def detect_objects(
+    file:       UploadFile = File(...),
+    model_name: str        = Form("ssd"),
+    confidence: float      = Form(0.3),
+    max_dets:   int        = Form(20),
+):
+    if model_name not in _DETECTION_MODEL_CONFIGS:
+        raise HTTPException(400, f"Unknown model '{model_name}'. Choose from: {list(_DETECTION_MODEL_CONFIGS)}")
+    confidence = max(0.05, min(float(confidence), 0.95))
+    max_dets   = max(1, min(int(max_dets), 50))
+    cfg = _DETECTION_MODEL_CONFIGS[model_name]
+
+    # Lazy-load ONNX session — one detection model in memory at a time
+    if _det_active[0] != model_name:
+        _det_cache.clear()
+        try:
+            import onnxruntime as ort  # noqa: PLC0415
+            session           = ort.InferenceSession(_ensure_det_model(model_name),
+                                                     providers=["CPUExecutionProvider"])
+            _det_cache["session"] = session
+            _det_active[0]        = model_name
+        except Exception as e:
+            raise HTTPException(500, f"Failed to load model '{model_name}': {e}")
+
+    session = _det_cache["session"]
+    size    = cfg["input_size"]
+
+    content = await file.read()
+    try:
+        from PIL import Image as PILImage, ImageDraw  # noqa: PLC0415
+        import numpy as np                             # noqa: PLC0415
+        import base64                                  # noqa: PLC0415
+        img = PILImage.open(io.BytesIO(content)).convert("RGB")
+    except Exception as e:
+        raise HTTPException(400, f"Could not load image: {e}")
+
+    orig_w, orig_h = img.width, img.height
+
+    # Preprocess — same ImageNet normalisation used across all ONNX Model Zoo models
+    resized = img.resize((size, size), PILImage.LANCZOS)
+    arr     = np.array(resized, dtype=np.float32) / 255.0
+    mean    = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+    std     = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+    arr     = (arr - mean) / std
+    arr     = arr.transpose(2, 0, 1)        # HWC → CHW
+    arr     = np.expand_dims(arr, axis=0)   # → (1, 3, H, W)
+
+    input_name = session.get_inputs()[0].name
+    try:
+        outputs = session.run(None, {input_name: arr})
+    except Exception as e:
+        raise HTTPException(500, f"Inference failed: {e}")
+
+    # SSD-12 outputs: bboxes[1,N,4], labels[1,N], scores[1,N]
+    boxes  = outputs[0][0]   # (N, 4)
+    labels = outputs[1][0]   # (N,)
+    scores = outputs[2][0]   # (N,)
+
+    # Detect whether boxes are normalised [0,1] or absolute [0, input_size]
+    box_max = float(np.abs(boxes).max()) if len(boxes) else 0.0
+    norm    = box_max <= 1.01
+
+    detections = []
+    for i in range(len(scores)):
+        s = float(scores[i])
+        if s < confidence:
+            continue
+        lbl = int(labels[i])
+        if lbl <= 0 or lbl >= len(_COCO_CLASSES):
+            continue
+
+        b = boxes[i]
+        if norm:
+            # (y1, x1, y2, x2) normalised
+            y1 = b[0] * orig_h;  x1 = b[1] * orig_w
+            y2 = b[2] * orig_h;  x2 = b[3] * orig_w
+        else:
+            sx = orig_w / size;  sy = orig_h / size
+            y1 = b[0] * sy;      x1 = b[1] * sx
+            y2 = b[2] * sy;      x2 = b[3] * sx
+
+        x1, y1 = max(0.0, float(x1)), max(0.0, float(y1))
+        x2, y2 = min(float(orig_w), float(x2)), min(float(orig_h), float(y2))
+
+        if x2 <= x1 or y2 <= y1:
+            continue
+
+        detections.append({
+            "class_id":   lbl,
+            "label":      _COCO_CLASSES[lbl],
+            "confidence": round(s, 4),
+            "box":        {"x1": int(x1), "y1": int(y1), "x2": int(x2), "y2": int(y2)},
+        })
+
+    detections.sort(key=lambda d: d["confidence"], reverse=True)
+    detections = detections[:max_dets]
+
+    # Draw boxes on original image
+    draw = ImageDraw.Draw(img)
+    for det in detections:
+        color = _BOX_PALETTE[det["class_id"] % len(_BOX_PALETTE)]
+        b     = det["box"]
+        draw.rectangle([b["x1"], b["y1"], b["x2"], b["y2"]], outline=color, width=3)
+        text   = f"{det['label']} {det['confidence']:.0%}"
+        tx, ty = b["x1"], max(0, b["y1"] - 15)
+        tw     = len(text) * 6 + 6
+        draw.rectangle([tx, ty, tx + tw, ty + 14], fill=color)
+        draw.text((tx + 3, ty + 2), text, fill="#000000")
+
+    # Cap output resolution
+    if max(img.width, img.height) > _MAX_IMG_DIM:
+        img.thumbnail((_MAX_IMG_DIM, _MAX_IMG_DIM), PILImage.LANCZOS)
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode()
+
+    return {
+        "model":                model_name,
+        "model_label":          cfg["label"],
+        "count":                len(detections),
+        "confidence_threshold": confidence,
+        "detections":           detections,
+        "image_b64":            f"data:image/png;base64,{b64}",
+        "orig_width":           orig_w,
+        "orig_height":          orig_h,
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

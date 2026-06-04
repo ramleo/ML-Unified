@@ -424,6 +424,24 @@ body {
   background: var(--bg-input);
 }
 
+/* ── Object Detection Panel ── */
+.det-conf-row {
+  display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;
+}
+.det-conf-row input[type=range] { flex: 1; accent-color: #38bdf8; }
+.det-conf-val { font-size: 0.82rem; font-weight: 700; color: #38bdf8; min-width: 36px; }
+
+.det-result-img {
+  width: 100%; border-radius: 12px; border: 1px solid var(--border2);
+  display: block; margin-bottom: 1rem;
+}
+.det-tag {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.25rem 0.6rem; border-radius: 20px;
+  font-size: 0.75rem; font-weight: 600; margin: 0.2rem;
+}
+.det-tag-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
 /* ── Unsupervised Panel ── */
 .u-panel { padding: 1.5rem; max-width: 860px; }
 .u-header { display:flex; gap:1rem; align-items:flex-start; margin-bottom:1.5rem; }
@@ -560,6 +578,13 @@ function renderSidebar() {
       <div class="model-btn-info">
         <div class="model-btn-title">Image Processing</div>
         <div class="model-btn-sub">Blur · Edges · Rotate · More</div>
+      </div>
+    </button>
+    <button class="model-btn" id="vbtn-detection" onclick="selectObjectDetection()">
+      <div class="model-dot" style="background:#38bdf8"></div>
+      <div class="model-btn-info">
+        <div class="model-btn-title">Object Detection</div>
+        <div class="model-btn-sub">SSD · COCO 80 classes</div>
       </div>
     </button>` +
     `<div style="flex:1"></div>
@@ -1597,6 +1622,178 @@ function renderIpResult(data) {
             ↓ Download
           </a>
         </div>
+      </div>
+    </div>`;
+}
+
+// ── Object Detection ─────────────────────────────────────────────────────
+let detFile     = null;
+let detImageURL = null;
+
+const DET_BOX_PALETTE = [
+  "#e879f9","#38bdf8","#34d399","#fbbf24",
+  "#f87171","#fb923c","#818cf8","#4ade80",
+  "#f472b6","#2dd4bf","#facc15","#a78bfa",
+];
+
+function selectObjectDetection() {
+  document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('vbtn-detection');
+  if (btn) btn.classList.add('active');
+  document.documentElement.style.setProperty('--accent', '#38bdf8');
+  renderObjectDetectionPanel();
+}
+
+function renderObjectDetectionPanel() {
+  detFile     = null;
+  detImageURL = null;
+
+  document.getElementById('main').innerHTML = `
+    <div class="vision-panel">
+      <div class="u-header">
+        <div class="u-dot" style="background:#38bdf8"></div>
+        <div>
+          <div class="u-title">Object Detection</div>
+          <div class="u-subtitle">Upload any photo — detect and locate objects from 80 COCO categories (people, cars, animals, furniture, food…) using a pre-trained SSD model. Bounding boxes are drawn directly on the image.</div>
+        </div>
+      </div>
+
+      <div class="wizard-section">
+        <label class="wizard-label">Confidence threshold</label>
+        <div class="det-conf-row">
+          <input type="range" id="detConf" min="5" max="90" value="30" step="5"
+                 oninput="document.getElementById('detConfVal').textContent=this.value+'%'">
+          <span class="det-conf-val" id="detConfVal">30%</span>
+        </div>
+      </div>
+
+      <div class="upload-zone" id="detUploadZone">
+        <input type="file" id="detImageInput" accept="image/*" onchange="handleDetFile(event)">
+        <div class="upload-zone-icon">📷</div>
+        <div class="upload-zone-text">Click to browse or drag &amp; drop</div>
+        <div class="upload-zone-sub">JPEG, PNG, WebP</div>
+      </div>
+
+      <div id="detPreviewSection" style="display:none;margin:0.75rem 0">
+        <img id="detPreviewImg" class="vision-preview-img" src="" alt="preview">
+        <div id="detFileName" style="font-size:0.78rem;color:var(--text3);margin-top:0.4rem"></div>
+      </div>
+
+      <div id="detErr" style="margin-top:0.5rem"></div>
+
+      <div style="margin:1.25rem 0">
+        <button class="btn btn-primary" id="detRunBtn" onclick="runObjectDetect()"
+                disabled style="opacity:0.4;background:#38bdf8">
+          Detect Objects →
+        </button>
+      </div>
+
+      <div id="detResult"></div>
+    </div>`;
+
+  const zone = document.getElementById('detUploadZone');
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) setDetFile(f);
+  });
+}
+
+function handleDetFile(e) { const f = e.target.files[0]; if (f) setDetFile(f); }
+
+function setDetFile(f) {
+  detFile = f;
+  if (detImageURL) URL.revokeObjectURL(detImageURL);
+  detImageURL = URL.createObjectURL(f);
+
+  const prev = document.getElementById('detPreviewSection');
+  prev.style.display = 'block';
+  document.getElementById('detPreviewImg').src = detImageURL;
+  document.getElementById('detFileName').textContent = `📄 ${f.name}  (${(f.size/1024).toFixed(1)} KB)`;
+
+  const btn = document.getElementById('detRunBtn');
+  btn.disabled = false; btn.style.opacity = '1';
+  document.getElementById('detResult').innerHTML = '';
+  document.getElementById('detErr').innerHTML    = '';
+}
+
+async function runObjectDetect() {
+  if (!detFile) return;
+  const btn    = document.getElementById('detRunBtn');
+  const errEl  = document.getElementById('detErr');
+  const conf   = parseInt(document.getElementById('detConf').value) / 100;
+
+  btn.innerHTML = '<span class="spinner"></span> Detecting…';
+  btn.disabled  = true;
+  errEl.innerHTML = '';
+  document.getElementById('detResult').innerHTML = `
+    <div style="text-align:center;padding:2rem 1rem;color:var(--text3)">
+      <span class="spinner" style="width:20px;height:20px;border-width:3px;display:inline-block"></span>
+      <div style="margin-top:0.75rem;font-size:0.82rem">
+        Running detection…<br>
+        <span style="font-size:0.72rem;opacity:0.7">First call downloads model weights (~100 MB) — may take up to 90 s on free tier</span>
+      </div>
+    </div>`;
+
+  const form = new FormData();
+  form.append('file',       detFile);
+  form.append('model_name', 'ssd');
+  form.append('confidence', conf);
+  form.append('max_dets',   20);
+
+  try {
+    const res = await fetch(`${API}/detect-objects`, { method: 'POST', body: form });
+    if (!res.ok) { const t = await res.text(); throw new Error(t); }
+    const data = await res.json();
+    renderDetectionResult(data);
+  } catch(e) {
+    document.getElementById('detResult').innerHTML = '';
+    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">${e.message}</div>`;
+  } finally {
+    btn.innerHTML = 'Detect Objects →';
+    btn.disabled  = false;
+  }
+}
+
+function renderDetectionResult(data) {
+  const accent = '#38bdf8';
+  const dets   = data.detections || [];
+
+  const noneMsg = dets.length === 0 ? `
+    <div style="padding:0.65rem 0.9rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);
+                border-radius:8px;color:#fbbf24;font-size:0.82rem;margin-bottom:1rem">
+      ⚠️ No objects detected above the confidence threshold. Try lowering it.
+    </div>` : '';
+
+  const tagsHTML = dets.map(d => {
+    const color = DET_BOX_PALETTE[d.class_id % DET_BOX_PALETTE.length];
+    return `<span class="det-tag" style="background:${color}22;border:1px solid ${color}55">
+      <span class="det-tag-dot" style="background:${color}"></span>
+      ${d.label} <span style="color:${color};font-weight:800">${(d.confidence*100).toFixed(0)}%</span>
+    </span>`;
+  }).join('');
+
+  document.getElementById('detResult').innerHTML = `
+    <div class="result-state" style="display:block;margin-top:0.5rem">
+      <div class="result-accent-bar" style="background:${accent}"></div>
+      <div class="result-body">
+        ${noneMsg}
+        <div class="proba-section-label" style="margin-bottom:0.75rem">
+          ${data.count} object${data.count !== 1 ? 's' : ''} detected
+          &nbsp;·&nbsp; confidence ≥ ${(data.confidence_threshold*100).toFixed(0)}%
+          &nbsp;·&nbsp; ${data.orig_width}×${data.orig_height} px
+        </div>
+        <img src="${data.image_b64}" class="det-result-img" alt="detection result">
+        <div style="margin-top:0.25rem">${tagsHTML}</div>
+        ${data.count > 0 ? `
+        <div style="margin-top:1rem">
+          <a href="${data.image_b64}" download="detected_objects.png"
+             class="btn btn-clear" style="text-decoration:none;font-size:0.8rem">
+            ↓ Download
+          </a>
+        </div>` : ''}
       </div>
     </div>`;
 }
