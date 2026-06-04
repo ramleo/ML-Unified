@@ -1767,7 +1767,16 @@ async function runObjectDetect() {
 
   try {
     const res = await fetch(`${API}/detect-objects`, { method: 'POST', body: form });
-    if (!res.ok) { const t = await res.text(); throw new Error(t); }
+    if (!res.ok) {
+      let msg;
+      try { const j = await res.json(); msg = j.detail || JSON.stringify(j); }
+      catch { msg = await res.text(); }
+      if (res.status === 503) {
+        showDetRetry(msg, form);
+        return;
+      }
+      throw new Error(msg);
+    }
     const data = await res.json();
     renderDetectionResult(data);
   } catch(e) {
@@ -1777,6 +1786,19 @@ async function runObjectDetect() {
     btn.innerHTML = 'Detect Objects →';
     btn.disabled  = false;
   }
+}
+
+function showDetRetry(msg, form) {
+  let secs = 20;
+  const errEl = document.getElementById('detErr');
+  const btn   = document.getElementById('detRunBtn');
+  btn.innerHTML = 'Detect Objects →'; btn.disabled = false;
+  const tick = () => {
+    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:10px;color:#fbbf24;font-size:0.83rem">
+      ⏳ ${msg} Auto-retrying in ${secs}s…</div>`;
+    if (secs-- > 0) { setTimeout(tick, 1000); } else { runObjectDetect(); }
+  };
+  tick();
 }
 
 function renderDetectionResult(data) {
@@ -1921,7 +1943,16 @@ async function runSegmentation() {
 
   try {
     const res = await fetch(`${API}/segment-image`, { method: 'POST', body: form });
-    if (!res.ok) { const t = await res.text(); throw new Error(t); }
+    if (!res.ok) {
+      let msg;
+      try { const j = await res.json(); msg = j.detail || JSON.stringify(j); }
+      catch { msg = await res.text(); }
+      if (res.status === 503) {
+        showSegRetry(msg, form);
+        return;
+      }
+      throw new Error(msg);
+    }
     const data = await res.json();
     renderSegmentationResult(data);
   } catch(e) {
@@ -1931,6 +1962,19 @@ async function runSegmentation() {
     btn.innerHTML = 'Segment Image →';
     btn.disabled  = false;
   }
+}
+
+function showSegRetry(msg) {
+  let secs = 20;
+  const errEl = document.getElementById('segErr');
+  const btn   = document.getElementById('segRunBtn');
+  btn.innerHTML = 'Segment Image →'; btn.disabled = false;
+  const tick = () => {
+    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:10px;color:#fbbf24;font-size:0.83rem">
+      ⏳ ${msg} Auto-retrying in ${secs}s…</div>`;
+    if (secs-- > 0) { setTimeout(tick, 1000); } else { runSegmentation(); }
+  };
+  tick();
 }
 
 function renderSegmentationResult(data) {

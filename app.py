@@ -22,6 +22,7 @@ import joblib
 import json
 import os
 import re
+import threading
 import pandas as pd
 
 app = FastAPI(title="ML Unified")
@@ -875,8 +876,10 @@ _BOX_PALETTE = [
     "#f472b6", "#2dd4bf", "#facc15", "#a78bfa",
 ]
 
-_det_cache:  Dict[str, Any] = {}
-_det_active: list = [None]
+_det_cache:    Dict[str, Any] = {}
+_det_active:   list = [None]
+_det_ready:    threading.Event = threading.Event()
+_det_load_err: list = [None]
 
 
 def _ensure_det_model(model_id: str) -> str:
@@ -885,6 +888,21 @@ def _ensure_det_model(model_id: str) -> str:
         import urllib.request  # noqa: PLC0415
         urllib.request.urlretrieve(_DETECTION_MODEL_CONFIGS[model_id]["url"], path)
     return path
+
+
+def _preload_det() -> None:
+    try:
+        path = _ensure_det_model("ssd")
+        import onnxruntime as ort  # noqa: PLC0415
+        _det_cache["session"] = ort.InferenceSession(path)
+        _det_active[0] = "ssd"
+    except Exception as exc:  # noqa: BLE001
+        _det_load_err[0] = str(exc)
+    finally:
+        _det_ready.set()
+
+
+threading.Thread(target=_preload_det, daemon=True, name="det-preload").start()
 
 
 @app.get("/detect-models")
@@ -910,6 +928,12 @@ async def detect_objects(
 ):
     if model_name not in _DETECTION_MODEL_CONFIGS:
         raise HTTPException(400, f"Unknown model '{model_name}'. Choose from: {list(_DETECTION_MODEL_CONFIGS)}")
+
+    if not _det_ready.is_set():
+        raise HTTPException(503, "Detection model is loading (~60 s on first start). Please try again shortly.")
+    if _det_load_err[0]:
+        raise HTTPException(500, f"Model load failed: {_det_load_err[0]}")
+
     confidence = max(0.05, min(float(confidence), 0.95))
     max_dets   = max(1, min(int(max_dets), 50))
     cfg = _DETECTION_MODEL_CONFIGS[model_name]
@@ -1084,8 +1108,10 @@ _SEGMENTATION_MODEL_CONFIGS: Dict[str, Dict] = {
     },
 }
 
-_seg_cache:  Dict[str, Any] = {}
-_seg_active: list = [None]
+_seg_cache:    Dict[str, Any] = {}
+_seg_active:   list = [None]
+_seg_ready:    threading.Event = threading.Event()
+_seg_load_err: list = [None]
 
 
 def _ensure_seg_model(model_id: str) -> str:
@@ -1095,6 +1121,21 @@ def _ensure_seg_model(model_id: str) -> str:
     if not os.path.exists(path):
         urllib.request.urlretrieve(cfg["url"], path)
     return path
+
+
+def _preload_seg() -> None:
+    try:
+        path = _ensure_seg_model("fcn_resnet50")
+        import onnxruntime as ort  # noqa: PLC0415
+        _seg_cache["session"] = ort.InferenceSession(path)
+        _seg_active[0] = "fcn_resnet50"
+    except Exception as exc:  # noqa: BLE001
+        _seg_load_err[0] = str(exc)
+    finally:
+        _seg_ready.set()
+
+
+threading.Thread(target=_preload_seg, daemon=True, name="seg-preload").start()
 
 
 @app.get("/seg-models")
@@ -1117,6 +1158,11 @@ async def segment_image(
 ):
     if model_name not in _SEGMENTATION_MODEL_CONFIGS:
         raise HTTPException(status_code=400, detail=f"Unknown model: {model_name}")
+
+    if not _seg_ready.is_set():
+        raise HTTPException(503, "Segmentation model is loading (~90 s on first start). Please try again shortly.")
+    if _seg_load_err[0]:
+        raise HTTPException(500, f"Model load failed: {_seg_load_err[0]}")
 
     from PIL import Image as PILImage  # noqa: PLC0415
     import numpy as np                 # noqa: PLC0415
