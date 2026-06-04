@@ -261,10 +261,10 @@ def test_list_image_models():
     assert r.status_code == 200
     models = r.json()
     ids = [m["id"] for m in models]
-    assert "mobilenetv2"    in ids
-    assert "efficientnetb0" in ids
-    assert "resnet50"       in ids
-    assert "inceptionv3"    in ids
+    assert "mobilenetv2" in ids
+    assert "resnet50"    in ids
+    assert "squeezenet"  in ids
+    assert "googlenet"   in ids
     for m in models:
         assert "label"       in m
         assert "description" in m

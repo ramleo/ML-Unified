@@ -576,38 +576,80 @@ async def train_model(
 
 
 # ── Image Classification ────────────────────────────────────────────────────
+# Uses ONNX Runtime (~15 MB) + models downloaded lazily from ONNX Model Zoo.
+# tensorflow-cpu was removed — it exceeds Render free tier disk limits (~1 GB installed).
+
+VISION_CACHE_DIR = os.path.join(HERE, "vision_cache")
+os.makedirs(VISION_CACHE_DIR, exist_ok=True)
 
 _IMAGE_MODEL_CONFIGS: Dict[str, Dict] = {
     "mobilenetv2": {
         "label":       "MobileNetV2",
         "input_size":  224,
         "description": "Fast & lightweight — ideal for real-time inference",
-    },
-    "efficientnetb0": {
-        "label":       "EfficientNetB0",
-        "input_size":  224,
-        "description": "Best accuracy-to-speed tradeoff in its class",
+        "url": "https://media.githubusercontent.com/media/onnx/models/main/validated/vision/classification/mobilenet/model/mobilenetv2-12.onnx",
+        "size_mb":     14,
     },
     "resnet50": {
         "label":       "ResNet50",
         "input_size":  224,
         "description": "Classic deep residual network — reliable baseline",
+        "url": "https://media.githubusercontent.com/media/onnx/models/main/validated/vision/classification/resnet/model/resnet50-v2-7.onnx",
+        "size_mb":     98,
     },
-    "inceptionv3": {
-        "label":       "InceptionV3",
-        "input_size":  299,
-        "description": "Strong multi-scale feature recognition",
+    "squeezenet": {
+        "label":       "SqueezeNet 1.1",
+        "input_size":  224,
+        "description": "Tiny & fast — AlexNet accuracy at 50× fewer parameters",
+        "url": "https://media.githubusercontent.com/media/onnx/models/main/validated/vision/classification/squeezenet/model/squeezenet1.1-7.onnx",
+        "size_mb":     5,
+    },
+    "googlenet": {
+        "label":       "GoogLeNet",
+        "input_size":  224,
+        "description": "Multi-scale Inception architecture — strong general accuracy",
+        "url": "https://media.githubusercontent.com/media/onnx/models/main/validated/vision/classification/googlenet/model/googlenet-12.onnx",
+        "size_mb":     28,
     },
 }
 
-_img_cache: Dict[str, Any] = {}   # holds loaded TF model + helpers
-_img_active: list           = [None]  # which model is currently loaded
+_IMAGENET_LABELS: list  = []
+_img_cache:       Dict[str, Any] = {}
+_img_active:      list  = [None]
+
+
+def _ensure_labels():
+    if _IMAGENET_LABELS:
+        return
+    labels_path = os.path.join(VISION_CACHE_DIR, "imagenet_classes.txt")
+    if not os.path.exists(labels_path):
+        import urllib.request  # noqa: PLC0415
+        urllib.request.urlretrieve(
+            "https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt",
+            labels_path,
+        )
+    with open(labels_path) as f:
+        _IMAGENET_LABELS[:] = [line.strip() for line in f.readlines()]
+
+
+def _ensure_model_file(model_id: str) -> str:
+    path = os.path.join(VISION_CACHE_DIR, f"{model_id}.onnx")
+    if not os.path.exists(path):
+        import urllib.request  # noqa: PLC0415
+        urllib.request.urlretrieve(_IMAGE_MODEL_CONFIGS[model_id]["url"], path)
+    return path
 
 
 @app.get("/image-models")
 def list_image_models():
     return [
-        {"id": k, "label": v["label"], "description": v["description"], "input_size": v["input_size"]}
+        {
+            "id":          k,
+            "label":       v["label"],
+            "description": v["description"],
+            "input_size":  v["input_size"],
+            "size_mb":     v["size_mb"],
+        }
         for k, v in _IMAGE_MODEL_CONFIGS.items()
     ]
 
@@ -623,60 +665,61 @@ async def classify_image(
     top_k = max(1, min(top_k, 10))
     cfg   = _IMAGE_MODEL_CONFIGS[model_name]
 
-    # Lazy-load: one model in memory at a time (Render free tier is 512 MB)
+    # Download labels once
+    try:
+        _ensure_labels()
+    except Exception as e:
+        raise HTTPException(500, f"Failed to load ImageNet labels: {e}")
+
+    # Lazy-load ONNX session — one model in memory at a time
     if _img_active[0] != model_name:
         _img_cache.clear()
         try:
-            import tensorflow as tf  # noqa: PLC0415
-            if model_name == "mobilenetv2":
-                mdl = tf.keras.applications.MobileNetV2(weights="imagenet", include_top=True)
-                pre = tf.keras.applications.mobilenet_v2.preprocess_input
-            elif model_name == "efficientnetb0":
-                mdl = tf.keras.applications.EfficientNetB0(weights="imagenet", include_top=True)
-                pre = tf.keras.applications.efficientnet.preprocess_input
-            elif model_name == "resnet50":
-                mdl = tf.keras.applications.ResNet50(weights="imagenet", include_top=True)
-                pre = tf.keras.applications.resnet50.preprocess_input
-            else:
-                mdl = tf.keras.applications.InceptionV3(weights="imagenet", include_top=True)
-                pre = tf.keras.applications.inception_v3.preprocess_input
-            _img_cache["model"]   = mdl
-            _img_cache["pre"]     = pre
-            _img_cache["decode"]  = tf.keras.applications.imagenet_utils.decode_predictions
+            import onnxruntime as ort  # noqa: PLC0415
+            model_path = _ensure_model_file(model_name)
+            session    = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+            _img_cache["session"] = session
             _img_active[0]        = model_name
         except Exception as e:
             raise HTTPException(500, f"Failed to load model '{model_name}': {e}")
 
-    mdl     = _img_cache["model"]
-    pre     = _img_cache["pre"]
-    decode  = _img_cache["decode"]
+    session = _img_cache["session"]
     size    = cfg["input_size"]
 
     content = await file.read()
     try:
         from PIL import Image as PILImage  # noqa: PLC0415
         import numpy as np                 # noqa: PLC0415
-        img = PILImage.open(io.BytesIO(content)).convert("RGB")
-        img = img.resize((size, size), PILImage.LANCZOS)
-        arr = np.expand_dims(np.array(img, dtype=np.float32), axis=0)
-        arr = pre(arr)
+        img  = PILImage.open(io.BytesIO(content)).convert("RGB")
+        img  = img.resize((size, size), PILImage.LANCZOS)
+        arr  = np.array(img, dtype=np.float32) / 255.0
+        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+        std  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+        arr  = (arr - mean) / std
+        arr  = arr.transpose(2, 0, 1)       # HWC → CHW
+        arr  = np.expand_dims(arr, axis=0)  # → (1, 3, H, W)
     except Exception as e:
         raise HTTPException(400, f"Could not process image: {e}")
 
-    preds   = mdl.predict(arr, verbose=0)
-    decoded = decode(preds, top=top_k)[0]
+    input_name = session.get_inputs()[0].name
+    scores     = session.run(None, {input_name: arr})[0][0]  # (1000,)
 
+    import numpy as np  # noqa: PLC0415 — already cached by Python; just re-binds name
+    scores = np.exp(scores - scores.max())
+    scores = scores / scores.sum()
+
+    top_idx = scores.argsort()[::-1][:top_k]
     return {
         "model":       model_name,
         "model_label": cfg["label"],
         "predictions": [
             {
                 "rank":       i + 1,
-                "class_id":   d[0],
-                "label":      d[1].replace("_", " "),
-                "confidence": round(float(d[2]), 4),
+                "class_id":   str(top_idx[i]),
+                "label":      _IMAGENET_LABELS[top_idx[i]] if top_idx[i] < len(_IMAGENET_LABELS) else f"class_{top_idx[i]}",
+                "confidence": round(float(scores[top_idx[i]]), 4),
             }
-            for i, d in enumerate(decoded)
+            for i in range(top_k)
         ],
     }
 

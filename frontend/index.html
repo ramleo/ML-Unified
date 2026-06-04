@@ -1103,10 +1103,10 @@ let visionModel    = 'mobilenetv2';
 let visionImageURL = null;
 
 const VISION_MODEL_META = {
-  mobilenetv2:   { label: 'MobileNetV2',   desc: 'Fast & lightweight' },
-  efficientnetb0:{ label: 'EfficientNetB0',desc: 'Best accuracy/speed' },
-  resnet50:      { label: 'ResNet50',       desc: 'Classic deep residual' },
-  inceptionv3:   { label: 'InceptionV3',   desc: 'Multi-scale recognition' },
+  mobilenetv2: { label: 'MobileNetV2',    desc: 'Fast & lightweight (14 MB)' },
+  resnet50:    { label: 'ResNet50',        desc: 'Classic deep residual (98 MB)' },
+  squeezenet:  { label: 'SqueezeNet 1.1', desc: 'Tiny & fast (5 MB)' },
+  googlenet:   { label: 'GoogLeNet',      desc: 'Multi-scale Inception (28 MB)' },
 };
 
 function selectVision() {
