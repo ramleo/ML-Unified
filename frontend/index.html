@@ -1768,13 +1768,10 @@ async function runObjectDetect() {
   try {
     const res = await fetch(`${API}/detect-objects`, { method: 'POST', body: form });
     if (!res.ok) {
+      const raw = await res.text();
       let msg;
-      try { const j = await res.json(); msg = j.detail || JSON.stringify(j); }
-      catch { msg = await res.text(); }
-      if (res.status === 503) {
-        showDetRetry(msg, form);
-        return;
-      }
+      try { const j = JSON.parse(raw); msg = j.detail || raw; } catch { msg = raw; }
+      if (res.status === 503) { showDetRetry(msg); return; }
       throw new Error(msg);
     }
     const data = await res.json();
@@ -1944,13 +1941,10 @@ async function runSegmentation() {
   try {
     const res = await fetch(`${API}/segment-image`, { method: 'POST', body: form });
     if (!res.ok) {
+      const raw = await res.text();
       let msg;
-      try { const j = await res.json(); msg = j.detail || JSON.stringify(j); }
-      catch { msg = await res.text(); }
-      if (res.status === 503) {
-        showSegRetry(msg, form);
-        return;
-      }
+      try { const j = JSON.parse(raw); msg = j.detail || raw; } catch { msg = raw; }
+      if (res.status === 503) { showSegRetry(msg); return; }
       throw new Error(msg);
     }
     const data = await res.json();
