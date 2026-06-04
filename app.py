@@ -962,77 +962,87 @@ async def detect_objects(
 
     orig_w, orig_h = img.width, img.height
 
-    # TinyYOLOv3 — preprocess: resize to 416×416, normalise to [0,1] (no ImageNet mean/std)
-    resized = img.resize((size, size), PILImage.LANCZOS)
-    arr     = np.array(resized, dtype=np.float32) / 255.0
-    arr     = arr.transpose(2, 0, 1)                       # HWC → CHW
-    arr     = np.expand_dims(arr, axis=0)                  # → (1, 3, 416, 416)
-    image_shape = np.array([[orig_h, orig_w]], dtype=np.float32)
-
     try:
-        outputs = session.run(None, {"input_1": arr, "image_shape": image_shape})
+        # TinyYOLOv3 — preprocess: resize to 416×416, normalise to [0,1]
+        resized = img.resize((size, size), PILImage.LANCZOS)
+        arr     = np.array(resized, dtype=np.float32) / 255.0
+        arr     = arr.transpose(2, 0, 1)               # HWC → CHW
+        arr     = np.expand_dims(arr, axis=0)           # → (1, 3, 416, 416)
+        image_shape = np.array([[orig_h, orig_w]], dtype=np.float32)
+
+        # Use actual input names from the session (not hardcoded strings)
+        inp = session.get_inputs()
+        feed: Dict[str, Any] = {inp[0].name: arr}
+        if len(inp) >= 2:
+            feed[inp[1].name] = image_shape
+
+        outputs = session.run(None, feed)
+
+        # TinyYOLOv3 outputs:
+        #   [0] boxes   (1, max_boxes, 4)  — y1,x1,y2,x2 in original pixel coords
+        #   [1] scores  (1, 80, max_boxes) — per-class confidence
+        #   [2] indices (num_det, 3)        — [batch, class_id, box_idx] (post-NMS)
+        boxes   = np.array(outputs[0][0])   # (max_boxes, 4)
+        scores  = np.array(outputs[1][0])   # (80, max_boxes)
+        indices = np.array(outputs[2])      # (num_det, 3)
+
+        detections = []
+        for row in indices:
+            class_idx = int(row[1])
+            box_idx   = int(row[2])
+            if class_idx >= scores.shape[0] or box_idx >= scores.shape[1]:
+                continue
+            s = float(scores[class_idx, box_idx])
+            if s < confidence:
+                continue
+
+            name_idx = class_idx + 1       # offset: _COCO_CLASSES[0] = "__background__"
+            if name_idx >= len(_COCO_CLASSES):
+                continue
+
+            b = boxes[box_idx]             # [y1, x1, y2, x2] in original pixels
+            y1, x1 = float(b[0]), float(b[1])
+            y2, x2 = float(b[2]), float(b[3])
+
+            x1, y1 = max(0.0, x1), max(0.0, y1)
+            x2, y2 = min(float(orig_w), x2), min(float(orig_h), y2)
+
+            if x2 <= x1 or y2 <= y1:
+                continue
+
+            detections.append({
+                "class_id":   name_idx,
+                "label":      _COCO_CLASSES[name_idx],
+                "confidence": round(s, 4),
+                "box":        {"x1": int(x1), "y1": int(y1), "x2": int(x2), "y2": int(y2)},
+            })
+
+        detections.sort(key=lambda d: d["confidence"], reverse=True)
+        detections = detections[:max_dets]
+
+        # Draw boxes on original image
+        draw = ImageDraw.Draw(img)
+        for det in detections:
+            color = _BOX_PALETTE[det["class_id"] % len(_BOX_PALETTE)]
+            b     = det["box"]
+            draw.rectangle([b["x1"], b["y1"], b["x2"], b["y2"]], outline=color, width=3)
+            text   = f"{det['label']} {det['confidence']:.0%}"
+            tx, ty = b["x1"], max(0, b["y1"] - 15)
+            tw     = len(text) * 6 + 6
+            draw.rectangle([tx, ty, tx + tw, ty + 14], fill=color)
+            draw.text((tx + 3, ty + 2), text, fill="#000000")
+
+        # Cap output resolution
+        if max(img.width, img.height) > _MAX_IMG_DIM:
+            img.thumbnail((_MAX_IMG_DIM, _MAX_IMG_DIM), PILImage.LANCZOS)
+
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        b64 = base64.b64encode(buf.getvalue()).decode()
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(500, f"Inference failed: {e}")
-
-    # TinyYOLOv3 outputs:
-    #   outputs[0] boxes   (1, max_boxes, 4)  — y1,x1,y2,x2 in original pixel coords
-    #   outputs[1] scores  (1, 80, max_boxes) — per-class confidence
-    #   outputs[2] indices (num_det, 3)        — [batch, class_id, box_idx] (post-NMS)
-    boxes   = outputs[0][0]   # (max_boxes, 4)
-    scores  = outputs[1][0]   # (80, max_boxes)
-    indices = outputs[2]      # (num_det, 3)
-
-    detections = []
-    for row in indices:
-        class_idx = int(row[1])
-        box_idx   = int(row[2])
-        s = float(scores[class_idx, box_idx])
-        if s < confidence:
-            continue
-
-        name_idx = class_idx + 1           # offset: _COCO_CLASSES[0] = "__background__"
-        if name_idx >= len(_COCO_CLASSES):
-            continue
-
-        b = boxes[box_idx]                 # [y1, x1, y2, x2] in original pixels
-        y1, x1 = float(b[0]), float(b[1])
-        y2, x2 = float(b[2]), float(b[3])
-
-        x1, y1 = max(0.0, x1), max(0.0, y1)
-        x2, y2 = min(float(orig_w), x2), min(float(orig_h), y2)
-
-        if x2 <= x1 or y2 <= y1:
-            continue
-
-        detections.append({
-            "class_id":   name_idx,
-            "label":      _COCO_CLASSES[name_idx],
-            "confidence": round(s, 4),
-            "box":        {"x1": int(x1), "y1": int(y1), "x2": int(x2), "y2": int(y2)},
-        })
-
-    detections.sort(key=lambda d: d["confidence"], reverse=True)
-    detections = detections[:max_dets]
-
-    # Draw boxes on original image
-    draw = ImageDraw.Draw(img)
-    for det in detections:
-        color = _BOX_PALETTE[det["class_id"] % len(_BOX_PALETTE)]
-        b     = det["box"]
-        draw.rectangle([b["x1"], b["y1"], b["x2"], b["y2"]], outline=color, width=3)
-        text   = f"{det['label']} {det['confidence']:.0%}"
-        tx, ty = b["x1"], max(0, b["y1"] - 15)
-        tw     = len(text) * 6 + 6
-        draw.rectangle([tx, ty, tx + tw, ty + 14], fill=color)
-        draw.text((tx + 3, ty + 2), text, fill="#000000")
-
-    # Cap output resolution
-    if max(img.width, img.height) > _MAX_IMG_DIM:
-        img.thumbnail((_MAX_IMG_DIM, _MAX_IMG_DIM), PILImage.LANCZOS)
-
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    b64 = base64.b64encode(buf.getvalue()).decode()
+        raise HTTPException(500, f"Detection failed: {e}")
 
     return {
         "model":                model_name,
