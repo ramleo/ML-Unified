@@ -1711,6 +1711,27 @@ function renderObjectDetectionPanel() {
       </div>
 
       <div id="detResult"></div>
+
+      <div style="margin-top:2rem;border-top:1px solid var(--border);padding-top:1.25rem">
+        <button id="detClassBtn" onclick="toggleDetClassBrowser()"
+                style="background:none;border:none;color:var(--text3);font-size:0.8rem;
+                       cursor:pointer;padding:0;font-weight:600">
+          Browse 80 COCO classes ▸
+        </button>
+        <div id="detClassPanel" style="display:none;margin-top:0.75rem">
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.6rem">
+            <input type="text" class="field-input" placeholder="Search classes…"
+                   oninput="renderDetClassList(this.value)"
+                   style="flex:1;font-size:0.82rem;padding:0.4rem 0.65rem">
+            <span id="detClassCount" style="font-size:0.72rem;color:var(--text3);white-space:nowrap">80 classes</span>
+          </div>
+          <div id="detClassGrid"
+               style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));
+                      gap:0.3rem;max-height:260px;overflow-y:auto;padding:0.5rem;
+                      background:var(--bg-input);border:1px solid var(--border2);border-radius:10px">
+          </div>
+        </div>
+      </div>
     </div>`;
 
   const zone = document.getElementById('detUploadZone');
@@ -1739,6 +1760,44 @@ function setDetFile(f) {
   btn.disabled = false; btn.style.opacity = '1';
   document.getElementById('detResult').innerHTML = '';
   document.getElementById('detErr').innerHTML    = '';
+}
+
+/* ── COCO 80 class browser ── */
+const _COCO_80 = [
+  'person','bicycle','car','motorcycle','airplane','bus','train','truck','boat',
+  'traffic light','fire hydrant','stop sign','parking meter','bench','bird','cat',
+  'dog','horse','sheep','cow','elephant','bear','zebra','giraffe','backpack',
+  'umbrella','handbag','tie','suitcase','frisbee','skis','snowboard','sports ball',
+  'kite','baseball bat','baseball glove','skateboard','surfboard','tennis racket',
+  'bottle','wine glass','cup','fork','knife','spoon','bowl','banana','apple',
+  'sandwich','orange','broccoli','carrot','hot dog','pizza','donut','cake','chair',
+  'couch','potted plant','bed','dining table','toilet','tv','laptop','mouse',
+  'remote','keyboard','cell phone','microwave','oven','toaster','sink',
+  'refrigerator','book','clock','vase','scissors','teddy bear','hair drier','toothbrush'
+];
+
+function toggleDetClassBrowser() {
+  const panel = document.getElementById('detClassPanel');
+  const btn   = document.getElementById('detClassBtn');
+  if (!panel) return;
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  btn.textContent = open ? 'Browse 80 COCO classes ▾' : 'Browse 80 COCO classes ▸';
+  if (open) renderDetClassList('');
+}
+
+function renderDetClassList(q) {
+  const grid  = document.getElementById('detClassGrid');
+  const count = document.getElementById('detClassCount');
+  if (!grid) return;
+  const lq       = q.toLowerCase();
+  const filtered = q ? _COCO_80.filter(c => c.includes(lq)) : _COCO_80;
+  grid.innerHTML  = filtered.map(c =>
+    `<div style="padding:0.25rem 0.5rem;font-size:0.75rem;color:var(--text2);
+                 background:var(--bg-card);border:1px solid var(--border2);border-radius:6px;
+                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${c}">${c}</div>`
+  ).join('');
+  count.textContent = q ? `${filtered.length} of 80 matching` : '80 classes';
 }
 
 /* ── Shared XHR progress helper for vision panels ── */
