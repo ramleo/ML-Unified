@@ -488,6 +488,84 @@ def test_detect_objects_confidence_filter():
     assert data["count"] == 1                          # car (0.2) filtered out
     assert data["detections"][0]["label"] == "person"
 
+# ── Image Segmentation ────────────────────────────────────────────────────────
+
+def test_list_seg_models():
+    r = client.get("/seg-models")
+    assert r.status_code == 200
+    models = r.json()
+    assert isinstance(models, list)
+    assert len(models) >= 1
+    ids = [m["id"] for m in models]
+    assert "fcn_resnet50" in ids
+    for m in models:
+        assert "label" in m
+        assert "size_mb" in m
+
+def test_segment_image_bad_model():
+    r = client.post("/segment-image",
+        files={"file": ("test.png", _make_png(), "image/png")},
+        data={"model_name": "nonexistent"})
+    assert r.status_code == 400
+
+def test_segment_image_inference():
+    """Full pipeline with mocked ONNX session — no model download required."""
+    import app as app_module
+
+    # FCN output: (1, 21, H, W) — put class 15 (person) on a patch
+    h, w = 64, 64
+    fake_logits = np.zeros((1, 21, h, w), dtype=np.float32)
+    fake_logits[0, 15, 20:50, 20:50] = 10.0   # person class dominates that region
+
+    mock_session = MagicMock()
+    mock_session.run.return_value    = [fake_logits]
+    mock_session.get_inputs.return_value  = [MagicMock(name="input")]
+    mock_session.get_outputs.return_value = [MagicMock(name="out")]
+
+    with patch.object(app_module, "_seg_cache",  {"session": mock_session}), \
+         patch.object(app_module, "_seg_active", ["fcn_resnet50"]):
+        r = client.post("/segment-image",
+            files={"file": ("test.png", _make_png(64, 64), "image/png")},
+            data={"model_name": "fcn_resnet50"})
+
+    assert r.status_code == 200
+    data = r.json()
+    assert data["model"] == "fcn_resnet50"
+    assert isinstance(data["classes_found"], list)
+    assert len(data["classes_found"]) >= 1
+    labels = [c["label"] for c in data["classes_found"]]
+    assert "person" in labels
+    for c in data["classes_found"]:
+        assert 0.0 <= c["percentage"] <= 100.0
+        assert c["color"].startswith("#")
+    assert data["image_b64"].startswith("data:image/png;base64,")
+    assert data["orig_width"]  == 64
+    assert data["orig_height"] == 64
+
+def test_segment_image_background_only():
+    """When all pixels are class 0 (background), classes_found must be empty."""
+    import app as app_module
+
+    h, w = 32, 32
+    fake_logits = np.zeros((1, 21, h, w), dtype=np.float32)
+    fake_logits[0, 0, :, :] = 10.0   # background wins everywhere
+
+    mock_session = MagicMock()
+    mock_session.run.return_value    = [fake_logits]
+    mock_session.get_inputs.return_value  = [MagicMock(name="input")]
+    mock_session.get_outputs.return_value = [MagicMock(name="out")]
+
+    with patch.object(app_module, "_seg_cache",  {"session": mock_session}), \
+         patch.object(app_module, "_seg_active", ["fcn_resnet50"]):
+        r = client.post("/segment-image",
+            files={"file": ("test.png", _make_png(32, 32), "image/png")},
+            data={"model_name": "fcn_resnet50"})
+
+    assert r.status_code == 200
+    data = r.json()
+    assert data["classes_found"] == []
+    assert data["image_b64"].startswith("data:image/png;base64,")
+
 def test_train_missing_target_col():
     csv = b"a,b,c\n1,2,3\n4,5,6\n"
     r = client.post("/train",

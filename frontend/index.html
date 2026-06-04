@@ -442,6 +442,21 @@ body {
 }
 .det-tag-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
+/* ── Image Segmentation Panel ── */
+.seg-class-list {
+  display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem;
+}
+.seg-class-chip {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.22rem 0.55rem; border-radius: 20px;
+  font-size: 0.74rem; font-weight: 600;
+}
+.seg-chip-swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.seg-result-img {
+  width: 100%; border-radius: 12px; border: 1px solid var(--border2);
+  display: block; margin-bottom: 1rem;
+}
+
 /* ── Unsupervised Panel ── */
 .u-panel { padding: 1.5rem; max-width: 860px; }
 .u-header { display:flex; gap:1rem; align-items:flex-start; margin-bottom:1.5rem; }
@@ -585,6 +600,13 @@ function renderSidebar() {
       <div class="model-btn-info">
         <div class="model-btn-title">Object Detection</div>
         <div class="model-btn-sub">SSD · COCO 80 classes</div>
+      </div>
+    </button>
+    <button class="model-btn" id="vbtn-segmentation" onclick="selectSegmentation()">
+      <div class="model-dot" style="background:#a78bfa"></div>
+      <div class="model-btn-info">
+        <div class="model-btn-title">Image Segmentation</div>
+        <div class="model-btn-sub">FCN · Pascal VOC 21 classes</div>
       </div>
     </button>` +
     `<div style="flex:1"></div>
@@ -1790,6 +1812,158 @@ function renderDetectionResult(data) {
         ${data.count > 0 ? `
         <div style="margin-top:1rem">
           <a href="${data.image_b64}" download="detected_objects.png"
+             class="btn btn-clear" style="text-decoration:none;font-size:0.8rem">
+            ↓ Download
+          </a>
+        </div>` : ''}
+      </div>
+    </div>`;
+}
+
+// ── Image Segmentation ───────────────────────────────────────────────────────
+let segFile     = null;
+let segImageURL = null;
+
+function selectSegmentation() {
+  document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('vbtn-segmentation');
+  if (btn) btn.classList.add('active');
+  document.documentElement.style.setProperty('--accent', '#a78bfa');
+  renderSegmentationPanel();
+}
+
+function renderSegmentationPanel() {
+  segFile     = null;
+  segImageURL = null;
+
+  document.getElementById('main').innerHTML = `
+    <div class="vision-panel">
+      <div class="u-header">
+        <div class="u-dot" style="background:#a78bfa"></div>
+        <div>
+          <div class="u-title">Image Segmentation</div>
+          <div class="u-subtitle">Upload any photo — each pixel is classified into one of 21 Pascal VOC categories (people, animals, vehicles, furniture…) using FCN-ResNet50. Classes are colour-overlaid on the original image.</div>
+        </div>
+      </div>
+
+      <div class="upload-zone" id="segUploadZone">
+        <input type="file" id="segImageInput" accept="image/*" onchange="handleSegFile(event)">
+        <div class="upload-zone-icon">🖼️</div>
+        <div class="upload-zone-text">Click to browse or drag &amp; drop</div>
+        <div class="upload-zone-sub">JPEG, PNG, WebP</div>
+      </div>
+
+      <div id="segPreviewSection" style="display:none;margin:0.75rem 0">
+        <img id="segPreviewImg" class="vision-preview-img" src="" alt="preview">
+        <div id="segFileName" style="font-size:0.78rem;color:var(--text3);margin-top:0.4rem"></div>
+      </div>
+
+      <div id="segErr" style="margin-top:0.5rem"></div>
+
+      <div style="margin:1.25rem 0">
+        <button class="btn btn-primary" id="segRunBtn" onclick="runSegmentation()"
+                disabled style="opacity:0.4;background:#a78bfa">
+          Segment Image →
+        </button>
+      </div>
+
+      <div id="segResult"></div>
+    </div>`;
+
+  const zone = document.getElementById('segUploadZone');
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) setSegFile(f);
+  });
+}
+
+function handleSegFile(e) { const f = e.target.files[0]; if (f) setSegFile(f); }
+
+function setSegFile(f) {
+  segFile = f;
+  if (segImageURL) URL.revokeObjectURL(segImageURL);
+  segImageURL = URL.createObjectURL(f);
+
+  const prev = document.getElementById('segPreviewSection');
+  prev.style.display = 'block';
+  document.getElementById('segPreviewImg').src = segImageURL;
+  document.getElementById('segFileName').textContent = `📄 ${f.name}  (${(f.size/1024).toFixed(1)} KB)`;
+
+  const btn = document.getElementById('segRunBtn');
+  btn.disabled = false; btn.style.opacity = '1';
+  document.getElementById('segResult').innerHTML = '';
+  document.getElementById('segErr').innerHTML    = '';
+}
+
+async function runSegmentation() {
+  if (!segFile) return;
+  const btn   = document.getElementById('segRunBtn');
+  const errEl = document.getElementById('segErr');
+
+  btn.innerHTML = '<span class="spinner"></span> Segmenting…';
+  btn.disabled  = true;
+  errEl.innerHTML = '';
+  document.getElementById('segResult').innerHTML = `
+    <div style="text-align:center;padding:2rem 1rem;color:var(--text3)">
+      <span class="spinner" style="width:20px;height:20px;border-width:3px;display:inline-block"></span>
+      <div style="margin-top:0.75rem;font-size:0.82rem">
+        Running segmentation…<br>
+        <span style="font-size:0.72rem;opacity:0.7">First call downloads model weights (~135 MB) — may take up to 2 min on free tier</span>
+      </div>
+    </div>`;
+
+  const form = new FormData();
+  form.append('file',       segFile);
+  form.append('model_name', 'fcn_resnet50');
+
+  try {
+    const res = await fetch(`${API}/segment-image`, { method: 'POST', body: form });
+    if (!res.ok) { const t = await res.text(); throw new Error(t); }
+    const data = await res.json();
+    renderSegmentationResult(data);
+  } catch(e) {
+    document.getElementById('segResult').innerHTML = '';
+    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">${e.message}</div>`;
+  } finally {
+    btn.innerHTML = 'Segment Image →';
+    btn.disabled  = false;
+  }
+}
+
+function renderSegmentationResult(data) {
+  const accent  = '#a78bfa';
+  const classes = data.classes_found || [];
+
+  const noneMsg = classes.length === 0 ? `
+    <div style="padding:0.65rem 0.9rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);
+                border-radius:8px;color:#fbbf24;font-size:0.82rem;margin-bottom:1rem">
+      ⚠️ No foreground classes detected. The image may be background-only or out of distribution.
+    </div>` : '';
+
+  const chipsHTML = classes.map(c => `
+    <span class="seg-class-chip" style="background:${c.color}22;border:1px solid ${c.color}55">
+      <span class="seg-chip-swatch" style="background:${c.color}"></span>
+      ${c.label}
+      <span style="color:${c.color};font-weight:800">${c.percentage}%</span>
+    </span>`).join('');
+
+  document.getElementById('segResult').innerHTML = `
+    <div class="result-state" style="display:block;margin-top:0.5rem">
+      <div class="result-accent-bar" style="background:${accent}"></div>
+      <div class="result-body">
+        ${noneMsg}
+        <div class="proba-section-label" style="margin-bottom:0.75rem">
+          ${classes.length} class${classes.length !== 1 ? 'es' : ''} detected
+          &nbsp;·&nbsp; ${data.orig_width}×${data.orig_height} px
+        </div>
+        <img src="${data.image_b64}" class="seg-result-img" alt="segmentation result">
+        <div class="seg-class-list">${chipsHTML}</div>
+        ${classes.length > 0 ? `
+        <div style="margin-top:1rem">
+          <a href="${data.image_b64}" download="segmentation_result.png"
              class="btn btn-clear" style="text-decoration:none;font-size:0.8rem">
             ↓ Download
           </a>

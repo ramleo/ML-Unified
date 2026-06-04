@@ -1036,6 +1036,174 @@ async def detect_objects(
     }
 
 
+# ── Image Segmentation ───────────────────────────────────────────────────────
+
+_SEG_CLASSES: list = [
+    "__background__",
+    "aeroplane", "bicycle", "bird", "boat", "bottle",
+    "bus", "car", "cat", "chair", "cow",
+    "diningtable", "dog", "horse", "motorbike", "person",
+    "pottedplant", "sheep", "sofa", "train", "tvmonitor",
+]
+
+# Perceptually distinct palette (index 0 = background = transparent)
+_SEG_PALETTE: list = [
+    (0,   0,   0),    # background
+    (128, 0,   0),    # aeroplane
+    (0,   128, 0),    # bicycle
+    (128, 128, 0),    # bird
+    (0,   0,   128),  # boat
+    (128, 0,   128),  # bottle
+    (0,   128, 128),  # bus
+    (128, 128, 128),  # car
+    (64,  0,   0),    # cat
+    (192, 0,   0),    # chair
+    (64,  128, 0),    # cow
+    (192, 128, 0),    # diningtable
+    (64,  0,   128),  # dog
+    (192, 0,   128),  # horse
+    (64,  128, 128),  # motorbike
+    (192, 128, 128),  # person
+    (0,   64,  0),    # pottedplant
+    (128, 64,  0),    # sheep
+    (0,   192, 0),    # sofa
+    (128, 192, 0),    # train
+    (0,   64,  128),  # tvmonitor
+]
+
+_SEGMENTATION_MODEL_CONFIGS: Dict[str, Dict] = {
+    "fcn_resnet50": {
+        "label":       "FCN-ResNet50",
+        "description": "Fully Convolutional Network — ResNet-50 backbone, Pascal VOC 21 classes",
+        "url": (
+            "https://media.githubusercontent.com/media/onnx/models/main/"
+            "validated/vision/object_detection_segmentation/fcn/model/fcn-resnet50-11.onnx"
+        ),
+        "input_size":  480,
+        "size_mb":     135,
+    },
+}
+
+_seg_cache:  Dict[str, Any] = {}
+_seg_active: list = [None]
+
+
+def _ensure_seg_model(model_id: str) -> str:
+    import urllib.request  # noqa: PLC0415
+    cfg  = _SEGMENTATION_MODEL_CONFIGS[model_id]
+    path = os.path.join(VISION_CACHE_DIR, f"{model_id}.onnx")
+    if not os.path.exists(path):
+        urllib.request.urlretrieve(cfg["url"], path)
+    return path
+
+
+@app.get("/seg-models")
+def list_seg_models():
+    return [
+        {
+            "id":          k,
+            "label":       v["label"],
+            "description": v["description"],
+            "size_mb":     v["size_mb"],
+        }
+        for k, v in _SEGMENTATION_MODEL_CONFIGS.items()
+    ]
+
+
+@app.post("/segment-image")
+async def segment_image(
+    file:       UploadFile = File(...),
+    model_name: str        = Form("fcn_resnet50"),
+):
+    if model_name not in _SEGMENTATION_MODEL_CONFIGS:
+        raise HTTPException(status_code=400, detail=f"Unknown model: {model_name}")
+
+    from PIL import Image as PILImage  # noqa: PLC0415
+    import numpy as np                 # noqa: PLC0415
+    import base64                      # noqa: PLC0415
+
+    raw = await file.read()
+    img = PILImage.open(io.BytesIO(raw)).convert("RGB")
+    orig_w, orig_h = img.width, img.height
+
+    cfg       = _SEGMENTATION_MODEL_CONFIGS[model_name]
+    size      = cfg["input_size"]
+
+    # Resize for inference (preserve aspect ratio, pad to square with reflect)
+    img_r = img.copy()
+    img_r.thumbnail((size, size), PILImage.LANCZOS)
+
+    # Load / cache model
+    if _seg_active[0] != model_name:
+        _seg_cache.clear()
+        path = _ensure_seg_model(model_name)
+        import onnxruntime as ort  # noqa: PLC0415
+        _seg_cache["session"] = ort.InferenceSession(path)
+        _seg_active[0] = model_name
+
+    session = _seg_cache["session"]
+
+    arr = np.array(img_r, dtype=np.float32) / 255.0
+    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+    std  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+    arr  = (arr - mean) / std
+    arr  = arr.transpose(2, 0, 1)[np.newaxis]  # (1, 3, H, W)
+
+    input_name  = session.get_inputs()[0].name
+    output_name = session.get_outputs()[0].name
+    logits = session.run([output_name], {input_name: arr})[0]  # (1, 21, H, W)
+
+    label_map = np.argmax(logits[0], axis=0).astype(np.uint8)  # (H, W)
+
+    # Scale label map back to original image size
+    lm_img    = PILImage.fromarray(label_map, mode="L")
+    lm_resized = lm_img.resize((orig_w, orig_h), PILImage.NEAREST)
+    label_full = np.array(lm_resized)
+
+    # Build RGBA colour mask
+    colour_mask = np.zeros((orig_h, orig_w, 4), dtype=np.uint8)
+    classes_found = {}
+    for cls_id, rgb in enumerate(_SEG_PALETTE):
+        if cls_id == 0:
+            continue  # skip background
+        px = np.where(label_full == cls_id)
+        count = len(px[0])
+        if count == 0:
+            continue
+        colour_mask[px[0], px[1], :3] = rgb
+        colour_mask[px[0], px[1],  3] = 180  # ~70% opacity
+        classes_found[cls_id] = count
+
+    mask_pil   = PILImage.fromarray(colour_mask, mode="RGBA")
+    orig_rgba  = img.convert("RGBA")
+    composite  = PILImage.alpha_composite(orig_rgba, mask_pil).convert("RGB")
+
+    buf = io.BytesIO()
+    composite.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode()
+
+    total_px = orig_w * orig_h
+    detected = [
+        {
+            "class_id":    cid,
+            "label":       _SEG_CLASSES[cid],
+            "pixel_count": cnt,
+            "percentage":  round(cnt / total_px * 100, 2),
+            "color":       "#{:02x}{:02x}{:02x}".format(*_SEG_PALETTE[cid]),
+        }
+        for cid, cnt in sorted(classes_found.items(), key=lambda x: -x[1])
+    ]
+
+    return {
+        "model":       model_name,
+        "model_label": cfg["label"],
+        "classes_found": detected,
+        "image_b64":   f"data:image/png;base64,{b64}",
+        "orig_width":  orig_w,
+        "orig_height": orig_h,
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
