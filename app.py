@@ -978,21 +978,35 @@ async def detect_objects(
 
         outputs = session.run(None, feed)
 
-        # TinyYOLOv3 outputs:
-        #   [0] boxes   (1, max_boxes, 4)  — y1,x1,y2,x2 in original pixel coords
-        #   [1] scores  (1, 80, max_boxes) — per-class confidence
-        #   [2] indices (num_det, 3)        — [batch, class_id, box_idx] (post-NMS)
-        boxes   = np.array(outputs[0][0])   # (max_boxes, 4)
-        scores  = np.array(outputs[1][0])   # (80, max_boxes)
-        indices = np.array(outputs[2])      # (num_det, 3)
+        # TinyYOLOv3 outputs (keep batch dim — matches ONNX Model Zoo notebook):
+        #   [0] boxes_out   (1, max_boxes, 4)  — y1,x1,y2,x2 in original pixel coords
+        #   [1] scores_out  (1, 80, max_boxes) — per-class confidence
+        #   [2] indices_raw (num_det, 3)        — [batch, class_id, box_idx] (post-NMS)
+        boxes_out   = np.array(outputs[0])
+        scores_out  = np.array(outputs[1])
+        indices_raw = np.array(outputs[2])
+
+        # Normalise indices to shape (K, 3) — empty case returns (0,) on some runtimes
+        if indices_raw.ndim < 2 or indices_raw.size == 0:
+            indices_2d: np.ndarray = np.empty((0, 3), dtype=np.int64)
+        else:
+            indices_2d = indices_raw.reshape(-1, 3)
 
         detections = []
-        for row in indices:
-            class_idx = int(row[1])
-            box_idx   = int(row[2])
-            if class_idx >= scores.shape[0] or box_idx >= scores.shape[1]:
+        for idx_ in indices_2d:
+            batch_idx = int(idx_[0])
+            class_idx = int(idx_[1])
+            box_idx   = int(idx_[2])
+
+            # Bounds-check before indexing
+            if (batch_idx >= scores_out.shape[0]
+                    or class_idx >= scores_out.shape[1]
+                    or box_idx   >= scores_out.shape[2]
+                    or batch_idx >= boxes_out.shape[0]
+                    or box_idx   >= boxes_out.shape[1]):
                 continue
-            s = float(scores[class_idx, box_idx])
+
+            s = float(scores_out[batch_idx, class_idx, box_idx])
             if s < confidence:
                 continue
 
@@ -1000,7 +1014,7 @@ async def detect_objects(
             if name_idx >= len(_COCO_CLASSES):
                 continue
 
-            b = boxes[box_idx]             # [y1, x1, y2, x2] in original pixels
+            b = boxes_out[batch_idx, box_idx]   # [y1, x1, y2, x2] in original pixels
             y1, x1 = float(b[0]), float(b[1])
             y2, x2 = float(b[2]), float(b[3])
 
@@ -1042,7 +1056,12 @@ async def detect_objects(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(500, f"Detection failed: {e}")
+        shape_info = ""
+        try:
+            shape_info = f" | output shapes: {[np.array(o).shape for o in outputs]}"  # type: ignore[name-defined]
+        except Exception:
+            pass
+        raise HTTPException(500, f"Detection failed: {e}{shape_info}")
 
     return {
         "model":                model_name,
