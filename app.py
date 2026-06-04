@@ -963,12 +963,20 @@ async def detect_objects(
     orig_w, orig_h = img.width, img.height
 
     try:
-        # TinyYOLOv3 — preprocess: resize to 416×416, normalise to [0,1]
-        resized = img.resize((size, size), PILImage.LANCZOS)
-        arr     = np.array(resized, dtype=np.float32) / 255.0
-        arr     = arr.transpose(2, 0, 1)               # HWC → CHW
-        arr     = np.expand_dims(arr, axis=0)           # → (1, 3, 416, 416)
-        image_shape = np.array([[orig_h, orig_w]], dtype=np.float32)
+        # TinyYOLOv3 — letterbox: maintain aspect ratio, pad grey to 416×416
+        # Simple stretch degrades detection; YOLO was trained on letterboxed images
+        scale  = min(size / orig_w, size / orig_h)
+        nw, nh = int(orig_w * scale), int(orig_h * scale)
+        pad_x  = (size - nw) // 2
+        pad_y  = (size - nh) // 2
+        canvas = PILImage.new("RGB", (size, size), (128, 128, 128))
+        canvas.paste(img.resize((nw, nh), PILImage.LANCZOS), (pad_x, pad_y))
+
+        arr = np.array(canvas, dtype=np.float32) / 255.0
+        arr = arr.transpose(2, 0, 1)               # HWC → CHW
+        arr = np.expand_dims(arr, axis=0)           # → (1, 3, 416, 416)
+        # Pass model input size so boxes come back in 416×416 letterboxed space
+        image_shape = np.array([[size, size]], dtype=np.float32)
 
         # Use actual input names from the session (not hardcoded strings)
         inp = session.get_inputs()
@@ -1014,9 +1022,15 @@ async def detect_objects(
             if name_idx >= len(_COCO_CLASSES):
                 continue
 
-            b = boxes_out[batch_idx, box_idx]   # [y1, x1, y2, x2] in original pixels
-            y1, x1 = float(b[0]), float(b[1])
-            y2, x2 = float(b[2]), float(b[3])
+            b = boxes_out[batch_idx, box_idx]   # [y1, x1, y2, x2] in letterboxed 416×416
+            y1_lb, x1_lb = float(b[0]), float(b[1])
+            y2_lb, x2_lb = float(b[2]), float(b[3])
+
+            # Unletterbox: remove padding offset, then scale back to original image
+            x1 = (x1_lb - pad_x) / scale
+            y1 = (y1_lb - pad_y) / scale
+            x2 = (x2_lb - pad_x) / scale
+            y2 = (y2_lb - pad_y) / scale
 
             x1, y1 = max(0.0, x1), max(0.0, y1)
             x2, y2 = min(float(orig_w), x2), min(float(orig_h), y2)
