@@ -288,6 +288,69 @@ def test_classify_image_bad_model():
         data={"model_name": "nonexistent_model", "top_k": "3"})
     assert r.status_code == 400
 
+# ── Image Processing ─────────────────────────────────────────────────────────
+
+def _make_png(w=64, h=64, color=(128, 64, 32)) -> io.BytesIO:
+    from PIL import Image as PILImage
+    img = PILImage.new("RGB", (w, h), color=color)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return buf
+
+def test_list_image_operations():
+    r = client.get("/image-operations")
+    assert r.status_code == 200
+    ops = r.json()
+    ids = [o["id"] for o in ops]
+    assert "grayscale" in ids
+    assert "blur"       in ids
+    assert "sharpen"    in ids
+    assert "edges"      in ids
+    assert "rotate"     in ids
+    for o in ops:
+        assert "id"     in o
+        assert "label"  in o
+        assert "params" in o
+
+def test_process_image_grayscale():
+    r = client.post("/process-image",
+        files={"file": ("test.png", _make_png(), "image/png")},
+        data={"operation": "grayscale"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["operation"]       == "grayscale"
+    assert data["operation_label"] == "Grayscale"
+    assert data["image_b64"].startswith("data:image/png;base64,")
+    assert data["width"] == 64
+    assert data["height"] == 64
+
+def test_process_image_blur():
+    r = client.post("/process-image",
+        files={"file": ("test.png", _make_png(), "image/png")},
+        data={"operation": "blur", "blur_radius": "5"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["params_used"]["radius"] == 5
+    assert data["image_b64"].startswith("data:image/png;base64,")
+
+def test_process_image_rotate():
+    r = client.post("/process-image",
+        files={"file": ("test.png", _make_png(64, 32), "image/png")},
+        data={"operation": "rotate", "rotate_angle": "90"})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["params_used"]["angle"] == 90.0
+    # After 90° rotate with expand=True, width/height swap
+    assert data["width"] == 32
+    assert data["height"] == 64
+
+def test_process_image_bad_operation():
+    r = client.post("/process-image",
+        files={"file": ("test.png", _make_png(), "image/png")},
+        data={"operation": "nonexistent_op"})
+    assert r.status_code == 400
+
 def test_train_missing_target_col():
     csv = b"a,b,c\n1,2,3\n4,5,6\n"
     r = client.post("/train",

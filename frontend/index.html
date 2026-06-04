@@ -397,6 +397,33 @@ body {
 .vision-result-thumb { flex-shrink: 0; text-align: center; }
 .vision-result-preds { flex: 1; min-width: 200px; }
 
+/* ── Image Processing Panel ── */
+.ip-ops-grid {
+  display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.25rem;
+}
+.ip-op-chip {
+  padding: 0.35rem 0.75rem; border-radius: 20px;
+  border: 1px solid var(--border2); cursor: pointer;
+  background: transparent; color: var(--text2);
+  font-size: 0.78rem; font-weight: 600; transition: all 0.15s;
+}
+.ip-op-chip:hover { border-color: #fb923c; color: var(--text); }
+.ip-op-chip.selected { border-color: #fb923c; background: rgba(251,146,60,0.12); color: var(--text); }
+
+.ip-before-after {
+  display: flex; gap: 1.25rem; margin-top: 1.5rem; flex-wrap: wrap;
+}
+.ip-image-box { flex: 1; min-width: 200px; }
+.ip-image-label {
+  font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text3); margin-bottom: 0.5rem;
+}
+.ip-image-result {
+  width: 100%; border-radius: 12px; border: 1px solid var(--border2);
+  object-fit: contain; max-height: 340px; display: block;
+  background: var(--bg-input);
+}
+
 /* ── Unsupervised Panel ── */
 .u-panel { padding: 1.5rem; max-width: 860px; }
 .u-header { display:flex; gap:1rem; align-items:flex-start; margin-bottom:1.5rem; }
@@ -526,6 +553,13 @@ function renderSidebar() {
       <div class="model-btn-info">
         <div class="model-btn-title">Image Classifier</div>
         <div class="model-btn-sub">ImageNet · 1000 classes</div>
+      </div>
+    </button>
+    <button class="model-btn" id="vbtn-processing" onclick="selectImageProcessing()">
+      <div class="model-dot" style="background:#fb923c"></div>
+      <div class="model-btn-info">
+        <div class="model-btn-title">Image Processing</div>
+        <div class="model-btn-sub">Blur · Edges · Rotate · More</div>
       </div>
     </button>` +
     `<div style="flex:1"></div>
@@ -1361,6 +1395,210 @@ function renderCategoryList(query) {
     : '<div style="color:var(--text3);font-size:0.8rem;grid-column:1/-1">No matches</div>';
   document.getElementById('vCategoryCount').textContent =
     q ? `${filtered.length} of 1,000 matching` : '1,000 categories';
+}
+
+// ── Image Processing ─────────────────────────────────────────────────────
+let ipFile      = null;
+let ipImageURL  = null;
+let ipOperation = 'grayscale';
+
+const IP_OPERATIONS = [
+  { id: 'grayscale',  label: 'Grayscale',       params: [] },
+  { id: 'blur',       label: 'Blur',             params: [{ name: 'blur_radius',       label: 'Radius',   min: 1,    max: 20,  defaultVal: 3,   step: 1   }] },
+  { id: 'sharpen',    label: 'Sharpen',          params: [{ name: 'sharpen_factor',    label: 'Strength', min: 1.0,  max: 5.0, defaultVal: 2.0, step: 0.5 }] },
+  { id: 'edges',      label: 'Edge Detection',   params: [] },
+  { id: 'rotate',     label: 'Rotate',           params: [{ name: 'rotate_angle',      label: 'Angle °',  min: -180, max: 180, defaultVal: 90,  step: 1   }] },
+  { id: 'brightness', label: 'Brightness',       params: [{ name: 'brightness_factor', label: 'Factor',   min: 0.1,  max: 3.0, defaultVal: 1.5, step: 0.1 }] },
+  { id: 'contrast',   label: 'Contrast',         params: [{ name: 'contrast_factor',   label: 'Factor',   min: 0.1,  max: 3.0, defaultVal: 1.5, step: 0.1 }] },
+  { id: 'flip_h',     label: 'Flip Horizontal',  params: [] },
+  { id: 'flip_v',     label: 'Flip Vertical',    params: [] },
+  { id: 'emboss',     label: 'Emboss',           params: [] },
+  { id: 'invert',     label: 'Invert Colors',    params: [] },
+];
+
+function selectImageProcessing() {
+  document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('vbtn-processing');
+  if (btn) btn.classList.add('active');
+  document.documentElement.style.setProperty('--accent', '#fb923c');
+  renderImageProcessingPanel();
+}
+
+function renderImageProcessingPanel() {
+  ipFile     = null;
+  ipImageURL = null;
+
+  const chipsHTML = IP_OPERATIONS.map(op => `
+    <button class="ip-op-chip${op.id === ipOperation ? ' selected' : ''}"
+            data-op="${op.id}" onclick="selectIpOperation(this)">
+      ${op.label}
+    </button>`).join('');
+
+  document.getElementById('main').innerHTML = `
+    <div class="vision-panel">
+      <div class="u-header">
+        <div class="u-dot" style="background:#fb923c"></div>
+        <div>
+          <div class="u-title">Image Processing</div>
+          <div class="u-subtitle">Apply classical image operations — blur, sharpen, edge detection, rotation, colour adjustments, and more — all in the browser with instant before/after comparison.</div>
+        </div>
+      </div>
+
+      <div class="wizard-section">
+        <label class="wizard-label">Operation</label>
+        <div class="ip-ops-grid">${chipsHTML}</div>
+      </div>
+
+      <div id="ipParamsSection" style="margin-bottom:1.25rem"></div>
+
+      <div class="upload-zone" id="ipUploadZone">
+        <input type="file" id="ipImageInput" accept="image/*" onchange="handleIpFile(event)">
+        <div class="upload-zone-icon">🖼️</div>
+        <div class="upload-zone-text">Click to browse or drag &amp; drop</div>
+        <div class="upload-zone-sub">JPEG, PNG, WebP, GIF</div>
+      </div>
+
+      <div id="ipPreviewSection" style="display:none;margin:0.75rem 0">
+        <img id="ipPreviewImg" class="vision-preview-img" src="" alt="preview">
+        <div id="ipFileName" style="font-size:0.78rem;color:var(--text3);margin-top:0.4rem"></div>
+      </div>
+
+      <div id="ipErr" style="margin-top:0.5rem"></div>
+
+      <div style="margin:1.25rem 0">
+        <button class="btn btn-primary" id="ipApplyBtn" onclick="runImageProcess()" disabled style="opacity:0.4;background:#fb923c">
+          Apply →
+        </button>
+      </div>
+
+      <div id="ipResult"></div>
+    </div>`;
+
+  renderIpParams();
+
+  const zone = document.getElementById('ipUploadZone');
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) setIpFile(f);
+  });
+}
+
+function selectIpOperation(el) {
+  document.querySelectorAll('.ip-op-chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  ipOperation = el.dataset.op;
+  renderIpParams();
+}
+
+function renderIpParams() {
+  const sec = document.getElementById('ipParamsSection');
+  if (!sec) return;
+  const op = IP_OPERATIONS.find(o => o.id === ipOperation);
+  if (!op || op.params.length === 0) { sec.innerHTML = ''; return; }
+
+  sec.innerHTML = op.params.map(p => `
+    <div class="u-param-row">
+      <label class="wizard-label">${p.label}</label>
+      <input type="number" class="field-input" id="ipParam_${p.name}"
+             value="${p.defaultVal}" min="${p.min}" max="${p.max}" step="${p.step}"
+             style="width:100px">
+    </div>`).join('');
+}
+
+function handleIpFile(e) {
+  const f = e.target.files[0];
+  if (f) setIpFile(f);
+}
+
+function setIpFile(f) {
+  ipFile = f;
+  if (ipImageURL) URL.revokeObjectURL(ipImageURL);
+  ipImageURL = URL.createObjectURL(f);
+
+  const preview = document.getElementById('ipPreviewSection');
+  preview.style.display = 'block';
+  document.getElementById('ipPreviewImg').src = ipImageURL;
+  document.getElementById('ipFileName').textContent = `📄 ${f.name}  (${(f.size/1024).toFixed(1)} KB)`;
+
+  const btn = document.getElementById('ipApplyBtn');
+  btn.disabled = false; btn.style.opacity = '1';
+  document.getElementById('ipResult').innerHTML = '';
+  document.getElementById('ipErr').innerHTML    = '';
+}
+
+async function runImageProcess() {
+  if (!ipFile) return;
+  const btn   = document.getElementById('ipApplyBtn');
+  const errEl = document.getElementById('ipErr');
+
+  btn.innerHTML = '<span class="spinner"></span> Processing…';
+  btn.disabled  = true;
+  errEl.innerHTML = '';
+  document.getElementById('ipResult').innerHTML = `
+    <div style="text-align:center;padding:2rem 1rem;color:var(--text3)">
+      <span class="spinner" style="width:20px;height:20px;border-width:3px;display:inline-block"></span>
+      <div style="margin-top:0.75rem;font-size:0.82rem">Applying operation…</div>
+    </div>`;
+
+  const form = new FormData();
+  form.append('file',      ipFile);
+  form.append('operation', ipOperation);
+
+  const op = IP_OPERATIONS.find(o => o.id === ipOperation);
+  if (op) {
+    op.params.forEach(p => {
+      const el = document.getElementById(`ipParam_${p.name}`);
+      if (el) form.append(p.name, el.value);
+    });
+  }
+
+  try {
+    const res = await fetch(`${API}/process-image`, { method: 'POST', body: form });
+    if (!res.ok) { const t = await res.text(); throw new Error(t); }
+    const data = await res.json();
+    renderIpResult(data);
+  } catch(e) {
+    document.getElementById('ipResult').innerHTML = '';
+    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">${e.message}</div>`;
+  } finally {
+    btn.innerHTML = 'Apply →';
+    btn.disabled  = false;
+  }
+}
+
+function renderIpResult(data) {
+  const paramsText = Object.entries(data.params_used || {})
+    .map(([k, v]) => `${k}: ${v}`).join(' · ') || '';
+
+  document.getElementById('ipResult').innerHTML = `
+    <div class="result-state" style="display:block;margin-top:0.5rem">
+      <div class="result-accent-bar" style="background:#fb923c"></div>
+      <div class="result-body">
+        <div class="proba-section-label" style="margin-bottom:1rem">
+          ${data.operation_label}${paramsText ? ' — ' + paramsText : ''}
+          &nbsp;·&nbsp; ${data.width}×${data.height} px
+        </div>
+        <div class="ip-before-after">
+          <div class="ip-image-box">
+            <div class="ip-image-label">Original</div>
+            <img src="${ipImageURL}" class="ip-image-result" alt="original">
+          </div>
+          <div class="ip-image-box">
+            <div class="ip-image-label">Processed</div>
+            <img src="${data.image_b64}" class="ip-image-result" alt="processed">
+          </div>
+        </div>
+        <div style="margin-top:1rem">
+          <a href="${data.image_b64}" download="processed_${data.operation}.png"
+             class="btn btn-clear" style="text-decoration:none;font-size:0.8rem">
+            ↓ Download
+          </a>
+        </div>
+      </div>
+    </div>`;
 }
 
 // ── Unsupervised Analysis ──────────────────────────────────────
