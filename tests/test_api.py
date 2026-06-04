@@ -1,6 +1,7 @@
 import io
 import os
-import pytest
+import numpy as np
+from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from app import app, MODELS, SCHEMA_DIR, MODEL_DIR
 
@@ -288,6 +289,68 @@ def test_classify_image_bad_model():
         data={"model_name": "nonexistent_model", "top_k": "3"})
     assert r.status_code == 400
 
+def test_classify_image_inference():
+    """Exercises preprocessing → softmax → top-K with a mocked ONNX session."""
+    from PIL import Image as PILImage
+    img = PILImage.new("RGB", (300, 300), color=(100, 150, 200))
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    buf.seek(0)
+
+    # 1000-class logits: class 207 (golden retriever) gets a big score
+    fake_logits = np.zeros((1, 1000), dtype=np.float32)
+    fake_logits[0, 207] = 12.0
+
+    mock_session = MagicMock()
+    mock_session.run.return_value = [fake_logits]
+    mock_session.get_inputs.return_value = [MagicMock(name="input")]
+
+    fake_labels = ["background"] + [f"class_{i}" for i in range(999)]
+    fake_labels[207] = "golden retriever"
+
+    import app as app_module
+    with patch.object(app_module, "_img_cache",  {"session": mock_session}), \
+         patch.object(app_module, "_img_active", ["mobilenetv2"]), \
+         patch.object(app_module, "_IMAGENET_LABELS", fake_labels):
+        r = client.post("/classify-image",
+            files={"file": ("test.jpg", buf, "image/jpeg")},
+            data={"model_name": "mobilenetv2", "top_k": "3"})
+
+    assert r.status_code == 200
+    data = r.json()
+    assert data["model"]          == "mobilenetv2"
+    assert data["model_label"]    == "MobileNetV2"
+    assert not data["low_confidence"]
+    assert data["top_confidence"] > 0.99        # softmax of dominant logit ≈ 1
+    assert len(data["predictions"]) == 3
+    assert data["predictions"][0]["label"]      == "golden retriever"
+    assert data["predictions"][0]["class_id"]   == "207"
+
+def test_classify_image_low_confidence():
+    """When all logits are equal, top score ≈ 0.001 → low_confidence flag set."""
+    from PIL import Image as PILImage
+    img = PILImage.new("RGB", (100, 100), color=(0, 0, 0))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+
+    flat_logits = np.zeros((1, 1000), dtype=np.float32)  # uniform → each p ≈ 0.001
+    mock_session = MagicMock()
+    mock_session.run.return_value = [flat_logits]
+    mock_session.get_inputs.return_value = [MagicMock(name="input")]
+    fake_labels = [f"class_{i}" for i in range(1000)]
+
+    import app as app_module
+    with patch.object(app_module, "_img_cache",  {"session": mock_session}), \
+         patch.object(app_module, "_img_active", ["mobilenetv2"]), \
+         patch.object(app_module, "_IMAGENET_LABELS", fake_labels):
+        r = client.post("/classify-image",
+            files={"file": ("test.png", buf, "image/png")},
+            data={"model_name": "mobilenetv2", "top_k": "5"})
+
+    assert r.status_code == 200
+    assert r.json()["low_confidence"] is True
+
 # ── Image Processing ─────────────────────────────────────────────────────────
 
 def _make_png(w=64, h=64, color=(128, 64, 32)) -> io.BytesIO:
@@ -371,6 +434,59 @@ def test_detect_objects_bad_model():
         files={"file": ("img.jpg", io.BytesIO(jpg), "image/jpeg")},
         data={"model_name": "nonexistent_model"})
     assert r.status_code == 400
+
+def test_detect_objects_inference():
+    """Exercises box parsing, coordinate scaling, PIL drawing, and base64 output."""
+    # One normalised box: person (class 1), confidence 0.95
+    fake_boxes  = np.array([[[0.1, 0.1, 0.9, 0.9]]], dtype=np.float32)  # (1,1,4) y1,x1,y2,x2
+    fake_labels = np.array([[1]], dtype=np.int64)                         # person
+    fake_scores = np.array([[0.95]], dtype=np.float32)
+
+    mock_session = MagicMock()
+    mock_session.run.return_value = [fake_boxes, fake_labels, fake_scores]
+    mock_session.get_inputs.return_value = [MagicMock(name="image")]
+
+    import app as app_module
+    with patch.object(app_module, "_det_cache",  {"session": mock_session}), \
+         patch.object(app_module, "_det_active", ["ssd"]):
+        r = client.post("/detect-objects",
+            files={"file": ("test.png", _make_png(640, 480), "image/png")},
+            data={"model_name": "ssd", "confidence": "0.5"})
+
+    assert r.status_code == 200
+    data = r.json()
+    assert data["count"]                      == 1
+    assert data["detections"][0]["label"]     == "person"
+    assert data["detections"][0]["confidence"] == 0.95
+    box = data["detections"][0]["box"]
+    assert box["x1"] < box["x2"]
+    assert box["y1"] < box["y2"]
+    assert data["image_b64"].startswith("data:image/png;base64,")
+    assert data["orig_width"]  == 640
+    assert data["orig_height"] == 480
+
+def test_detect_objects_confidence_filter():
+    """Objects below the threshold must be excluded from results."""
+    fake_boxes  = np.array([[[0.1, 0.1, 0.5, 0.5],
+                              [0.2, 0.2, 0.8, 0.8]]], dtype=np.float32)
+    fake_labels = np.array([[1, 3]], dtype=np.int64)   # person, car
+    fake_scores = np.array([[0.9, 0.2]], dtype=np.float32)
+
+    mock_session = MagicMock()
+    mock_session.run.return_value = [fake_boxes, fake_labels, fake_scores]
+    mock_session.get_inputs.return_value = [MagicMock(name="image")]
+
+    import app as app_module
+    with patch.object(app_module, "_det_cache",  {"session": mock_session}), \
+         patch.object(app_module, "_det_active", ["ssd"]):
+        r = client.post("/detect-objects",
+            files={"file": ("test.png", _make_png(), "image/png")},
+            data={"model_name": "ssd", "confidence": "0.5"})
+
+    assert r.status_code == 200
+    data = r.json()
+    assert data["count"] == 1                          # car (0.2) filtered out
+    assert data["detections"][0]["label"] == "person"
 
 def test_train_missing_target_col():
     csv = b"a,b,c\n1,2,3\n4,5,6\n"
