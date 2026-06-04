@@ -254,6 +254,29 @@ def test_train_invalid_task():
               "accent": "#818cf8"})
     assert r.status_code == 400
 
+# ── Image models meta ────────────────────────────────────────────────────────
+
+def test_list_image_models():
+    r = client.get("/image-models")
+    assert r.status_code == 200
+    models = r.json()
+    ids = [m["id"] for m in models]
+    assert "mobilenetv2"    in ids
+    assert "efficientnetb0" in ids
+    assert "resnet50"       in ids
+    assert "inceptionv3"    in ids
+    for m in models:
+        assert "label"       in m
+        assert "description" in m
+        assert "input_size"  in m
+
+def test_classify_image_bad_model():
+    jpg = b"\xff\xd8\xff\xe0" + b"\x00" * 100   # minimal JPEG header bytes
+    r = client.post("/classify-image",
+        files={"file": ("img.jpg", io.BytesIO(jpg), "image/jpeg")},
+        data={"model_name": "nonexistent_model", "top_k": "3"})
+    assert r.status_code == 400
+
 def test_train_missing_target_col():
     csv = b"a,b,c\n1,2,3\n4,5,6\n"
     r = client.post("/train",

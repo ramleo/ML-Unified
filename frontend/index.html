@@ -365,6 +365,38 @@ body {
 .train-result-metric { font-size: 2rem; font-weight: 800; margin-bottom: 0.25rem; }
 .train-result-label  { font-size: 0.8rem; color: var(--text3); margin-bottom: 1.5rem; }
 
+/* ── Vision Panel ── */
+.vision-panel { padding: 1.5rem; max-width: 860px; }
+
+.vision-model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+.vision-model-chip {
+  padding: 0.6rem 0.75rem; border-radius: 10px;
+  border: 1px solid var(--border2); cursor: pointer;
+  background: transparent; color: var(--text2);
+  text-align: left; transition: all 0.15s; width: 100%;
+}
+.vision-model-chip:hover { border-color: #e879f9; color: var(--text); }
+.vision-model-chip.selected { border-color: #e879f9; background: rgba(232,121,249,0.1); color: var(--text); }
+.vmchip-label { font-size: 0.82rem; font-weight: 700; }
+.vmchip-desc  { font-size: 0.68rem; color: var(--text3); margin-top: 0.2rem; }
+.vision-model-chip.selected .vmchip-desc { color: #d946ef; }
+
+.vision-preview-img {
+  width: 140px; height: 140px; object-fit: cover;
+  border-radius: 12px; border: 1px solid var(--border2); display: block;
+}
+
+.vision-result-layout {
+  display: flex; gap: 1.5rem; align-items: flex-start; flex-wrap: wrap;
+}
+.vision-result-thumb { flex-shrink: 0; text-align: center; }
+.vision-result-preds { flex: 1; min-width: 200px; }
+
 /* ── Unsupervised Panel ── */
 .u-panel { padding: 1.5rem; max-width: 860px; }
 .u-header { display:flex; gap:1rem; align-items:flex-start; margin-bottom:1.5rem; }
@@ -488,6 +520,14 @@ function renderSidebar() {
         </div>
       </button>
     `).join('') +
+    '<div class="sidebar-label" style="margin-top:1rem">Vision</div>' +
+    `<button class="model-btn" id="vbtn-classifier" onclick="selectVision()">
+      <div class="model-dot" style="background:#e879f9"></div>
+      <div class="model-btn-info">
+        <div class="model-btn-title">Image Classifier</div>
+        <div class="model-btn-sub">ImageNet · 1000 classes</div>
+      </div>
+    </button>` +
     `<div style="flex:1"></div>
      <button class="sidebar-upload-btn" onclick="showUploadWizard()">
        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1055,6 +1095,189 @@ function cancelWizard() {
   if (allModels.length > 0) selectModel(allModels[0].id);
   else document.getElementById('main').innerHTML =
     '<div class="empty-state"><div class="empty-icon">\u{1F916}</div><div>Select a model from the sidebar to get started</div></div>';
+}
+
+// ── Vision / Image Classification ────────────────────────────────
+let visionFile     = null;
+let visionModel    = 'mobilenetv2';
+let visionImageURL = null;
+
+const VISION_MODEL_META = {
+  mobilenetv2:   { label: 'MobileNetV2',   desc: 'Fast & lightweight' },
+  efficientnetb0:{ label: 'EfficientNetB0',desc: 'Best accuracy/speed' },
+  resnet50:      { label: 'ResNet50',       desc: 'Classic deep residual' },
+  inceptionv3:   { label: 'InceptionV3',   desc: 'Multi-scale recognition' },
+};
+
+function selectVision() {
+  document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('vbtn-classifier');
+  if (btn) btn.classList.add('active');
+  document.documentElement.style.setProperty('--accent', '#e879f9');
+  renderImageClassifierPanel();
+}
+
+function renderImageClassifierPanel() {
+  visionFile     = null;
+  visionImageURL = null;
+
+  const chipHTML = Object.entries(VISION_MODEL_META).map(([id, m]) => `
+    <button class="vision-model-chip${id === visionModel ? ' selected' : ''}"
+            data-model="${id}" onclick="selectVisionModel(this)">
+      <div class="vmchip-label">${m.label}</div>
+      <div class="vmchip-desc">${m.desc}</div>
+    </button>`).join('');
+
+  document.getElementById('main').innerHTML = `
+    <div class="vision-panel">
+      <div class="u-header">
+        <div class="u-dot" style="background:#e879f9"></div>
+        <div>
+          <div class="u-title">Image Classifier</div>
+          <div class="u-subtitle">Upload any image — classify it against 1,000 ImageNet categories using four pre-trained deep learning models.</div>
+        </div>
+      </div>
+
+      <div class="wizard-section">
+        <label class="wizard-label">Pre-trained Model</label>
+        <div class="vision-model-grid">${chipHTML}</div>
+      </div>
+
+      <div class="u-param-row" style="margin-bottom:1.25rem">
+        <label class="wizard-label">Top predictions to show</label>
+        <input type="number" class="field-input" id="vTopK" value="5" min="1" max="10" step="1" style="width:70px">
+      </div>
+
+      <div class="upload-zone" id="vUploadZone">
+        <input type="file" id="vImageInput" accept="image/*" onchange="handleVisionFile(event)">
+        <div class="upload-zone-icon">🖼️</div>
+        <div class="upload-zone-text">Click to browse or drag &amp; drop</div>
+        <div class="upload-zone-sub">JPEG, PNG, WebP, GIF</div>
+      </div>
+
+      <div id="vPreviewSection" style="display:none;margin:1rem 0;display:none">
+        <img id="vPreviewImg" class="vision-preview-img" src="" alt="preview">
+        <div id="vFileName" style="font-size:0.78rem;color:var(--text3);margin-top:0.4rem"></div>
+      </div>
+
+      <div id="vErr" style="margin-top:0.5rem"></div>
+
+      <div style="margin:1.25rem 0">
+        <button class="btn btn-primary" id="vClassifyBtn" onclick="runImageClassify()" disabled style="opacity:0.4">
+          Classify →
+        </button>
+      </div>
+
+      <div id="vResult"></div>
+    </div>`;
+
+  const zone = document.getElementById('vUploadZone');
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) setVisionFile(f);
+  });
+}
+
+function selectVisionModel(el) {
+  document.querySelectorAll('.vision-model-chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  visionModel = el.dataset.model;
+}
+
+function handleVisionFile(e) {
+  const f = e.target.files[0];
+  if (f) setVisionFile(f);
+}
+
+function setVisionFile(f) {
+  visionFile = f;
+  if (visionImageURL) URL.revokeObjectURL(visionImageURL);
+  visionImageURL = URL.createObjectURL(f);
+
+  const preview = document.getElementById('vPreviewSection');
+  preview.style.display = 'block';
+  document.getElementById('vPreviewImg').src = visionImageURL;
+  document.getElementById('vFileName').textContent = `📄 ${f.name}  (${(f.size/1024).toFixed(1)} KB)`;
+
+  const btn = document.getElementById('vClassifyBtn');
+  btn.disabled = false; btn.style.opacity = '1';
+  document.getElementById('vResult').innerHTML = '';
+  document.getElementById('vErr').innerHTML    = '';
+}
+
+async function runImageClassify() {
+  if (!visionFile) return;
+  const btn   = document.getElementById('vClassifyBtn');
+  const errEl = document.getElementById('vErr');
+  const topK  = parseInt(document.getElementById('vTopK').value) || 5;
+
+  btn.innerHTML = '<span class="spinner"></span> Classifying…';
+  btn.disabled  = true;
+  errEl.innerHTML = '';
+  document.getElementById('vResult').innerHTML = `
+    <div style="text-align:center;padding:2rem 1rem;color:var(--text3)">
+      <span class="spinner" style="width:20px;height:20px;border-width:3px;display:inline-block"></span>
+      <div style="margin-top:0.75rem;font-size:0.82rem">
+        Running inference…<br>
+        <span style="font-size:0.72rem;opacity:0.7">First call downloads model weights — may take up to 60 s on free tier</span>
+      </div>
+    </div>`;
+
+  const form = new FormData();
+  form.append('file',       visionFile);
+  form.append('model_name', visionModel);
+  form.append('top_k',      topK);
+
+  try {
+    const res = await fetch(`${API}/classify-image`, { method: 'POST', body: form });
+    if (!res.ok) { const t = await res.text(); throw new Error(t); }
+    const data = await res.json();
+    renderVisionResult(data);
+  } catch(e) {
+    document.getElementById('vResult').innerHTML = '';
+    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">${e.message}</div>`;
+  } finally {
+    btn.innerHTML = 'Classify →';
+    btn.disabled  = false;
+  }
+}
+
+function renderVisionResult(data) {
+  const preds  = data.predictions || [];
+  const accent = '#e879f9';
+  const maxConf = preds.length ? preds[0].confidence : 1;
+
+  const barsHTML = preds.map(p => `
+    <div class="proba-row" style="margin-bottom:0.55rem">
+      <div class="proba-name" style="width:180px;font-size:0.8rem">
+        <span style="color:${accent};font-size:0.65rem;font-weight:700;margin-right:0.3rem">#${p.rank}</span>
+        ${p.label}
+      </div>
+      <div class="proba-bar-wrap">
+        <div class="proba-bar-fill" style="width:${(p.confidence/maxConf*100).toFixed(1)}%;background:${accent}"></div>
+      </div>
+      <div class="proba-pct" style="color:${accent}">${(p.confidence*100).toFixed(1)}%</div>
+    </div>`).join('');
+
+  document.getElementById('vResult').innerHTML = `
+    <div class="result-state" style="display:block;margin-top:0.5rem">
+      <div class="result-accent-bar" style="background:${accent}"></div>
+      <div class="result-body">
+        <div class="vision-result-layout">
+          <div class="vision-result-thumb">
+            <img src="${visionImageURL}" class="vision-preview-img" alt="classified image">
+            <div style="font-size:0.68rem;color:var(--text3);margin-top:0.4rem">${data.model_label}</div>
+          </div>
+          <div class="vision-result-preds">
+            <div class="proba-section-label" style="margin-bottom:0.75rem">Top Predictions</div>
+            ${barsHTML}
+          </div>
+        </div>
+      </div>
+    </div>`;
 }
 
 // ── Unsupervised Analysis ──────────────────────────────────────

@@ -575,6 +575,112 @@ async def train_model(
     return resp
 
 
+# ── Image Classification ────────────────────────────────────────────────────
+
+_IMAGE_MODEL_CONFIGS: Dict[str, Dict] = {
+    "mobilenetv2": {
+        "label":       "MobileNetV2",
+        "input_size":  224,
+        "description": "Fast & lightweight — ideal for real-time inference",
+    },
+    "efficientnetb0": {
+        "label":       "EfficientNetB0",
+        "input_size":  224,
+        "description": "Best accuracy-to-speed tradeoff in its class",
+    },
+    "resnet50": {
+        "label":       "ResNet50",
+        "input_size":  224,
+        "description": "Classic deep residual network — reliable baseline",
+    },
+    "inceptionv3": {
+        "label":       "InceptionV3",
+        "input_size":  299,
+        "description": "Strong multi-scale feature recognition",
+    },
+}
+
+_img_cache: Dict[str, Any] = {}   # holds loaded TF model + helpers
+_img_active: list           = [None]  # which model is currently loaded
+
+
+@app.get("/image-models")
+def list_image_models():
+    return [
+        {"id": k, "label": v["label"], "description": v["description"], "input_size": v["input_size"]}
+        for k, v in _IMAGE_MODEL_CONFIGS.items()
+    ]
+
+
+@app.post("/classify-image")
+async def classify_image(
+    file:       UploadFile = File(...),
+    model_name: str        = Form("mobilenetv2"),
+    top_k:      int        = Form(5),
+):
+    if model_name not in _IMAGE_MODEL_CONFIGS:
+        raise HTTPException(400, f"Unknown model '{model_name}'. Choose from: {list(_IMAGE_MODEL_CONFIGS)}")
+    top_k = max(1, min(top_k, 10))
+    cfg   = _IMAGE_MODEL_CONFIGS[model_name]
+
+    # Lazy-load: one model in memory at a time (Render free tier is 512 MB)
+    if _img_active[0] != model_name:
+        _img_cache.clear()
+        try:
+            import tensorflow as tf  # noqa: PLC0415
+            if model_name == "mobilenetv2":
+                mdl = tf.keras.applications.MobileNetV2(weights="imagenet", include_top=True)
+                pre = tf.keras.applications.mobilenet_v2.preprocess_input
+            elif model_name == "efficientnetb0":
+                mdl = tf.keras.applications.EfficientNetB0(weights="imagenet", include_top=True)
+                pre = tf.keras.applications.efficientnet.preprocess_input
+            elif model_name == "resnet50":
+                mdl = tf.keras.applications.ResNet50(weights="imagenet", include_top=True)
+                pre = tf.keras.applications.resnet50.preprocess_input
+            else:
+                mdl = tf.keras.applications.InceptionV3(weights="imagenet", include_top=True)
+                pre = tf.keras.applications.inception_v3.preprocess_input
+            _img_cache["model"]   = mdl
+            _img_cache["pre"]     = pre
+            _img_cache["decode"]  = tf.keras.applications.imagenet_utils.decode_predictions
+            _img_active[0]        = model_name
+        except Exception as e:
+            raise HTTPException(500, f"Failed to load model '{model_name}': {e}")
+
+    mdl     = _img_cache["model"]
+    pre     = _img_cache["pre"]
+    decode  = _img_cache["decode"]
+    size    = cfg["input_size"]
+
+    content = await file.read()
+    try:
+        from PIL import Image as PILImage  # noqa: PLC0415
+        import numpy as np                 # noqa: PLC0415
+        img = PILImage.open(io.BytesIO(content)).convert("RGB")
+        img = img.resize((size, size), PILImage.LANCZOS)
+        arr = np.expand_dims(np.array(img, dtype=np.float32), axis=0)
+        arr = pre(arr)
+    except Exception as e:
+        raise HTTPException(400, f"Could not process image: {e}")
+
+    preds   = mdl.predict(arr, verbose=0)
+    decoded = decode(preds, top=top_k)[0]
+
+    return {
+        "model":       model_name,
+        "model_label": cfg["label"],
+        "predictions": [
+            {
+                "rank":       i + 1,
+                "class_id":   d[0],
+                "label":      d[1].replace("_", " "),
+                "confidence": round(float(d[2]), 4),
+            }
+            for i, d in enumerate(decoded)
+        ],
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
