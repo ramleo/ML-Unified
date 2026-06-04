@@ -8,10 +8,9 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import (RandomForestClassifier, GradientBoostingClassifier,
                                RandomForestRegressor, GradientBoostingRegressor)
-from xgboost import XGBClassifier, XGBRegressor
-from lightgbm import LGBMClassifier, LGBMRegressor
-from catboost import CatBoostClassifier, CatBoostRegressor
 from sklearn.cluster import KMeans, DBSCAN
+# xgboost, lightgbm, catboost are imported lazily inside train_model to save ~200 MB
+# of shared-library memory at startup (critical on Render free tier 512 MB limit)
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.model_selection import train_test_split
@@ -424,6 +423,12 @@ async def train_model(
 
     le = None
     plot_data = None
+
+    # Lazy-import boosting libraries — each ~20-200 MB of shared libs;
+    # keeping them out of module-level imports frees ~200 MB at startup.
+    from xgboost import XGBClassifier, XGBRegressor          # noqa: PLC0415
+    from lightgbm import LGBMClassifier, LGBMRegressor        # noqa: PLC0415
+    from catboost import CatBoostClassifier, CatBoostRegressor  # noqa: PLC0415
 
     if task == "clustering":
         preprocessor.fit(X)
