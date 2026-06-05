@@ -2079,7 +2079,7 @@ async function runSegmentation() {
 
   const form = new FormData();
   form.append('file',       segFile);
-  form.append('model_name', 'fcn_resnet50');
+  form.append('model_name', 'color_segmentation');
 
   try {
     const res = await _postWithProgress(

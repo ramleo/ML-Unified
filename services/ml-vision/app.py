@@ -324,14 +324,10 @@ _warmup_done = threading.Event()
 
 
 def _warmup_models() -> None:
-    for _dl in (
-        lambda: _ensure_seg_model("fcn_resnet50"),
-        lambda: _ensure_det_model("tiny_yolov3"),
-    ):
-        try:
-            _dl()
-        except Exception as exc:
-            print(f"[warmup] model download failed: {exc}", flush=True)
+    try:
+        _ensure_det_model("tiny_yolov3")
+    except Exception as exc:
+        print(f"[warmup] tiny_yolov3 download failed: {exc}", flush=True)
     _warmup_done.set()
 
 
@@ -533,181 +529,116 @@ async def detect_objects(
     }
 
 
-# ── Image Segmentation ───────────────────────────────────────────────────────
+# ── Image Segmentation (PIL colour-quantisation, no ONNX) ────────────────────
+# FCN-ResNet50 (135 MB) was too slow to load on Render free tier (15-30 s model
+# load + inference > Cloudflare 30 s proxy timeout → 502). PIL quantisation is
+# instant and uses <5 MB of RAM.
 
-_SEG_CLASSES: list = [
-    "__background__",
-    "aeroplane", "bicycle", "bird", "boat", "bottle",
-    "bus", "car", "cat", "chair", "cow",
-    "diningtable", "dog", "horse", "motorbike", "person",
-    "pottedplant", "sheep", "sofa", "train", "tvmonitor",
+_SEG_VIZ: list = [          # distinct visualisation colours for up to 12 clusters
+    (128, 0,   0), (0,   128, 0), (0,   0,   128), (128, 128, 0),
+    (0,   128, 128), (128, 0, 128), (64,  64,  0), (0,   64,  64),
+    (64,  0,   64), (192, 128, 0), (0,   192, 128), (192, 0,   128),
 ]
 
-_SEG_PALETTE: list = [
-    (0,   0,   0),
-    (128, 0,   0),
-    (0,   128, 0),
-    (128, 128, 0),
-    (0,   0,   128),
-    (128, 0,   128),
-    (0,   128, 128),
-    (128, 128, 128),
-    (64,  0,   0),
-    (192, 0,   0),
-    (64,  128, 0),
-    (192, 128, 0),
-    (64,  0,   128),
-    (192, 0,   128),
-    (64,  128, 128),
-    (192, 128, 128),
-    (0,   64,  0),
-    (128, 64,  0),
-    (0,   192, 0),
-    (128, 192, 0),
-    (0,   64,  128),
-]
 
-_SEGMENTATION_MODEL_CONFIGS: Dict[str, Dict] = {
-    "fcn_resnet50": {
-        "label":       "FCN-ResNet50",
-        "description": "Fully Convolutional Network — ResNet-50 backbone, Pascal VOC 21 classes",
-        "url": (
-            "https://media.githubusercontent.com/media/onnx/models/main/"
-            "validated/vision/object_detection_segmentation/fcn/model/fcn-resnet50-11.onnx"
-        ),
-        "input_size":  320,
-        "size_mb":     135,
-    },
-}
-
-
-def _ensure_seg_model(model_id: str) -> str:
-    import urllib.request  # noqa: PLC0415
-    cfg  = _SEGMENTATION_MODEL_CONFIGS[model_id]
-    path = os.path.join(VISION_CACHE_DIR, f"{model_id}.onnx")
-    if not os.path.exists(path):
-        urllib.request.urlretrieve(cfg["url"], path)
-    return path
-
-
-def _load_seg_session(model_id: str):
-    import gc
-    import onnxruntime as ort  # noqa: PLC0415
-    path = _ensure_seg_model(model_id)
-    with _large_vision_lock:
-        _large_vision_cache.clear()
-        gc.collect()
-        session = ort.InferenceSession(path)
-        _large_vision_cache["model_type"] = "seg"
-        _large_vision_cache["model_id"]   = model_id
-        _large_vision_cache["session"]    = session
-    return session
+def _colour_label(r: int, g: int, b: int) -> str:
+    """Heuristic semantic label from an RGB colour via HSV analysis."""
+    import colorsys  # noqa: PLC0415
+    h, s, v    = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+    h_deg      = h * 360
+    s_pct, v_pct = s * 100, v * 100
+    if v_pct < 18:
+        return "shadow/dark"
+    if s_pct < 14:
+        return "sky/light" if v_pct > 80 else "structure/neutral"
+    if  75 <= h_deg <= 165:
+        return "vegetation"
+    if 195 <= h_deg <= 265:
+        return "sky/water"
+    if  10 <= h_deg <  75:
+        return "earth/ground"
+    if h_deg < 10 or h_deg > 340:
+        return "warm object"
+    return "mixed region"
 
 
 @app.get("/seg-models")
 def list_seg_models():
     return [
         {
-            "id":          k,
-            "label":       v["label"],
-            "description": v["description"],
-            "size_mb":     v["size_mb"],
+            "id":          "color_segmentation",
+            "label":       "Color Segmentation",
+            "description": "Fast PIL colour-region analysis — instant, no model download",
+            "size_mb":     0,
         }
-        for k, v in _SEGMENTATION_MODEL_CONFIGS.items()
     ]
 
 
 @app.post("/segment-image")
 async def segment_image(
     file:       UploadFile = File(...),
-    model_name: str        = Form("fcn_resnet50"),
+    model_name: str        = Form("color_segmentation"),
 ):
-    if model_name not in _SEGMENTATION_MODEL_CONFIGS:
-        raise HTTPException(status_code=400, detail=f"Unknown model: {model_name}")
-
     from PIL import Image as PILImage  # noqa: PLC0415
     import numpy as np                 # noqa: PLC0415
     import base64                      # noqa: PLC0415
 
     raw = await file.read()
-    img = PILImage.open(io.BytesIO(raw)).convert("RGB")
+    try:
+        img = PILImage.open(io.BytesIO(raw)).convert("RGB")
+    except Exception:
+        raise HTTPException(400, "Cannot read image file")
+
     orig_w, orig_h = img.width, img.height
 
-    cfg  = _SEGMENTATION_MODEL_CONFIGS[model_name]
-    size = cfg["input_size"]
+    thumb = img.copy()
+    thumb.thumbnail((480, 480), PILImage.LANCZOS)
 
-    img_r = img.copy()
-    img_r.thumbnail((size, size), PILImage.LANCZOS)
+    n_colors  = 8
+    quantized   = thumb.quantize(colors=n_colors, method=PILImage.Quantize.FASTOCTREE)
+    palette_raw = quantized.getpalette()           # 768 ints (256 × RGB)
+    q_arr       = np.array(quantized, dtype=np.uint8)
+    total_px    = q_arr.size
 
-    with _large_vision_lock:
-        cached = (
-            _large_vision_cache.get("model_type") == "seg"
-            and _large_vision_cache.get("model_id") == model_name
-        )
-        session = _large_vision_cache.get("session") if cached else None
+    new_palette: list = [0] * 768
+    classes_found: list = []
+    seen: dict = {}
 
-    if session is None:
-        seg_path = os.path.join(VISION_CACHE_DIR, f"{model_name}.onnx")
-        if not os.path.exists(seg_path):
-            raise HTTPException(503, "Vision service is warming up — please try again in ~30 seconds")
-        try:
-            session = _load_seg_session(model_name)
-        except Exception as e:
-            raise HTTPException(500, f"Failed to load segmentation model: {e}")
+    for idx in range(n_colors):
+        vr, vg, vb = _SEG_VIZ[idx % len(_SEG_VIZ)]
+        new_palette[idx*3], new_palette[idx*3+1], new_palette[idx*3+2] = vr, vg, vb
 
-    arr  = np.array(img_r, dtype=np.float32) / 255.0
-    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-    std  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-    arr  = (arr - mean) / std
-    arr  = arr.transpose(2, 0, 1)[np.newaxis]
-
-    input_name  = session.get_inputs()[0].name
-    output_name = session.get_outputs()[0].name
-    logits = session.run([output_name], {input_name: arr})[0]
-
-    label_map = np.argmax(logits[0], axis=0).astype(np.uint8)
-
-    lm_img     = PILImage.fromarray(label_map, mode="L")
-    lm_resized = lm_img.resize((orig_w, orig_h), PILImage.NEAREST)
-    label_full = np.array(lm_resized)
-
-    colour_mask = np.zeros((orig_h, orig_w, 4), dtype=np.uint8)
-    classes_found = {}
-    for cls_id, rgb in enumerate(_SEG_PALETTE):
-        if cls_id == 0:
+        r, g, b     = palette_raw[idx*3], palette_raw[idx*3+1], palette_raw[idx*3+2]
+        pixel_count = int(np.sum(q_arr == idx))
+        pct         = pixel_count / total_px * 100
+        if pct < 1.0:
             continue
-        px    = np.where(label_full == cls_id)
-        count = len(px[0])
-        if count == 0:
-            continue
-        colour_mask[px[0], px[1], :3] = rgb
-        colour_mask[px[0], px[1],  3] = 180
-        classes_found[cls_id] = count
 
-    mask_pil  = PILImage.fromarray(colour_mask, mode="RGBA")
-    orig_rgba = img.convert("RGBA")
-    composite = PILImage.alpha_composite(orig_rgba, mask_pil).convert("RGB")
+        label = _colour_label(r, g, b)
+        if label in seen:
+            seen[label] += 1
+            label = f"{label} {seen[label]}"
+        else:
+            seen[label] = 1
+
+        classes_found.append({
+            "label":      label,
+            "percentage": round(pct, 1),
+            "color":      f"#{vr:02x}{vg:02x}{vb:02x}",
+        })
+
+    seg_img = quantized.copy()
+    seg_img.putpalette(new_palette)
+    seg_rgb = seg_img.convert("RGB").resize((orig_w, orig_h), PILImage.NEAREST)
 
     buf = io.BytesIO()
-    composite.save(buf, format="PNG")
+    seg_rgb.save(buf, format="PNG")
     b64 = base64.b64encode(buf.getvalue()).decode()
 
-    total_px = orig_w * orig_h
-    detected = [
-        {
-            "class_id":    cid,
-            "label":       _SEG_CLASSES[cid],
-            "pixel_count": cnt,
-            "percentage":  round(cnt / total_px * 100, 2),
-            "color":       "#{:02x}{:02x}{:02x}".format(*_SEG_PALETTE[cid]),
-        }
-        for cid, cnt in sorted(classes_found.items(), key=lambda x: -x[1])
-    ]
-
     return {
-        "model":         model_name,
-        "model_label":   cfg["label"],
-        "classes_found": detected,
+        "model":         "color_segmentation",
+        "model_label":   "Color Segmentation",
+        "classes_found": sorted(classes_found, key=lambda x: -x["percentage"]),
         "image_b64":     f"data:image/png;base64,{b64}",
         "orig_width":    orig_w,
         "orig_height":   orig_h,
