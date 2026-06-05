@@ -2368,30 +2368,42 @@ function _renderMetrics(api, vision) {
       Raw JSON ↗
     </a>`;
 
-  el.innerHTML = `
-    <div style="margin-bottom:1.25rem">
-      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.6rem">
-        <span style="font-size:0.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;
-                     letter-spacing:0.08em">ML Unified</span>
-        ${rawBtn(API)}
-      </div>
-      ${card(api)}
-    </div>
+  const section = (label, data, url) => `
     <div>
       <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.6rem">
         <span style="font-size:0.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;
-                     letter-spacing:0.08em">ML Vision</span>
-        ${VISION_API ? rawBtn(VISION_API) : ''}
+                     letter-spacing:0.08em">${label}</span>
+        ${url ? rawBtn(url) : ''}
       </div>
-      ${card(vision)}
+      ${card(data)}
     </div>`;
+
+  if (APP_MODE === 'vision') {
+    el.innerHTML = section('ML Vision', vision, VISION_API);
+  } else if (APP_MODE === 'ml') {
+    el.innerHTML = section('ML Unified', api, API);
+  } else {
+    el.innerHTML = section('ML Unified', api, API)
+      + `<div style="margin-top:1.25rem">`
+      + section('ML Vision', vision, VISION_API)
+      + `</div>`;
+  }
 }
 
 async function _fetchMetrics() {
-  const [api, vision] = await Promise.all([
-    fetch(`${API}/metrics`).then(r => r.ok ? r.json() : null).catch(() => null),
-    VISION_API ? fetch(`${VISION_API}/metrics`).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null),
-  ]);
+  let api = null, vision = null;
+  if (APP_MODE === 'vision') {
+    vision = VISION_API
+      ? await fetch(`${VISION_API}/metrics`).then(r => r.ok ? r.json() : null).catch(() => null)
+      : null;
+  } else if (APP_MODE === 'ml') {
+    api = await fetch(`${API}/metrics`).then(r => r.ok ? r.json() : null).catch(() => null);
+  } else {
+    [api, vision] = await Promise.all([
+      fetch(`${API}/metrics`).then(r => r.ok ? r.json() : null).catch(() => null),
+      VISION_API ? fetch(`${VISION_API}/metrics`).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null),
+    ]);
+  }
   _metricsCache = { api, vision, ts: new Date() };
   _renderMetrics(api, vision);
   const ts = document.getElementById('metricsTs');
