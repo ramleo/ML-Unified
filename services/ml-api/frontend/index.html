@@ -2383,6 +2383,7 @@ const _METRICS_SKIP = new Set([
 const _METRICS_KNOWN = {
   ml:     ['Iris', 'Titanic', 'Diabetes', 'Insurance', 'Training', 'Clustering'],
   vision: ['Classifier', 'Processing', 'Detection', 'Segmentation'],
+  eda:    ['EDA Analysis'],
 };
 
 function _friendlyEndpoints(endpoints, key) {
@@ -2390,6 +2391,7 @@ function _friendlyEndpoints(endpoints, key) {
     '/train':          'Training',
     '/analyze':        'CSV Analysis',
     '/unsupervised':   'Clustering',
+    '/eda':            'EDA Analysis',
     '/classify-image': 'Classifier',
     '/process-image':  'Processing',
     '/detect-objects': 'Detection',
@@ -2521,7 +2523,8 @@ function _renderMetrics(api, vision) {
     el.innerHTML = section('ML Vision', vision, VISION_API, 'vision');
   } else if (APP_MODE === 'ml' || APP_MODE === 'eda') {
     const label = APP_MODE === 'eda' ? 'EDA Explorer' : 'ML Unified';
-    el.innerHTML = section(label, api, API, 'ml');
+    const key   = APP_MODE === 'eda' ? 'eda' : 'ml';
+    el.innerHTML = section(label, api, API, key);
   } else {
     el.innerHTML = section('ML Unified', api, API, 'ml')
       + `<div style="margin-top:1.25rem">`
