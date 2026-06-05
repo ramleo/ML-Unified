@@ -7,6 +7,27 @@ client = TestClient(app)
 
 # ── Health & meta ─────────────────────────────────────────────────────────────
 
+def test_metrics_empty():
+    """Fresh service returns valid metrics structure."""
+    r = client.get("/metrics")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["service"] == "ml-api"
+    assert "uptime_s"       in data
+    assert "total_requests" in data
+    assert "error_rate"     in data
+    assert "endpoints"      in data
+    assert isinstance(data["endpoints"], list)
+
+def test_metrics_records_requests():
+    """After a real request, /metrics logs it."""
+    client.get("/models")
+    r = client.get("/metrics")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total_requests"] >= 1
+    assert any(e["path"] == "/models" for e in data["endpoints"])
+
 def test_health():
     r = client.get("/health")
     assert r.status_code == 200

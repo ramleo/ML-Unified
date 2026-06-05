@@ -25,6 +25,32 @@ def test_health():
     assert r.json()["service"] == "ml-vision"
 
 
+# ── Metrics ───────────────────────────────────────────────────────────────────
+
+def test_metrics_empty():
+    """Fresh service with no logged requests returns valid empty metrics."""
+    r = client.get("/metrics")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["service"] == "ml-vision"
+    assert "uptime_s"       in data
+    assert "total_requests" in data
+    assert "avg_ms"         in data
+    assert "p95_ms"         in data
+    assert "error_rate"     in data
+    assert "endpoints"      in data
+    assert isinstance(data["endpoints"], list)
+
+def test_metrics_records_requests():
+    """After a real request, metrics shows at least one logged entry."""
+    client.get("/image-models")
+    r = client.get("/metrics")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total_requests"] >= 1
+    assert any(e["path"] == "/image-models" for e in data["endpoints"])
+
+
 # ── Image classifier meta ─────────────────────────────────────────────────────
 
 def test_list_image_models():

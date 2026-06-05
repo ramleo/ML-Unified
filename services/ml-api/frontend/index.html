@@ -663,19 +663,30 @@ function renderSidebar() {
     </button>`;
 
   const trainBtn = showML
-    ? `<div style="flex:1"></div>
-       <button class="sidebar-upload-btn" onclick="showUploadWizard()">
+    ? `<button class="sidebar-upload-btn" onclick="showUploadWizard()">
          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
            <path d="M8 2v9M4 6l4-4 4 4"/><path d="M2 13h12"/>
          </svg>
          Train New Model
        </button>`
-    : '<div style="flex:1"></div>';
+    : '';
+
+  const metricsBtn = `
+    <div style="flex:1"></div>
+    <button class="sidebar-upload-btn" onclick="openMetricsPanel()"
+            style="border-color:var(--border2);color:var(--text3);margin-top:0.5rem">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+        <path d="M2 12 L5 7 L8 9 L11 4 L14 6" stroke-linecap="round" stroke-linejoin="round"/>
+        <rect x="1" y="1" width="14" height="14" rx="2"/>
+      </svg>
+      Live Metrics
+    </button>`;
 
   sb.innerHTML =
     (showML     ? mlSection     : '') +
     (showVision ? visionSection : '') +
-    trainBtn;
+    trainBtn +
+    metricsBtn;
 }
 
 // ── Select model ──────────────────────────────────────────────
@@ -2277,6 +2288,123 @@ function renderSegmentationResult(data) {
         </div>` : ''}
       </div>
     </div>`;
+}
+
+// ── Live Metrics ───────────────────────────────────────────────
+let _metricsInterval = null;
+
+function _fmtUptime(s) {
+  if (s < 60)   return `${s}s`;
+  if (s < 3600) return `${Math.floor(s/60)}m ${s%60}s`;
+  return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;
+}
+
+function _latencyBar(ms, maxMs) {
+  const pct   = Math.min((ms / Math.max(maxMs, 1)) * 100, 100);
+  const color = ms < 200 ? '#34d399' : ms < 800 ? '#fbbf24' : '#f87171';
+  return `<div style="height:6px;border-radius:3px;background:var(--border2);flex:1;overflow:hidden">
+    <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;transition:width 0.4s"></div>
+  </div>`;
+}
+
+function _renderMetrics(api, vision) {
+  const el = document.getElementById('metricsBody');
+  if (!el) return;
+
+  const card = (data) => {
+    if (!data) return `<div style="color:var(--text3);font-size:0.8rem;padding:1rem 0">Service unavailable</div>`;
+    const maxMs = Math.max(...(data.endpoints || []).map(e => e.p95_ms), 1);
+    const errColor = data.error_rate > 5 ? '#f87171' : data.error_rate > 0 ? '#fbbf24' : '#34d399';
+    const rows = (data.endpoints || []).slice(0, 6).map(e => `
+      <div style="display:grid;grid-template-columns:1fr auto auto;gap:0.5rem;align-items:center;
+                  padding:0.35rem 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:0.72rem;color:var(--text2);overflow:hidden;text-overflow:ellipsis;
+                     white-space:nowrap" title="${e.path}">${e.path}</span>
+        <span style="font-size:0.7rem;color:var(--text3);white-space:nowrap">${e.count}×</span>
+        <span style="font-size:0.7rem;color:var(--text3);white-space:nowrap">${e.avg_ms}ms</span>
+      </div>
+      <div style="padding:0.2rem 0 0.4rem;display:flex;align-items:center;gap:0.5rem">
+        ${_latencyBar(e.p95_ms, maxMs)}
+        <span style="font-size:0.65rem;color:var(--text3);white-space:nowrap">p95 ${e.p95_ms}ms</span>
+      </div>`).join('');
+    return `
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.75rem">
+        ${[
+          ['Uptime',    _fmtUptime(data.uptime_s), '#34d399'],
+          ['Requests',  data.total_requests,        'var(--text)'],
+          ['Avg',       data.avg_ms + 'ms',         'var(--text)'],
+          ['p95',       data.p95_ms + 'ms',         'var(--text)'],
+          ['Errors',    data.error_rate + '%',       errColor],
+        ].map(([l,v,c]) => `
+          <div style="text-align:center;padding:0.4rem 0.6rem;border-radius:8px;
+                      background:var(--border);border:1px solid var(--border2);min-width:54px">
+            <div style="font-size:0.85rem;font-weight:700;color:${c}">${v}</div>
+            <div style="font-size:0.6rem;color:var(--text3);margin-top:1px">${l}</div>
+          </div>`).join('')}
+      </div>
+      ${rows ? `<div style="margin-top:0.25rem">${rows}</div>` : '<div style="color:var(--text3);font-size:0.78rem">No requests yet</div>'}`;
+  };
+
+  el.innerHTML = `
+    <div style="margin-bottom:1.25rem">
+      <div style="font-size:0.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;
+                  letter-spacing:0.08em;margin-bottom:0.6rem">ML API</div>
+      ${card(api)}
+    </div>
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;
+                  letter-spacing:0.08em;margin-bottom:0.6rem">ML Vision</div>
+      ${card(vision)}
+    </div>`;
+}
+
+async function _fetchMetrics() {
+  const [api, vision] = await Promise.all([
+    fetch(`${API}/metrics`).then(r => r.ok ? r.json() : null).catch(() => null),
+    VISION_API ? fetch(`${VISION_API}/metrics`).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null),
+  ]);
+  _renderMetrics(api, vision);
+  const ts = document.getElementById('metricsTs');
+  if (ts) ts.textContent = 'Updated ' + new Date().toLocaleTimeString();
+}
+
+function openMetricsPanel() {
+  if (document.getElementById('metricsOverlay')) return;
+  const overlay = document.createElement('div');
+  overlay.id = 'metricsOverlay';
+  overlay.style.cssText = `position:fixed;inset:0;z-index:1000;display:flex;align-items:flex-end;
+    justify-content:flex-end;padding:1rem;pointer-events:none`;
+  overlay.innerHTML = `
+    <div style="pointer-events:all;width:min(420px,96vw);max-height:80vh;overflow-y:auto;
+                background:var(--bg-card);border:1px solid var(--border2);border-radius:16px;
+                box-shadow:0 8px 40px rgba(0,0,0,0.4);display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;justify-content:space-between;
+                  padding:0.9rem 1rem 0.6rem;border-bottom:1px solid var(--border);position:sticky;top:0;
+                  background:var(--bg-card);z-index:1;border-radius:16px 16px 0 0">
+        <div>
+          <div style="font-size:0.9rem;font-weight:700;color:var(--text)">Live Metrics</div>
+          <div id="metricsTs" style="font-size:0.68rem;color:var(--text3)">Loading…</div>
+        </div>
+        <button onclick="closeMetricsPanel()"
+                style="background:none;border:none;color:var(--text3);cursor:pointer;
+                       font-size:1.1rem;padding:0.2rem 0.4rem;border-radius:6px;
+                       transition:color 0.15s"
+                onmouseover="this.style.color='var(--text)'"
+                onmouseout="this.style.color='var(--text3)'">✕</button>
+      </div>
+      <div id="metricsBody" style="padding:1rem">
+        <div style="color:var(--text3);font-size:0.8rem">Fetching…</div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  _fetchMetrics();
+  _metricsInterval = setInterval(_fetchMetrics, 30000);
+}
+
+function closeMetricsPanel() {
+  const el = document.getElementById('metricsOverlay');
+  if (el) el.remove();
+  if (_metricsInterval) { clearInterval(_metricsInterval); _metricsInterval = null; }
 }
 
 // ── Unsupervised Analysis ──────────────────────────────────────
