@@ -2003,7 +2003,7 @@ function renderSegmentationPanel() {
         <div class="u-dot" style="background:#a78bfa"></div>
         <div>
           <div class="u-title">Image Segmentation</div>
-          <div class="u-subtitle">Upload any photo — each pixel is classified into one of 21 Pascal VOC categories (people, animals, vehicles, furniture…) using FCN-ResNet50. Classes are colour-overlaid on the original image.</div>
+          <div class="u-subtitle">Upload any photo — each pixel is classified into one of 150 ADE20K categories (people, vehicles, furniture, nature…) using SegFormer-B0. Classes are colour-overlaid on the original image.</div>
         </div>
       </div>
 
@@ -2029,6 +2029,27 @@ function renderSegmentationPanel() {
       </div>
 
       <div id="segResult"></div>
+
+      <div style="margin-top:2rem;border-top:1px solid var(--border);padding-top:1.25rem">
+        <button id="segClassBtn" onclick="toggleSegClassBrowser()"
+                style="background:none;border:none;color:var(--text3);font-size:0.8rem;
+                       cursor:pointer;padding:0;font-weight:600">
+          Browse 150 ADE20K classes ▸
+        </button>
+        <div id="segClassPanel" style="display:none;margin-top:0.75rem">
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.6rem">
+            <input type="text" class="field-input" placeholder="Search classes…"
+                   oninput="renderSegClassList(this.value)"
+                   style="flex:1;font-size:0.82rem;padding:0.4rem 0.65rem">
+            <span id="segClassCount" style="font-size:0.72rem;color:var(--text3);white-space:nowrap">150 classes</span>
+          </div>
+          <div id="segClassGrid"
+               style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));
+                      gap:0.3rem;max-height:260px;overflow-y:auto;padding:0.5rem;
+                      background:var(--bg-input);border:1px solid var(--border2);border-radius:10px">
+          </div>
+        </div>
+      </div>
     </div>`;
 
   const zone = document.getElementById('segUploadZone');
@@ -2123,6 +2144,52 @@ function showSegRetry(msg) {
     if (secs-- > 0) { _segRetryTimer = setTimeout(tick, 1000); } else { runSegmentation(); }
   };
   tick();
+}
+
+/* ── ADE20K 150 class browser ── */
+const _ADE20K_150 = [
+  'wall','building','sky','floor','tree','ceiling','road','bed','window','grass',
+  'cabinet','sidewalk','person','earth','door','table','mountain','plant','curtain',
+  'chair','car','water','painting','sofa','shelf','house','sea','mirror','rug','field',
+  'armchair','seat','fence','desk','rock','wardrobe','lamp','bathtub','railing',
+  'cushion','base','box','column','signboard','chest of drawers','counter','sand',
+  'sink','skyscraper','fireplace','refrigerator','grandstand','path','stairs','runway',
+  'case','pool table','pillow','screen door','stairway','river','bridge','bookcase',
+  'blind','coffee table','toilet','flower','book','hill','bench','countertop','stove',
+  'palm','kitchen island','computer','swivel chair','boat','bar','arcade machine',
+  'hovel','bus','towel','light','truck','tower','chandelier','awning','streetlight',
+  'booth','television','airplane','dirt track','apparel','pole','land','bannister',
+  'escalator','ottoman','bottle','buffet','poster','stage','van','ship','fountain',
+  'conveyer belt','canopy','washer','plaything','swimming pool','stool','barrel',
+  'basket','waterfall','tent','bag','minibike','cradle','oven','ball','food','step',
+  'tank','trade name','microwave','pot','animal','bicycle','lake','dishwasher',
+  'screen','blanket','sculpture','hood','sconce','vase','traffic light','tray',
+  'ashcan','fan','pier','crt screen','plate','monitor','bulletin board','shower',
+  'radiator','glass','clock','flag'
+];
+
+function toggleSegClassBrowser() {
+  const panel = document.getElementById('segClassPanel');
+  const btn   = document.getElementById('segClassBtn');
+  if (!panel) return;
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  btn.textContent = open ? 'Browse 150 ADE20K classes ▾' : 'Browse 150 ADE20K classes ▸';
+  if (open) renderSegClassList('');
+}
+
+function renderSegClassList(q) {
+  const grid  = document.getElementById('segClassGrid');
+  const count = document.getElementById('segClassCount');
+  if (!grid) return;
+  const lq       = q.toLowerCase();
+  const filtered = q ? _ADE20K_150.filter(c => c.includes(lq)) : _ADE20K_150;
+  grid.innerHTML  = filtered.map(c =>
+    `<div style="padding:0.25rem 0.5rem;font-size:0.75rem;color:var(--text2);
+                 background:var(--bg-card);border:1px solid var(--border2);border-radius:6px;
+                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${c}">${c}</div>`
+  ).join('');
+  count.textContent = q ? `${filtered.length} of 150 matching` : '150 classes';
 }
 
 function renderSegmentationResult(data) {
