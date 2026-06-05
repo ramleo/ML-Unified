@@ -558,7 +558,13 @@ const ACCENT_PALETTE_DEFAULT = [
 
 // ── Theme ────────────────────────────────────────────────────
 (function () {
-  try { if (localStorage.getItem('theme') === 'light') setTheme('light'); } catch(e) {}
+  const urlTheme = new URLSearchParams(window.location.search).get('theme');
+  if (urlTheme === 'light' || urlTheme === 'dark') {
+    setTheme(urlTheme);
+    try { localStorage.setItem('theme', urlTheme); } catch(e) {}
+  } else {
+    try { if (localStorage.getItem('theme') === 'light') setTheme('light'); } catch(e) {}
+  }
 })();
 
 function setTheme(t) {
