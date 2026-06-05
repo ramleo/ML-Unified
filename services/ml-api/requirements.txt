@@ -8,5 +8,3 @@ python-multipart
 xgboost
 lightgbm
 catboost
-onnxruntime
-Pillow

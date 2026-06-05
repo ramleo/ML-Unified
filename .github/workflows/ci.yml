@@ -21,26 +21,46 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: |
-            requirements.txt
+            services/ml-api/requirements.txt
+            services/ml-vision/requirements.txt
             requirements-dev.txt
 
-      - name: Install dependencies
+      - name: Install ml-api dependencies
+        run: pip install -r services/ml-api/requirements.txt
+
+      - name: Install ml-vision dependencies
+        run: pip install -r services/ml-vision/requirements.txt
+
+      - name: Install dev tools
         run: pip install -r requirements-dev.txt
 
-      - name: Lint (ruff)
-        run: ruff check app.py
+      - name: Lint ml-api
+        run: ruff check services/ml-api/app.py
 
-      - name: Run tests
-        run: pytest tests/ -v --tb=short
+      - name: Lint ml-vision
+        run: ruff check services/ml-vision/app.py
+
+      - name: Test ml-api
+        run: pytest services/ml-api/tests/ -v --tb=short
+
+      - name: Test ml-vision
+        run: pytest services/ml-vision/tests/ -v --tb=short
 
   deploy:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
-      - name: Trigger Render deploy
+      - name: Trigger ml-api deploy
         run: |
           curl -s -o /dev/null -w "%{http_code}" \
             "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" | grep -q "^2" \
-            && echo "Deploy triggered." \
-            || (echo "Deploy hook failed." && exit 1)
+            && echo "ml-api deploy triggered." \
+            || (echo "ml-api deploy hook failed." && exit 1)
+
+      - name: Trigger ml-vision deploy
+        run: |
+          curl -s -o /dev/null -w "%{http_code}" \
+            "${{ secrets.RENDER_VISION_DEPLOY_HOOK_URL }}" | grep -q "^2" \
+            && echo "ml-vision deploy triggered." \
+            || (echo "ml-vision deploy hook failed." && exit 1)
