@@ -349,10 +349,12 @@ def _ensure_det_model(model_id: str) -> str:
 
 
 def _load_det_session(model_id: str):
+    import gc
     import onnxruntime as ort  # noqa: PLC0415
     path = _ensure_det_model(model_id)
     with _large_vision_lock:
         _large_vision_cache.clear()
+        gc.collect()
         session = ort.InferenceSession(path)
         _large_vision_cache["model_type"] = "det"
         _large_vision_cache["model_id"]   = model_id
@@ -573,7 +575,7 @@ _SEGMENTATION_MODEL_CONFIGS: Dict[str, Dict] = {
             "https://media.githubusercontent.com/media/onnx/models/main/"
             "validated/vision/object_detection_segmentation/fcn/model/fcn-resnet50-11.onnx"
         ),
-        "input_size":  480,
+        "input_size":  320,
         "size_mb":     135,
     },
 }
@@ -589,10 +591,12 @@ def _ensure_seg_model(model_id: str) -> str:
 
 
 def _load_seg_session(model_id: str):
+    import gc
     import onnxruntime as ort  # noqa: PLC0415
     path = _ensure_seg_model(model_id)
     with _large_vision_lock:
         _large_vision_cache.clear()
+        gc.collect()
         session = ort.InferenceSession(path)
         _large_vision_cache["model_type"] = "seg"
         _large_vision_cache["model_id"]   = model_id
