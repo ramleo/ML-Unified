@@ -2353,15 +2353,31 @@ function _renderMetrics(api, vision) {
       ${rows ? `<div style="margin-top:0.25rem">${rows}</div>` : '<div style="color:var(--text3);font-size:0.78rem">No requests yet</div>'}`;
   };
 
+  const rawBtn = (url) => `
+    <a href="${url}/metrics" target="_blank"
+       style="font-size:0.62rem;color:var(--text3);text-decoration:none;padding:0.15rem 0.45rem;
+              border:1px solid var(--border2);border-radius:5px;cursor:pointer;
+              transition:color 0.15s,border-color 0.15s"
+       onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'"
+       onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border2)'">
+      Raw JSON ↗
+    </a>`;
+
   el.innerHTML = `
     <div style="margin-bottom:1.25rem">
-      <div style="font-size:0.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;
-                  letter-spacing:0.08em;margin-bottom:0.6rem">ML API</div>
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.6rem">
+        <span style="font-size:0.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;
+                     letter-spacing:0.08em">ML API</span>
+        ${rawBtn(API)}
+      </div>
       ${card(api)}
     </div>
     <div>
-      <div style="font-size:0.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;
-                  letter-spacing:0.08em;margin-bottom:0.6rem">ML Vision</div>
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.6rem">
+        <span style="font-size:0.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;
+                     letter-spacing:0.08em">ML Vision</span>
+        ${VISION_API ? rawBtn(VISION_API) : ''}
+      </div>
       ${card(vision)}
     </div>`;
 }
