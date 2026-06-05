@@ -57,6 +57,7 @@ async def exploratory_analysis(file: UploadFile = File(...)):
         q25, q75 = float(s.quantile(0.25)), float(s.quantile(0.75))
         iqr      = q75 - q25
         outliers = int(((s < q25 - 1.5 * iqr) | (s > q75 + 1.5 * iqr)).sum())
+        raw_s    = s if len(s) <= 300 else s.sample(300, random_state=42)
         stats[col] = {
             "mean":     round(float(s.mean()), 4),
             "median":   round(float(s.median()), 4),
@@ -68,6 +69,7 @@ async def exploratory_analysis(file: UploadFile = File(...)):
             "outliers": outliers,
             "skew":     round(float(s.skew()), 3),
             "kurtosis": round(float(s.kurtosis()), 3),
+            "raw_vals": [round(float(v), 4) for v in raw_s.tolist()],
         }
 
     distributions = {}

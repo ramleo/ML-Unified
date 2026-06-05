@@ -2991,6 +2991,9 @@ function draw3dPlot(divId, plotData, accent, colorLabels, showNoise, xLabel, yLa
 
 
 // ── EDA Explorer ─────────────────────────────────────────────
+let _edaCurrentData = null;
+let _edaCurrentFilename = null;
+
 function selectEDA() {
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('ebtn-eda');
@@ -3045,6 +3048,8 @@ async function _runEDA(file) {
       throw new Error(msg.detail || 'Upload failed');
     }
     const data = await r.json();
+    _edaCurrentData     = data;
+    _edaCurrentFilename = file.name;
     resEl.innerHTML = _renderEDA(data, file.name);
     setTimeout(() => _renderEDAPlots(data), 0);
   } catch (e) {
@@ -3063,6 +3068,7 @@ function _renderEDA(d, filename) {
     <div class="eda-section-card" id="eda-s-overview">
       <div class="eda-section-title">📋 Overview
         <span style="font-weight:400;color:var(--text3);font-size:0.75rem;margin-left:0.4rem">${filename}</span>
+        <button id="eda-export-btn" onclick="_exportEDAReport()" style="margin-left:auto;padding:0.25rem 0.7rem;border-radius:20px;font-size:0.72rem;font-weight:600;cursor:pointer;background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.35);transition:all 0.15s" onmouseover="this.style.background='rgba(52,211,153,0.22)'" onmouseout="this.style.background='rgba(52,211,153,0.12)'">⬇ Export Report</button>
       </div>
       <div class="eda-overview-grid">
         <div class="eda-chip"><div class="eda-chip-val">${d.overview.rows.toLocaleString()}</div><div class="eda-chip-label">Rows</div></div>
@@ -3090,6 +3096,7 @@ function _renderEDA(d, filename) {
     ['eda-s-columns', 'Columns'],
     ...(Object.keys(d.stats).length ? [['eda-s-stats', 'Statistics']] : []),
     ...(Object.keys(d.distributions).length ? [['eda-s-distributions', 'Distributions']] : []),
+    ...(Object.keys(d.stats).length ? [['eda-s-boxplots', 'Box Plots']] : []),
     ...(d.correlations && d.correlations.labels.length > 1 ? [['eda-s-correlations', 'Correlations']] : []),
   ];
   const navHTML = `
@@ -3193,6 +3200,14 @@ function _renderEDA(d, filename) {
       </div>
     </div>` : '';
 
+  const boxHTML = numCols.length ? `
+    <div class="eda-section-card" id="eda-s-boxplots">
+      <div class="eda-section-title">📦 Box Plots
+        <span style="font-weight:400;color:var(--text3);font-size:0.7rem">IQR fences · outliers as dots</span>
+      </div>
+      <div id="eda-box-plot"></div>
+    </div>` : '';
+
   const corrHTML = (d.correlations && d.correlations.labels.length > 1) ? `
     <div class="eda-section-card" id="eda-s-correlations">
       <div class="eda-section-title">🔥 Correlation Heatmap
@@ -3201,7 +3216,7 @@ function _renderEDA(d, filename) {
       <div id="eda-corr-hm" class="eda-corr-plot"></div>
     </div>` : '';
 
-  return overviewHTML + insightsHTML + navHTML + sampleHTML + colsHTML + statsHTML + distHTML + corrHTML;
+  return overviewHTML + insightsHTML + navHTML + sampleHTML + colsHTML + statsHTML + distHTML + boxHTML + corrHTML;
 }
 
 function _renderEDAPlots(d) {
@@ -3232,6 +3247,28 @@ function _renderEDAPlots(d) {
     }], { ...baseLayout }, cfg);
   });
 
+  const boxEl = document.getElementById('eda-box-plot');
+  if (boxEl) {
+    const numCols = Object.keys(d.stats).filter(c => d.stats[c].raw_vals);
+    if (numCols.length) {
+      const traces = numCols.map(col => ({
+        type: 'box', name: col,
+        y: d.stats[col].raw_vals,
+        boxpoints: 'outliers',
+        marker: { color: '#34d399', size: 3, opacity: 0.7 },
+        line:   { color: '#34d399', width: 1.5 },
+        fillcolor: 'rgba(52,211,153,0.12)',
+      }));
+      Plotly.newPlot(boxEl, traces, {
+        paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+        font: { color: tc, size: 10 }, showlegend: false,
+        height: 340, margin: { l: 50, r: 20, t: 10, b: 90 },
+        xaxis: { tickangle: -35, tickfont: { size: 9 }, gridcolor: gc },
+        yaxis: { gridcolor: gc, zerolinecolor: gc },
+      }, cfg);
+    }
+  }
+
   if (d.correlations && d.correlations.labels.length > 1) {
     const el = document.getElementById('eda-corr-hm');
     if (!el) return;
@@ -3258,6 +3295,175 @@ function _edaShortNum(n) {
   if (Math.abs(n) >= 1e6) return (n/1e6).toFixed(1)+'M';
   if (Math.abs(n) >= 1e3) return (n/1e3).toFixed(1)+'K';
   return Number.isInteger(n) ? n : parseFloat(n.toFixed(2));
+}
+
+async function _exportEDAReport() {
+  if (!_edaCurrentData || !_edaCurrentFilename) return;
+  const btn = document.getElementById('eda-export-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Exporting…'; }
+  try {
+    const cfg = { format: 'png', scale: 2 };
+    const imgFor = async id => {
+      const el = document.getElementById(id);
+      if (!el || !el.querySelector('.js-plotly-plot,svg')) return null;
+      try { return await Plotly.toImage(el, cfg); } catch { return null; }
+    };
+
+    const distKeys = Object.keys(_edaCurrentData.distributions);
+    const distImgs = await Promise.all(distKeys.map((_, i) => imgFor(`eda-dist-${i}`)));
+    const boxImg   = await imgFor('eda-box-plot');
+    const corrImg  = await imgFor('eda-corr-hm');
+
+    const html = _buildExportHTML(_edaCurrentData, _edaCurrentFilename, distKeys, distImgs, boxImg, corrImg);
+    const blob = new Blob([html], { type: 'text/html' });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), { href: url, download: _edaCurrentFilename.replace(/\.csv$/i, '') + '_eda_report.html' });
+    a.click();
+    URL.revokeObjectURL(url);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⬇ Export Report'; }
+  }
+}
+
+function _buildExportHTML(d, filename, distKeys, distImgs, boxImg, corrImg) {
+  const qScore = d.quality_score ?? 100;
+  const qColor = qScore >= 80 ? '#34d399' : qScore >= 60 ? '#fbbf24' : '#f87171';
+  const missingColor = d.overview.missing_pct > 10 ? '#f87171' : d.overview.missing_pct > 0 ? '#fbbf24' : '#34d399';
+  const insightIcons = { danger: '🔴', warning: '⚠️', info: 'ℹ️' };
+  const now = new Date().toLocaleString();
+
+  const chipStyle = 'background:#1e293b;border:1px solid #334155;border-radius:10px;padding:0.75rem 1rem;text-align:center;min-width:90px';
+  const thStyle   = 'padding:0.4rem 0.75rem;text-align:left;font-size:0.65rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;border-bottom:1px solid #1e293b';
+  const tdStyle   = 'padding:0.4rem 0.75rem;border-bottom:1px solid #1e293b;color:#94a3b8';
+
+  const chips = `
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.75rem;margin-bottom:1.25rem">
+      ${[
+        [d.overview.rows.toLocaleString(), 'Rows', 'var(--t)'],
+        [d.overview.cols, 'Columns', 'var(--t)'],
+        [d.overview.missing_pct + '%', 'Missing', missingColor],
+        [d.overview.duplicates, 'Duplicates', d.overview.duplicates > 0 ? '#fbbf24' : 'var(--t)'],
+        [qScore, 'Quality /100', qColor],
+      ].map(([v, l, c]) => `<div style="${chipStyle}"><div style="font-size:1.3rem;font-weight:800;color:${c}">${v}</div><div style="font-size:0.62rem;color:#64748b;margin-top:2px;text-transform:uppercase">${l}</div></div>`).join('')}
+    </div>`;
+
+  const insights = (d.insights && d.insights.length) ? `
+    <h2 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin:1.5rem 0 0.75rem">💡 Smart Insights</h2>
+    ${d.insights.map(ins => {
+      const bgs = { danger: 'rgba(248,113,113,0.08)', warning: 'rgba(251,191,36,0.08)', info: 'rgba(56,189,248,0.08)' };
+      const bds = { danger: 'rgba(248,113,113,0.3)', warning: 'rgba(251,191,36,0.3)', info: 'rgba(56,189,248,0.3)' };
+      return `<div style="display:flex;gap:0.5rem;padding:0.55rem 0.8rem;border-radius:8px;font-size:0.8rem;line-height:1.45;margin-bottom:0.4rem;background:${bgs[ins.type]};border:1px solid ${bds[ins.type]}">
+        <span>${insightIcons[ins.type] || 'ℹ️'}</span><span style="color:#cbd5e1">${ins.text}</span></div>`;
+    }).join('')}` : '';
+
+  const sampleRows = d.sample ? `
+    <h2 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin:1.5rem 0 0.75rem">👁 Sample Data</h2>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.8rem">
+      <thead><tr>${d.sample.columns.map(c => `<th style="${thStyle}">${c}</th>`).join('')}</tr></thead>
+      <tbody>${d.sample.rows.map(row => `<tr>${row.map(v =>
+        `<td style="${tdStyle}">${v === null ? '<i style="color:#475569">NaN</i>' : v}</td>`
+      ).join('')}</tr>`).join('')}</tbody>
+    </table></div>` : '';
+
+  const colRows = d.columns.map(c => {
+    const pct = c.missing_pct;
+    const bc  = pct > 20 ? '#f87171' : pct > 5 ? '#fbbf24' : '#34d399';
+    const badge = c.is_numeric
+      ? '<span style="background:rgba(56,189,248,0.12);color:#38bdf8;padding:1px 7px;border-radius:20px;font-size:0.62rem;font-weight:600">numeric</span>'
+      : '<span style="background:rgba(167,139,250,0.12);color:#a78bfa;padding:1px 7px;border-radius:20px;font-size:0.62rem;font-weight:600">categorical</span>';
+    return `<tr>
+      <td style="${tdStyle};font-weight:600;color:#e2e8f0">${c.name}</td>
+      <td style="${tdStyle}">${badge}</td>
+      <td style="${tdStyle}">${c.dtype}</td>
+      <td style="${tdStyle}"><div style="display:flex;align-items:center;gap:0.5rem">
+        <div style="flex:1;height:4px;background:#1e293b;border-radius:4px;overflow:hidden">
+          <div style="width:${Math.min(100,pct)}%;height:100%;background:${bc};border-radius:4px"></div>
+        </div><span style="color:${pct > 0 ? bc : '#475569'};font-size:0.75rem;min-width:36px;text-align:right">${pct}%</span>
+      </div></td>
+      <td style="${tdStyle};text-align:right">${c.nunique}</td>
+    </tr>`;
+  }).join('');
+
+  const colsSection = `
+    <h2 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin:1.5rem 0 0.75rem">🗂 Column Info</h2>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+      <thead><tr>${['Column','Type','Dtype','Missing','Unique'].map(h => `<th style="${thStyle}">${h}</th>`).join('')}</tr></thead>
+      <tbody>${colRows}</tbody>
+    </table></div>`;
+
+  const numCols = Object.keys(d.stats);
+  const statsSection = numCols.length ? `
+    <h2 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin:1.5rem 0 0.75rem">📊 Descriptive Statistics</h2>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+      <thead><tr>${['Column','Mean','Median','Std','Min','Max','Skew','Kurtosis','Outliers'].map(h => `<th style="${thStyle}">${h}</th>`).join('')}</tr></thead>
+      <tbody>${numCols.map(col => {
+        const s = d.stats[col];
+        const skewC = Math.abs(s.skew) > 2 ? '#f87171' : Math.abs(s.skew) > 1 ? '#fbbf24' : '#94a3b8';
+        return `<tr>
+          <td style="${tdStyle};font-weight:600;color:#e2e8f0">${col}</td>
+          <td style="${tdStyle};text-align:right">${s.mean}</td>
+          <td style="${tdStyle};text-align:right">${s.median}</td>
+          <td style="${tdStyle};text-align:right">${s.std}</td>
+          <td style="${tdStyle};text-align:right">${s.min}</td>
+          <td style="${tdStyle};text-align:right">${s.max}</td>
+          <td style="${tdStyle};text-align:right;color:${skewC}">${s.skew}</td>
+          <td style="${tdStyle};text-align:right">${s.kurtosis}</td>
+          <td style="${tdStyle};text-align:right;color:${s.outliers > 0 ? '#fbbf24' : '#475569'}">${s.outliers}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>` : '';
+
+  const boxSection = boxImg ? `
+    <h2 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin:1.5rem 0 0.75rem">📦 Box Plots</h2>
+    <img src="${boxImg}" style="width:100%;border-radius:8px">` : '';
+
+  const distSection = distImgs.some(Boolean) ? `
+    <h2 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin:1.5rem 0 0.75rem">📈 Distributions</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem">
+      ${distKeys.map((col, i) => distImgs[i] ? `
+        <div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:0.75rem">
+          <div style="font-size:0.72rem;font-weight:600;color:#94a3b8;margin-bottom:0.25rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${col}</div>
+          <img src="${distImgs[i]}" style="width:100%;border-radius:4px">
+        </div>` : '').join('')}
+    </div>` : '';
+
+  const corrSection = corrImg ? `
+    <h2 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin:1.5rem 0 0.75rem">🔥 Correlation Heatmap</h2>
+    <img src="${corrImg}" style="width:100%;border-radius:8px">` : '';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EDA Report — ${filename}</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:system-ui,-apple-system,sans-serif; background:#0f172a; color:#e2e8f0; padding:2rem; }
+  h1 { font-size:1.4rem; font-weight:800; margin-bottom:0.25rem; }
+  .meta { font-size:0.8rem; color:#64748b; margin-bottom:2rem; }
+  section { background:#1e293b; border:1px solid #334155; border-radius:12px; padding:1.25rem; margin-bottom:1.25rem; }
+</style>
+</head>
+<body>
+<div style="max-width:960px;margin:0 auto">
+  <h1>EDA Report</h1>
+  <p class="meta">${filename} &nbsp;·&nbsp; Generated ${now}</p>
+  <section>
+    <p style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin-bottom:0.85rem">📋 Overview</p>
+    ${chips}
+  </section>
+  ${insights ? `<section>${insights}</section>` : ''}
+  ${sampleRows ? `<section>${sampleRows}</section>` : ''}
+  <section>${colsSection}</section>
+  ${statsSection ? `<section>${statsSection}</section>` : ''}
+  ${boxSection ? `<section>${boxSection}</section>` : ''}
+  ${distSection ? `<section>${distSection}</section>` : ''}
+  ${corrSection ? `<section>${corrSection}</section>` : ''}
+  <p style="font-size:0.7rem;color:#475569;margin-top:1.5rem;text-align:center">Generated by EDA Explorer · ml-unified.onrender.com</p>
+</div>
+</body>
+</html>`;
 }
 
 init();
