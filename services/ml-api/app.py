@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from routers import eda as _eda_router
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -650,7 +651,6 @@ async def train_model(
     return resp
 
 
-from routers import eda as _eda_router
 app.include_router(_eda_router.router)
 
 if __name__ == "__main__":
