@@ -2519,7 +2519,7 @@ function _renderMetrics(api, vision) {
 
   if (APP_MODE === 'vision') {
     el.innerHTML = section('ML Vision', vision, VISION_API, 'vision');
-  } else if (APP_MODE === 'ml') {
+  } else if (APP_MODE === 'ml' || APP_MODE === 'eda') {
     el.innerHTML = section('ML Unified', api, API, 'ml');
   } else {
     el.innerHTML = section('ML Unified', api, API, 'ml')
@@ -2535,7 +2535,7 @@ async function _fetchMetrics() {
     vision = VISION_API
       ? await fetch(`${VISION_API}/metrics`).then(r => r.ok ? r.json() : null).catch(() => null)
       : null;
-  } else if (APP_MODE === 'ml') {
+  } else if (APP_MODE === 'ml' || APP_MODE === 'eda') {
     api = await fetch(`${API}/metrics`).then(r => r.ok ? r.json() : null).catch(() => null);
   } else {
     [api, vision] = await Promise.all([
