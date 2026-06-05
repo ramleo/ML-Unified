@@ -459,21 +459,46 @@ body {
 }
 
 /* ── EDA Explorer Panel ── */
-.eda-panel { padding: 1.5rem; max-width: 860px; }
+.eda-panel { padding: 1.5rem; max-width: 960px; }
 .eda-header { display:flex; gap:1rem; align-items:flex-start; margin-bottom:1.5rem; }
-.eda-section { margin-bottom:2rem; }
+.eda-section-card {
+  background:var(--bg-card); border:1px solid var(--border2);
+  border-radius:12px; padding:1.25rem; margin-bottom:1.25rem;
+}
 .eda-section-title {
   font-size:0.75rem; font-weight:700; color:var(--text2);
   text-transform:uppercase; letter-spacing:0.06em;
-  margin-bottom:0.75rem; display:flex; align-items:center; gap:0.4rem;
+  margin-bottom:0.85rem; display:flex; align-items:center; gap:0.4rem;
 }
-.eda-overview-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:0.75rem; }
+.eda-sticky-nav {
+  position:sticky; top:0; z-index:10;
+  background:var(--bg); border-bottom:1px solid var(--border2);
+  display:flex; gap:0.25rem; padding:0.5rem 0;
+  margin:-0.25rem 0 1.25rem; overflow-x:auto; scrollbar-width:none;
+}
+.eda-sticky-nav::-webkit-scrollbar { display:none; }
+.eda-nav-tab {
+  padding:0.3rem 0.7rem; border-radius:20px; font-size:0.72rem;
+  font-weight:600; color:var(--text2); cursor:pointer;
+  background:transparent; border:1px solid transparent;
+  white-space:nowrap; transition:all 0.15s;
+}
+.eda-nav-tab:hover { background:var(--border2); color:var(--text); }
+.eda-overview-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:0.75rem; }
 .eda-chip {
-  background:var(--bg-card); border:1px solid var(--border2);
+  background:var(--bg); border:1px solid var(--border2);
   border-radius:10px; padding:0.75rem 1rem; text-align:center;
 }
 .eda-chip-val   { font-size:1.3rem; font-weight:800; color:var(--text); }
 .eda-chip-label { font-size:0.62rem; color:var(--text3); margin-top:2px; text-transform:uppercase; letter-spacing:0.05em; }
+.eda-insight {
+  display:flex; align-items:flex-start; gap:0.5rem;
+  padding:0.55rem 0.8rem; border-radius:8px; font-size:0.8rem;
+  line-height:1.45; margin-bottom:0.45rem;
+}
+.eda-insight-danger  { background:rgba(248,113,113,0.08);  border:1px solid rgba(248,113,113,0.25); }
+.eda-insight-warning { background:rgba(251,191,36,0.08);   border:1px solid rgba(251,191,36,0.25); }
+.eda-insight-info    { background:rgba(56,189,248,0.08);   border:1px solid rgba(56,189,248,0.25); }
 .eda-table { width:100%; border-collapse:collapse; font-size:0.82rem; }
 .eda-table th {
   padding:0.4rem 0.75rem; text-align:left;
@@ -485,18 +510,17 @@ body {
 .eda-type-badge { display:inline-block; padding:1px 7px; border-radius:20px; font-size:0.62rem; font-weight:600; }
 .eda-type-num { background:rgba(56,189,248,0.12); color:#38bdf8; }
 .eda-type-cat { background:rgba(167,139,250,0.12); color:#a78bfa; }
-.eda-dist-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:0.75rem; }
+.eda-dist-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:1rem; }
 .eda-dist-card {
-  background:var(--bg-card); border:1px solid var(--border2);
+  background:var(--bg); border:1px solid var(--border2);
   border-radius:10px; padding:0.75rem;
 }
 .eda-dist-title {
   font-size:0.72rem; font-weight:600; color:var(--text2);
-  margin-bottom:0.5rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  margin-bottom:0.25rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
-.eda-heatmap { border-collapse:collapse; }
-.eda-heatmap th, .eda-heatmap td { border:1px solid var(--border); min-width:36px; height:32px; }
-.eda-heatmap th { background:transparent; font-weight:600; }
+.eda-dist-plot { height:160px; }
+.eda-corr-plot { width:100%; }
 
 /* ── Unsupervised Panel ── */
 .u-panel { padding: 1.5rem; max-width: 860px; }
@@ -3022,6 +3046,7 @@ async function _runEDA(file) {
     }
     const data = await r.json();
     resEl.innerHTML = _renderEDA(data, file.name);
+    setTimeout(() => _renderEDAPlots(data), 0);
   } catch (e) {
     resEl.innerHTML = '';
     errEl.textContent = e.message;
@@ -3031,9 +3056,12 @@ async function _runEDA(file) {
 
 function _renderEDA(d, filename) {
   const missingColor = d.overview.missing_pct > 10 ? '#f87171' : d.overview.missing_pct > 0 ? '#fbbf24' : '#34d399';
+  const qScore = d.quality_score ?? 100;
+  const qColor = qScore >= 80 ? '#34d399' : qScore >= 60 ? '#fbbf24' : '#f87171';
+
   const overviewHTML = `
-    <div class="eda-section">
-      <div class="eda-section-title">📋 Dataset Overview
+    <div class="eda-section-card" id="eda-s-overview">
+      <div class="eda-section-title">📋 Overview
         <span style="font-weight:400;color:var(--text3);font-size:0.75rem;margin-left:0.4rem">${filename}</span>
       </div>
       <div class="eda-overview-grid">
@@ -3041,8 +3069,48 @@ function _renderEDA(d, filename) {
         <div class="eda-chip"><div class="eda-chip-val">${d.overview.cols}</div><div class="eda-chip-label">Columns</div></div>
         <div class="eda-chip"><div class="eda-chip-val" style="color:${missingColor}">${d.overview.missing_pct}%</div><div class="eda-chip-label">Missing</div></div>
         <div class="eda-chip"><div class="eda-chip-val" style="color:${d.overview.duplicates > 0 ? '#fbbf24' : 'var(--text)'}">${d.overview.duplicates}</div><div class="eda-chip-label">Duplicates</div></div>
+        <div class="eda-chip"><div class="eda-chip-val" style="color:${qColor}">${qScore}</div><div class="eda-chip-label">Quality /100</div></div>
       </div>
     </div>`;
+
+  const insightIcons = { danger: '🔴', warning: '⚠️', info: 'ℹ️' };
+  const insightsHTML = (d.insights && d.insights.length) ? `
+    <div class="eda-section-card" id="eda-s-insights">
+      <div class="eda-section-title">💡 Smart Insights</div>
+      ${d.insights.map(ins => `
+        <div class="eda-insight eda-insight-${ins.type}">
+          <span style="flex-shrink:0">${insightIcons[ins.type] || 'ℹ️'}</span>
+          <span style="color:var(--text2)">${ins.text}</span>
+        </div>`).join('')}
+    </div>` : '';
+
+  const navTabs = [
+    ['eda-s-overview', 'Overview'],
+    ['eda-s-sample', 'Sample'],
+    ['eda-s-columns', 'Columns'],
+    ...(Object.keys(d.stats).length ? [['eda-s-stats', 'Statistics']] : []),
+    ...(Object.keys(d.distributions).length ? [['eda-s-distributions', 'Distributions']] : []),
+    ...(d.correlations && d.correlations.labels.length > 1 ? [['eda-s-correlations', 'Correlations']] : []),
+  ];
+  const navHTML = `
+    <nav class="eda-sticky-nav">
+      ${navTabs.map(([id, label]) => `<button class="eda-nav-tab" onclick="document.getElementById('${id}').scrollIntoView({behavior:'smooth',block:'start'})">${label}</button>`).join('')}
+    </nav>`;
+
+  const sampleHTML = d.sample ? `
+    <div class="eda-section-card" id="eda-s-sample">
+      <div class="eda-section-title">👁 Sample Data
+        <span style="font-weight:400;color:var(--text3);font-size:0.7rem">first ${d.sample.rows.length} rows</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="eda-table">
+          <thead><tr>${d.sample.columns.map(c => `<th>${c}</th>`).join('')}</tr></thead>
+          <tbody>${d.sample.rows.map(row => `<tr>${row.map(v =>
+            `<td>${v === null ? '<span style="color:var(--text3);font-style:italic">NaN</span>' : v}</td>`
+          ).join('')}</tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>` : '';
 
   const colRows = d.columns.map(c => {
     const badge = c.is_numeric
@@ -3066,7 +3134,7 @@ function _renderEDA(d, filename) {
   }).join('');
 
   const colsHTML = `
-    <div class="eda-section">
+    <div class="eda-section-card" id="eda-s-columns">
       <div class="eda-section-title">🗂 Column Info</div>
       <div style="overflow-x:auto">
         <table class="eda-table">
@@ -3078,7 +3146,7 @@ function _renderEDA(d, filename) {
 
   const numCols = Object.keys(d.stats);
   const statsHTML = numCols.length ? `
-    <div class="eda-section">
+    <div class="eda-section-card" id="eda-s-stats">
       <div class="eda-section-title">📊 Descriptive Statistics</div>
       <div style="overflow-x:auto">
         <table class="eda-table">
@@ -3086,10 +3154,13 @@ function _renderEDA(d, filename) {
             <th>Column</th>
             <th style="text-align:right">Mean</th><th style="text-align:right">Median</th>
             <th style="text-align:right">Std</th><th style="text-align:right">Min</th>
-            <th style="text-align:right">Max</th><th style="text-align:right">Outliers</th>
+            <th style="text-align:right">Max</th>
+            <th style="text-align:right">Skew</th><th style="text-align:right">Kurtosis</th>
+            <th style="text-align:right">Outliers</th>
           </tr></thead>
           <tbody>${numCols.map(col => {
             const s = d.stats[col];
+            const skewColor = Math.abs(s.skew) > 2 ? '#f87171' : Math.abs(s.skew) > 1 ? '#fbbf24' : 'var(--text2)';
             return `<tr>
               <td style="font-weight:600;color:var(--text)">${col}</td>
               <td style="text-align:right">${s.mean}</td>
@@ -3097,6 +3168,8 @@ function _renderEDA(d, filename) {
               <td style="text-align:right">${s.std}</td>
               <td style="text-align:right">${s.min}</td>
               <td style="text-align:right">${s.max}</td>
+              <td style="text-align:right;color:${skewColor}">${s.skew}</td>
+              <td style="text-align:right">${s.kurtosis}</td>
               <td style="text-align:right;color:${s.outliers > 0 ? '#fbbf24' : 'var(--text3)'}">${s.outliers}</td>
             </tr>`;
           }).join('')}</tbody>
@@ -3106,80 +3179,79 @@ function _renderEDA(d, filename) {
 
   const distKeys = Object.keys(d.distributions);
   const distHTML = distKeys.length ? `
-    <div class="eda-section">
+    <div class="eda-section-card" id="eda-s-distributions">
       <div class="eda-section-title">📈 Distributions</div>
-      <div class="eda-dist-grid">${distKeys.map(col => `
-        <div class="eda-dist-card">
-          <div class="eda-dist-title">${col}</div>
-          ${_edaMiniChart(d.distributions[col])}
-        </div>`).join('')}
+      <div class="eda-dist-grid">${distKeys.map((col, i) => {
+        const isNum = d.distributions[col].type === 'histogram';
+        return `<div class="eda-dist-card">
+          <div class="eda-dist-title">${col}
+            <span style="font-size:0.58rem;color:var(--text3);margin-left:4px">${isNum ? 'numeric' : 'categorical'}</span>
+          </div>
+          <div id="eda-dist-${i}" class="eda-dist-plot"></div>
+        </div>`;
+      }).join('')}
       </div>
     </div>` : '';
 
-  let corrHTML = '';
-  if (d.correlations && d.correlations.labels.length > 1) {
-    const { labels, matrix } = d.correlations;
-    const header = `<tr><th></th>${labels.map(l =>
-      `<th style="font-size:0.6rem;writing-mode:vertical-rl;padding:0.25rem 0.1rem;color:var(--text2);max-width:36px">${l}</th>`
-    ).join('')}</tr>`;
-    const body = matrix.map((row, i) =>
-      `<tr><th style="font-size:0.7rem;padding-right:0.5rem;color:var(--text2);white-space:nowrap;text-align:left">${labels[i]}</th>` +
-      row.map((v, j) => {
-        if (v === null) return '<td style="background:var(--border2)"></td>';
-        const a = (Math.abs(v) * 0.75 + 0.12).toFixed(2);
-        const bg = v > 0 ? `rgba(56,189,248,${a})` : `rgba(248,113,113,${a})`;
-        const textColor = Math.abs(v) > 0.5 ? '#fff' : 'var(--text2)';
-        return `<td title="${labels[i]} vs ${labels[j]}: ${v}" style="background:${bg};text-align:center;font-size:0.62rem;color:${textColor}">${v.toFixed(2)}</td>`;
-      }).join('') + '</tr>'
-    ).join('');
-    const legend = ['0.0','0.2','0.4','0.6','0.8','1.0'].map((v,i) => {
-      const a = (parseFloat(v)*0.75+0.12).toFixed(2);
-      return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
-        <div style="width:22px;height:10px;background:rgba(56,189,248,${a});border-radius:2px"></div>
-        <div style="font-size:0.55rem;color:var(--text3)">${v}</div>
-      </div>`;
-    }).join('');
-    corrHTML = `
-      <div class="eda-section">
-        <div class="eda-section-title">🔥 Correlation Heatmap</div>
-        <div style="overflow-x:auto"><table class="eda-heatmap">${header}${body}</table></div>
-        <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap">
-          <span style="font-size:0.7rem;color:var(--text3)">Positive →</span>
-          ${legend}
-          <span style="font-size:0.7rem;color:var(--text3);margin-left:0.5rem">Negative = red</span>
-        </div>
-      </div>`;
-  }
+  const corrHTML = (d.correlations && d.correlations.labels.length > 1) ? `
+    <div class="eda-section-card" id="eda-s-correlations">
+      <div class="eda-section-title">🔥 Correlation Heatmap
+        <span style="font-weight:400;color:var(--text3);font-size:0.7rem">Pearson · blue = positive · red = negative</span>
+      </div>
+      <div id="eda-corr-hm" class="eda-corr-plot"></div>
+    </div>` : '';
 
-  return overviewHTML + colsHTML + statsHTML + distHTML + corrHTML;
+  return overviewHTML + insightsHTML + navHTML + sampleHTML + colsHTML + statsHTML + distHTML + corrHTML;
 }
 
-function _edaMiniChart(dist) {
-  const counts = dist.counts;
-  const maxC   = Math.max(...counts, 1);
-  if (dist.type === 'histogram') {
-    const W = 180, H = 56, bW = W / counts.length;
-    const bars = counts.map((c, i) => {
-      const h = Math.max(1, Math.round((c / maxC) * (H - 4)));
-      return `<rect x="${Math.round(i*bW)+0.5}" y="${H-h}" width="${Math.max(1,bW-1.5)}" height="${h}" fill="#34d399" opacity="0.75" rx="1"/>`;
-    }).join('');
-    const b0 = dist.bins[0], bN = dist.bins[dist.bins.length - 1];
-    return `<svg width="100%" viewBox="0 0 ${W} ${H+14}" style="display:block">
-      ${bars}
-      <text x="1" y="${H+12}" font-size="8" fill="#64748b">${_edaShortNum(b0)}</text>
-      <text x="${W-1}" y="${H+12}" font-size="8" fill="#64748b" text-anchor="end">${_edaShortNum(bN)}</text>
-    </svg>`;
+function _renderEDAPlots(d) {
+  if (typeof Plotly === 'undefined') return;
+  const cs  = getComputedStyle(document.documentElement);
+  const tc  = cs.getPropertyValue('--text3').trim()   || '#64748b';
+  const gc  = cs.getPropertyValue('--border').trim()  || 'rgba(255,255,255,0.07)';
+  const cfg = { displayModeBar: false, responsive: true };
+  const baseLayout = {
+    paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+    font: { color: tc, size: 10 }, height: 160, showlegend: false,
+    margin: { l: 35, r: 5, t: 5, b: 40 }, bargap: 0.05,
+    xaxis: { gridcolor: gc, zerolinecolor: gc, tickfont: { size: 8 } },
+    yaxis: { gridcolor: gc, zerolinecolor: gc, tickfont: { size: 9 } },
+  };
+
+  const distKeys = Object.keys(d.distributions);
+  distKeys.forEach((col, i) => {
+    const el = document.getElementById(`eda-dist-${i}`);
+    if (!el) return;
+    const dist = d.distributions[col];
+    const isHist = dist.type === 'histogram';
+    Plotly.newPlot(el, [{
+      type: 'bar',
+      x: isHist ? dist.bins : dist.labels,
+      y: dist.counts,
+      marker: { color: isHist ? '#34d399' : '#a78bfa', opacity: 0.82 },
+    }], { ...baseLayout }, cfg);
+  });
+
+  if (d.correlations && d.correlations.labels.length > 1) {
+    const el = document.getElementById('eda-corr-hm');
+    if (!el) return;
+    const { labels, matrix } = d.correlations;
+    Plotly.newPlot(el, [{
+      type: 'heatmap', z: matrix, x: labels, y: labels,
+      colorscale: 'RdBu', reversescale: true, zmid: 0, zmin: -1, zmax: 1,
+      text: matrix.map(r => r.map(v => v !== null ? v.toFixed(2) : '')),
+      texttemplate: '%{text}', textfont: { size: 9 },
+      showscale: true,
+      colorbar: { thickness: 12, len: 0.85, tickfont: { size: 9, color: tc } },
+    }], {
+      paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+      font: { color: tc, size: 10 }, showlegend: false,
+      margin: { l: 90, r: 20, t: 20, b: 90 },
+      height: Math.min(600, Math.max(300, labels.length * 45 + 110)),
+      xaxis: { tickangle: -45, tickfont: { size: 9 }, gridcolor: gc },
+      yaxis: { tickfont: { size: 9 }, gridcolor: gc },
+    }, cfg);
   }
-  return dist.labels.slice(0, 8).map((l, i) => {
-    const pct = Math.round((dist.counts[i] / maxC) * 100);
-    return `<div style="display:flex;align-items:center;gap:0.35rem;margin-bottom:3px">
-      <div style="font-size:0.6rem;color:var(--text3);width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0">${l}</div>
-      <div style="flex:1;height:5px;background:var(--border2);border-radius:3px;overflow:hidden">
-        <div style="width:${pct}%;height:100%;background:#a78bfa;border-radius:3px"></div>
-      </div>
-      <div style="font-size:0.6rem;color:var(--text3);min-width:20px;text-align:right">${dist.counts[i]}</div>
-    </div>`;
-  }).join('');
 }
 
 function _edaShortNum(n) {

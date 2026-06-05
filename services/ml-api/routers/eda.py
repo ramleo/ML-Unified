@@ -6,6 +6,16 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 router = APIRouter()
 
 
+def _to_native(v):
+    if pd.isna(v):
+        return None
+    if isinstance(v, np.integer):
+        return int(v)
+    if isinstance(v, np.floating):
+        return float(v)
+    return str(v)
+
+
 @router.post("/eda")
 async def exploratory_analysis(file: UploadFile = File(...)):
     content = await file.read()
@@ -56,6 +66,8 @@ async def exploratory_analysis(file: UploadFile = File(...)):
             "q25":      round(q25, 4),
             "q75":      round(q75, 4),
             "outliers": outliers,
+            "skew":     round(float(s.skew()), 3),
+            "kurtosis": round(float(s.kurtosis()), 3),
         }
 
     distributions = {}
@@ -89,10 +101,72 @@ async def exploratory_analysis(file: UploadFile = File(...)):
                        for row in corr.values.tolist()],
         }
 
+    # Sample data — first 5 rows
+    sample = {
+        "columns": df.columns.tolist(),
+        "rows": [
+            [_to_native(v) for v in row]
+            for row in df.head(5).itertuples(index=False, name=None)
+        ],
+    }
+
+    # Smart insights
+    insights = []
+
+    for c in columns:
+        if c["missing_pct"] > 20:
+            insights.append({"type": "danger",  "text": f"'{c['name']}' has {c['missing_pct']}% missing — consider dropping or imputing before training."})
+        elif c["missing_pct"] > 5:
+            insights.append({"type": "warning", "text": f"'{c['name']}' has {c['missing_pct']}% missing values."})
+
+    if overview["duplicates"] > 0:
+        dup_pct = round(overview["duplicates"] / overview["rows"] * 100, 1)
+        level = "warning" if dup_pct > 5 else "info"
+        insights.append({"type": level, "text": f"{overview['duplicates']} duplicate rows ({dup_pct}%) — deduplicate before training."})
+
+    for col, s in stats.items():
+        if abs(s["skew"]) > 2:
+            insights.append({"type": "info", "text": f"'{col}' is highly skewed (skew={s['skew']}) — consider a log or Box-Cox transform."})
+
+    for col, s in stats.items():
+        if overview["rows"] > 0:
+            out_pct = round(s["outliers"] / overview["rows"] * 100, 1)
+            if out_pct > 10:
+                insights.append({"type": "warning", "text": f"'{col}' has {s['outliers']} outliers ({out_pct}%) — check for data entry errors."})
+
+    if correlations:
+        labels = correlations["labels"]
+        matrix = correlations["matrix"]
+        seen: set = set()
+        for i in range(len(labels)):
+            for j in range(i + 1, len(labels)):
+                v = matrix[i][j]
+                if v is not None and abs(v) >= 0.9:
+                    pair = tuple(sorted([labels[i], labels[j]]))
+                    if pair not in seen:
+                        seen.add(pair)
+                        insights.append({"type": "danger", "text": f"'{labels[i]}' and '{labels[j]}' are highly correlated ({v:.2f}) — multicollinearity risk for linear models."})
+
+    # Data quality score (0–100)
+    score = 100.0
+    score -= min(40, overview["missing_pct"] * 2)
+    dup_pct_raw = overview["duplicates"] / max(overview["rows"], 1) * 100
+    score -= min(15, dup_pct_raw * 3)
+    if stats:
+        avg_abs_skew = sum(abs(s["skew"]) for s in stats.values()) / len(stats)
+        score -= min(10, avg_abs_skew * 2)
+        if overview["rows"] > 0:
+            avg_out_pct = sum(s["outliers"] / overview["rows"] * 100 for s in stats.values()) / len(stats)
+            score -= min(15, avg_out_pct * 1.5)
+    quality_score = max(0, round(score))
+
     return {
         "overview":      overview,
         "columns":       columns,
         "stats":         stats,
         "distributions": distributions,
         "correlations":  correlations,
+        "sample":        sample,
+        "insights":      insights,
+        "quality_score": quality_score,
     }
