@@ -2409,11 +2409,15 @@ function _friendlyEndpoints(endpoints, key) {
   for (const name of (_METRICS_KNOWN[key] || [])) {
     groups[name] = { name, count: 0, totalMs: 0, p95_ms: 0 };
   }
-  // Merge actual data, skipping internal paths
+  // Merge actual data — strict mode (eda) only updates pre-seeded known items
+  const strict = key === 'eda';  // eda shares ml-api but should only show its own endpoints
   for (const e of endpoints) {
     if (_METRICS_SKIP.has(e.path)) continue;
     const name = toName(e.path);
-    if (!groups[name]) groups[name] = { name, count: 0, totalMs: 0, p95_ms: 0 };
+    if (!groups[name]) {
+      if (strict) continue;  // eda/known-only mode: ignore endpoints not in METRICS_KNOWN
+      groups[name] = { name, count: 0, totalMs: 0, p95_ms: 0 };
+    }
     groups[name].count   += e.count;
     groups[name].totalMs += e.avg_ms * e.count;
     groups[name].p95_ms   = Math.max(groups[name].p95_ms, e.p95_ms);
