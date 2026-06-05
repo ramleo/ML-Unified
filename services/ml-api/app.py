@@ -650,6 +650,9 @@ async def train_model(
     return resp
 
 
+from routers import eda as _eda_router
+app.include_router(_eda_router.router)
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

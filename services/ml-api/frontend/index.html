@@ -458,6 +458,46 @@ body {
   display: block; margin-bottom: 1rem;
 }
 
+/* ── EDA Explorer Panel ── */
+.eda-panel { padding: 1.5rem; max-width: 860px; }
+.eda-header { display:flex; gap:1rem; align-items:flex-start; margin-bottom:1.5rem; }
+.eda-section { margin-bottom:2rem; }
+.eda-section-title {
+  font-size:0.75rem; font-weight:700; color:var(--text2);
+  text-transform:uppercase; letter-spacing:0.06em;
+  margin-bottom:0.75rem; display:flex; align-items:center; gap:0.4rem;
+}
+.eda-overview-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:0.75rem; }
+.eda-chip {
+  background:var(--bg-card); border:1px solid var(--border2);
+  border-radius:10px; padding:0.75rem 1rem; text-align:center;
+}
+.eda-chip-val   { font-size:1.3rem; font-weight:800; color:var(--text); }
+.eda-chip-label { font-size:0.62rem; color:var(--text3); margin-top:2px; text-transform:uppercase; letter-spacing:0.05em; }
+.eda-table { width:100%; border-collapse:collapse; font-size:0.82rem; }
+.eda-table th {
+  padding:0.4rem 0.75rem; text-align:left;
+  font-size:0.65rem; font-weight:600; text-transform:uppercase;
+  letter-spacing:0.06em; color:var(--text3); border-bottom:1px solid var(--border2);
+}
+.eda-table td { padding:0.4rem 0.75rem; border-bottom:1px solid var(--border); color:var(--text2); }
+.eda-table tbody tr:hover td { background:var(--border); }
+.eda-type-badge { display:inline-block; padding:1px 7px; border-radius:20px; font-size:0.62rem; font-weight:600; }
+.eda-type-num { background:rgba(56,189,248,0.12); color:#38bdf8; }
+.eda-type-cat { background:rgba(167,139,250,0.12); color:#a78bfa; }
+.eda-dist-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:0.75rem; }
+.eda-dist-card {
+  background:var(--bg-card); border:1px solid var(--border2);
+  border-radius:10px; padding:0.75rem;
+}
+.eda-dist-title {
+  font-size:0.72rem; font-weight:600; color:var(--text2);
+  margin-bottom:0.5rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.eda-heatmap { border-collapse:collapse; }
+.eda-heatmap th, .eda-heatmap td { border:1px solid var(--border); min-width:36px; height:32px; }
+.eda-heatmap th { background:transparent; font-weight:600; }
+
 /* ── Unsupervised Panel ── */
 .u-panel { padding: 1.5rem; max-width: 860px; }
 .u-header { display:flex; gap:1rem; align-items:flex-start; margin-bottom:1.5rem; }
@@ -552,6 +592,10 @@ const APP_MODE = new URLSearchParams(window.location.search).get('mode') || 'all
     if (titleEl) titleEl.textContent = 'ML Unified';
     if (subEl)   subEl.textContent   = 'Multi-Model Predictor';
     document.title = 'ML Unified — Multi-Model Predictor';
+  } else if (APP_MODE === 'eda') {
+    if (titleEl) titleEl.textContent = 'EDA Explorer';
+    if (subEl)   subEl.textContent   = 'Exploratory Data Analysis';
+    document.title = 'EDA Explorer — Dataset Inspector';
   }
 })();
 
@@ -598,6 +642,8 @@ async function init() {
     // Auto-select the appropriate default panel based on mode
     if (APP_MODE === 'vision') {
       selectVision();
+    } else if (APP_MODE === 'eda') {
+      selectEDA();
     } else if (allModels.length > 0) {
       selectModel(allModels[0].id);
     }
@@ -616,8 +662,9 @@ function renderSidebar() {
     { id: 'tsne',    label: 't-SNE',    sub: 'Visualization',         accent: '#f472b6' },
     { id: 'pca',     label: 'PCA',      sub: 'Dimensionality Reduction', accent: '#34d399' },
   ];
-  const showML     = APP_MODE !== 'vision';
-  const showVision = APP_MODE !== 'ml';
+  const showML     = APP_MODE !== 'vision' && APP_MODE !== 'eda';
+  const showVision = APP_MODE !== 'ml'     && APP_MODE !== 'eda';
+  const showEDA    = APP_MODE !== 'vision';
 
   const mlSection =
     '<div class="sidebar-label">Supervised Models</div>' +
@@ -673,6 +720,17 @@ function renderSidebar() {
       </div>
     </button>`;
 
+  const edaSection = showEDA
+    ? `<div class="sidebar-label" style="margin-top:${showML || showVision ? '1rem' : '0'}">Data Tools</div>
+       <button class="model-btn" id="ebtn-eda" onclick="selectEDA()">
+         <div class="model-dot" style="background:#34d399"></div>
+         <div class="model-btn-info">
+           <div class="model-btn-title">EDA Explorer</div>
+           <div class="model-btn-sub">Explore any CSV dataset</div>
+         </div>
+       </button>`
+    : '';
+
   const trainBtn = showML
     ? `<button class="sidebar-upload-btn" onclick="showUploadWizard()">
          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -696,6 +754,7 @@ function renderSidebar() {
   sb.innerHTML =
     (showML     ? mlSection     : '') +
     (showVision ? visionSection : '') +
+    edaSection +
     trainBtn +
     metricsBtn;
 }
@@ -2898,6 +2957,228 @@ function draw3dPlot(divId, plotData, accent, colorLabels, showNoise, xLabel, yLa
   Plotly.newPlot(divId, [trace], layout, { responsive: true, displayModeBar: false });
 }
 
+
+// ── EDA Explorer ─────────────────────────────────────────────
+function selectEDA() {
+  document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('ebtn-eda');
+  if (btn) btn.classList.add('active');
+  document.documentElement.style.setProperty('--accent', '#34d399');
+  document.getElementById('main').innerHTML = `
+    <div class="eda-panel">
+      <div class="eda-header">
+        <div class="u-dot" style="background:#34d399;margin-top:4px"></div>
+        <div>
+          <div class="u-title">EDA Explorer</div>
+          <div class="u-subtitle">Upload any CSV to explore its shape, distributions, missing values, and feature correlations.</div>
+        </div>
+      </div>
+      <div class="upload-zone" id="edaUploadZone"
+           ondragover="event.preventDefault();this.classList.add('drag')"
+           ondragleave="this.classList.remove('drag')"
+           ondrop="_edaDrop(event)">
+        <input type="file" accept=".csv" onchange="_edaFileSelected(this)">
+        <div class="upload-zone-icon">📊</div>
+        <div class="upload-zone-text">Drop a CSV file here, or click to browse</div>
+        <div class="upload-zone-sub">Any tabular CSV — columns are auto-detected</div>
+      </div>
+      <div id="edaErr" class="err-state" style="margin-bottom:1rem"></div>
+      <div id="edaResults"></div>
+    </div>`;
+}
+
+function _edaDrop(e) {
+  e.preventDefault();
+  document.getElementById('edaUploadZone').classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file) _runEDA(file);
+}
+
+function _edaFileSelected(input) {
+  if (input.files[0]) _runEDA(input.files[0]);
+}
+
+async function _runEDA(file) {
+  const errEl = document.getElementById('edaErr');
+  const resEl = document.getElementById('edaResults');
+  errEl.style.display = 'none';
+  resEl.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text3)"><span class="spinner" style="border-color:rgba(52,211,153,0.3);border-top-color:#34d399;width:20px;height:20px;border-width:3px"></span><div style="margin-top:0.75rem;font-size:0.85rem">Analysing dataset…</div></div>';
+
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const r = await fetch(`${API}/eda`, { method: 'POST', body: fd });
+    if (!r.ok) {
+      const msg = await r.json().catch(() => ({ detail: 'Upload failed' }));
+      throw new Error(msg.detail || 'Upload failed');
+    }
+    const data = await r.json();
+    resEl.innerHTML = _renderEDA(data, file.name);
+  } catch (e) {
+    resEl.innerHTML = '';
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+function _renderEDA(d, filename) {
+  const missingColor = d.overview.missing_pct > 10 ? '#f87171' : d.overview.missing_pct > 0 ? '#fbbf24' : '#34d399';
+  const overviewHTML = `
+    <div class="eda-section">
+      <div class="eda-section-title">📋 Dataset Overview
+        <span style="font-weight:400;color:var(--text3);font-size:0.75rem;margin-left:0.4rem">${filename}</span>
+      </div>
+      <div class="eda-overview-grid">
+        <div class="eda-chip"><div class="eda-chip-val">${d.overview.rows.toLocaleString()}</div><div class="eda-chip-label">Rows</div></div>
+        <div class="eda-chip"><div class="eda-chip-val">${d.overview.cols}</div><div class="eda-chip-label">Columns</div></div>
+        <div class="eda-chip"><div class="eda-chip-val" style="color:${missingColor}">${d.overview.missing_pct}%</div><div class="eda-chip-label">Missing</div></div>
+        <div class="eda-chip"><div class="eda-chip-val" style="color:${d.overview.duplicates > 0 ? '#fbbf24' : 'var(--text)'}">${d.overview.duplicates}</div><div class="eda-chip-label">Duplicates</div></div>
+      </div>
+    </div>`;
+
+  const colRows = d.columns.map(c => {
+    const badge = c.is_numeric
+      ? '<span class="eda-type-badge eda-type-num">numeric</span>'
+      : '<span class="eda-type-badge eda-type-cat">categorical</span>';
+    const pct = c.missing_pct;
+    const barColor = pct > 20 ? '#f87171' : pct > 5 ? '#fbbf24' : '#34d399';
+    const bar = `<div style="display:flex;align-items:center;gap:0.5rem">
+      <div style="flex:1;height:4px;background:var(--border2);border-radius:4px;overflow:hidden">
+        <div style="width:${Math.min(100,pct)}%;height:100%;background:${barColor};border-radius:4px"></div>
+      </div>
+      <span style="font-size:0.75rem;color:${pct > 0 ? barColor : 'var(--text3)'};min-width:36px;text-align:right">${pct}%</span>
+    </div>`;
+    return `<tr>
+      <td style="font-weight:600;color:var(--text)">${c.name}</td>
+      <td>${badge}</td>
+      <td style="font-size:0.78rem">${c.dtype}</td>
+      <td>${bar}</td>
+      <td style="text-align:right">${c.nunique}</td>
+    </tr>`;
+  }).join('');
+
+  const colsHTML = `
+    <div class="eda-section">
+      <div class="eda-section-title">🗂 Column Info</div>
+      <div style="overflow-x:auto">
+        <table class="eda-table">
+          <thead><tr><th>Column</th><th>Type</th><th>Dtype</th><th>Missing</th><th style="text-align:right">Unique</th></tr></thead>
+          <tbody>${colRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  const numCols = Object.keys(d.stats);
+  const statsHTML = numCols.length ? `
+    <div class="eda-section">
+      <div class="eda-section-title">📊 Descriptive Statistics</div>
+      <div style="overflow-x:auto">
+        <table class="eda-table">
+          <thead><tr>
+            <th>Column</th>
+            <th style="text-align:right">Mean</th><th style="text-align:right">Median</th>
+            <th style="text-align:right">Std</th><th style="text-align:right">Min</th>
+            <th style="text-align:right">Max</th><th style="text-align:right">Outliers</th>
+          </tr></thead>
+          <tbody>${numCols.map(col => {
+            const s = d.stats[col];
+            return `<tr>
+              <td style="font-weight:600;color:var(--text)">${col}</td>
+              <td style="text-align:right">${s.mean}</td>
+              <td style="text-align:right">${s.median}</td>
+              <td style="text-align:right">${s.std}</td>
+              <td style="text-align:right">${s.min}</td>
+              <td style="text-align:right">${s.max}</td>
+              <td style="text-align:right;color:${s.outliers > 0 ? '#fbbf24' : 'var(--text3)'}">${s.outliers}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>
+    </div>` : '';
+
+  const distKeys = Object.keys(d.distributions);
+  const distHTML = distKeys.length ? `
+    <div class="eda-section">
+      <div class="eda-section-title">📈 Distributions</div>
+      <div class="eda-dist-grid">${distKeys.map(col => `
+        <div class="eda-dist-card">
+          <div class="eda-dist-title">${col}</div>
+          ${_edaMiniChart(d.distributions[col])}
+        </div>`).join('')}
+      </div>
+    </div>` : '';
+
+  let corrHTML = '';
+  if (d.correlations && d.correlations.labels.length > 1) {
+    const { labels, matrix } = d.correlations;
+    const header = `<tr><th></th>${labels.map(l =>
+      `<th style="font-size:0.6rem;writing-mode:vertical-rl;padding:0.25rem 0.1rem;color:var(--text2);max-width:36px">${l}</th>`
+    ).join('')}</tr>`;
+    const body = matrix.map((row, i) =>
+      `<tr><th style="font-size:0.7rem;padding-right:0.5rem;color:var(--text2);white-space:nowrap;text-align:left">${labels[i]}</th>` +
+      row.map((v, j) => {
+        if (v === null) return '<td style="background:var(--border2)"></td>';
+        const a = (Math.abs(v) * 0.75 + 0.12).toFixed(2);
+        const bg = v > 0 ? `rgba(56,189,248,${a})` : `rgba(248,113,113,${a})`;
+        const textColor = Math.abs(v) > 0.5 ? '#fff' : 'var(--text2)';
+        return `<td title="${labels[i]} vs ${labels[j]}: ${v}" style="background:${bg};text-align:center;font-size:0.62rem;color:${textColor}">${v.toFixed(2)}</td>`;
+      }).join('') + '</tr>'
+    ).join('');
+    const legend = ['0.0','0.2','0.4','0.6','0.8','1.0'].map((v,i) => {
+      const a = (parseFloat(v)*0.75+0.12).toFixed(2);
+      return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+        <div style="width:22px;height:10px;background:rgba(56,189,248,${a});border-radius:2px"></div>
+        <div style="font-size:0.55rem;color:var(--text3)">${v}</div>
+      </div>`;
+    }).join('');
+    corrHTML = `
+      <div class="eda-section">
+        <div class="eda-section-title">🔥 Correlation Heatmap</div>
+        <div style="overflow-x:auto"><table class="eda-heatmap">${header}${body}</table></div>
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap">
+          <span style="font-size:0.7rem;color:var(--text3)">Positive →</span>
+          ${legend}
+          <span style="font-size:0.7rem;color:var(--text3);margin-left:0.5rem">Negative = red</span>
+        </div>
+      </div>`;
+  }
+
+  return overviewHTML + colsHTML + statsHTML + distHTML + corrHTML;
+}
+
+function _edaMiniChart(dist) {
+  const counts = dist.counts;
+  const maxC   = Math.max(...counts, 1);
+  if (dist.type === 'histogram') {
+    const W = 180, H = 56, bW = W / counts.length;
+    const bars = counts.map((c, i) => {
+      const h = Math.max(1, Math.round((c / maxC) * (H - 4)));
+      return `<rect x="${Math.round(i*bW)+0.5}" y="${H-h}" width="${Math.max(1,bW-1.5)}" height="${h}" fill="#34d399" opacity="0.75" rx="1"/>`;
+    }).join('');
+    const b0 = dist.bins[0], bN = dist.bins[dist.bins.length - 1];
+    return `<svg width="100%" viewBox="0 0 ${W} ${H+14}" style="display:block">
+      ${bars}
+      <text x="1" y="${H+12}" font-size="8" fill="#64748b">${_edaShortNum(b0)}</text>
+      <text x="${W-1}" y="${H+12}" font-size="8" fill="#64748b" text-anchor="end">${_edaShortNum(bN)}</text>
+    </svg>`;
+  }
+  return dist.labels.slice(0, 8).map((l, i) => {
+    const pct = Math.round((dist.counts[i] / maxC) * 100);
+    return `<div style="display:flex;align-items:center;gap:0.35rem;margin-bottom:3px">
+      <div style="font-size:0.6rem;color:var(--text3);width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0">${l}</div>
+      <div style="flex:1;height:5px;background:var(--border2);border-radius:3px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:#a78bfa;border-radius:3px"></div>
+      </div>
+      <div style="font-size:0.6rem;color:var(--text3);min-width:20px;text-align:right">${dist.counts[i]}</div>
+    </div>`;
+  }).join('');
+}
+
+function _edaShortNum(n) {
+  if (Math.abs(n) >= 1e6) return (n/1e6).toFixed(1)+'M';
+  if (Math.abs(n) >= 1e3) return (n/1e3).toFixed(1)+'K';
+  return Number.isInteger(n) ? n : parseFloat(n.toFixed(2));
+}
 
 init();
 </script>
