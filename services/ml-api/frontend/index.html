@@ -2302,8 +2302,59 @@ function renderSegmentationResult(data) {
 }
 
 // ── Live Metrics ───────────────────────────────────────────────
-let _metricsInterval = null;
-let _metricsCache    = null;   // pre-fetched so panel opens instantly
+let _metricsInterval  = null;
+let _metricsCache     = null;   // pre-fetched so panel opens instantly
+let _metricsDetailsOpen = {};   // { ml: bool, vision: bool } — persists across re-renders
+
+function _toggleMetricsDetails(key) {
+  _metricsDetailsOpen[key] = !_metricsDetailsOpen[key];
+  const detEl = document.getElementById('metricsDetails_' + key);
+  const btnEl = document.getElementById('metricsDetailsBtn_' + key);
+  if (detEl) detEl.style.display = _metricsDetailsOpen[key] ? 'block' : 'none';
+  if (btnEl) btnEl.textContent   = _metricsDetailsOpen[key] ? 'Details ▴' : 'Details ▾';
+}
+
+function _friendlyEndpoints(endpoints) {
+  const NAME = {
+    '/models':           'Model List',
+    '/train':            'Training',
+    '/analyze':          'CSV Analysis',
+    '/unsupervised':     'Clustering',
+    '/image-models':     'Models',
+    '/imagenet-classes': 'ImageNet Labels',
+    '/classify-image':   'Classifier',
+    '/image-operations': 'Operations',
+    '/process-image':    'Processing',
+    '/detect-models':    'Models',
+    '/detect-objects':   'Detection',
+    '/seg-models':       'Models',
+    '/segment-image':    'Segmentation',
+  };
+  function toName(path) {
+    if (NAME[path]) return NAME[path];
+    const m = path.match(/\/(?:schemas|predict)\/(.+)/);
+    if (m) return m[1].charAt(0).toUpperCase() + m[1].slice(1);
+    const seg = path.split('/').filter(Boolean).pop() || path;
+    return seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ');
+  }
+  const groups = {};
+  for (const e of endpoints) {
+    const name = toName(e.path);
+    if (!groups[name]) groups[name] = { name, count: 0, totalMs: 0, p95_ms: 0, errors: 0 };
+    groups[name].count   += e.count;
+    groups[name].totalMs += e.avg_ms * e.count;
+    groups[name].p95_ms   = Math.max(groups[name].p95_ms, e.p95_ms);
+    groups[name].errors  += Math.round(e.error_rate / 100 * e.count);
+  }
+  return Object.values(groups)
+    .map(g => ({
+      name:      g.name,
+      count:     g.count,
+      avg_ms:    g.count > 0 ? Math.round(g.totalMs / g.count * 10) / 10 : 0,
+      p95_ms:    g.p95_ms,
+    }))
+    .sort((a, b) => b.count - a.count);
+}
 
 function _fmtUptime(s) {
   if (s < 60)   return `${s}s`;
@@ -2323,41 +2374,6 @@ function _renderMetrics(api, vision) {
   const el = document.getElementById('metricsBody');
   if (!el) return;
 
-  const card = (data) => {
-    if (!data) return `<div style="color:var(--text3);font-size:0.8rem;padding:1rem 0">Service unavailable</div>`;
-    const maxMs = Math.max(...(data.endpoints || []).map(e => e.p95_ms), 1);
-    const errColor = data.error_rate > 5 ? '#f87171' : data.error_rate > 0 ? '#fbbf24' : '#34d399';
-    const rows = (data.endpoints || []).slice(0, 6).map(e => `
-      <div style="display:grid;grid-template-columns:1fr auto auto;gap:0.5rem;align-items:center;
-                  padding:0.35rem 0;border-bottom:1px solid var(--border)">
-        <span style="font-size:0.72rem;color:var(--text2);overflow:hidden;text-overflow:ellipsis;
-                     white-space:nowrap" title="${e.path}">${e.path}</span>
-        <span style="font-size:0.7rem;color:var(--text3);white-space:nowrap">${e.count}×</span>
-        <span style="font-size:0.7rem;color:var(--text3);white-space:nowrap">${e.avg_ms}ms</span>
-      </div>
-      <div style="padding:0.2rem 0 0.4rem;display:flex;align-items:center;gap:0.5rem">
-        ${_latencyBar(e.p95_ms, maxMs)}
-        <span style="font-size:0.65rem;color:var(--text3);white-space:nowrap">p95 ${e.p95_ms}ms</span>
-      </div>`).join('');
-    return `
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.5rem;margin-bottom:0.75rem">
-        ${[
-          ['Uptime',    _fmtUptime(data.uptime_s), '#34d399'],
-          ['Requests',  data.total_requests,        'var(--text)'],
-          ['Avg',       data.avg_ms + 'ms',         'var(--text)'],
-          ['p95',       data.p95_ms + 'ms',         'var(--text)'],
-          ['Errors',    data.error_rate + '%',       errColor],
-        ].map(([l,v,c]) => `
-          <div style="text-align:center;padding:0.4rem 0.3rem;border-radius:8px;
-                      background:var(--border);border:1px solid var(--border2)">
-            <div style="font-size:0.82rem;font-weight:700;color:${c};white-space:nowrap;
-                        overflow:hidden;text-overflow:ellipsis">${v}</div>
-            <div style="font-size:0.58rem;color:var(--text3);margin-top:1px">${l}</div>
-          </div>`).join('')}
-      </div>
-      ${rows ? `<div style="margin-top:0.25rem">${rows}</div>` : '<div style="color:var(--text3);font-size:0.78rem">No requests yet</div>'}`;
-  };
-
   const rawBtn = (url) => `
     <a href="${url}/metrics" target="_blank"
        style="font-size:0.62rem;color:var(--text3);text-decoration:none;padding:0.15rem 0.45rem;
@@ -2368,24 +2384,74 @@ function _renderMetrics(api, vision) {
       Raw JSON ↗
     </a>`;
 
-  const section = (label, data, url) => `
+  const card = (data, key) => {
+    if (!data) return `<div style="color:var(--text3);font-size:0.8rem;padding:1rem 0">Service unavailable</div>`;
+    const errColor  = data.error_rate > 5 ? '#f87171' : data.error_rate > 0 ? '#fbbf24' : '#34d399';
+    const grouped   = _friendlyEndpoints(data.endpoints || []);
+    const maxMs     = Math.max(...grouped.map(e => e.p95_ms), 1);
+    const isOpen    = !!_metricsDetailsOpen[key];
+
+    const rows = grouped.map(e => `
+      <div style="display:grid;grid-template-columns:1fr auto auto;gap:0.5rem;align-items:center;
+                  padding:0.35rem 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:0.72rem;color:var(--text2)">${e.name}</span>
+        <span style="font-size:0.7rem;color:var(--text3);white-space:nowrap">${e.count}×</span>
+        <span style="font-size:0.7rem;color:var(--text3);white-space:nowrap">${e.avg_ms}ms</span>
+      </div>
+      <div style="padding:0.2rem 0 0.4rem;display:flex;align-items:center;gap:0.5rem">
+        ${_latencyBar(e.p95_ms, maxMs)}
+        <span style="font-size:0.65rem;color:var(--text3);white-space:nowrap">p95 ${e.p95_ms}ms</span>
+      </div>`).join('');
+
+    const detailsBtn = rows ? `
+      <button id="metricsDetailsBtn_${key}" onclick="_toggleMetricsDetails('${key}')"
+              style="font-size:0.68rem;color:var(--text3);background:none;border:1px solid var(--border2);
+                     border-radius:5px;padding:0.15rem 0.5rem;cursor:pointer;margin-bottom:0.5rem;
+                     transition:color 0.15s,border-color 0.15s"
+              onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'"
+              onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border2)'">
+        ${isOpen ? 'Details ▴' : 'Details ▾'}
+      </button>
+      <div id="metricsDetails_${key}" style="display:${isOpen ? 'block' : 'none'}">${rows}</div>
+    ` : `<div style="color:var(--text3);font-size:0.78rem">No requests yet</div>`;
+
+    return `
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.5rem;margin-bottom:0.6rem">
+        ${[
+          ['Uptime',   _fmtUptime(data.uptime_s), '#34d399'],
+          ['Requests', data.total_requests,        'var(--text)'],
+          ['Avg',      data.avg_ms + 'ms',         'var(--text)'],
+          ['p95',      data.p95_ms + 'ms',         'var(--text)'],
+          ['Errors',   data.error_rate + '%',       errColor],
+        ].map(([l,v,c]) => `
+          <div style="text-align:center;padding:0.4rem 0.3rem;border-radius:8px;
+                      background:var(--border);border:1px solid var(--border2)">
+            <div style="font-size:0.82rem;font-weight:700;color:${c};white-space:nowrap;
+                        overflow:hidden;text-overflow:ellipsis">${v}</div>
+            <div style="font-size:0.58rem;color:var(--text3);margin-top:1px">${l}</div>
+          </div>`).join('')}
+      </div>
+      ${detailsBtn}`;
+  };
+
+  const section = (label, data, url, key) => `
     <div>
       <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.6rem">
         <span style="font-size:0.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;
                      letter-spacing:0.08em">${label}</span>
         ${url ? rawBtn(url) : ''}
       </div>
-      ${card(data)}
+      ${card(data, key)}
     </div>`;
 
   if (APP_MODE === 'vision') {
-    el.innerHTML = section('ML Vision', vision, VISION_API);
+    el.innerHTML = section('ML Vision', vision, VISION_API, 'vision');
   } else if (APP_MODE === 'ml') {
-    el.innerHTML = section('ML Unified', api, API);
+    el.innerHTML = section('ML Unified', api, API, 'ml');
   } else {
-    el.innerHTML = section('ML Unified', api, API)
+    el.innerHTML = section('ML Unified', api, API, 'ml')
       + `<div style="margin-top:1.25rem">`
-      + section('ML Vision', vision, VISION_API)
+      + section('ML Vision', vision, VISION_API, 'vision')
       + `</div>`;
   }
 }
