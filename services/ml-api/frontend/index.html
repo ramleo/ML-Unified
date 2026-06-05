@@ -535,6 +535,22 @@ async function initVisionUrl() {
   } catch (_) {}
 }
 initVisionUrl();
+
+// ── App mode: read ?mode=ml | ?mode=vision | (none = all) ─────
+const APP_MODE = new URLSearchParams(window.location.search).get('mode') || 'all';
+// Reflect mode in nav title immediately
+(function applyNavMode() {
+  const titleEl = document.querySelector('.nav-title');
+  const subEl   = document.querySelector('.nav-sub');
+  if (APP_MODE === 'vision') {
+    if (titleEl) titleEl.textContent = 'ML Vision';
+    if (subEl)   subEl.textContent   = 'Computer Vision Platform';
+  } else if (APP_MODE === 'ml') {
+    if (titleEl) titleEl.textContent = 'ML Unified';
+    if (subEl)   subEl.textContent   = 'Multi-Model Predictor';
+  }
+})();
+
 const ACCENT_PALETTE_DEFAULT = [
   "#818cf8","#38bdf8","#34d399","#fbbf24",
   "#f87171","#fb923c","#a78bfa","#4ade80",
@@ -582,7 +598,10 @@ function renderSidebar() {
     { id: 'tsne',    label: 't-SNE',    sub: 'Visualization',         accent: '#f472b6' },
     { id: 'pca',     label: 'PCA',      sub: 'Dimensionality Reduction', accent: '#34d399' },
   ];
-  sb.innerHTML =
+  const showML     = APP_MODE !== 'vision';
+  const showVision = APP_MODE !== 'ml';
+
+  const mlSection =
     '<div class="sidebar-label">Supervised Models</div>' +
     allModels.map(m => `
       <button class="model-btn" id="btn-${m.id}" onclick="selectModel('${m.id}')">
@@ -603,9 +622,11 @@ function renderSidebar() {
           <div class="model-btn-sub">${a.sub}</div>
         </div>
       </button>
-    `).join('') +
-    '<div class="sidebar-label" style="margin-top:1rem">Vision</div>' +
-    `<button class="model-btn" id="vbtn-classifier" onclick="selectVision()">
+    `).join('');
+
+  const visionSection =
+    `<div class="sidebar-label" style="margin-top:${showML ? '1rem' : '0'}">Vision</div>
+    <button class="model-btn" id="vbtn-classifier" onclick="selectVision()">
       <div class="model-dot" style="background:#e879f9"></div>
       <div class="model-btn-info">
         <div class="model-btn-title">Image Classifier</div>
@@ -630,16 +651,24 @@ function renderSidebar() {
       <div class="model-dot" style="background:#a78bfa"></div>
       <div class="model-btn-info">
         <div class="model-btn-title">Image Segmentation</div>
-        <div class="model-btn-sub">FCN · Pascal VOC 21 classes</div>
+        <div class="model-btn-sub">SegFormer-B0 · ADE20K 150 classes</div>
       </div>
-    </button>` +
-    `<div style="flex:1"></div>
-     <button class="sidebar-upload-btn" onclick="showUploadWizard()">
-       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-         <path d="M8 2v9M4 6l4-4 4 4"/><path d="M2 13h12"/>
-       </svg>
-       Train New Model
-     </button>`;
+    </button>`;
+
+  const trainBtn = showML
+    ? `<div style="flex:1"></div>
+       <button class="sidebar-upload-btn" onclick="showUploadWizard()">
+         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+           <path d="M8 2v9M4 6l4-4 4 4"/><path d="M2 13h12"/>
+         </svg>
+         Train New Model
+       </button>`
+    : '<div style="flex:1"></div>';
+
+  sb.innerHTML =
+    (showML     ? mlSection     : '') +
+    (showVision ? visionSection : '') +
+    trainBtn;
 }
 
 // ── Select model ──────────────────────────────────────────────
