@@ -318,6 +318,27 @@ _BOX_PALETTE = [
 _large_vision_cache: Dict[str, Any] = {}
 _large_vision_lock:  threading.Lock  = threading.Lock()
 
+# Background warmup: download model files to disk on startup so the first inference
+# request doesn't have to wait for a 135 MB download and timeout (502 on Render free tier).
+_warmup_done = threading.Event()
+
+
+def _warmup_models() -> None:
+    for _dl in (
+        lambda: _ensure_seg_model("fcn_resnet50"),
+        lambda: _ensure_det_model("tiny_yolov3"),
+    ):
+        try:
+            _dl()
+        except Exception as exc:
+            print(f"[warmup] model download failed: {exc}", flush=True)
+    _warmup_done.set()
+
+
+@app.on_event("startup")
+async def startup() -> None:
+    threading.Thread(target=_warmup_models, daemon=True).start()
+
 
 def _ensure_det_model(model_id: str) -> str:
     path = os.path.join(VISION_CACHE_DIR, f"det_{model_id}.onnx")
@@ -375,6 +396,9 @@ async def detect_objects(
         session = _large_vision_cache.get("session") if cached else None
 
     if session is None:
+        det_path = os.path.join(VISION_CACHE_DIR, f"det_{model_name}.onnx")
+        if not os.path.exists(det_path):
+            raise HTTPException(503, "Vision service is warming up — please try again in ~30 seconds")
         try:
             session = _load_det_session(model_name)
         except Exception as e:
@@ -619,6 +643,9 @@ async def segment_image(
         session = _large_vision_cache.get("session") if cached else None
 
     if session is None:
+        seg_path = os.path.join(VISION_CACHE_DIR, f"{model_name}.onnx")
+        if not os.path.exists(seg_path):
+            raise HTTPException(503, "Vision service is warming up — please try again in ~30 seconds")
         try:
             session = _load_seg_session(model_name)
         except Exception as e:
