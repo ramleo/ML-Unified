@@ -59,6 +59,7 @@ jobs:
             || (echo "ml-api deploy hook failed." && exit 1)
 
       - name: Trigger ml-vision deploy
+        if: secrets.RENDER_VISION_DEPLOY_HOOK_URL != ''
         run: |
           curl -s -o /dev/null -w "%{http_code}" \
             "${{ secrets.RENDER_VISION_DEPLOY_HOOK_URL }}" | grep -q "^2" \
