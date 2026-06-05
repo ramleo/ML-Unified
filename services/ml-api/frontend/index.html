@@ -592,8 +592,12 @@ async function init() {
     const res = await fetch(`${API}/models`);
     allModels  = await res.json();
     renderSidebar();
-    // Auto-select first model
-    if (allModels.length > 0) selectModel(allModels[0].id);
+    // Auto-select the appropriate default panel based on mode
+    if (APP_MODE === 'vision') {
+      selectVision();
+    } else if (allModels.length > 0) {
+      selectModel(allModels[0].id);
+    }
   } catch(e) {
     document.getElementById('sidebar').innerHTML =
       '<div class="sidebar-loading" style="color:#f87171">Failed to load models. Is the server running?</div>';
