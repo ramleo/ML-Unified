@@ -17,7 +17,7 @@ app.add_middleware(
 )
 
 # ── Request monitoring ────────────────────────────────────────────────────────
-_SKIP_PATHS = {"/health", "/metrics", "/favicon.ico"}
+_SKIP_PATHS = {"/", "/health", "/metrics", "/favicon.ico"}
 _req_log: collections.deque = collections.deque(maxlen=1000)
 _svc_start = time.time()
 
@@ -78,6 +78,10 @@ os.makedirs(VISION_CACHE_DIR, exist_ok=True)
 
 _MAX_IMG_DIM = 1200
 
+
+@app.get("/")
+def root():
+    return {"service": "ml-vision", "status": "ok", "docs": "/docs"}
 
 @app.get("/health")
 def health():

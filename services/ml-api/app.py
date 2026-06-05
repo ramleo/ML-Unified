@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import collections
 import time
@@ -34,7 +34,7 @@ app.add_middleware(
 )
 
 # ── Request monitoring ────────────────────────────────────────────────────────
-_SKIP_PATHS = {"/", "/health", "/metrics", "/app-config"}
+_SKIP_PATHS = {"/", "/health", "/metrics", "/app-config", "/favicon.ico"}
 _req_log: collections.deque = collections.deque(maxlen=1000)
 _svc_start = time.time()
 
@@ -139,6 +139,13 @@ def index():
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
         )
     return {"message": "ML API — see /docs"}
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    path = os.path.join(HERE, "frontend", "favicon.ico")
+    if os.path.exists(path):
+        return FileResponse(path, media_type="image/x-icon")
+    return HTMLResponse(status_code=204)
 
 @app.get("/health")
 def health():
