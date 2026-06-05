@@ -510,7 +510,19 @@ body {
 
 <script>
 // ── Config ──────────────────────────────────────────────────
-const API = '';  // same origin; Render serves both backend + frontend
+const API = '';  // same origin; ml-api serves frontend
+let VISION_API = '';  // ml-vision base URL — set by initVisionUrl() on load
+
+async function initVisionUrl() {
+  try {
+    const r = await fetch('/app-config');
+    if (r.ok) {
+      const cfg = await r.json();
+      if (cfg.vision_url) VISION_API = cfg.vision_url.replace(/\/$/, '');
+    }
+  } catch (_) {}
+}
+initVisionUrl();
 const ACCENT_PALETTE_DEFAULT = [
   "#818cf8","#38bdf8","#34d399","#fbbf24",
   "#f87171","#fb923c","#a78bfa","#4ade80",
@@ -1335,7 +1347,7 @@ async function runImageClassify() {
   form.append('top_k',      topK);
 
   try {
-    const res = await fetch(`${API}/classify-image`, { method: 'POST', body: form });
+    const res = await fetch(`${VISION_API}/classify-image`, { method: 'POST', body: form });
     if (!res.ok) { const t = await res.text(); throw new Error(t); }
     const data = await res.json();
     renderVisionResult(data);
@@ -1411,7 +1423,7 @@ async function toggleCategoryBrowser() {
   document.getElementById('vCategoryBtn').textContent = 'Loading…';
   if (!_imagenetClasses) {
     try {
-      const r = await fetch(`${API}/imagenet-classes`);
+      const r = await fetch(`${VISION_API}/imagenet-classes`);
       const d = await r.json();
       _imagenetClasses = d.classes || [];
     } catch(e) {
@@ -1603,7 +1615,7 @@ async function runImageProcess() {
   }
 
   try {
-    const res = await fetch(`${API}/process-image`, { method: 'POST', body: form });
+    const res = await fetch(`${VISION_API}/process-image`, { method: 'POST', body: form });
     if (!res.ok) { const t = await res.text(); throw new Error(t); }
     const data = await res.json();
     renderIpResult(data);
@@ -1886,7 +1898,7 @@ async function runObjectDetect() {
 
   try {
     const res = await _postWithProgress(
-      `${API}/detect-objects`, form, 'detResult', '#38bdf8',
+      `${VISION_API}/detect-objects`, form, 'detResult', '#38bdf8',
       'First call downloads ~35 MB — may take up to 60 s on free tier');
     if (!res.ok) {
       const raw = await res.text();
@@ -2071,7 +2083,7 @@ async function runSegmentation() {
 
   try {
     const res = await _postWithProgress(
-      `${API}/segment-image`, form, 'segResult', '#a78bfa',
+      `${VISION_API}/segment-image`, form, 'segResult', '#a78bfa',
       'First call downloads ~135 MB — may take up to 2 min on free tier');
     if (!res.ok) {
       const raw = await res.text();

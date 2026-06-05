@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder, StandardScaler
@@ -67,9 +67,18 @@ _load()
 @app.get("/")
 def index():
     if os.path.exists(FRONTEND):
-        return FileResponse(
-            FRONTEND,
-            headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+        vision_url = os.environ.get("ML_VISION_URL", "").rstrip("/")
+        with open(FRONTEND, encoding="utf-8") as f:
+            html = f.read()
+        # Pre-populate VISION_API so it is set before any JS runs (avoids race with initVisionUrl)
+        html = html.replace(
+            "let VISION_API = '';",
+            f"let VISION_API = '{vision_url}';",
+            1,
+        )
+        return HTMLResponse(
+            html,
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
         )
     return {"message": "ML API — see /docs"}
 
