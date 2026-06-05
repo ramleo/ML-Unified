@@ -17,7 +17,7 @@ app.add_middleware(
 )
 
 # ── Request monitoring ────────────────────────────────────────────────────────
-_SKIP_PATHS = {"/health", "/metrics"}
+_SKIP_PATHS = {"/health", "/metrics", "/favicon.ico"}
 _req_log: collections.deque = collections.deque(maxlen=1000)
 _svc_start = time.time()
 

@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ML Unified — Multi-Model Predictor</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
 <style>
 /* ── Theme variables ── */
 :root {
@@ -546,9 +547,11 @@ const APP_MODE = new URLSearchParams(window.location.search).get('mode') || 'all
   if (APP_MODE === 'vision') {
     if (titleEl) titleEl.textContent = 'ML Vision';
     if (subEl)   subEl.textContent   = 'Computer Vision Platform';
+    document.title = 'ML Vision — Computer Vision Platform';
   } else if (APP_MODE === 'ml') {
     if (titleEl) titleEl.textContent = 'ML Unified';
     if (subEl)   subEl.textContent   = 'Multi-Model Predictor';
+    document.title = 'ML Unified — Multi-Model Predictor';
   }
 })();
 
@@ -2300,6 +2303,7 @@ function renderSegmentationResult(data) {
 
 // ── Live Metrics ───────────────────────────────────────────────
 let _metricsInterval = null;
+let _metricsCache    = null;   // pre-fetched so panel opens instantly
 
 function _fmtUptime(s) {
   if (s < 60)   return `${s}s`;
@@ -2336,7 +2340,7 @@ function _renderMetrics(api, vision) {
         <span style="font-size:0.65rem;color:var(--text3);white-space:nowrap">p95 ${e.p95_ms}ms</span>
       </div>`).join('');
     return `
-      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.75rem">
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.5rem;margin-bottom:0.75rem">
         ${[
           ['Uptime',    _fmtUptime(data.uptime_s), '#34d399'],
           ['Requests',  data.total_requests,        'var(--text)'],
@@ -2344,10 +2348,11 @@ function _renderMetrics(api, vision) {
           ['p95',       data.p95_ms + 'ms',         'var(--text)'],
           ['Errors',    data.error_rate + '%',       errColor],
         ].map(([l,v,c]) => `
-          <div style="text-align:center;padding:0.4rem 0.6rem;border-radius:8px;
-                      background:var(--border);border:1px solid var(--border2);min-width:54px">
-            <div style="font-size:0.85rem;font-weight:700;color:${c}">${v}</div>
-            <div style="font-size:0.6rem;color:var(--text3);margin-top:1px">${l}</div>
+          <div style="text-align:center;padding:0.4rem 0.3rem;border-radius:8px;
+                      background:var(--border);border:1px solid var(--border2)">
+            <div style="font-size:0.82rem;font-weight:700;color:${c};white-space:nowrap;
+                        overflow:hidden;text-overflow:ellipsis">${v}</div>
+            <div style="font-size:0.58rem;color:var(--text3);margin-top:1px">${l}</div>
           </div>`).join('')}
       </div>
       ${rows ? `<div style="margin-top:0.25rem">${rows}</div>` : '<div style="color:var(--text3);font-size:0.78rem">No requests yet</div>'}`;
@@ -2387,10 +2392,14 @@ async function _fetchMetrics() {
     fetch(`${API}/metrics`).then(r => r.ok ? r.json() : null).catch(() => null),
     VISION_API ? fetch(`${VISION_API}/metrics`).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null),
   ]);
+  _metricsCache = { api, vision, ts: new Date() };
   _renderMetrics(api, vision);
   const ts = document.getElementById('metricsTs');
-  if (ts) ts.textContent = 'Updated ' + new Date().toLocaleTimeString();
+  if (ts) ts.textContent = 'Updated ' + _metricsCache.ts.toLocaleTimeString();
 }
+
+// Pre-fetch once on load so the panel opens instantly
+window.addEventListener('load', () => { _fetchMetrics(); });
 
 function openMetricsPanel() {
   if (document.getElementById('metricsOverlay')) return;
@@ -2398,6 +2407,7 @@ function openMetricsPanel() {
   overlay.id = 'metricsOverlay';
   overlay.style.cssText = `position:fixed;inset:0;z-index:1000;display:flex;align-items:flex-end;
     justify-content:flex-end;padding:1rem;pointer-events:none`;
+  const cachedTs = _metricsCache ? 'Updated ' + _metricsCache.ts.toLocaleTimeString() : 'Loading…';
   overlay.innerHTML = `
     <div style="pointer-events:all;width:min(420px,96vw);max-height:80vh;overflow-y:auto;
                 background:var(--bg-card);border:1px solid var(--border2);border-radius:16px;
@@ -2407,7 +2417,7 @@ function openMetricsPanel() {
                   background:var(--bg-card);z-index:1;border-radius:16px 16px 0 0">
         <div>
           <div style="font-size:0.9rem;font-weight:700;color:var(--text)">Live Metrics</div>
-          <div id="metricsTs" style="font-size:0.68rem;color:var(--text3)">Loading…</div>
+          <div id="metricsTs" style="font-size:0.68rem;color:var(--text3)">${cachedTs}</div>
         </div>
         <button onclick="closeMetricsPanel()"
                 style="background:none;border:none;color:var(--text3);cursor:pointer;
@@ -2417,10 +2427,14 @@ function openMetricsPanel() {
                 onmouseout="this.style.color='var(--text3)'">✕</button>
       </div>
       <div id="metricsBody" style="padding:1rem">
-        <div style="color:var(--text3);font-size:0.8rem">Fetching…</div>
+        <div style="color:var(--text3);font-size:0.8rem">Loading…</div>
       </div>
     </div>`;
   document.body.appendChild(overlay);
+  // Show cached data immediately, then refresh
+  if (_metricsCache) {
+    _renderMetrics(_metricsCache.api, _metricsCache.vision);
+  }
   _fetchMetrics();
   _metricsInterval = setInterval(_fetchMetrics, 30000);
 }
