@@ -2084,7 +2084,7 @@ async function runSegmentation() {
   try {
     const res = await _postWithProgress(
       `${VISION_API}/segment-image`, form, 'segResult', '#a78bfa',
-      'First call downloads ~135 MB — may take up to 2 min on free tier');
+      'First call downloads ~4.4 MB — may take ~30 s on free tier cold start');
     if (!res.ok) {
       const raw = await res.text();
       let msg;
@@ -2114,10 +2114,10 @@ function showSegRetry(msg) {
     return;
   }
   _segRetryCount++;
-  let secs = 20;
+  let secs = 30;
   const tick = () => {
     errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:10px;color:#fbbf24;font-size:0.83rem;display:flex;align-items:center;gap:0.75rem">
-      <span>⏳ ${msg} Auto-retrying in ${secs}s… (attempt ${_segRetryCount}/3)</span>
+      <span>⏳ Vision service is warming up — please try again in ~30 seconds. Auto-retrying in ${secs}s… (attempt ${_segRetryCount}/3)</span>
       <button onclick="cancelSegRetry()" style="padding:0.2rem 0.6rem;border:1px solid #fbbf2466;border-radius:6px;background:transparent;color:#fbbf24;cursor:pointer;font-size:0.78rem;flex-shrink:0">Stop</button>
     </div>`;
     if (secs-- > 0) { _segRetryTimer = setTimeout(tick, 1000); } else { runSegmentation(); }
