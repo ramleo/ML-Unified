@@ -258,14 +258,15 @@ def test_list_seg_models():
     assert r.status_code == 200
     models = r.json()
     assert isinstance(models, list)
-    assert len(models) >= 1
+    assert len(models) >= 2
     ids = [m["id"] for m in models]
+    assert "segformer_b0"      in ids
     assert "color_segmentation" in ids
     for m in models:
         assert "label"   in m
         assert "size_mb" in m
 
-def test_segment_image_inference():
+def test_segment_image_color():
     """PIL colour segmentation — no mock needed, runs fully in-process."""
     r = client.post("/segment-image",
         files={"file": ("test.png", _make_png(64, 64), "image/png")},
@@ -290,3 +291,41 @@ def test_segment_image_uniform():
     data = r.json()
     assert data["image_b64"].startswith("data:image/png;base64,")
     assert isinstance(data["classes_found"], list)
+
+def test_segment_image_bad_model():
+    r = client.post("/segment-image",
+        files={"file": ("test.png", _make_png(32, 32), "image/png")},
+        data={"model_name": "nonexistent_seg_model"})
+    assert r.status_code == 400
+
+def test_segment_image_segformer_inference():
+    """SegFormer-B0 path: mocks ONNX session + model-on-disk check."""
+    import app as app_module
+
+    # logits shape: (1, 150, 128, 128) — make class 2 (sky) dominant
+    fake_logits = np.full((1, 150, 128, 128), -10.0, dtype=np.float32)
+    fake_logits[0, 2, :, :] = 10.0   # class 2 = "sky"
+
+    mock_session = MagicMock()
+    mock_session.run.return_value = [fake_logits]
+
+    fake_slot = {
+        "model_type": "seg",
+        "model_id":   "segformer_b0",
+        "session":    mock_session,
+    }
+
+    # Pretend the model file exists so the 503 guard doesn't fire
+    with patch.object(app_module, "_large_vision_cache", fake_slot), \
+         patch("os.path.exists", lambda p: True):
+        r = client.post("/segment-image",
+            files={"file": ("test.png", _make_png(64, 64), "image/png")},
+            data={"model_name": "segformer_b0"})
+
+    assert r.status_code == 200
+    data = r.json()
+    assert data["model"]      == "segformer_b0"
+    assert data["orig_width"] == 64
+    assert isinstance(data["classes_found"], list)
+    assert any(c["label"] == "sky" for c in data["classes_found"])
+    assert data["image_b64"].startswith("data:image/png;base64,")
