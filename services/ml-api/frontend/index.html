@@ -459,64 +459,132 @@ body {
 }
 
 /* ── EDA Explorer Panel ── */
-.eda-panel { padding: 1.5rem; max-width: 960px; }
+.eda-panel { padding:1.5rem; max-width:960px; }
 .eda-header { display:flex; gap:1rem; align-items:flex-start; margin-bottom:1.5rem; }
+
+/* Glassmorphism section cards */
 .eda-section-card {
-  background:var(--bg-card); border:1px solid var(--border2);
-  border-radius:12px; padding:1.25rem; margin-bottom:1.25rem;
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.09);
+  border-radius:16px; padding:1.35rem; margin-bottom:1.25rem;
+  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+  box-shadow:0 8px 32px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06);
+  opacity:0; transform:translateY(22px);
+  transition:opacity 0.45s ease, transform 0.45s ease, box-shadow 0.3s ease;
 }
+.eda-section-card.eda-visible { opacity:1; transform:translateY(0); }
+.eda-section-card:hover {
+  box-shadow:0 12px 44px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.09);
+}
+[data-theme="light"] .eda-section-card {
+  background:rgba(255,255,255,0.72);
+  border:1px solid rgba(0,0,0,0.08);
+  box-shadow:0 4px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.9);
+}
+
+/* Section title — gradient left accent */
 .eda-section-title {
-  font-size:0.75rem; font-weight:700; color:var(--text2);
-  text-transform:uppercase; letter-spacing:0.06em;
-  margin-bottom:0.85rem; display:flex; align-items:center; gap:0.4rem;
+  font-size:0.72rem; font-weight:700; color:var(--text2);
+  text-transform:uppercase; letter-spacing:0.08em;
+  margin-bottom:1rem; display:flex; align-items:center; gap:0.5rem;
+  padding-left:0.8rem; position:relative;
 }
+.eda-section-title::before {
+  content:''; position:absolute; left:0; top:50%;
+  transform:translateY(-50%);
+  width:3px; height:100%; min-height:14px;
+  background:linear-gradient(180deg,#34d399,#38bdf8);
+  border-radius:4px;
+}
+
+/* Sticky nav */
 .eda-sticky-nav {
   position:sticky; top:0; z-index:10;
-  background:var(--bg); border-bottom:1px solid var(--border2);
+  background:var(--bg); border-bottom:1px solid rgba(255,255,255,0.06);
   display:flex; gap:0.25rem; padding:0.5rem 0;
   margin:-0.25rem 0 1.25rem; overflow-x:auto; scrollbar-width:none;
 }
 .eda-sticky-nav::-webkit-scrollbar { display:none; }
 .eda-nav-tab {
-  padding:0.3rem 0.7rem; border-radius:20px; font-size:0.72rem;
+  padding:0.3rem 0.8rem; border-radius:20px; font-size:0.72rem;
   font-weight:600; color:var(--text2); cursor:pointer;
   background:transparent; border:1px solid transparent;
-  white-space:nowrap; transition:all 0.15s;
+  white-space:nowrap; transition:all 0.18s;
 }
-.eda-nav-tab:hover { background:var(--border2); color:var(--text); }
+.eda-nav-tab:hover { background:rgba(52,211,153,0.12); color:#34d399; border-color:rgba(52,211,153,0.25); }
+
+/* Overview chip grid */
 .eda-overview-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:0.75rem; }
 .eda-chip {
-  background:var(--bg); border:1px solid var(--border2);
-  border-radius:10px; padding:0.75rem 1rem; text-align:center;
+  border-radius:12px; padding:1rem 0.75rem; text-align:center;
+  border:1px solid rgba(255,255,255,0.08);
+  transition:transform 0.2s ease, box-shadow 0.2s ease;
+  position:relative; overflow:hidden;
 }
-.eda-chip-val   { font-size:1.3rem; font-weight:800; color:var(--text); }
-.eda-chip-label { font-size:0.62rem; color:var(--text3); margin-top:2px; text-transform:uppercase; letter-spacing:0.05em; }
+.eda-chip::after {
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,0.04),transparent);
+  pointer-events:none;
+}
+.eda-chip:hover { transform:translateY(-3px); box-shadow:0 8px 20px rgba(0,0,0,0.2); }
+.eda-chip-rows    { background:rgba(52,211,153,0.09);  border-color:rgba(52,211,153,0.2); }
+.eda-chip-cols    { background:rgba(56,189,248,0.09);  border-color:rgba(56,189,248,0.2); }
+.eda-chip-missing { background:rgba(251,191,36,0.09);  border-color:rgba(251,191,36,0.2); }
+.eda-chip-dups    { background:rgba(248,113,113,0.09); border-color:rgba(248,113,113,0.2); }
+.eda-chip-quality { background:rgba(167,139,250,0.09); border-color:rgba(167,139,250,0.2); }
+[data-theme="light"] .eda-chip { border-color:rgba(0,0,0,0.1); }
+.eda-chip-icon  { font-size:1.1rem; display:block; margin-bottom:0.3rem; }
+.eda-chip-val   { font-size:1.4rem; font-weight:800; color:var(--text); line-height:1.1; }
+.eda-chip-label { font-size:0.6rem; color:var(--text3); margin-top:5px; text-transform:uppercase; letter-spacing:0.06em; }
+
+/* Quality ring */
+.eda-quality-ring { display:flex; align-items:center; justify-content:center; margin-bottom:0.2rem; }
+.eda-ring-track { fill:none; stroke:rgba(255,255,255,0.1); stroke-width:5; }
+[data-theme="light"] .eda-ring-track { stroke:rgba(0,0,0,0.1); }
+.eda-ring-fill  { fill:none; stroke-width:5; stroke-linecap:round;
+  transform:rotate(-90deg); transform-origin:50% 50%;
+  transition:stroke-dashoffset 1.3s cubic-bezier(0.4,0,0.2,1); }
+.eda-ring-num   { font-size:11px; font-weight:800; text-anchor:middle; dominant-baseline:middle; fill:var(--text); }
+
+/* Insight cards */
 .eda-insight {
-  display:flex; align-items:flex-start; gap:0.5rem;
-  padding:0.55rem 0.8rem; border-radius:8px; font-size:0.8rem;
-  line-height:1.45; margin-bottom:0.45rem;
+  display:flex; align-items:flex-start; gap:0.6rem;
+  padding:0.65rem 0.9rem; border-radius:10px; font-size:0.8rem;
+  line-height:1.5; margin-bottom:0.5rem;
+  border-left:3px solid; backdrop-filter:blur(8px);
 }
-.eda-insight-danger  { background:rgba(248,113,113,0.08);  border:1px solid rgba(248,113,113,0.25); }
-.eda-insight-warning { background:rgba(251,191,36,0.08);   border:1px solid rgba(251,191,36,0.25); }
-.eda-insight-info    { background:rgba(56,189,248,0.08);   border:1px solid rgba(56,189,248,0.25); }
+.eda-insight-danger  { background:rgba(248,113,113,0.07); border-color:#f87171; }
+.eda-insight-warning { background:rgba(251,191,36,0.07);  border-color:#fbbf24; }
+.eda-insight-info    { background:rgba(56,189,248,0.07);  border-color:#38bdf8; }
+
+/* Tables */
 .eda-table { width:100%; border-collapse:collapse; font-size:0.82rem; }
 .eda-table th {
-  padding:0.4rem 0.75rem; text-align:left;
-  font-size:0.65rem; font-weight:600; text-transform:uppercase;
-  letter-spacing:0.06em; color:var(--text3); border-bottom:1px solid var(--border2);
+  padding:0.5rem 0.75rem; text-align:left;
+  font-size:0.63rem; font-weight:700; text-transform:uppercase;
+  letter-spacing:0.07em; color:var(--text3);
+  border-bottom:1px solid rgba(255,255,255,0.07);
+  background:rgba(255,255,255,0.02);
 }
-.eda-table td { padding:0.4rem 0.75rem; border-bottom:1px solid var(--border); color:var(--text2); }
-.eda-table tbody tr:hover td { background:var(--border); }
-.eda-type-badge { display:inline-block; padding:1px 7px; border-radius:20px; font-size:0.62rem; font-weight:600; }
-.eda-type-num { background:rgba(56,189,248,0.12); color:#38bdf8; }
-.eda-type-cat { background:rgba(167,139,250,0.12); color:#a78bfa; }
+[data-theme="light"] .eda-table th { border-color:rgba(0,0,0,0.08); background:rgba(0,0,0,0.02); }
+.eda-table td { padding:0.45rem 0.75rem; border-bottom:1px solid rgba(255,255,255,0.04); color:var(--text2); }
+[data-theme="light"] .eda-table td { border-color:rgba(0,0,0,0.05); }
+.eda-table tbody tr:hover td { background:rgba(52,211,153,0.05); }
+.eda-type-badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:0.6rem; font-weight:700; }
+.eda-type-num { background:rgba(56,189,248,0.15); color:#38bdf8; }
+.eda-type-cat { background:rgba(167,139,250,0.15); color:#a78bfa; }
+
+/* Distribution grid */
 .eda-dist-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:1rem; }
 .eda-dist-card {
-  background:var(--bg); border:1px solid var(--border2);
-  border-radius:10px; padding:0.75rem;
+  background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.07);
+  border-radius:10px; padding:0.85rem;
+  transition:border-color 0.2s ease, transform 0.2s ease;
 }
+.eda-dist-card:hover { border-color:rgba(52,211,153,0.35); transform:translateY(-2px); }
+[data-theme="light"] .eda-dist-card { background:rgba(0,0,0,0.02); border-color:rgba(0,0,0,0.08); }
 .eda-dist-title {
-  font-size:0.72rem; font-weight:600; color:var(--text2);
+  font-size:0.72rem; font-weight:700; color:var(--text2);
   margin-bottom:0.25rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .eda-dist-plot { height:160px; }
@@ -538,6 +606,25 @@ body {
 .u-axis-y      { writing-mode:vertical-rl; transform:rotate(180deg); position:absolute; left:-18px; top:50%; transform:translateX(-50%) rotate(-90deg); }
 .u-stat-row    { display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:0.35rem 0; font-size:0.83rem; color:var(--text2); }
 .u-stat-divider { border-top:1px solid var(--border1); margin:0.5rem 0; }
+
+@media print {
+  nav, .sidebar, #topbar, .upload-zone, .eda-sticky-nav, #eda-export-btn, #eda-pdf-btn { display:none !important; }
+  body { background:#fff !important; color:#000 !important; }
+  .eda-panel { max-width:100%; padding:0; }
+  .eda-section-card {
+    background:#fff !important; border:1px solid #ddd !important;
+    box-shadow:none !important; opacity:1 !important; transform:none !important;
+    break-inside:avoid; page-break-inside:avoid;
+  }
+  .eda-section-title { color:#333 !important; }
+  .eda-section-title::before { background:#34d399 !important; }
+  .eda-table th, .eda-table td { color:#333 !important; border-color:#ddd !important; }
+  .eda-chip { border:1px solid #ddd !important; background:#f9f9f9 !important; }
+  .eda-chip-val, .eda-chip-label, .eda-ring-num { color:#111 !important; fill:#111 !important; }
+  .eda-ring-track { stroke:#ddd !important; }
+  .eda-insight { border-left-width:3px !important; }
+  #main { overflow:visible !important; }
+}
 </style>
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" defer></script>
 </head>
@@ -2986,7 +3073,7 @@ function draw3dPlot(divId, plotData, accent, colorLabels, showNoise, xLabel, yLa
     font: { color: '#9ca3af', size: 11 },
   };
 
-  Plotly.newPlot(divId, [trace], layout, { responsive: true, displayModeBar: false });
+  Plotly.newPlot(divId, [trace], layout, { responsive: true, displayModeBar: 'hover', scrollZoom: true });
 }
 
 
@@ -3051,7 +3138,7 @@ async function _runEDA(file) {
     _edaCurrentData     = data;
     _edaCurrentFilename = file.name;
     resEl.innerHTML = _renderEDA(data, file.name);
-    setTimeout(() => _renderEDAPlots(data), 0);
+    setTimeout(() => { _renderEDAPlots(data); _edaInitAnimations(data); }, 0);
   } catch (e) {
     resEl.innerHTML = '';
     errEl.textContent = e.message;
@@ -3064,18 +3151,54 @@ function _renderEDA(d, filename) {
   const qScore = d.quality_score ?? 100;
   const qColor = qScore >= 80 ? '#34d399' : qScore >= 60 ? '#fbbf24' : '#f87171';
 
+  // Quality ring SVG — arc draws itself via JS after render
+  const R = 22, C = 2 * Math.PI * R, startScore = 0;
+  const qualityRing = `
+    <div class="eda-quality-ring">
+      <svg width="54" height="54" viewBox="0 0 54 54">
+        <circle class="eda-ring-track" cx="27" cy="27" r="${R}"/>
+        <circle class="eda-ring-fill" id="eda-ring-arc" cx="27" cy="27" r="${R}"
+          stroke="${qColor}"
+          stroke-dasharray="${C}"
+          stroke-dashoffset="${C}"/>
+        <text class="eda-ring-num" x="27" y="27" id="eda-ring-num">0</text>
+      </svg>
+    </div>`;
+
   const overviewHTML = `
     <div class="eda-section-card" id="eda-s-overview">
-      <div class="eda-section-title">📋 Overview
-        <span style="font-weight:400;color:var(--text3);font-size:0.75rem;margin-left:0.4rem">${filename}</span>
-        <button id="eda-export-btn" onclick="_exportEDAReport()" style="margin-left:auto;padding:0.25rem 0.7rem;border-radius:20px;font-size:0.72rem;font-weight:600;cursor:pointer;background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.35);transition:all 0.15s" onmouseover="this.style.background='rgba(52,211,153,0.22)'" onmouseout="this.style.background='rgba(52,211,153,0.12)'">⬇ Export Report</button>
+      <div class="eda-section-title">Overview
+        <span style="font-weight:400;color:var(--text3);font-size:0.75rem">${filename}</span>
+        <span style="display:flex;gap:0.5rem;margin-left:auto">
+          <button id="eda-pdf-btn" onclick="_printEDA()" style="padding:0.25rem 0.7rem;border-radius:20px;font-size:0.72rem;font-weight:600;cursor:pointer;background:rgba(56,189,248,0.12);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);transition:all 0.15s">⎙ PDF</button>
+          <button id="eda-export-btn" onclick="_exportEDAReport()" style="padding:0.25rem 0.7rem;border-radius:20px;font-size:0.72rem;font-weight:600;cursor:pointer;background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.3);transition:all 0.15s">⬇ HTML</button>
+        </span>
       </div>
       <div class="eda-overview-grid">
-        <div class="eda-chip"><div class="eda-chip-val">${d.overview.rows.toLocaleString()}</div><div class="eda-chip-label">Rows</div></div>
-        <div class="eda-chip"><div class="eda-chip-val">${d.overview.cols}</div><div class="eda-chip-label">Columns</div></div>
-        <div class="eda-chip"><div class="eda-chip-val" style="color:${missingColor}">${d.overview.missing_pct}%</div><div class="eda-chip-label">Missing</div></div>
-        <div class="eda-chip"><div class="eda-chip-val" style="color:${d.overview.duplicates > 0 ? '#fbbf24' : 'var(--text)'}">${d.overview.duplicates}</div><div class="eda-chip-label">Duplicates</div></div>
-        <div class="eda-chip"><div class="eda-chip-val" style="color:${qColor}">${qScore}</div><div class="eda-chip-label">Quality /100</div></div>
+        <div class="eda-chip eda-chip-rows">
+          <span class="eda-chip-icon">⊞</span>
+          <div class="eda-chip-val" data-countup="${d.overview.rows}" data-suffix="">0</div>
+          <div class="eda-chip-label">Rows</div>
+        </div>
+        <div class="eda-chip eda-chip-cols">
+          <span class="eda-chip-icon">▦</span>
+          <div class="eda-chip-val" data-countup="${d.overview.cols}" data-suffix="">0</div>
+          <div class="eda-chip-label">Columns</div>
+        </div>
+        <div class="eda-chip eda-chip-missing">
+          <span class="eda-chip-icon">◌</span>
+          <div class="eda-chip-val" style="color:${missingColor}" data-countup="${d.overview.missing_pct}" data-suffix="%" data-float="1">0%</div>
+          <div class="eda-chip-label">Missing</div>
+        </div>
+        <div class="eda-chip eda-chip-dups">
+          <span class="eda-chip-icon">⊕</span>
+          <div class="eda-chip-val" style="color:${d.overview.duplicates > 0 ? '#fbbf24' : 'var(--text)'}" data-countup="${d.overview.duplicates}" data-suffix="">0</div>
+          <div class="eda-chip-label">Duplicates</div>
+        </div>
+        <div class="eda-chip eda-chip-quality">
+          ${qualityRing}
+          <div class="eda-chip-label">Quality /100</div>
+        </div>
       </div>
     </div>`;
 
@@ -3090,13 +3213,45 @@ function _renderEDA(d, filename) {
         </div>`).join('')}
     </div>` : '';
 
+  // Narrative
+  const narrativeHTML = d.narrative ? `
+    <div class="eda-section-card" id="eda-s-narrative">
+      <div class="eda-section-title">Analyst Summary</div>
+      <p style="font-size:0.88rem;line-height:1.75;color:var(--text2);margin:0">${d.narrative}</p>
+    </div>` : '';
+
+  // ML Readiness
+  const verdictStyle = { pass:'rgba(52,211,153,0.12)', warn:'rgba(251,191,36,0.12)', fail:'rgba(248,113,113,0.12)' };
+  const verdictColor = { pass:'#34d399', warn:'#fbbf24', fail:'#f87171' };
+  const verdictLabel = { pass:'Ready', warn:'Review', fail:'Fix' };
+  const verdictIcon  = { pass:'✓', warn:'⚠', fail:'✗' };
+  const readinessHTML = (d.readiness && d.readiness.length) ? `
+    <div class="eda-section-card" id="eda-s-readiness">
+      <div class="eda-section-title">ML Readiness</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0.6rem">
+        ${d.readiness.map(r => `
+          <div style="display:flex;align-items:flex-start;gap:0.6rem;padding:0.6rem 0.75rem;border-radius:10px;background:${verdictStyle[r.verdict]};border:1px solid ${verdictColor[r.verdict]}33">
+            <span style="font-size:0.75rem;font-weight:800;color:${verdictColor[r.verdict]};flex-shrink:0;width:14px;text-align:center;margin-top:1px">${verdictIcon[r.verdict]}</span>
+            <div>
+              <div style="font-size:0.78rem;font-weight:700;color:var(--text);margin-bottom:2px">${r.name}</div>
+              <div style="font-size:0.7rem;color:var(--text3);line-height:1.4">${r.reason}</div>
+            </div>
+            <span style="margin-left:auto;font-size:0.62rem;font-weight:700;color:${verdictColor[r.verdict]};flex-shrink:0;align-self:center">${verdictLabel[r.verdict]}</span>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
   const navTabs = [
     ['eda-s-overview', 'Overview'],
+    ...(d.narrative ? [['eda-s-narrative', 'Summary']] : []),
+    ...(d.readiness && d.readiness.length ? [['eda-s-readiness', 'ML Readiness']] : []),
     ['eda-s-sample', 'Sample'],
     ['eda-s-columns', 'Columns'],
     ...(Object.keys(d.stats).length ? [['eda-s-stats', 'Statistics']] : []),
     ...(Object.keys(d.distributions).length ? [['eda-s-distributions', 'Distributions']] : []),
     ...(Object.keys(d.stats).length ? [['eda-s-boxplots', 'Box Plots']] : []),
+    ...(d.mi && d.mi.labels.length > 1 ? [['eda-s-mi', 'Mutual Info']] : []),
+    ...(d.pca ? [['eda-s-pca', 'PCA 3D']] : []),
     ...(d.correlations && d.correlations.labels.length > 1 ? [['eda-s-correlations', 'Correlations']] : []),
   ];
   const navHTML = `
@@ -3208,6 +3363,36 @@ function _renderEDA(d, filename) {
       <div id="eda-box-plot"></div>
     </div>` : '';
 
+  const miHTML = (d.mi && d.mi.labels.length > 1) ? `
+    <div class="eda-section-card" id="eda-s-mi">
+      <div class="eda-section-title">Mutual Information
+        <span style="font-weight:400;color:var(--text3);font-size:0.7rem">normalized 0–1 · captures non-linear + categorical relationships</span>
+      </div>
+      <div id="eda-mi-hm" class="eda-corr-plot"></div>
+    </div>` : '';
+
+  const pcaHTML = d.pca ? (() => {
+    const ev = d.pca.explained_variance;
+    const catOpts = (d.pca.cat_cols || []).map(c => `<option value="${c}"${c === d.pca.color_col ? ' selected' : ''}>${c}</option>`).join('');
+    const colorDropdown = catOpts ? `
+      <div style="margin-bottom:0.75rem;display:flex;align-items:center;gap:0.5rem">
+        <span style="font-size:0.75rem;color:var(--text3)">Color by:</span>
+        <select id="eda-pca-color" onchange="_recolorPCA(this.value)"
+          style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:var(--text);font-size:0.75rem;padding:0.2rem 0.5rem;cursor:pointer">
+          <option value="">— none —</option>
+          ${catOpts}
+        </select>
+      </div>` : '';
+    return `
+    <div class="eda-section-card" id="eda-s-pca">
+      <div class="eda-section-title">PCA 3D Scatter
+        <span style="font-weight:400;color:var(--text3);font-size:0.7rem">PC1 ${ev[0]}% · PC2 ${ev[1]}% · PC3 ${ev[2]}% explained variance</span>
+      </div>
+      ${colorDropdown}
+      <div id="eda-pca-3d" style="height:480px"></div>
+    </div>`;
+  })() : '';
+
   const corrHTML = (d.correlations && d.correlations.labels.length > 1) ? `
     <div class="eda-section-card" id="eda-s-correlations">
       <div class="eda-section-title">🔥 Correlation Heatmap
@@ -3216,7 +3401,7 @@ function _renderEDA(d, filename) {
       <div id="eda-corr-hm" class="eda-corr-plot"></div>
     </div>` : '';
 
-  return overviewHTML + insightsHTML + navHTML + sampleHTML + colsHTML + statsHTML + distHTML + boxHTML + corrHTML;
+  return overviewHTML + narrativeHTML + readinessHTML + insightsHTML + navHTML + sampleHTML + colsHTML + statsHTML + distHTML + boxHTML + miHTML + pcaHTML + corrHTML;
 }
 
 function _renderEDAPlots(d) {
@@ -3224,7 +3409,7 @@ function _renderEDAPlots(d) {
   const cs  = getComputedStyle(document.documentElement);
   const tc  = cs.getPropertyValue('--text3').trim()   || '#64748b';
   const gc  = cs.getPropertyValue('--border').trim()  || 'rgba(255,255,255,0.07)';
-  const cfg = { displayModeBar: false, responsive: true };
+  const cfg = { displayModeBar: 'hover', scrollZoom: true, responsive: true };
   const baseLayout = {
     paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
     font: { color: tc, size: 10 }, height: 160, showlegend: false,
@@ -3269,6 +3454,36 @@ function _renderEDAPlots(d) {
     }
   }
 
+  if (d.mi && d.mi.labels.length > 1) {
+    const miEl = document.getElementById('eda-mi-hm');
+    if (miEl) {
+      const { labels, matrix } = d.mi;
+      Plotly.newPlot(miEl, [{
+        type: 'heatmap', z: matrix, x: labels, y: labels,
+        colorscale: 'Viridis', zmin: 0, zmax: 1,
+        text: matrix.map(r => r.map(v => v.toFixed(2))),
+        texttemplate: '%{text}', textfont: { size: 9 },
+        showscale: true,
+        colorbar: { thickness: 12, len: 0.85, tickfont: { size: 9, color: tc }, title: { text: 'MI', font: { size: 9, color: tc } } },
+      }], {
+        paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+        font: { color: tc, size: 10 }, showlegend: false,
+        margin: { l: 90, r: 20, t: 20, b: 90 },
+        height: Math.min(600, Math.max(300, labels.length * 45 + 110)),
+        xaxis: { tickangle: -45, tickfont: { size: 9 }, gridcolor: gc },
+        yaxis: { tickfont: { size: 9 }, gridcolor: gc },
+      }, cfg);
+    }
+  }
+
+  if (d.pca) {
+    const pcaEl = document.getElementById('eda-pca-3d');
+    if (pcaEl) {
+      window._edaPCAData = d.pca;
+      _drawPCA3D(d.pca, d.pca.color_col, d.pca.color_vals, cfg, tc);
+    }
+  }
+
   if (d.correlations && d.correlations.labels.length > 1) {
     const el = document.getElementById('eda-corr-hm');
     if (!el) return;
@@ -3289,6 +3504,122 @@ function _renderEDAPlots(d) {
       yaxis: { tickfont: { size: 9 }, gridcolor: gc },
     }, cfg);
   }
+}
+
+// ── PCA 3D helpers ───────────────────────────────────────────
+function _drawPCA3D(pca, colorCol, colorVals, cfg, tc) {
+  const pcaEl = document.getElementById('eda-pca-3d');
+  if (!pcaEl || typeof Plotly === 'undefined') return;
+  const ev = pca.explained_variance;
+  const xs = pca.coords.map(r => r[0]);
+  const ys = pca.coords.map(r => r[1]);
+  const zs = pca.coords.map(r => r[2]);
+  const trace = {
+    type: 'scatter3d', mode: 'markers',
+    x: xs, y: ys, z: zs,
+    text: colorVals || [],
+    marker: {
+      size: 4, opacity: 0.8,
+      color: colorVals ? colorVals : xs,
+      colorscale: colorVals ? 'Turbo' : 'Viridis',
+      showscale: !colorVals,
+      colorbar: colorVals ? undefined : { thickness: 10, len: 0.6, tickfont: { size: 9, color: tc } },
+    },
+    hovertemplate: colorCol
+      ? `PC1: %{x:.2f}<br>PC2: %{y:.2f}<br>PC3: %{z:.2f}<br>${colorCol}: %{text}<extra></extra>`
+      : 'PC1: %{x:.2f}<br>PC2: %{y:.2f}<br>PC3: %{z:.2f}<extra></extra>',
+  };
+  const layout = {
+    paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+    font: { color: tc, size: 10 }, showlegend: false,
+    height: 480, margin: { l: 0, r: 0, t: 10, b: 0 },
+    scene: {
+      xaxis: { title: { text: `PC1 (${ev[0]}%)`, font: { size: 10 } }, tickfont: { size: 8 }, gridcolor: 'rgba(255,255,255,0.08)', zerolinecolor: 'rgba(255,255,255,0.12)' },
+      yaxis: { title: { text: `PC2 (${ev[1]}%)`, font: { size: 10 } }, tickfont: { size: 8 }, gridcolor: 'rgba(255,255,255,0.08)', zerolinecolor: 'rgba(255,255,255,0.12)' },
+      zaxis: { title: { text: `PC3 (${ev[2]}%)`, font: { size: 10 } }, tickfont: { size: 8 }, gridcolor: 'rgba(255,255,255,0.08)', zerolinecolor: 'rgba(255,255,255,0.12)' },
+      bgcolor: 'rgba(0,0,0,0)',
+    },
+  };
+  Plotly.newPlot(pcaEl, [trace], layout, { ...cfg, scrollZoom: false });
+}
+
+function _recolorPCA(colName) {
+  const pca = window._edaPCAData;
+  if (!pca) return;
+  const cs = getComputedStyle(document.documentElement);
+  const tc = cs.getPropertyValue('--text3').trim() || '#64748b';
+  const cfg = { displayModeBar: 'hover', scrollZoom: false, responsive: true };
+  let colorVals = null;
+  if (colName && pca.cat_cols && pca.cat_cols.includes(colName)) {
+    const idx = pca.cat_cols.indexOf(colName);
+    colorVals = pca.color_vals;
+    // If the selected col matches stored color_col, use stored vals
+    if (colName !== pca.color_col) {
+      // We only have the first cat col's vals from backend; for others show numeric encoding hint
+      colorVals = null;
+    }
+  }
+  _drawPCA3D(pca, colName || null, colorVals, cfg, tc);
+}
+
+// ── EDA Animations ───────────────────────────────────────────
+function _edaInitAnimations(d) {
+  // 1. Staggered section card entrance via IntersectionObserver
+  const cards = document.querySelectorAll('#edaResults .eda-section-card');
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('eda-visible');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.05 });
+  cards.forEach((card, i) => {
+    card.style.transitionDelay = `${i * 60}ms`;
+    io.observe(card);
+  });
+
+  // 2. Count-up animation on chip values
+  document.querySelectorAll('[data-countup]').forEach(el => {
+    const target  = parseFloat(el.dataset.countup);
+    const suffix  = el.dataset.suffix || '';
+    const isFloat = !!el.dataset.float;
+    const dur = 900, start = performance.now();
+    const tick = now => {
+      const pct = Math.min((now - start) / dur, 1);
+      const ease = 1 - Math.pow(1 - pct, 3);
+      const val  = target * ease;
+      el.textContent = (isFloat ? val.toFixed(1) : Math.round(val).toLocaleString()) + suffix;
+      if (pct < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+
+  // 3. Quality ring draw animation
+  const arc = document.getElementById('eda-ring-arc');
+  const num = document.getElementById('eda-ring-num');
+  if (arc && num) {
+    const qScore = d.quality_score ?? 100;
+    const R = 22, C = 2 * Math.PI * R;
+    const target = C * (1 - qScore / 100);
+    // Trigger CSS transition
+    requestAnimationFrame(() => {
+      arc.style.strokeDashoffset = target;
+    });
+    // Count up the number inside the ring
+    const dur = 1200, start = performance.now();
+    const tick = now => {
+      const pct = Math.min((now - start) / dur, 1);
+      const ease = 1 - Math.pow(1 - pct, 3);
+      num.textContent = Math.round(qScore * ease);
+      if (pct < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+}
+
+function _printEDA() {
+  window.print();
 }
 
 function _edaShortNum(n) {
@@ -3313,8 +3644,9 @@ async function _exportEDAReport() {
     const distImgs = await Promise.all(distKeys.map((_, i) => imgFor(`eda-dist-${i}`)));
     const boxImg   = await imgFor('eda-box-plot');
     const corrImg  = await imgFor('eda-corr-hm');
+    const miImg    = await imgFor('eda-mi-hm');
 
-    const html = _buildExportHTML(_edaCurrentData, _edaCurrentFilename, distKeys, distImgs, boxImg, corrImg);
+    const html = _buildExportHTML(_edaCurrentData, _edaCurrentFilename, distKeys, distImgs, boxImg, corrImg, miImg);
     const blob = new Blob([html], { type: 'text/html' });
     const url  = URL.createObjectURL(blob);
     const a    = Object.assign(document.createElement('a'), { href: url, download: _edaCurrentFilename.replace(/\.csv$/i, '') + '_eda_report.html' });
@@ -3325,143 +3657,207 @@ async function _exportEDAReport() {
   }
 }
 
-function _buildExportHTML(d, filename, distKeys, distImgs, boxImg, corrImg) {
+function _buildExportHTML(d, filename, distKeys, distImgs, boxImg, corrImg, miImg) {
   const qScore = d.quality_score ?? 100;
   const qColor = qScore >= 80 ? '#34d399' : qScore >= 60 ? '#fbbf24' : '#f87171';
   const missingColor = d.overview.missing_pct > 10 ? '#f87171' : d.overview.missing_pct > 0 ? '#fbbf24' : '#34d399';
   const insightIcons = { danger: '🔴', warning: '⚠️', info: 'ℹ️' };
   const now = new Date().toLocaleString();
+  const basename = filename.replace(/\.csv$/i, '');
 
-  const chipStyle = 'background:#1e293b;border:1px solid #334155;border-radius:10px;padding:0.75rem 1rem;text-align:center;min-width:90px';
-  const thStyle   = 'padding:0.4rem 0.75rem;text-align:left;font-size:0.65rem;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;border-bottom:1px solid #1e293b';
-  const tdStyle   = 'padding:0.4rem 0.75rem;border-bottom:1px solid #1e293b;color:#94a3b8';
-
-  const chips = `
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.75rem;margin-bottom:1.25rem">
-      ${[
-        [d.overview.rows.toLocaleString(), 'Rows', 'var(--t)'],
-        [d.overview.cols, 'Columns', 'var(--t)'],
-        [d.overview.missing_pct + '%', 'Missing', missingColor],
-        [d.overview.duplicates, 'Duplicates', d.overview.duplicates > 0 ? '#fbbf24' : 'var(--t)'],
-        [qScore, 'Quality /100', qColor],
-      ].map(([v, l, c]) => `<div style="${chipStyle}"><div style="font-size:1.3rem;font-weight:800;color:${c}">${v}</div><div style="font-size:0.62rem;color:#64748b;margin-top:2px;text-transform:uppercase">${l}</div></div>`).join('')}
+  const sec = (title, icon, content, accent) => `
+    <div class="rpt-card">
+      <div class="rpt-title" style="--accent:${accent || '#38bdf8'}">${icon} ${title}</div>
+      ${content}
     </div>`;
 
-  const insights = (d.insights && d.insights.length) ? `
-    <h2 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin:1.5rem 0 0.75rem">💡 Smart Insights</h2>
-    ${d.insights.map(ins => {
-      const bgs = { danger: 'rgba(248,113,113,0.08)', warning: 'rgba(251,191,36,0.08)', info: 'rgba(56,189,248,0.08)' };
-      const bds = { danger: 'rgba(248,113,113,0.3)', warning: 'rgba(251,191,36,0.3)', info: 'rgba(56,189,248,0.3)' };
-      return `<div style="display:flex;gap:0.5rem;padding:0.55rem 0.8rem;border-radius:8px;font-size:0.8rem;line-height:1.45;margin-bottom:0.4rem;background:${bgs[ins.type]};border:1px solid ${bds[ins.type]}">
-        <span>${insightIcons[ins.type] || 'ℹ️'}</span><span style="color:#cbd5e1">${ins.text}</span></div>`;
-    }).join('')}` : '';
+  const thS = 'padding:0.45rem 0.8rem;text-align:left;font-size:0.63rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:#64748b;border-bottom:1px solid rgba(255,255,255,0.06)';
+  const tdS = 'padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.04);color:#94a3b8;font-size:0.8rem';
 
-  const sampleRows = d.sample ? `
-    <h2 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin:1.5rem 0 0.75rem">👁 Sample Data</h2>
-    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.8rem">
-      <thead><tr>${d.sample.columns.map(c => `<th style="${thStyle}">${c}</th>`).join('')}</tr></thead>
+  // Overview chips
+  const chipData = [
+    { v: d.overview.rows.toLocaleString(), l: 'Rows',       c: '#38bdf8', bg: 'rgba(56,189,248,0.08)',  bd: 'rgba(56,189,248,0.2)'  },
+    { v: d.overview.cols,                  l: 'Columns',    c: '#34d399', bg: 'rgba(52,211,153,0.08)',  bd: 'rgba(52,211,153,0.2)'  },
+    { v: d.overview.missing_pct + '%',     l: 'Missing',    c: missingColor, bg: 'rgba(251,191,36,0.07)', bd: 'rgba(251,191,36,0.18)' },
+    { v: d.overview.duplicates,            l: 'Duplicates', c: d.overview.duplicates > 0 ? '#f87171' : '#94a3b8', bg: 'rgba(248,113,113,0.07)', bd: 'rgba(248,113,113,0.18)' },
+    { v: qScore,                           l: 'Quality/100',c: qColor,    bg: 'rgba(167,139,250,0.08)', bd: 'rgba(167,139,250,0.2)' },
+  ];
+  const chipsHTML = `
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.75rem">
+      ${chipData.map(ch => `
+        <div style="background:${ch.bg};border:1px solid ${ch.bd};border-radius:12px;padding:1rem;text-align:center">
+          <div style="font-size:1.6rem;font-weight:900;color:${ch.c};letter-spacing:-0.02em">${ch.v}</div>
+          <div style="font-size:0.6rem;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;margin-top:4px">${ch.l}</div>
+        </div>`).join('')}
+    </div>`;
+
+  // Narrative
+  const narrativeHTML = d.narrative ? `
+    <p style="font-size:0.88rem;line-height:1.85;color:#94a3b8;padding:1rem 1.15rem;background:rgba(255,255,255,0.03);border-radius:10px;border:1px solid rgba(255,255,255,0.06)">${d.narrative}</p>
+  ` : '';
+
+  // ML Readiness
+  const readinessHTML = (d.readiness && d.readiness.length) ? (() => {
+    const vColor = { pass: '#34d399', warn: '#fbbf24', fail: '#f87171' };
+    const vLabel = { pass: 'Ready', warn: 'Review', fail: 'Fix' };
+    const vIcon  = { pass: '✓', warn: '⚠', fail: '✗' };
+    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0.6rem">
+      ${d.readiness.map(r => `
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-left:3px solid ${vColor[r.verdict]};border-radius:8px;padding:0.65rem 0.85rem">
+          <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.3rem">
+            <span style="color:${vColor[r.verdict]};font-weight:800;font-size:0.9rem">${vIcon[r.verdict]}</span>
+            <span style="font-size:0.72rem;font-weight:700;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.name}</span>
+          </div>
+          <div style="font-size:0.65rem;color:#64748b;line-height:1.5">${r.reason}</div>
+        </div>`).join('')}
+    </div>`;
+  })() : '';
+
+  // Insights
+  const insightsHTML = (d.insights && d.insights.length) ? d.insights.map(ins => {
+    const bgs = { danger: 'rgba(248,113,113,0.07)', warning: 'rgba(251,191,36,0.07)', info: 'rgba(56,189,248,0.06)' };
+    const bds = { danger: '#f8717140', warning: '#fbbf2440', info: '#38bdf840' };
+    return `<div style="display:flex;gap:0.5rem;padding:0.55rem 0.85rem;border-radius:8px;font-size:0.8rem;line-height:1.5;margin-bottom:0.35rem;background:${bgs[ins.type]};border:1px solid ${bds[ins.type]}">
+      <span>${insightIcons[ins.type]}</span><span style="color:#cbd5e1">${ins.text}</span></div>`;
+  }).join('') : '';
+
+  // Sample
+  const sampleHTML = d.sample ? `
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+      <thead><tr>${d.sample.columns.map(c => `<th style="${thS}">${c}</th>`).join('')}</tr></thead>
       <tbody>${d.sample.rows.map(row => `<tr>${row.map(v =>
-        `<td style="${tdStyle}">${v === null ? '<i style="color:#475569">NaN</i>' : v}</td>`
+        `<td style="${tdS}">${v === null ? '<i style="color:#475569">NaN</i>' : v}</td>`
       ).join('')}</tr>`).join('')}</tbody>
     </table></div>` : '';
 
-  const colRows = d.columns.map(c => {
-    const pct = c.missing_pct;
-    const bc  = pct > 20 ? '#f87171' : pct > 5 ? '#fbbf24' : '#34d399';
-    const badge = c.is_numeric
-      ? '<span style="background:rgba(56,189,248,0.12);color:#38bdf8;padding:1px 7px;border-radius:20px;font-size:0.62rem;font-weight:600">numeric</span>'
-      : '<span style="background:rgba(167,139,250,0.12);color:#a78bfa;padding:1px 7px;border-radius:20px;font-size:0.62rem;font-weight:600">categorical</span>';
-    return `<tr>
-      <td style="${tdStyle};font-weight:600;color:#e2e8f0">${c.name}</td>
-      <td style="${tdStyle}">${badge}</td>
-      <td style="${tdStyle}">${c.dtype}</td>
-      <td style="${tdStyle}"><div style="display:flex;align-items:center;gap:0.5rem">
-        <div style="flex:1;height:4px;background:#1e293b;border-radius:4px;overflow:hidden">
-          <div style="width:${Math.min(100,pct)}%;height:100%;background:${bc};border-radius:4px"></div>
-        </div><span style="color:${pct > 0 ? bc : '#475569'};font-size:0.75rem;min-width:36px;text-align:right">${pct}%</span>
-      </div></td>
-      <td style="${tdStyle};text-align:right">${c.nunique}</td>
-    </tr>`;
-  }).join('');
-
-  const colsSection = `
-    <h2 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin:1.5rem 0 0.75rem">🗂 Column Info</h2>
-    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.82rem">
-      <thead><tr>${['Column','Type','Dtype','Missing','Unique'].map(h => `<th style="${thStyle}">${h}</th>`).join('')}</tr></thead>
-      <tbody>${colRows}</tbody>
+  // Columns
+  const colsHTML = `
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+      <thead><tr>${['Column','Type','Dtype','Missing','Unique'].map(h => `<th style="${thS}">${h}</th>`).join('')}</tr></thead>
+      <tbody>${d.columns.map(c => {
+        const bc = c.missing_pct > 20 ? '#f87171' : c.missing_pct > 5 ? '#fbbf24' : '#34d399';
+        const badge = c.is_numeric
+          ? '<span style="background:rgba(56,189,248,0.12);color:#38bdf8;padding:1px 8px;border-radius:20px;font-size:0.6rem;font-weight:700">numeric</span>'
+          : '<span style="background:rgba(167,139,250,0.12);color:#a78bfa;padding:1px 8px;border-radius:20px;font-size:0.6rem;font-weight:700">categorical</span>';
+        return `<tr>
+          <td style="${tdS};font-weight:700;color:#e2e8f0">${c.name}</td>
+          <td style="${tdS}">${badge}</td>
+          <td style="${tdS};color:#64748b">${c.dtype}</td>
+          <td style="${tdS}"><div style="display:flex;align-items:center;gap:0.5rem">
+            <div style="flex:1;height:3px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;min-width:50px">
+              <div style="width:${Math.min(100,c.missing_pct)}%;height:100%;background:${bc};border-radius:4px"></div>
+            </div><span style="color:${c.missing_pct > 0 ? bc : '#475569'};font-size:0.73rem">${c.missing_pct}%</span>
+          </div></td>
+          <td style="${tdS};text-align:right">${c.nunique}</td>
+        </tr>`;
+      }).join('')}</tbody>
     </table></div>`;
 
+  // Stats
   const numCols = Object.keys(d.stats);
-  const statsSection = numCols.length ? `
-    <h2 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin:1.5rem 0 0.75rem">📊 Descriptive Statistics</h2>
-    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.82rem">
-      <thead><tr>${['Column','Mean','Median','Std','Min','Max','Skew','Kurtosis','Outliers'].map(h => `<th style="${thStyle}">${h}</th>`).join('')}</tr></thead>
+  const statsHTML = numCols.length ? `
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+      <thead><tr>${['Column','Mean','Median','Std','Min','Max','Skew','Kurt','Outliers'].map(h => `<th style="${thS}">${h}</th>`).join('')}</tr></thead>
       <tbody>${numCols.map(col => {
         const s = d.stats[col];
-        const skewC = Math.abs(s.skew) > 2 ? '#f87171' : Math.abs(s.skew) > 1 ? '#fbbf24' : '#94a3b8';
+        const skC = Math.abs(s.skew) > 2 ? '#f87171' : Math.abs(s.skew) > 1 ? '#fbbf24' : '#64748b';
         return `<tr>
-          <td style="${tdStyle};font-weight:600;color:#e2e8f0">${col}</td>
-          <td style="${tdStyle};text-align:right">${s.mean}</td>
-          <td style="${tdStyle};text-align:right">${s.median}</td>
-          <td style="${tdStyle};text-align:right">${s.std}</td>
-          <td style="${tdStyle};text-align:right">${s.min}</td>
-          <td style="${tdStyle};text-align:right">${s.max}</td>
-          <td style="${tdStyle};text-align:right;color:${skewC}">${s.skew}</td>
-          <td style="${tdStyle};text-align:right">${s.kurtosis}</td>
-          <td style="${tdStyle};text-align:right;color:${s.outliers > 0 ? '#fbbf24' : '#475569'}">${s.outliers}</td>
+          <td style="${tdS};font-weight:700;color:#e2e8f0">${col}</td>
+          <td style="${tdS};text-align:right">${s.mean}</td>
+          <td style="${tdS};text-align:right">${s.median}</td>
+          <td style="${tdS};text-align:right">${s.std}</td>
+          <td style="${tdS};text-align:right">${s.min}</td>
+          <td style="${tdS};text-align:right">${s.max}</td>
+          <td style="${tdS};text-align:right;color:${skC}">${s.skew}</td>
+          <td style="${tdS};text-align:right">${s.kurtosis}</td>
+          <td style="${tdS};text-align:right;color:${s.outliers > 0 ? '#fbbf24' : '#475569'}">${s.outliers}</td>
         </tr>`;
       }).join('')}</tbody>
     </table></div>` : '';
 
-  const boxSection = boxImg ? `
-    <h2 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin:1.5rem 0 0.75rem">📦 Box Plots</h2>
-    <img src="${boxImg}" style="width:100%;border-radius:8px">` : '';
+  const imgSection = (img, caption) => img ? `<div style="margin-top:0.25rem">
+    ${caption ? `<div style="font-size:0.7rem;color:#64748b;margin-bottom:0.5rem">${caption}</div>` : ''}
+    <img src="${img}" style="width:100%;border-radius:8px;display:block">
+  </div>` : '';
 
-  const distSection = distImgs.some(Boolean) ? `
-    <h2 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin:1.5rem 0 0.75rem">📈 Distributions</h2>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem">
+  const distGridHTML = distImgs.some(Boolean) ? `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.85rem">
       ${distKeys.map((col, i) => distImgs[i] ? `
-        <div style="background:#1e293b;border:1px solid #334155;border-radius:10px;padding:0.75rem">
-          <div style="font-size:0.72rem;font-weight:600;color:#94a3b8;margin-bottom:0.25rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${col}</div>
-          <img src="${distImgs[i]}" style="width:100%;border-radius:4px">
+        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:0.65rem">
+          <div style="font-size:0.7rem;font-weight:700;color:#94a3b8;margin-bottom:0.4rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${col}</div>
+          <img src="${distImgs[i]}" style="width:100%;border-radius:5px;display:block">
         </div>` : '').join('')}
     </div>` : '';
-
-  const corrSection = corrImg ? `
-    <h2 style="font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin:1.5rem 0 0.75rem">🔥 Correlation Heatmap</h2>
-    <img src="${corrImg}" style="width:100%;border-radius:8px">` : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>EDA Report — ${filename}</title>
+<title>EDA Report — ${basename}</title>
 <style>
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:system-ui,-apple-system,sans-serif; background:#0f172a; color:#e2e8f0; padding:2rem; }
-  h1 { font-size:1.4rem; font-weight:800; margin-bottom:0.25rem; }
-  .meta { font-size:0.8rem; color:#64748b; margin-bottom:2rem; }
-  section { background:#1e293b; border:1px solid #334155; border-radius:12px; padding:1.25rem; margin-bottom:1.25rem; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:#080f1e;color:#e2e8f0;min-height:100vh}
+  .rpt-header{background:linear-gradient(135deg,#0f172a 0%,#1a1040 50%,#0c1f2e 100%);padding:2.5rem 2rem 2rem;border-bottom:1px solid rgba(255,255,255,0.06);position:relative;overflow:hidden}
+  .rpt-header::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 20% 50%,rgba(56,189,248,0.08) 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,rgba(52,211,153,0.06) 0%,transparent 55%);pointer-events:none}
+  .rpt-logo{font-size:0.65rem;font-weight:800;letter-spacing:0.15em;text-transform:uppercase;color:#38bdf8;margin-bottom:0.75rem;opacity:0.8}
+  .rpt-h1{font-size:1.85rem;font-weight:900;letter-spacing:-0.02em;background:linear-gradient(135deg,#e2e8f0 30%,#38bdf8 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:0.4rem}
+  .rpt-meta{font-size:0.78rem;color:#475569}
+  .rpt-badges{display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:1rem}
+  .rpt-badge{font-size:0.65rem;font-weight:700;padding:0.2rem 0.65rem;border-radius:20px;letter-spacing:0.04em}
+  .rpt-body{max-width:1040px;margin:0 auto;padding:2rem}
+  .rpt-card{background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:1.35rem;margin-bottom:1.25rem;box-shadow:0 4px 24px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.04)}
+  .rpt-title{font-size:0.7rem;font-weight:800;text-transform:uppercase;letter-spacing:0.09em;color:var(--text2,#94a3b8);padding-left:0.75rem;position:relative;margin-bottom:1rem;display:flex;align-items:center;gap:0.5rem}
+  .rpt-title::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:3px;height:100%;min-height:12px;background:linear-gradient(180deg,var(--accent,#38bdf8),rgba(52,211,153,0.6));border-radius:4px}
+  .rpt-divider{height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.07),transparent);margin:0.5rem 0 1rem}
+  .rpt-footer{text-align:center;padding:2rem;font-size:0.7rem;color:#334155;border-top:1px solid rgba(255,255,255,0.04)}
+  .rpt-footer a{color:#38bdf8;text-decoration:none}
+  tr:hover td{background:rgba(255,255,255,0.015)}
 </style>
 </head>
 <body>
-<div style="max-width:960px;margin:0 auto">
-  <h1>EDA Report</h1>
-  <p class="meta">${filename} &nbsp;·&nbsp; Generated ${now}</p>
-  <section>
-    <p style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#94a3b8;margin-bottom:0.85rem">📋 Overview</p>
-    ${chips}
-  </section>
-  ${insights ? `<section>${insights}</section>` : ''}
-  ${sampleRows ? `<section>${sampleRows}</section>` : ''}
-  <section>${colsSection}</section>
-  ${statsSection ? `<section>${statsSection}</section>` : ''}
-  ${boxSection ? `<section>${boxSection}</section>` : ''}
-  ${distSection ? `<section>${distSection}</section>` : ''}
-  ${corrSection ? `<section>${corrSection}</section>` : ''}
-  <p style="font-size:0.7rem;color:#475569;margin-top:1.5rem;text-align:center">Generated by EDA Explorer · ml-unified.onrender.com</p>
+
+<div class="rpt-header">
+  <div class="rpt-logo">EDA Explorer · AIRaML</div>
+  <div class="rpt-h1">Exploratory Analysis</div>
+  <div class="rpt-meta">${filename} &nbsp;·&nbsp; ${now}</div>
+  <div class="rpt-badges">
+    <span class="rpt-badge" style="background:rgba(52,211,153,0.1);color:#34d399;border:1px solid rgba(52,211,153,0.25)">${d.overview.rows.toLocaleString()} rows</span>
+    <span class="rpt-badge" style="background:rgba(56,189,248,0.1);color:#38bdf8;border:1px solid rgba(56,189,248,0.25)">${d.overview.cols} columns</span>
+    <span class="rpt-badge" style="background:rgba(167,139,250,0.1);color:#a78bfa;border:1px solid rgba(167,139,250,0.25)">Quality ${qScore}/100</span>
+    ${d.overview.duplicates > 0 ? `<span class="rpt-badge" style="background:rgba(248,113,113,0.1);color:#f87171;border:1px solid rgba(248,113,113,0.25)">${d.overview.duplicates} duplicates</span>` : ''}
+  </div>
 </div>
+
+<div class="rpt-body">
+
+  ${sec('Overview', '📋', chipsHTML, '#38bdf8')}
+
+  ${narrativeHTML ? sec('Analyst Summary', '📝', narrativeHTML, '#a78bfa') : ''}
+
+  ${insightsHTML ? sec('Smart Insights', '💡', insightsHTML, '#fbbf24') : ''}
+
+  ${readinessHTML ? sec('ML Readiness', '⚙', readinessHTML, '#34d399') : ''}
+
+  ${sampleHTML ? sec('Sample Data', '👁', sampleHTML, '#38bdf8') : ''}
+
+  ${sec('Column Info', '🗂', colsHTML, '#94a3b8')}
+
+  ${statsHTML ? sec('Descriptive Statistics', '📊', statsHTML, '#38bdf8') : ''}
+
+  ${boxImg ? sec('Box Plots', '📦', imgSection(boxImg), '#a78bfa') : ''}
+
+  ${distGridHTML ? sec('Distributions', '📈', distGridHTML, '#34d399') : ''}
+
+  ${miImg ? sec('Mutual Information', '🔗', imgSection(miImg, 'Normalized 0–1 · captures non-linear + categorical relationships'), '#38bdf8') : ''}
+
+  ${corrImg ? sec('Correlation Heatmap', '🔥', imgSection(corrImg, 'Pearson · blue = positive · red = negative'), '#f87171') : ''}
+
+  <div class="rpt-footer">
+    Generated by <a href="https://ml-unified.onrender.com">EDA Explorer</a> · AIRaML portfolio &nbsp;·&nbsp; ${now}
+  </div>
+</div>
+
 </body>
 </html>`;
 }
