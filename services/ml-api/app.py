@@ -29,7 +29,12 @@ import pandas as pd
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    _load()   # runs after uvicorn binds to port, before first request
+    try:
+        _load()
+    except Exception as exc:
+        import traceback
+        print("ERROR: _load() failed:", exc, flush=True)
+        traceback.print_exc()
     yield
 
 app = FastAPI(title="ML API", lifespan=_lifespan)
