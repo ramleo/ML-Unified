@@ -3438,11 +3438,12 @@ function _renderEDAPlots(d) {
   const cs  = getComputedStyle(document.documentElement);
   const tc  = cs.getPropertyValue('--text3').trim()   || '#64748b';
   const gc  = cs.getPropertyValue('--border').trim()  || 'rgba(255,255,255,0.07)';
-  const cfg = { displayModeBar: 'hover', scrollZoom: true, responsive: true };
+  const cfg = { displayModeBar: 'hover', scrollZoom: true, responsive: true, modeBarButtonsToRemove: ['select2d', 'lasso2d'] };
   const baseLayout = {
     paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
     font: { color: tc, size: 10 }, showlegend: false,
     margin: { l: 35, r: 5, t: 5, b: 40 }, bargap: 0.05,
+    doubleclick: 'reset+autosize',
     xaxis: { gridcolor: gc, zerolinecolor: gc, tickfont: { size: 8 } },
     yaxis: { gridcolor: gc, zerolinecolor: gc, tickfont: { size: 9 } },
   };
@@ -3670,7 +3671,7 @@ function _recolorSPLOM(colName) {
   const cs = getComputedStyle(document.documentElement);
   const tc = cs.getPropertyValue('--text3').trim() || '#64748b';
   const gc = cs.getPropertyValue('--border').trim() || 'rgba(255,255,255,0.07)';
-  const cfg = { displayModeBar: 'hover', scrollZoom: true, responsive: true };
+  const cfg = { displayModeBar: 'hover', scrollZoom: true, responsive: true, modeBarButtonsToRemove: ['select2d', 'lasso2d'] };
   const colorVals = (colName && splom.color_map && splom.color_map[colName]) || null;
   _drawSPLOM(splom, colName || null, colorVals, cfg, tc, gc);
 }
@@ -3680,7 +3681,7 @@ function _recolorPCA(colName) {
   if (!pca) return;
   const cs = getComputedStyle(document.documentElement);
   const tc = cs.getPropertyValue('--text3').trim() || '#64748b';
-  const cfg = { displayModeBar: 'hover', scrollZoom: true, responsive: true };
+  const cfg = { displayModeBar: 'hover', scrollZoom: true, responsive: true, modeBarButtonsToRemove: ['select2d', 'lasso2d'] };
   const colorVals = (colName && pca.cat_color_map && pca.cat_color_map[colName]) || null;
   _drawPCA3D(pca, colName || null, colorVals, cfg, tc);
 }
@@ -3764,19 +3765,16 @@ async function _captureAllEDACharts() {
   const imgFor = async (id, w, h) => {
     const el = document.getElementById(id);
     if (!el || !el.querySelector('.js-plotly-plot')) return null;
+    let img = null;
     try {
-      await Plotly.relayout(el, {
-        width: w || 800, height: h || 320,
-        paper_bgcolor: '#111827', plot_bgcolor: '#111827',
-      });
-      const img = await Plotly.toImage(el, { format: 'png', scale: 2 });
-      // Restore chart to responsive / original colors
-      await Plotly.relayout(el, {
-        width: null, height: null,
-        paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
-      });
-      return img;
-    } catch { return null; }
+      await Plotly.relayout(el, { width: w || 800, height: h || 320, paper_bgcolor: '#111827', plot_bgcolor: '#111827' });
+      img = await Plotly.toImage(el, { format: 'png', scale: 2 });
+    } catch { /* capture failed */ }
+    // Restore in a separate try so a restore failure never discards a captured image
+    try {
+      await Plotly.relayout(el, { autosize: true, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent' });
+    } catch { /* non-critical */ }
+    return img;
   };
   const distKeys = Object.keys(_edaCurrentData.distributions);
   const distImgs = [];
@@ -3813,12 +3811,13 @@ async function _printEDA() {
   if (btn) { btn.disabled = true; btn.textContent = 'Preparing…'; }
   try {
     const charts = await _captureAllEDACharts();
-    const html = _buildExportHTML(_edaCurrentData, _edaCurrentFilename, charts.distKeys, charts.distImgs, charts.boxImg, charts.corrImg, charts.miImg, true, charts.splomImg);
-    const win = window.open('', '_blank');
-    if (!win) { alert('Allow pop-ups for this site to use PDF export.'); return; }
-    win.document.write(html);
-    win.document.close();
-    win.addEventListener('load', () => { setTimeout(() => win.print(), 300); });
+    // isPrint=false so the "Save as PDF" button is included inside the report
+    const html = _buildExportHTML(_edaCurrentData, _edaCurrentFilename, charts.distKeys, charts.distImgs, charts.boxImg, charts.corrImg, charts.miImg, false, charts.splomImg);
+    const blob = new Blob([html], { type: 'text/html' });
+    const url  = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    // Revoke after enough time for the new tab to finish loading
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '⎙ PDF'; }
   }
