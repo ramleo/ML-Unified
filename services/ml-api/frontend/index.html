@@ -3378,7 +3378,7 @@ function _renderEDA(d, filename) {
       <div style="margin-bottom:0.75rem;display:flex;align-items:center;gap:0.5rem">
         <span style="font-size:0.75rem;color:var(--text3)">Color by:</span>
         <select id="eda-pca-color" onchange="_recolorPCA(this.value)"
-          style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:var(--text);font-size:0.75rem;padding:0.2rem 0.5rem;cursor:pointer">
+          style="background:var(--bg-card,#1e293b);border:1px solid rgba(255,255,255,0.14);border-radius:6px;color:var(--text,#e2e8f0);font-size:0.75rem;padding:0.25rem 0.6rem;cursor:pointer;outline:none">
           <option value="">— none —</option>
           ${catOpts}
         </select>
@@ -3389,7 +3389,7 @@ function _renderEDA(d, filename) {
         <span style="font-weight:400;color:var(--text3);font-size:0.7rem">PC1 ${ev[0]}% · PC2 ${ev[1]}% · PC3 ${ev[2]}% explained variance</span>
       </div>
       ${colorDropdown}
-      <div id="eda-pca-3d" style="height:480px"></div>
+      <div id="eda-pca-3d" style="height:480px;background:rgba(8,15,30,0.4);border-radius:10px"></div>
     </div>`;
   })() : '';
 
@@ -3480,7 +3480,10 @@ function _renderEDAPlots(d) {
     const pcaEl = document.getElementById('eda-pca-3d');
     if (pcaEl) {
       window._edaPCAData = d.pca;
-      _drawPCA3D(d.pca, d.pca.color_col, d.pca.color_vals, cfg, tc);
+      const initColorVals = (d.pca.cat_color_map && d.pca.color_col)
+        ? d.pca.cat_color_map[d.pca.color_col] || null
+        : null;
+      _drawPCA3D(d.pca, d.pca.color_col, initColorVals, cfg, tc);
     }
   }
 
@@ -3514,30 +3517,53 @@ function _drawPCA3D(pca, colorCol, colorVals, cfg, tc) {
   const xs = pca.coords.map(r => r[0]);
   const ys = pca.coords.map(r => r[1]);
   const zs = pca.coords.map(r => r[2]);
+
+  // Plotly scatter3d needs numeric color values — convert strings to integer codes
+  let colorData, hoverText, showScale, colorbarCfg;
+  if (colorVals && colorVals.length > 0) {
+    const unique = [...new Set(colorVals)];
+    colorData  = colorVals.map(v => unique.indexOf(v));
+    hoverText  = colorVals;
+    showScale  = true;
+    colorbarCfg = {
+      thickness: 10, len: 0.6,
+      tickfont: { size: 9, color: tc },
+      tickvals: unique.map((_, i) => i),
+      ticktext: unique.length <= 12 ? unique : unique.slice(0, 12).concat(['…']),
+      title: { text: colorCol, font: { size: 9, color: tc } },
+    };
+  } else {
+    colorData  = xs;
+    hoverText  = [];
+    showScale  = false;
+    colorbarCfg = undefined;
+  }
+
   const trace = {
     type: 'scatter3d', mode: 'markers',
     x: xs, y: ys, z: zs,
-    text: colorVals || [],
+    text: hoverText,
     marker: {
-      size: 4, opacity: 0.8,
-      color: colorVals ? colorVals : xs,
-      colorscale: colorVals ? 'Turbo' : 'Viridis',
-      showscale: !colorVals,
-      colorbar: colorVals ? undefined : { thickness: 10, len: 0.6, tickfont: { size: 9, color: tc } },
+      size: 4, opacity: 0.82,
+      color: colorData,
+      colorscale: 'Turbo',
+      showscale: showScale,
+      colorbar: colorbarCfg,
     },
     hovertemplate: colorCol
       ? `PC1: %{x:.2f}<br>PC2: %{y:.2f}<br>PC3: %{z:.2f}<br>${colorCol}: %{text}<extra></extra>`
       : 'PC1: %{x:.2f}<br>PC2: %{y:.2f}<br>PC3: %{z:.2f}<extra></extra>',
   };
+  const gc = 'rgba(255,255,255,0.08)';
   const layout = {
-    paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+    paper_bgcolor: 'transparent',
     font: { color: tc, size: 10 }, showlegend: false,
     height: 480, margin: { l: 0, r: 0, t: 10, b: 0 },
     scene: {
-      xaxis: { title: { text: `PC1 (${ev[0]}%)`, font: { size: 10 } }, tickfont: { size: 8 }, gridcolor: 'rgba(255,255,255,0.08)', zerolinecolor: 'rgba(255,255,255,0.12)' },
-      yaxis: { title: { text: `PC2 (${ev[1]}%)`, font: { size: 10 } }, tickfont: { size: 8 }, gridcolor: 'rgba(255,255,255,0.08)', zerolinecolor: 'rgba(255,255,255,0.12)' },
-      zaxis: { title: { text: `PC3 (${ev[2]}%)`, font: { size: 10 } }, tickfont: { size: 8 }, gridcolor: 'rgba(255,255,255,0.08)', zerolinecolor: 'rgba(255,255,255,0.12)' },
-      bgcolor: 'rgba(0,0,0,0)',
+      xaxis: { title: { text: `PC1 (${ev[0]}%)`, font: { size: 10 } }, tickfont: { size: 8 }, gridcolor: gc, zerolinecolor: 'rgba(255,255,255,0.14)', backgroundcolor: 'rgba(0,0,0,0)' },
+      yaxis: { title: { text: `PC2 (${ev[1]}%)`, font: { size: 10 } }, tickfont: { size: 8 }, gridcolor: gc, zerolinecolor: 'rgba(255,255,255,0.14)', backgroundcolor: 'rgba(0,0,0,0)' },
+      zaxis: { title: { text: `PC3 (${ev[2]}%)`, font: { size: 10 } }, tickfont: { size: 8 }, gridcolor: gc, zerolinecolor: 'rgba(255,255,255,0.14)', backgroundcolor: 'rgba(0,0,0,0)' },
+      bgcolor: 'rgba(8,15,30,0.5)',
     },
   };
   Plotly.newPlot(pcaEl, [trace], layout, { ...cfg, scrollZoom: false });
@@ -3549,16 +3575,7 @@ function _recolorPCA(colName) {
   const cs = getComputedStyle(document.documentElement);
   const tc = cs.getPropertyValue('--text3').trim() || '#64748b';
   const cfg = { displayModeBar: 'hover', scrollZoom: false, responsive: true };
-  let colorVals = null;
-  if (colName && pca.cat_cols && pca.cat_cols.includes(colName)) {
-    const idx = pca.cat_cols.indexOf(colName);
-    colorVals = pca.color_vals;
-    // If the selected col matches stored color_col, use stored vals
-    if (colName !== pca.color_col) {
-      // We only have the first cat col's vals from backend; for others show numeric encoding hint
-      colorVals = null;
-    }
-  }
+  const colorVals = (colName && pca.cat_color_map && pca.cat_color_map[colName]) || null;
   _drawPCA3D(pca, colName || null, colorVals, cfg, tc);
 }
 
@@ -3618,14 +3635,31 @@ function _edaInitAnimations(d) {
   }
 }
 
-function _printEDA() {
-  window.print();
-}
-
 function _edaShortNum(n) {
   if (Math.abs(n) >= 1e6) return (n/1e6).toFixed(1)+'M';
   if (Math.abs(n) >= 1e3) return (n/1e3).toFixed(1)+'K';
   return Number.isInteger(n) ? n : parseFloat(n.toFixed(2));
+}
+
+async function _captureAllEDACharts() {
+  // Capture each Plotly chart sequentially to avoid race conditions.
+  // Use explicit width/height + opaque dark background so PNGs are consistent.
+  const imgFor = async (id, w, h) => {
+    const el = document.getElementById(id);
+    if (!el || !el.querySelector('.js-plotly-plot,svg')) return null;
+    try {
+      return await Plotly.toImage(el, { format: 'png', scale: 2, width: w || 800, height: h || 320, setBackground: 'transparent' });
+    } catch { return null; }
+  };
+  const distKeys = Object.keys(_edaCurrentData.distributions);
+  const distImgs = [];
+  for (let i = 0; i < distKeys.length; i++) {
+    distImgs.push(await imgFor(`eda-dist-${i}`, 700, 280));
+  }
+  const boxImg  = await imgFor('eda-box-plot',  900, 400);
+  const corrImg = await imgFor('eda-corr-hm',   800, 700);
+  const miImg   = await imgFor('eda-mi-hm',     800, 700);
+  return { distKeys, distImgs, boxImg, corrImg, miImg };
 }
 
 async function _exportEDAReport() {
@@ -3633,31 +3667,36 @@ async function _exportEDAReport() {
   const btn = document.getElementById('eda-export-btn');
   if (btn) { btn.disabled = true; btn.textContent = 'Exporting…'; }
   try {
-    const cfg = { format: 'png', scale: 2 };
-    const imgFor = async id => {
-      const el = document.getElementById(id);
-      if (!el || !el.querySelector('.js-plotly-plot,svg')) return null;
-      try { return await Plotly.toImage(el, cfg); } catch { return null; }
-    };
-
-    const distKeys = Object.keys(_edaCurrentData.distributions);
-    const distImgs = await Promise.all(distKeys.map((_, i) => imgFor(`eda-dist-${i}`)));
-    const boxImg   = await imgFor('eda-box-plot');
-    const corrImg  = await imgFor('eda-corr-hm');
-    const miImg    = await imgFor('eda-mi-hm');
-
-    const html = _buildExportHTML(_edaCurrentData, _edaCurrentFilename, distKeys, distImgs, boxImg, corrImg, miImg);
+    const charts = await _captureAllEDACharts();
+    const html = _buildExportHTML(_edaCurrentData, _edaCurrentFilename, charts.distKeys, charts.distImgs, charts.boxImg, charts.corrImg, charts.miImg);
     const blob = new Blob([html], { type: 'text/html' });
     const url  = URL.createObjectURL(blob);
     const a    = Object.assign(document.createElement('a'), { href: url, download: _edaCurrentFilename.replace(/\.csv$/i, '') + '_eda_report.html' });
     a.click();
     URL.revokeObjectURL(url);
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '⬇ Export Report'; }
+    if (btn) { btn.disabled = false; btn.textContent = '⬇ HTML'; }
   }
 }
 
-function _buildExportHTML(d, filename, distKeys, distImgs, boxImg, corrImg, miImg) {
+async function _printEDA() {
+  if (!_edaCurrentData || !_edaCurrentFilename) return;
+  const btn = document.getElementById('eda-pdf-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparing…'; }
+  try {
+    const charts = await _captureAllEDACharts();
+    const html = _buildExportHTML(_edaCurrentData, _edaCurrentFilename, charts.distKeys, charts.distImgs, charts.boxImg, charts.corrImg, charts.miImg, true);
+    const win = window.open('', '_blank');
+    if (!win) { alert('Allow pop-ups for this site to use PDF export.'); return; }
+    win.document.write(html);
+    win.document.close();
+    win.addEventListener('load', () => { setTimeout(() => win.print(), 300); });
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⎙ PDF'; }
+  }
+}
+
+function _buildExportHTML(d, filename, distKeys, distImgs, boxImg, corrImg, miImg, isPrint) {
   const qScore = d.quality_score ?? 100;
   const qColor = qScore >= 80 ? '#34d399' : qScore >= 60 ? '#fbbf24' : '#f87171';
   const missingColor = d.overview.missing_pct > 10 ? '#f87171' : d.overview.missing_pct > 0 ? '#fbbf24' : '#34d399';
@@ -3812,7 +3851,16 @@ function _buildExportHTML(d, filename, distKeys, distImgs, boxImg, corrImg, miIm
   .rpt-divider{height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.07),transparent);margin:0.5rem 0 1rem}
   .rpt-footer{text-align:center;padding:2rem;font-size:0.7rem;color:#334155;border-top:1px solid rgba(255,255,255,0.04)}
   .rpt-footer a{color:#38bdf8;text-decoration:none}
+  .rpt-print-btn{display:inline-flex;align-items:center;gap:0.4rem;background:rgba(56,189,248,0.12);border:1px solid rgba(56,189,248,0.3);color:#38bdf8;font-size:0.78rem;font-weight:600;padding:0.45rem 1.1rem;border-radius:20px;cursor:pointer;margin:1.25rem auto 0;letter-spacing:0.02em}
+  .rpt-print-btn:hover{background:rgba(56,189,248,0.2)}
   tr:hover td{background:rgba(255,255,255,0.015)}
+  @media print{
+    .rpt-print-btn,.no-print{display:none!important}
+    body{background:#fff!important;color:#111!important}
+    .rpt-header{background:#0f172a!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+    .rpt-card{background:#fff!important;border:1px solid #e2e8f0!important;box-shadow:none!important;break-inside:avoid}
+    img{max-width:100%;page-break-inside:avoid}
+  }
 </style>
 </head>
 <body>
@@ -3854,6 +3902,7 @@ function _buildExportHTML(d, filename, distKeys, distImgs, boxImg, corrImg, miIm
   ${corrImg ? sec('Correlation Heatmap', '🔥', imgSection(corrImg, 'Pearson · blue = positive · red = negative'), '#f87171') : ''}
 
   <div class="rpt-footer">
+    ${!isPrint ? '<button class="rpt-print-btn" onclick="window.print()">⎙ Save as PDF</button><br><br>' : ''}
     Generated by <a href="https://ml-unified.onrender.com">EDA Explorer</a> · AIRaML portfolio &nbsp;·&nbsp; ${now}
   </div>
 </div>

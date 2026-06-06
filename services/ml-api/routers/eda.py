@@ -318,16 +318,18 @@ async def exploratory_analysis(file: UploadFile = File(...)):
             ev = [round(float(v) * 100, 1) for v in pca.explained_variance_ratio_]
             while len(ev) < 3:
                 ev.append(0.0)
-            # First categorical column as optional color
+            # Build color map for all available categorical columns
+            cat_color_map: dict = {}
+            for cc in cat_cols[:8]:
+                cat_color_map[cc] = df[cc].fillna("N/A").astype(str).tolist()
             color_col = cat_cols[0] if cat_cols else None
-            color_vals = df[color_col].fillna("N/A").astype(str).tolist() if color_col else None
             pca_result = {
                 "coords": coords,
                 "explained_variance": ev,
                 "labels": pca_num_cols,
                 "color_col": color_col,
-                "color_vals": color_vals,
-                "cat_cols": cat_cols[:10],
+                "cat_cols": cat_cols[:8],
+                "cat_color_map": cat_color_map,
             }
         except Exception:
             pca_result = None
