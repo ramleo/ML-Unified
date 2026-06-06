@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from contextlib import asynccontextmanager
 from routers import eda as _eda_router
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, FileResponse
@@ -26,7 +27,12 @@ import os
 import re
 import pandas as pd
 
-app = FastAPI(title="ML API")
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    _load()   # runs after uvicorn binds to port, before first request
+    yield
+
+app = FastAPI(title="ML API", lifespan=_lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -120,8 +126,6 @@ def _load():
             "classes":  le.classes_.tolist() if le is not None else None,
             "schema":   schema,
         }
-
-_load()
 
 @app.get("/")
 def index():
