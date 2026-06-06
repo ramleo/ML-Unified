@@ -776,7 +776,7 @@ function renderSidebar() {
   ];
   const showML     = APP_MODE !== 'vision' && APP_MODE !== 'eda';
   const showVision = APP_MODE !== 'ml'     && APP_MODE !== 'eda';
-  const showEDA    = APP_MODE !== 'vision';
+  const showEDA    = APP_MODE === 'eda';
 
   const mlSection =
     '<div class="sidebar-label">Supervised Models</div>' +
