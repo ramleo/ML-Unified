@@ -3759,39 +3759,79 @@ function _edaShortNum(n) {
 }
 
 async function _captureAllEDACharts() {
-  // Capture each Plotly chart sequentially to avoid race conditions.
-  // Relayout to target dimensions first — explicit height in layout overrides
-  // toImage's width/height params if not done this way.
-  const imgFor = async (id, w, h) => {
-    const el = document.getElementById(id);
-    if (!el || !el.querySelector('.js-plotly-plot')) return null;
-    const tw = w || 800, th = h || 320;
-    // Save and override container CSS — responsive:true ResizeObserver would otherwise
-    // snap the chart back to its CSS height (160px) between relayout and toImage.
-    const savedStyle = el.getAttribute('style') || '';
-    let img = null;
+  const d = _edaCurrentData;
+  const gc = 'rgba(255,255,255,0.08)';
+
+  // Render a fresh off-screen Plotly chart and capture it as PNG.
+  // Off-screen avoids all ResizeObserver interference with live charts.
+  const offscreen = async (traces, layout, w, h) => {
+    const el = document.createElement('div');
+    el.style.cssText = `position:fixed;left:-9999px;top:0;width:${w}px;height:${h}px;visibility:hidden;`;
+    document.body.appendChild(el);
     try {
-      el.style.width  = tw + 'px';
-      el.style.height = th + 'px';
-      await Plotly.relayout(el, { width: tw, height: th, paper_bgcolor: '#111827', plot_bgcolor: '#111827' });
-      img = await Plotly.toImage(el, { format: 'png', scale: 2, width: tw, height: th });
-    } catch { /* capture failed */ }
-    // Restore in a separate try so a restore failure never discards a captured image
-    try {
-      el.setAttribute('style', savedStyle);
-      await Plotly.relayout(el, { autosize: true, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent' });
-    } catch { /* non-critical */ }
-    return img;
+      await Plotly.newPlot(el, traces, { ...layout, width: w, height: h }, { staticPlot: true, responsive: false });
+      return await Plotly.toImage(el, { format: 'png', scale: 2, width: w, height: h });
+    } catch(e) {
+      console.error('[EDA export] capture failed:', e);
+      return null;
+    } finally {
+      try { Plotly.purge(el); } catch {}
+      document.body.removeChild(el);
+    }
   };
-  const distKeys = Object.keys(_edaCurrentData.distributions);
+
+  const darkBase = {
+    paper_bgcolor: '#111827', plot_bgcolor: '#111827',
+    font: { color: '#e2e8f0', size: 10 }, showlegend: false,
+    margin: { l: 40, r: 10, t: 10, b: 45 }, bargap: 0.04,
+    xaxis: { gridcolor: gc, zerolinecolor: gc, tickfont: { size: 8 } },
+    yaxis: { gridcolor: gc, zerolinecolor: gc, tickfont: { size: 9 } },
+  };
+
+  // Distributions
+  const distKeys = Object.keys(d.distributions);
   const distImgs = [];
-  for (let i = 0; i < distKeys.length; i++) {
-    distImgs.push(await imgFor(`eda-dist-${i}`, 700, 280));
+  for (const col of distKeys) {
+    const rawVals = d.stats[col]?.raw_vals;
+    const dist    = d.distributions[col];
+    const traces  = (dist.type === 'histogram' && rawVals?.length)
+      ? [{ type: 'histogram', x: rawVals, autobinx: true, marker: { color: '#34d399', opacity: 0.82, line: { color: 'rgba(52,211,153,0.3)', width: 0.5 } } }]
+      : [{ type: 'bar', x: dist.labels || dist.bins, y: dist.counts, marker: { color: '#a78bfa', opacity: 0.82 } }];
+    distImgs.push(await offscreen(traces, darkBase, 700, 280));
   }
-  const boxImg   = await imgFor('eda-box-plot',    900, 400);
-  const corrImg  = await imgFor('eda-corr-hm',     800, 700);
-  const miImg    = await imgFor('eda-mi-hm',       800, 700);
-  const splomImg = await imgFor('eda-splom-plot',  900, 900);
+
+  // Box plots
+  const boxCols   = Object.keys(d.stats).filter(c => d.stats[c].raw_vals);
+  const boxTraces = boxCols.map(col => ({
+    type: 'box', name: col, y: d.stats[col].raw_vals, boxpoints: 'outliers',
+    marker: { color: '#34d399', size: 3, opacity: 0.7 }, line: { color: '#34d399', width: 1.5 },
+    fillcolor: 'rgba(52,211,153,0.12)',
+  }));
+  const boxImg = boxTraces.length
+    ? await offscreen(boxTraces, { ...darkBase, margin: { l: 50, r: 20, t: 10, b: 90 }, xaxis: { tickangle: -35, tickfont: { size: 9 }, gridcolor: gc }, yaxis: { gridcolor: gc } }, 900, 400)
+    : null;
+
+  // Correlation heatmap
+  const corrImg = d.correlations
+    ? await offscreen(
+        [{ type: 'heatmap', z: d.correlations.matrix, x: d.correlations.labels, y: d.correlations.labels, colorscale: 'RdBu', zmid: 0, zmin: -1, zmax: 1, showscale: true }],
+        { ...darkBase, margin: { l: 80, r: 60, t: 20, b: 80 }, xaxis: { tickangle: -35, gridcolor: gc }, yaxis: { gridcolor: gc } }, 800, 700)
+    : null;
+
+  // MI matrix
+  const miImg = d.mi
+    ? await offscreen(
+        [{ type: 'heatmap', z: d.mi.matrix, x: d.mi.labels, y: d.mi.labels, colorscale: 'Viridis', zmin: 0, zmax: 1, showscale: true }],
+        { ...darkBase, margin: { l: 80, r: 60, t: 20, b: 80 }, xaxis: { tickangle: -35, gridcolor: gc }, yaxis: { gridcolor: gc } }, 800, 700)
+    : null;
+
+  // SPLOM
+  const splomImg = d.splom
+    ? await offscreen(
+        [{ type: 'splom', dimensions: d.splom.cols.map(c => ({ label: c, values: d.splom.data[c] })), showupperhalf: false, marker: { size: 3, color: '#38bdf8', opacity: 0.6 } }],
+        { ...darkBase, margin: { l: 10, r: 10, t: 10, b: 10 } }, 900, 900)
+    : null;
+
   return { distKeys, distImgs, boxImg, corrImg, miImg, splomImg };
 }
 
