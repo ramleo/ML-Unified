@@ -3765,13 +3765,20 @@ async function _captureAllEDACharts() {
   const imgFor = async (id, w, h) => {
     const el = document.getElementById(id);
     if (!el || !el.querySelector('.js-plotly-plot')) return null;
+    const tw = w || 800, th = h || 320;
+    // Save and override container CSS — responsive:true ResizeObserver would otherwise
+    // snap the chart back to its CSS height (160px) between relayout and toImage.
+    const savedStyle = el.getAttribute('style') || '';
     let img = null;
     try {
-      await Plotly.relayout(el, { width: w || 800, height: h || 320, paper_bgcolor: '#111827', plot_bgcolor: '#111827' });
-      img = await Plotly.toImage(el, { format: 'png', scale: 2 });
+      el.style.width  = tw + 'px';
+      el.style.height = th + 'px';
+      await Plotly.relayout(el, { width: tw, height: th, paper_bgcolor: '#111827', plot_bgcolor: '#111827' });
+      img = await Plotly.toImage(el, { format: 'png', scale: 2, width: tw, height: th });
     } catch { /* capture failed */ }
     // Restore in a separate try so a restore failure never discards a captured image
     try {
+      el.setAttribute('style', savedStyle);
       await Plotly.relayout(el, { autosize: true, paper_bgcolor: 'transparent', plot_bgcolor: 'transparent' });
     } catch { /* non-critical */ }
     return img;
