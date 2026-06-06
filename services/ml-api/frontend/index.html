@@ -3442,7 +3442,7 @@ function _renderEDAPlots(d) {
   const cfg = { displayModeBar: 'hover', scrollZoom: true, responsive: true };
   const baseLayout = {
     paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
-    font: { color: tc, size: 10 }, height: 160, showlegend: false,
+    font: { color: tc, size: 10 }, showlegend: false,
     margin: { l: 35, r: 5, t: 5, b: 40 }, bargap: 0.05,
     xaxis: { gridcolor: gc, zerolinecolor: gc, tickfont: { size: 8 } },
     yaxis: { gridcolor: gc, zerolinecolor: gc, tickfont: { size: 9 } },
@@ -3454,12 +3454,26 @@ function _renderEDAPlots(d) {
     if (!el) return;
     const dist = d.distributions[col];
     const isHist = dist.type === 'histogram';
-    Plotly.newPlot(el, [{
-      type: 'bar',
-      x: isHist ? dist.bins : dist.labels,
-      y: dist.counts,
-      marker: { color: isHist ? '#34d399' : '#a78bfa', opacity: 0.82 },
-    }], { ...baseLayout }, cfg);
+    const rawVals = d.stats[col]?.raw_vals;
+
+    if (isHist && rawVals && rawVals.length > 0) {
+      // Use Plotly's native histogram type with raw values — much better auto-binning
+      // than numpy's fixed-width bins which produce giant bars for clustered data
+      Plotly.newPlot(el, [{
+        type: 'histogram', x: rawVals, autobinx: true,
+        marker: { color: '#34d399', opacity: 0.82, line: { color: 'rgba(52,211,153,0.3)', width: 0.5 } },
+        hovertemplate: 'Range: %{x}<br>Count: %{y}<extra></extra>',
+      }], { ...baseLayout, bargap: 0.04 }, cfg);
+    } else {
+      // Categorical bar chart (top-10 values)
+      Plotly.newPlot(el, [{
+        type: 'bar',
+        x: isHist ? dist.bins : dist.labels,
+        y: dist.counts,
+        marker: { color: '#a78bfa', opacity: 0.82 },
+        hovertemplate: '%{x}: %{y}<extra></extra>',
+      }], { ...baseLayout }, cfg);
+    }
   });
 
   const boxEl = document.getElementById('eda-box-plot');
@@ -3602,7 +3616,7 @@ function _drawPCA3D(pca, colorCol, colorVals, cfg, tc) {
       bgcolor: 'rgba(8,15,30,0.5)',
     },
   };
-  Plotly.newPlot(pcaEl, [trace], layout, { ...cfg, scrollZoom: false });
+  Plotly.newPlot(pcaEl, [trace], layout, { ...cfg, scrollZoom: true });
 }
 
 function _downloadCSV() {
@@ -3675,7 +3689,7 @@ function _recolorPCA(colName) {
   if (!pca) return;
   const cs = getComputedStyle(document.documentElement);
   const tc = cs.getPropertyValue('--text3').trim() || '#64748b';
-  const cfg = { displayModeBar: 'hover', scrollZoom: false, responsive: true };
+  const cfg = { displayModeBar: 'hover', scrollZoom: true, responsive: true };
   const colorVals = (colName && pca.cat_color_map && pca.cat_color_map[colName]) || null;
   _drawPCA3D(pca, colName || null, colorVals, cfg, tc);
 }
@@ -3754,12 +3768,23 @@ function _edaShortNum(n) {
 
 async function _captureAllEDACharts() {
   // Capture each Plotly chart sequentially to avoid race conditions.
-  // Use explicit width/height + opaque dark background so PNGs are consistent.
+  // Relayout to target dimensions first — explicit height in layout overrides
+  // toImage's width/height params if not done this way.
   const imgFor = async (id, w, h) => {
     const el = document.getElementById(id);
-    if (!el || !el.querySelector('.js-plotly-plot,svg')) return null;
+    if (!el || !el.querySelector('.js-plotly-plot')) return null;
     try {
-      return await Plotly.toImage(el, { format: 'png', scale: 2, width: w || 800, height: h || 320, setBackground: 'transparent' });
+      await Plotly.relayout(el, {
+        width: w || 800, height: h || 320,
+        paper_bgcolor: '#111827', plot_bgcolor: '#111827',
+      });
+      const img = await Plotly.toImage(el, { format: 'png', scale: 2 });
+      // Restore chart to responsive / original colors
+      await Plotly.relayout(el, {
+        width: null, height: null,
+        paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+      });
+      return img;
     } catch { return null; }
   };
   const distKeys = Object.keys(_edaCurrentData.distributions);
