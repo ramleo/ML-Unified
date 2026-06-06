@@ -318,21 +318,72 @@ async def exploratory_analysis(file: UploadFile = File(...)):
             ev = [round(float(v) * 100, 1) for v in pca.explained_variance_ratio_]
             while len(ev) < 3:
                 ev.append(0.0)
-            # Build color map for all available categorical columns
+            # Build color map: all categorical cols + low-cardinality numeric cols
+            # Low-cardinality numerics (2-15 unique) are useful as class labels
+            low_card_num = [c for c in num_cols if 2 <= df[c].nunique() <= 15]
+            color_option_cols = list(dict.fromkeys(cat_cols[:8] + low_card_num[:4]))
             cat_color_map: dict = {}
-            for cc in cat_cols[:8]:
-                cat_color_map[cc] = df[cc].fillna("N/A").astype(str).tolist()
-            color_col = cat_cols[0] if cat_cols else None
+            for cc in color_option_cols:
+                try:
+                    cat_color_map[cc] = df[cc].fillna("N/A").astype(str).tolist()
+                except Exception:
+                    pass
+            color_col = color_option_cols[0] if color_option_cols else None
             pca_result = {
                 "coords": coords,
                 "explained_variance": ev,
                 "labels": pca_num_cols,
                 "color_col": color_col,
-                "cat_cols": cat_cols[:8],
+                "cat_cols": color_option_cols,
                 "cat_color_map": cat_color_map,
             }
         except Exception:
             pca_result = None
+
+    # ── SPLOM (Scatter Plot Matrix) ──────────────────────────────
+    splom_result = None
+    splom_cols = [c for c in num_cols if df[c].isnull().sum() / len(df) < 0.5][:8]
+    if len(splom_cols) >= 2:
+        try:
+            splom_df = df[splom_cols].dropna()
+            n_sample = min(400, len(splom_df))
+            if n_sample > 0:
+                splom_sample = splom_df.sample(n_sample, random_state=42) if len(splom_df) > n_sample else splom_df
+                splom_data: dict = {c: [round(float(v), 4) for v in splom_sample[c].tolist()] for c in splom_cols}
+                # Include one categorical color column if available (aligned to same rows)
+                splom_color_col = None
+                splom_color_vals = None
+                splom_color_map: dict = {}
+                for cc in cat_cols[:5] + [c for c in num_cols if 2 <= df[c].nunique() <= 15][:3]:
+                    if cc in df.columns:
+                        try:
+                            vals = df.loc[splom_sample.index, cc].fillna("N/A").astype(str).tolist()
+                            splom_color_map[cc] = vals
+                            if splom_color_col is None:
+                                splom_color_col = cc
+                                splom_color_vals = vals
+                        except Exception:
+                            pass
+                splom_result = {
+                    "cols": splom_cols,
+                    "data": splom_data,
+                    "n": n_sample,
+                    "color_col": splom_color_col,
+                    "color_vals": splom_color_vals,
+                    "color_map": splom_color_map,
+                }
+        except Exception:
+            splom_result = None
+
+    # ── Low-variance flags ───────────────────────────────────────
+    low_variance_cols = set()
+    for col, s in stats.items():
+        col_range = s["max"] - s["min"]
+        # Flag if std is very small relative to range (or absolutely near-zero)
+        if col_range > 0 and s["std"] / col_range < 0.05:
+            low_variance_cols.add(col)
+        elif s["std"] < 1e-6:
+            low_variance_cols.add(col)
 
     return {
         "overview":      overview,
@@ -343,8 +394,10 @@ async def exploratory_analysis(file: UploadFile = File(...)):
         "sample":        sample,
         "insights":      insights,
         "quality_score": quality_score,
-        "readiness":     readiness,
-        "narrative":     narrative,
-        "mi":            mi_result,
-        "pca":           pca_result,
+        "readiness":        readiness,
+        "narrative":        narrative,
+        "mi":               mi_result,
+        "pca":              pca_result,
+        "splom":            splom_result,
+        "low_variance_cols": list(low_variance_cols),
     }

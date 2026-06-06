@@ -512,6 +512,7 @@ body {
   white-space:nowrap; transition:all 0.18s;
 }
 .eda-nav-tab:hover { background:rgba(52,211,153,0.12); color:#34d399; border-color:rgba(52,211,153,0.25); }
+.eda-nav-tab.eda-nav-active { background:rgba(52,211,153,0.15); color:#34d399; border-color:rgba(52,211,153,0.4); box-shadow:0 0 8px rgba(52,211,153,0.2); }
 
 /* Overview chip grid */
 .eda-overview-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:0.75rem; }
@@ -3080,6 +3081,7 @@ function draw3dPlot(divId, plotData, accent, colorLabels, showNoise, xLabel, yLa
 // ── EDA Explorer ─────────────────────────────────────────────
 let _edaCurrentData = null;
 let _edaCurrentFilename = null;
+let _edaCurrentFile = null;
 
 function selectEDA() {
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
@@ -3137,6 +3139,7 @@ async function _runEDA(file) {
     const data = await r.json();
     _edaCurrentData     = data;
     _edaCurrentFilename = file.name;
+    _edaCurrentFile     = file;
     resEl.innerHTML = _renderEDA(data, file.name);
     setTimeout(() => { _renderEDAPlots(data); _edaInitAnimations(data); }, 0);
   } catch (e) {
@@ -3170,6 +3173,7 @@ function _renderEDA(d, filename) {
       <div class="eda-section-title">Overview
         <span style="font-weight:400;color:var(--text3);font-size:0.75rem">${filename}</span>
         <span style="display:flex;gap:0.5rem;margin-left:auto">
+          <button id="eda-csv-btn" onclick="_downloadCSV()" style="padding:0.25rem 0.7rem;border-radius:20px;font-size:0.72rem;font-weight:600;cursor:pointer;background:rgba(167,139,250,0.12);color:#a78bfa;border:1px solid rgba(167,139,250,0.3);transition:all 0.15s">⬇ CSV</button>
           <button id="eda-pdf-btn" onclick="_printEDA()" style="padding:0.25rem 0.7rem;border-radius:20px;font-size:0.72rem;font-weight:600;cursor:pointer;background:rgba(56,189,248,0.12);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);transition:all 0.15s">⎙ PDF</button>
           <button id="eda-export-btn" onclick="_exportEDAReport()" style="padding:0.25rem 0.7rem;border-radius:20px;font-size:0.72rem;font-weight:600;cursor:pointer;background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.3);transition:all 0.15s">⬇ HTML</button>
         </span>
@@ -3252,11 +3256,12 @@ function _renderEDA(d, filename) {
     ...(Object.keys(d.stats).length ? [['eda-s-boxplots', 'Box Plots']] : []),
     ...(d.mi && d.mi.labels.length > 1 ? [['eda-s-mi', 'Mutual Info']] : []),
     ...(d.pca ? [['eda-s-pca', 'PCA 3D']] : []),
+    ...(d.splom ? [['eda-s-splom', 'SPLOM']] : []),
     ...(d.correlations && d.correlations.labels.length > 1 ? [['eda-s-correlations', 'Correlations']] : []),
   ];
   const navHTML = `
     <nav class="eda-sticky-nav">
-      ${navTabs.map(([id, label]) => `<button class="eda-nav-tab" onclick="document.getElementById('${id}').scrollIntoView({behavior:'smooth',block:'start'})">${label}</button>`).join('')}
+      ${navTabs.map(([id, label]) => `<button class="eda-nav-tab" data-section="${id}" onclick="document.getElementById('${id}').scrollIntoView({behavior:'smooth',block:'start'})">${label}</button>`).join('')}
     </nav>`;
 
   const sampleHTML = d.sample ? `
@@ -3339,15 +3344,18 @@ function _renderEDA(d, filename) {
       </div>
     </div>` : '';
 
+  const lvSet = new Set(d.low_variance_cols || []);
   const distKeys = Object.keys(d.distributions);
   const distHTML = distKeys.length ? `
     <div class="eda-section-card" id="eda-s-distributions">
       <div class="eda-section-title">📈 Distributions</div>
       <div class="eda-dist-grid">${distKeys.map((col, i) => {
         const isNum = d.distributions[col].type === 'histogram';
+        const isLV  = lvSet.has(col);
         return `<div class="eda-dist-card">
           <div class="eda-dist-title">${col}
             <span style="font-size:0.58rem;color:var(--text3);margin-left:4px">${isNum ? 'numeric' : 'categorical'}</span>
+            ${isLV ? '<span style="font-size:0.58rem;color:#fbbf24;margin-left:4px;font-weight:700">⚠ low variance</span>' : ''}
           </div>
           <div id="eda-dist-${i}" class="eda-dist-plot"></div>
         </div>`;
@@ -3393,6 +3401,28 @@ function _renderEDA(d, filename) {
     </div>`;
   })() : '';
 
+  const splomHTML = d.splom ? (() => {
+    const colorOpts = Object.keys(d.splom.color_map || {})
+      .map(c => `<option value="${c}"${c === d.splom.color_col ? ' selected' : ''}>${c}</option>`).join('');
+    const colorDropdown = colorOpts ? `
+      <div style="margin-bottom:0.75rem;display:flex;align-items:center;gap:0.5rem">
+        <span style="font-size:0.75rem;color:var(--text3)">Color by:</span>
+        <select id="eda-splom-color" onchange="_recolorSPLOM(this.value)"
+          style="background:var(--bg-card,#1e293b);border:1px solid rgba(255,255,255,0.14);border-radius:6px;color:var(--text,#e2e8f0);font-size:0.75rem;padding:0.25rem 0.6rem;cursor:pointer;outline:none">
+          <option value="">— none —</option>
+          ${colorOpts}
+        </select>
+      </div>` : '';
+    return `
+    <div class="eda-section-card" id="eda-s-splom">
+      <div class="eda-section-title">Scatter Plot Matrix
+        <span style="font-weight:400;color:var(--text3);font-size:0.7rem">${d.splom.cols.length} features · ${d.splom.n} samples · pairwise relationships</span>
+      </div>
+      ${colorDropdown}
+      <div id="eda-splom-plot" style="min-height:500px"></div>
+    </div>`;
+  })() : '';
+
   const corrHTML = (d.correlations && d.correlations.labels.length > 1) ? `
     <div class="eda-section-card" id="eda-s-correlations">
       <div class="eda-section-title">🔥 Correlation Heatmap
@@ -3401,7 +3431,7 @@ function _renderEDA(d, filename) {
       <div id="eda-corr-hm" class="eda-corr-plot"></div>
     </div>` : '';
 
-  return overviewHTML + narrativeHTML + readinessHTML + insightsHTML + navHTML + sampleHTML + colsHTML + statsHTML + distHTML + boxHTML + miHTML + pcaHTML + corrHTML;
+  return overviewHTML + narrativeHTML + readinessHTML + insightsHTML + navHTML + sampleHTML + colsHTML + statsHTML + distHTML + boxHTML + miHTML + pcaHTML + splomHTML + corrHTML;
 }
 
 function _renderEDAPlots(d) {
@@ -3487,6 +3517,12 @@ function _renderEDAPlots(d) {
     }
   }
 
+  if (d.splom) {
+    const initColorVals = (d.splom.color_map && d.splom.color_col)
+      ? d.splom.color_map[d.splom.color_col] || null : null;
+    _drawSPLOM(d.splom, d.splom.color_col, initColorVals, cfg, tc, gc);
+  }
+
   if (d.correlations && d.correlations.labels.length > 1) {
     const el = document.getElementById('eda-corr-hm');
     if (!el) return;
@@ -3569,6 +3605,71 @@ function _drawPCA3D(pca, colorCol, colorVals, cfg, tc) {
   Plotly.newPlot(pcaEl, [trace], layout, { ...cfg, scrollZoom: false });
 }
 
+function _downloadCSV() {
+  if (!_edaCurrentFile) return;
+  const url = URL.createObjectURL(_edaCurrentFile);
+  const a = Object.assign(document.createElement('a'), { href: url, download: _edaCurrentFile.name });
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function _drawSPLOM(splom, colorCol, colorVals, cfg, tc, gc) {
+  const el = document.getElementById('eda-splom-plot');
+  if (!el || typeof Plotly === 'undefined') return;
+  window._edaSPLOMData = splom;
+
+  let colorData;
+  if (colorVals && colorVals.length > 0) {
+    const unique = [...new Set(colorVals)];
+    colorData = colorVals.map(v => unique.indexOf(v));
+  } else {
+    colorData = null;
+  }
+
+  const dim = splom.cols.length;
+  const sz  = Math.max(120, Math.min(220, Math.floor(900 / dim)));
+  const trace = {
+    type: 'splom',
+    dimensions: splom.cols.map(col => ({ label: col, values: splom.data[col] })),
+    marker: {
+      size: 3, opacity: 0.55,
+      color: colorData || splom.data[splom.cols[0]],
+      colorscale: 'Turbo',
+      showscale: false,
+      line: { width: 0 },
+    },
+    diagonal: { visible: true },
+    showupperhalf: false,
+    text: colorVals || [],
+    hovertemplate: colorCol ? `${colorCol}: %{text}<extra></extra>` : undefined,
+  };
+  const layout = {
+    paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+    font: { color: tc, size: 9 }, showlegend: false,
+    height: dim * sz + 60,
+    margin: { l: 80, r: 20, t: 20, b: 80 },
+  };
+  // Override each axis pair for dark theme
+  splom.cols.forEach((_, i) => {
+    const k = `xaxis${i > 0 ? i+1 : ''}`;
+    const k2 = `yaxis${i > 0 ? i+1 : ''}`;
+    layout[k]  = { gridcolor: gc, zerolinecolor: gc, tickfont: { size: 7 } };
+    layout[k2] = { gridcolor: gc, zerolinecolor: gc, tickfont: { size: 7 } };
+  });
+  Plotly.newPlot(el, [trace], layout, cfg);
+}
+
+function _recolorSPLOM(colName) {
+  const splom = window._edaSPLOMData;
+  if (!splom) return;
+  const cs = getComputedStyle(document.documentElement);
+  const tc = cs.getPropertyValue('--text3').trim() || '#64748b';
+  const gc = cs.getPropertyValue('--border').trim() || 'rgba(255,255,255,0.07)';
+  const cfg = { displayModeBar: 'hover', scrollZoom: true, responsive: true };
+  const colorVals = (colName && splom.color_map && splom.color_map[colName]) || null;
+  _drawSPLOM(splom, colName || null, colorVals, cfg, tc, gc);
+}
+
 function _recolorPCA(colName) {
   const pca = window._edaPCAData;
   if (!pca) return;
@@ -3596,7 +3697,17 @@ function _edaInitAnimations(d) {
     io.observe(card);
   });
 
-  // 2. Count-up animation on chip values
+  // 2. Nav active-section highlight via a persistent IntersectionObserver
+  const navSections = document.querySelectorAll('#edaResults .eda-section-card[id]');
+  const navIO = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const btn = document.querySelector(`.eda-nav-tab[data-section="${entry.target.id}"]`);
+      if (btn) btn.classList.toggle('eda-nav-active', entry.isIntersecting);
+    });
+  }, { threshold: 0.25, rootMargin: '-60px 0px -40% 0px' });
+  navSections.forEach(s => navIO.observe(s));
+
+  // 4. Count-up animation on chip values
   document.querySelectorAll('[data-countup]').forEach(el => {
     const target  = parseFloat(el.dataset.countup);
     const suffix  = el.dataset.suffix || '';
@@ -3612,7 +3723,7 @@ function _edaInitAnimations(d) {
     requestAnimationFrame(tick);
   });
 
-  // 3. Quality ring draw animation
+  // 5. Quality ring draw animation
   const arc = document.getElementById('eda-ring-arc');
   const num = document.getElementById('eda-ring-num');
   if (arc && num) {
@@ -3656,10 +3767,11 @@ async function _captureAllEDACharts() {
   for (let i = 0; i < distKeys.length; i++) {
     distImgs.push(await imgFor(`eda-dist-${i}`, 700, 280));
   }
-  const boxImg  = await imgFor('eda-box-plot',  900, 400);
-  const corrImg = await imgFor('eda-corr-hm',   800, 700);
-  const miImg   = await imgFor('eda-mi-hm',     800, 700);
-  return { distKeys, distImgs, boxImg, corrImg, miImg };
+  const boxImg   = await imgFor('eda-box-plot',    900, 400);
+  const corrImg  = await imgFor('eda-corr-hm',     800, 700);
+  const miImg    = await imgFor('eda-mi-hm',       800, 700);
+  const splomImg = await imgFor('eda-splom-plot',  900, 900);
+  return { distKeys, distImgs, boxImg, corrImg, miImg, splomImg };
 }
 
 async function _exportEDAReport() {
@@ -3668,7 +3780,7 @@ async function _exportEDAReport() {
   if (btn) { btn.disabled = true; btn.textContent = 'Exporting…'; }
   try {
     const charts = await _captureAllEDACharts();
-    const html = _buildExportHTML(_edaCurrentData, _edaCurrentFilename, charts.distKeys, charts.distImgs, charts.boxImg, charts.corrImg, charts.miImg);
+    const html = _buildExportHTML(_edaCurrentData, _edaCurrentFilename, charts.distKeys, charts.distImgs, charts.boxImg, charts.corrImg, charts.miImg, false, charts.splomImg);
     const blob = new Blob([html], { type: 'text/html' });
     const url  = URL.createObjectURL(blob);
     const a    = Object.assign(document.createElement('a'), { href: url, download: _edaCurrentFilename.replace(/\.csv$/i, '') + '_eda_report.html' });
@@ -3685,7 +3797,7 @@ async function _printEDA() {
   if (btn) { btn.disabled = true; btn.textContent = 'Preparing…'; }
   try {
     const charts = await _captureAllEDACharts();
-    const html = _buildExportHTML(_edaCurrentData, _edaCurrentFilename, charts.distKeys, charts.distImgs, charts.boxImg, charts.corrImg, charts.miImg, true);
+    const html = _buildExportHTML(_edaCurrentData, _edaCurrentFilename, charts.distKeys, charts.distImgs, charts.boxImg, charts.corrImg, charts.miImg, true, charts.splomImg);
     const win = window.open('', '_blank');
     if (!win) { alert('Allow pop-ups for this site to use PDF export.'); return; }
     win.document.write(html);
@@ -3696,7 +3808,7 @@ async function _printEDA() {
   }
 }
 
-function _buildExportHTML(d, filename, distKeys, distImgs, boxImg, corrImg, miImg, isPrint) {
+function _buildExportHTML(d, filename, distKeys, distImgs, boxImg, corrImg, miImg, isPrint, splomImg) {
   const qScore = d.quality_score ?? 100;
   const qColor = qScore >= 80 ? '#34d399' : qScore >= 60 ? '#fbbf24' : '#f87171';
   const missingColor = d.overview.missing_pct > 10 ? '#f87171' : d.overview.missing_pct > 0 ? '#fbbf24' : '#34d399';
@@ -3898,6 +4010,14 @@ function _buildExportHTML(d, filename, distKeys, distImgs, boxImg, corrImg, miIm
   ${distGridHTML ? sec('Distributions', '📈', distGridHTML, '#34d399') : ''}
 
   ${miImg ? sec('Mutual Information', '🔗', imgSection(miImg, 'Normalized 0–1 · captures non-linear + categorical relationships'), '#38bdf8') : ''}
+
+  ${splomImg ? sec('Scatter Plot Matrix', '⊡', imgSection(splomImg, `${(d.splom||{cols:[]}).cols.length} features · pairwise relationships`), '#34d399') : ''}
+
+  ${d.pca ? sec('PCA 3D Scatter', '🔵',
+    `<p style="font-size:0.82rem;color:#64748b;line-height:1.7;padding:0.75rem 1rem;background:rgba(255,255,255,0.02);border-radius:8px;border:1px dashed rgba(255,255,255,0.1)">
+      ⓘ PCA 3D scatter uses WebGL and cannot be captured as a static image. Open the live EDA Explorer to interact with the 3D plot.<br>
+      <span style="font-size:0.75rem;opacity:0.6">PC1 ${d.pca.explained_variance[0]}% · PC2 ${d.pca.explained_variance[1]}% · PC3 ${d.pca.explained_variance[2]}% explained variance · ${d.pca.coords.length} points</span>
+    </p>`, '#a78bfa') : ''}
 
   ${corrImg ? sec('Correlation Heatmap', '🔥', imgSection(corrImg, 'Pearson · blue = positive · red = negative'), '#f87171') : ''}
 
