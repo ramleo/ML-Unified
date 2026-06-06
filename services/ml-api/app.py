@@ -157,6 +157,13 @@ def favicon():
         return FileResponse(path, media_type="image/x-icon")
     return HTMLResponse(status_code=204)
 
+@app.get("/icon.svg", include_in_schema=False)
+def favicon_svg():
+    path = os.path.join(HERE, "frontend", "icon.svg")
+    if os.path.exists(path):
+        return FileResponse(path, media_type="image/svg+xml")
+    return HTMLResponse(status_code=204)
+
 @app.get("/health")
 def health():
     return {"status": "ok", "models": list(MODELS.keys())}
