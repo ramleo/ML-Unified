@@ -609,7 +609,7 @@ body {
 .u-stat-divider { border-top:1px solid var(--border1); margin:0.5rem 0; }
 
 @media print {
-  nav, .sidebar, #topbar, .upload-zone, .eda-sticky-nav, #eda-export-btn, #eda-pdf-btn { display:none !important; }
+  nav, .sidebar, #topbar, .upload-zone, .eda-sticky-nav, #eda-export-btn { display:none !important; }
   body { background:#fff !important; color:#000 !important; }
   .eda-panel { max-width:100%; padding:0; }
   .eda-section-card {
@@ -3173,7 +3173,6 @@ function _renderEDA(d, filename) {
       <div class="eda-section-title">Overview
         <span style="font-weight:400;color:var(--text3);font-size:0.75rem">${filename}</span>
         <span style="display:flex;gap:0.5rem;margin-left:auto">
-          <button id="eda-pdf-btn" onclick="_printEDA()" style="padding:0.25rem 0.7rem;border-radius:20px;font-size:0.72rem;font-weight:600;cursor:pointer;background:rgba(56,189,248,0.12);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);transition:all 0.15s">⎙ PDF</button>
           <button id="eda-export-btn" onclick="_exportEDAReport()" style="padding:0.25rem 0.7rem;border-radius:20px;font-size:0.72rem;font-weight:600;cursor:pointer;background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.3);transition:all 0.15s">⬇ HTML</button>
         </span>
       </div>
@@ -3818,15 +3817,21 @@ async function _captureAllEDACharts() {
   // Correlation heatmap
   const corrImg = d.correlations
     ? await offscreen(
-        [{ type: 'heatmap', z: d.correlations.matrix, x: d.correlations.labels, y: d.correlations.labels, colorscale: 'RdBu', zmid: 0, zmin: -1, zmax: 1, showscale: true }],
-        { ...darkBase, margin: { l: 80, r: 60, t: 20, b: 80 }, xaxis: { tickangle: -35, gridcolor: gc }, yaxis: { gridcolor: gc } }, 800, 700)
+        [{ type: 'heatmap', z: d.correlations.matrix, x: d.correlations.labels, y: d.correlations.labels,
+           colorscale: 'RdBu', zmid: 0, zmin: -1, zmax: 1, showscale: true,
+           text: d.correlations.matrix.map(r => r.map(v => v !== null ? v.toFixed(2) : '')),
+           texttemplate: '%{text}', textfont: { size: 8, color: '#ffffff' } }],
+        { ...darkBase, margin: { l: 90, r: 60, t: 20, b: 120 }, xaxis: { tickangle: -45, gridcolor: gc }, yaxis: { gridcolor: gc } }, 800, 750)
     : null;
 
   // MI matrix
   const miImg = d.mi
     ? await offscreen(
-        [{ type: 'heatmap', z: d.mi.matrix, x: d.mi.labels, y: d.mi.labels, colorscale: 'Viridis', zmin: 0, zmax: 1, showscale: true }],
-        { ...darkBase, margin: { l: 80, r: 60, t: 20, b: 80 }, xaxis: { tickangle: -35, gridcolor: gc }, yaxis: { gridcolor: gc } }, 800, 700)
+        [{ type: 'heatmap', z: d.mi.matrix, x: d.mi.labels, y: d.mi.labels,
+           colorscale: 'Viridis', zmin: 0, zmax: 1, showscale: true,
+           text: d.mi.matrix.map(r => r.map(v => v.toFixed(2))),
+           texttemplate: '%{text}', textfont: { size: 8, color: '#ffffff' } }],
+        { ...darkBase, margin: { l: 90, r: 60, t: 20, b: 120 }, xaxis: { tickangle: -45, gridcolor: gc }, yaxis: { gridcolor: gc } }, 800, 750)
     : null;
 
   // SPLOM
@@ -3856,23 +3861,6 @@ async function _exportEDAReport() {
   }
 }
 
-async function _printEDA() {
-  if (!_edaCurrentData || !_edaCurrentFilename) return;
-  const btn = document.getElementById('eda-pdf-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Preparing…'; }
-  try {
-    const charts = await _captureAllEDACharts();
-    // isPrint=false so print instructions are included inside the report
-    const html = _buildExportHTML(_edaCurrentData, _edaCurrentFilename, charts.distKeys, charts.distImgs, charts.boxImg, charts.corrImg, charts.miImg, false, charts.splomImg);
-    const blob = new Blob([html], { type: 'text/html' });
-    const url  = URL.createObjectURL(blob);
-    window.open(url, '_blank');
-    // Revoke after enough time for the new tab to finish loading
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '⎙ PDF'; }
-  }
-}
 
 function _buildExportHTML(d, filename, distKeys, distImgs, boxImg, corrImg, miImg, isPrint, splomImg) {
   const qScore = d.quality_score ?? 100;
