@@ -3502,18 +3502,20 @@ function _renderEDAPlots(d) {
     const miEl = document.getElementById('eda-mi-hm');
     if (miEl) {
       const { labels, matrix } = d.mi;
+      const miCellSize = labels.length > 10 ? 38 : 48;
+      const miH = Math.min(780, Math.max(420, labels.length * miCellSize + 160));
       Plotly.newPlot(miEl, [{
         type: 'heatmap', z: matrix, x: labels, y: labels,
         colorscale: 'Viridis', zmin: 0, zmax: 1,
-        text: matrix.map(r => r.map(v => v.toFixed(2))),
-        texttemplate: '%{text}', textfont: { size: 9 },
+        text: matrix.map(r => r.map(v => v === null ? '' : v.toFixed(2))),
+        texttemplate: '%{text}', textfont: { size: labels.length > 10 ? 7 : 9, color: '#ffffff' },
         showscale: true,
         colorbar: { thickness: 12, len: 0.85, tickfont: { size: 9, color: tc }, title: { text: 'MI', font: { size: 9, color: tc } } },
       }], {
         paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
         font: { color: tc, size: 10 }, showlegend: false,
-        margin: { l: 90, r: 20, t: 20, b: 90 },
-        height: Math.min(600, Math.max(300, labels.length * 45 + 110)),
+        margin: { l: 90, r: 60, t: 20, b: 120 },
+        height: miH,
         xaxis: { tickangle: -45, tickfont: { size: 9 }, gridcolor: gc },
         yaxis: { tickfont: { size: 9 }, gridcolor: gc },
       }, cfg);
@@ -3541,18 +3543,20 @@ function _renderEDAPlots(d) {
     const el = document.getElementById('eda-corr-hm');
     if (!el) return;
     const { labels, matrix } = d.correlations;
+    const corrCellSize = labels.length > 10 ? 38 : 48;
+    const corrH = Math.min(780, Math.max(420, labels.length * corrCellSize + 160));
     Plotly.newPlot(el, [{
       type: 'heatmap', z: matrix, x: labels, y: labels,
       colorscale: 'RdBu', reversescale: true, zmid: 0, zmin: -1, zmax: 1,
       text: matrix.map(r => r.map(v => v !== null ? v.toFixed(2) : '')),
-      texttemplate: '%{text}', textfont: { size: 9 },
+      texttemplate: '%{text}', textfont: { size: labels.length > 10 ? 7 : 9, color: '#ffffff' },
       showscale: true,
       colorbar: { thickness: 12, len: 0.85, tickfont: { size: 9, color: tc } },
     }], {
       paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
       font: { color: tc, size: 10 }, showlegend: false,
-      margin: { l: 90, r: 20, t: 20, b: 90 },
-      height: Math.min(600, Math.max(300, labels.length * 45 + 110)),
+      margin: { l: 90, r: 60, t: 20, b: 120 },
+      height: corrH,
       xaxis: { tickangle: -45, tickfont: { size: 9 }, gridcolor: gc },
       yaxis: { tickfont: { size: 9 }, gridcolor: gc },
     }, cfg);
