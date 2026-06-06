@@ -3173,7 +3173,6 @@ function _renderEDA(d, filename) {
       <div class="eda-section-title">Overview
         <span style="font-weight:400;color:var(--text3);font-size:0.75rem">${filename}</span>
         <span style="display:flex;gap:0.5rem;margin-left:auto">
-          <button id="eda-csv-btn" onclick="_downloadCSV()" style="padding:0.25rem 0.7rem;border-radius:20px;font-size:0.72rem;font-weight:600;cursor:pointer;background:rgba(167,139,250,0.12);color:#a78bfa;border:1px solid rgba(167,139,250,0.3);transition:all 0.15s">⬇ CSV</button>
           <button id="eda-pdf-btn" onclick="_printEDA()" style="padding:0.25rem 0.7rem;border-radius:20px;font-size:0.72rem;font-weight:600;cursor:pointer;background:rgba(56,189,248,0.12);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);transition:all 0.15s">⎙ PDF</button>
           <button id="eda-export-btn" onclick="_exportEDAReport()" style="padding:0.25rem 0.7rem;border-radius:20px;font-size:0.72rem;font-weight:600;cursor:pointer;background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.3);transition:all 0.15s">⬇ HTML</button>
         </span>
@@ -3617,14 +3616,6 @@ function _drawPCA3D(pca, colorCol, colorVals, cfg, tc) {
     },
   };
   Plotly.newPlot(pcaEl, [trace], layout, { ...cfg, scrollZoom: true });
-}
-
-function _downloadCSV() {
-  if (!_edaCurrentFile) return;
-  const url = URL.createObjectURL(_edaCurrentFile);
-  const a = Object.assign(document.createElement('a'), { href: url, download: _edaCurrentFile.name });
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 function _drawSPLOM(splom, colorCol, colorVals, cfg, tc, gc) {
