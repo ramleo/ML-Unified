@@ -676,12 +676,12 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes panelIn {
-  from { opacity: 0; transform: translateY(18px); }
+  from { opacity: 0; transform: translateY(36px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes dotPulse {
   0%   { transform: scale(1); }
-  45%  { transform: scale(1.6); box-shadow: 0 0 12px var(--active-accent,#818cf8); }
+  45%  { transform: scale(2.2); box-shadow: 0 0 18px var(--active-accent,#818cf8); }
   100% { transform: scale(1); }
 }
 @keyframes shimmer {
@@ -713,25 +713,25 @@ body {
   pointer-events: none; z-index: 0; filter: blur(72px);
 }
 .bg-blob-1 {
-  width: 480px; height: 480px; top: -130px; left: -130px;
-  background: rgba(99,102,241,0.07);
+  width: 560px; height: 560px; top: -150px; left: -150px;
+  background: rgba(99,102,241,0.14);
   animation: blobDrift1 20s ease-in-out infinite;
 }
 .bg-blob-2 {
-  width: 380px; height: 380px; bottom: 60px; right: -90px;
-  background: rgba(56,189,248,0.06);
+  width: 440px; height: 440px; bottom: 60px; right: -100px;
+  background: rgba(56,189,248,0.11);
   animation: blobDrift2 26s ease-in-out infinite;
 }
-[data-theme="light"] .bg-blob-1 { background: rgba(99,102,241,0.04); }
-[data-theme="light"] .bg-blob-2 { background: rgba(56,189,248,0.035); }
+[data-theme="light"] .bg-blob-1 { background: rgba(99,102,241,0.07); }
+[data-theme="light"] .bg-blob-2 { background: rgba(56,189,248,0.06); }
 
 /* Layer content above canvas/blobs */
 .gradient-top-bar, nav, .layout { position: relative; z-index: 1; }
 
 /* Sidebar item entrance */
 .sb-anim {
-  opacity: 0; transform: translateY(10px);
-  transition: opacity 0.32s ease, transform 0.32s ease;
+  opacity: 0; transform: translateY(20px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
 }
 .sb-anim.sb-visible { opacity: 1; transform: translateY(0); }
 
@@ -2730,9 +2730,9 @@ function countUp(el, endVal, prefix, duration) {
         const dx = pts[i].x - pts[j].x, dy = pts[i].y - pts[j].y;
         const d  = Math.sqrt(dx * dx + dy * dy);
         if (d < CONN) {
-          ctx.globalAlpha = (1 - d / CONN) * (dark ? 0.18 : 0.10);
+          ctx.globalAlpha = (1 - d / CONN) * (dark ? 0.35 : 0.18);
           ctx.strokeStyle = `rgba(${lineColor},1)`;
-          ctx.lineWidth   = 0.6;
+          ctx.lineWidth   = 0.8;
           ctx.beginPath();
           ctx.moveTo(pts[i].x, pts[i].y);
           ctx.lineTo(pts[j].x, pts[j].y);
@@ -2742,7 +2742,7 @@ function countUp(el, endVal, prefix, duration) {
     }
 
     pts.forEach(p => {
-      ctx.globalAlpha = dark ? 0.35 : 0.22;
+      ctx.globalAlpha = dark ? 0.65 : 0.40;
       ctx.fillStyle   = `rgba(${dotColor},1)`;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
