@@ -1,24 +1,15 @@
 services:
   - type: web
     name: ml-api
-    runtime: python
+    env: docker
     rootDir: services/ml-api
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
-      - key: PYTHON_VERSION
-        value: "3.11.0"
       - key: ML_VISION_URL
         sync: false   # set via Render dashboard once ml-vision is deployed
 
   - type: web
     name: ml-vision
-    runtime: python
+    env: docker
     rootDir: services/ml-vision
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.11.0"
