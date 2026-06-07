@@ -265,7 +265,7 @@ body {
   border: 1px dashed var(--border2); border-radius: 16px;
   color: var(--text3); font-size: 0.85rem; text-align: center;
 }
-.empty-icon { font-size: 2rem; opacity: 0.5; }
+.empty-icon { display:flex; align-items:center; justify-content:center; opacity:0.75; }
 
 .result-state {
   display: none;
@@ -392,7 +392,7 @@ body {
 }
 .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: rgba(129,140,248,0.04); }
 .upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
-.upload-zone-icon { font-size: 2.2rem; margin-bottom: 0.5rem; opacity: 0.6; }
+.upload-zone-icon { display:flex; justify-content:center; margin-bottom:0.5rem; }
 .upload-zone-text { font-size: 0.88rem; color: var(--text2); font-weight: 500; }
 .upload-zone-sub  { font-size: 0.72rem; color: var(--text3); margin-top: 0.25rem; }
 
@@ -842,7 +842,7 @@ body {
   <!-- Main -->
   <main class="main" id="main">
     <div class="empty-state">
-      <div class="empty-icon">🤖</div>
+      <div class="empty-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><circle cx="22" cy="22" r="5" fill="#818cf8" opacity="0.75"/><circle cx="22" cy="8" r="3" fill="#818cf8" opacity="0.5"/><circle cx="36" cy="22" r="3" fill="#38bdf8" opacity="0.5"/><circle cx="22" cy="36" r="3" fill="#34d399" opacity="0.5"/><circle cx="8" cy="22" r="3" fill="#818cf8" opacity="0.5"/><circle cx="31" cy="13" r="2" fill="#818cf8" opacity="0.32"/><circle cx="31" cy="31" r="2" fill="#38bdf8" opacity="0.32"/><circle cx="13" cy="31" r="2" fill="#34d399" opacity="0.32"/><circle cx="13" cy="13" r="2" fill="#818cf8" opacity="0.32"/><line x1="22" y1="22" x2="22" y2="11" stroke="#818cf8" stroke-width="1.1" opacity="0.4"/><line x1="22" y1="22" x2="33" y2="22" stroke="#38bdf8" stroke-width="1.1" opacity="0.4"/><line x1="22" y1="22" x2="22" y2="33" stroke="#34d399" stroke-width="1.1" opacity="0.4"/><line x1="22" y1="22" x2="11" y2="22" stroke="#818cf8" stroke-width="1.1" opacity="0.4"/><line x1="22" y1="22" x2="29" y2="15" stroke="#818cf8" stroke-width="0.8" opacity="0.22"/><line x1="22" y1="22" x2="29" y2="29" stroke="#38bdf8" stroke-width="0.8" opacity="0.22"/><line x1="22" y1="22" x2="15" y2="29" stroke="#34d399" stroke-width="0.8" opacity="0.22"/><line x1="22" y1="22" x2="15" y2="15" stroke="#818cf8" stroke-width="0.8" opacity="0.22"/></svg></div>
       <div>Select a model from the sidebar to get started</div>
     </div>
   </main>
@@ -1117,7 +1117,7 @@ function renderMain() {
     <!-- Result -->
     <div class="result-wrap">
       <div class="empty-state" id="emptyState">
-        <div class="empty-icon">📊</div>
+        <div class="empty-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><rect x="3" y="3" width="38" height="38" rx="10" stroke="#818cf8" stroke-width="1.3" opacity="0.2"/><rect x="9" y="26" width="7" height="11" rx="2" fill="#818cf8" opacity="0.65"/><rect x="18.5" y="19" width="7" height="18" rx="2" fill="#38bdf8" opacity="0.65"/><rect x="28" y="22" width="7" height="15" rx="2" fill="#34d399" opacity="0.65"/><path d="M7 37h30" stroke="#64748b" stroke-width="1" stroke-linecap="round" opacity="0.35"/><path d="M9 26l10-10 9 5 9-11" stroke="#f472b6" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/></svg></div>
         <div>Fill in the fields and click Predict</div>
       </div>
       <div class="result-state" id="resultState">
@@ -1366,7 +1366,7 @@ function renderWizardStep1() {
       </p>
       <div class="upload-zone" id="uploadZone">
         <input type="file" id="csvInput" accept=".csv" onchange="handleFileSelect(event)">
-        <div class="upload-zone-icon">\u{1F4C2}</div>
+        <div class="upload-zone-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><rect x="3" y="3" width="38" height="38" rx="10" stroke="#818cf8" stroke-width="1.3" opacity="0.22"/><path d="M22 30V17" stroke="#818cf8" stroke-width="1.9" stroke-linecap="round"/><path d="M15 24l7-7 7 7" stroke="#38bdf8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 35h18" stroke="#34d399" stroke-width="1.9" stroke-linecap="round"/></svg></div>
         <div class="upload-zone-text">Click to browse or drag &amp; drop</div>
         <div class="upload-zone-sub">CSV files only</div>
       </div>
@@ -1636,7 +1636,7 @@ function drawClusterPlot(canvasId, plotData, nClusters, accent) {
 function cancelWizard() {
   if (allModels.length > 0) selectModel(allModels[0].id);
   else document.getElementById('main').innerHTML =
-    '<div class="empty-state"><div class="empty-icon">\u{1F916}</div><div>Select a model from the sidebar to get started</div></div>';
+    '<div class="empty-state"><div class="empty-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><circle cx="22" cy="22" r="5" fill="#818cf8" opacity="0.75"/><circle cx="22" cy="8" r="3" fill="#818cf8" opacity="0.5"/><circle cx="36" cy="22" r="3" fill="#38bdf8" opacity="0.5"/><circle cx="22" cy="36" r="3" fill="#34d399" opacity="0.5"/><circle cx="8" cy="22" r="3" fill="#818cf8" opacity="0.5"/><line x1="22" y1="22" x2="22" y2="11" stroke="#818cf8" stroke-width="1.1" opacity="0.4"/><line x1="22" y1="22" x2="33" y2="22" stroke="#38bdf8" stroke-width="1.1" opacity="0.4"/><line x1="22" y1="22" x2="22" y2="33" stroke="#34d399" stroke-width="1.1" opacity="0.4"/><line x1="22" y1="22" x2="11" y2="22" stroke="#818cf8" stroke-width="1.1" opacity="0.4"/></svg></div><div>Select a model from the sidebar to get started</div></div>';
 }
 
 // ── Vision / Image Classification ────────────────────────────────
@@ -1694,7 +1694,7 @@ function renderImageClassifierPanel() {
 
       <div class="upload-zone" id="vUploadZone">
         <input type="file" id="vImageInput" accept="image/*" onchange="handleVisionFile(event)">
-        <div class="upload-zone-icon">🖼️</div>
+        <div class="upload-zone-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><rect x="4" y="9" width="36" height="27" rx="5" stroke="#818cf8" stroke-width="1.5" opacity="0.55"/><circle cx="15" cy="19" r="3.8" stroke="#fbbf24" stroke-width="1.4" opacity="0.8"/><path d="M4 30l11-10 8 7 5-5 12 14" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.65"/></svg></div>
         <div class="upload-zone-text">Click to browse or drag &amp; drop</div>
         <div class="upload-zone-sub">JPEG, PNG, WebP, GIF</div>
       </div>
@@ -1963,7 +1963,7 @@ function renderImageProcessingPanel() {
 
       <div class="upload-zone" id="ipUploadZone">
         <input type="file" id="ipImageInput" accept="image/*" onchange="handleIpFile(event)">
-        <div class="upload-zone-icon">🖼️</div>
+        <div class="upload-zone-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><rect x="4" y="9" width="36" height="27" rx="5" stroke="#818cf8" stroke-width="1.5" opacity="0.55"/><circle cx="15" cy="19" r="3.8" stroke="#fbbf24" stroke-width="1.4" opacity="0.8"/><path d="M4 30l11-10 8 7 5-5 12 14" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.65"/></svg></div>
         <div class="upload-zone-text">Click to browse or drag &amp; drop</div>
         <div class="upload-zone-sub">JPEG, PNG, WebP, GIF</div>
       </div>
@@ -2154,7 +2154,7 @@ function renderObjectDetectionPanel() {
 
       <div class="upload-zone" id="detUploadZone">
         <input type="file" id="detImageInput" accept="image/*" onchange="handleDetFile(event)">
-        <div class="upload-zone-icon">📷</div>
+        <div class="upload-zone-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><rect x="3" y="12" width="38" height="24" rx="5" stroke="#38bdf8" stroke-width="1.5" opacity="0.6"/><path d="M15 12l4-6h6l4 6" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/><circle cx="22" cy="24" r="6.5" stroke="#818cf8" stroke-width="1.5" opacity="0.7"/><circle cx="22" cy="24" r="3" fill="#818cf8" opacity="0.45"/><circle cx="35" cy="17" r="1.8" fill="#34d399" opacity="0.7"/></svg></div>
         <div class="upload-zone-text">Click to browse or drag &amp; drop</div>
         <div class="upload-zone-sub">JPEG, PNG, WebP</div>
       </div>
@@ -2460,7 +2460,7 @@ function renderSegmentationPanel() {
 
       <div class="upload-zone" id="segUploadZone">
         <input type="file" id="segImageInput" accept="image/*" onchange="handleSegFile(event)">
-        <div class="upload-zone-icon">🖼️</div>
+        <div class="upload-zone-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><rect x="4" y="9" width="36" height="27" rx="5" stroke="#818cf8" stroke-width="1.5" opacity="0.55"/><circle cx="15" cy="19" r="3.8" stroke="#fbbf24" stroke-width="1.4" opacity="0.8"/><path d="M4 30l11-10 8 7 5-5 12 14" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.65"/></svg></div>
         <div class="upload-zone-text">Click to browse or drag &amp; drop</div>
         <div class="upload-zone-sub">JPEG, PNG, WebP</div>
       </div>
@@ -2953,20 +2953,32 @@ function _renderMetrics(api, vision) {
       </button>
       <div id="metricsDetails_${key}" style="display:${isOpen ? 'block' : 'none'}">${rows}</div>`;
 
+    const statBg = c => {
+      if (c === '#34d399') return 'rgba(52,211,153,0.12)';
+      if (c === '#f87171') return 'rgba(248,113,113,0.12)';
+      if (c === '#fbbf24') return 'rgba(251,191,36,0.12)';
+      return 'var(--border)';
+    };
+    const statBorder = c => {
+      if (c === '#34d399') return 'rgba(52,211,153,0.3)';
+      if (c === '#f87171') return 'rgba(248,113,113,0.3)';
+      if (c === '#fbbf24') return 'rgba(251,191,36,0.3)';
+      return 'var(--border2)';
+    };
     return `
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.5rem;margin-bottom:0.6rem">
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.5rem;margin-bottom:0.75rem">
         ${[
           ['Uptime',   _fmtUptime(data.uptime_s), '#34d399'],
-          ['Requests', data.total_requests,        'var(--text)'],
-          ['Avg',      data.avg_ms + 'ms',         'var(--text)'],
-          ['p95',      data.p95_ms + 'ms',         'var(--text)'],
+          ['Requests', data.total_requests,        'var(--text2)'],
+          ['Avg',      data.avg_ms + 'ms',         'var(--text2)'],
+          ['p95',      data.p95_ms + 'ms',         'var(--text2)'],
           ['Errors',   data.error_rate + '%',       errColor],
         ].map(([l,v,c]) => `
-          <div style="text-align:center;padding:0.4rem 0.3rem;border-radius:8px;
-                      background:var(--border);border:1px solid var(--border2)">
-            <div style="font-size:0.82rem;font-weight:700;color:${c};white-space:nowrap;
-                        overflow:hidden;text-overflow:ellipsis">${v}</div>
-            <div style="font-size:0.58rem;color:var(--text3);margin-top:1px">${l}</div>
+          <div style="text-align:center;padding:0.5rem 0.25rem;border-radius:10px;
+                      background:${statBg(c)};border:1px solid ${statBorder(c)}">
+            <div style="font-size:0.8rem;font-weight:800;color:${c};white-space:nowrap;
+                        overflow:hidden;text-overflow:ellipsis;letter-spacing:-0.01em">${v}</div>
+            <div style="font-size:0.56rem;color:var(--text3);margin-top:2px;text-transform:uppercase;letter-spacing:0.04em">${l}</div>
           </div>`).join('')}
       </div>
       ${detailsBtn}`;
@@ -2974,9 +2986,13 @@ function _renderMetrics(api, vision) {
 
   const section = (label, data, url, key) => `
     <div>
-      <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.6rem">
-        <span style="font-size:0.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;
-                     letter-spacing:0.08em">${label}</span>
+      <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.75rem;
+                  padding-left:0.75rem;position:relative">
+        <div style="position:absolute;left:0;top:50%;transform:translateY(-50%);
+                    width:3px;height:14px;border-radius:4px;
+                    background:linear-gradient(180deg,#818cf8,#34d399)"></div>
+        <span style="font-size:0.68rem;font-weight:700;color:var(--text2);text-transform:uppercase;
+                     letter-spacing:0.1em">${label}</span>
         ${url ? rawBtn(url) : ''}
       </div>
       ${card(data, key)}
@@ -3027,24 +3043,26 @@ function openMetricsPanel() {
     justify-content:flex-end;padding:1rem;pointer-events:none`;
   const cachedTs = _metricsCache ? 'Updated ' + _metricsCache.ts.toLocaleTimeString() : 'Loading…';
   overlay.innerHTML = `
-    <div style="pointer-events:all;width:min(420px,96vw);max-height:80vh;overflow-y:auto;
-                background:var(--bg-card);border:1px solid var(--border2);border-radius:16px;
-                box-shadow:0 8px 40px rgba(0,0,0,0.4);display:flex;flex-direction:column">
+    <div style="pointer-events:all;width:min(420px,96vw);max-height:80vh;
+                background:var(--bg-glass);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+                border:1px solid var(--border2);border-radius:16px;
+                box-shadow:0 12px 48px rgba(0,0,0,0.55);display:flex;flex-direction:column;overflow:hidden">
+      <div style="height:3px;background:linear-gradient(90deg,#818cf8,#38bdf8,#34d399);flex-shrink:0"></div>
       <div style="display:flex;align-items:center;justify-content:space-between;
-                  padding:0.9rem 1rem 0.6rem;border-bottom:1px solid var(--border);position:sticky;top:0;
-                  background:var(--bg-card);z-index:1;border-radius:16px 16px 0 0">
+                  padding:0.85rem 1rem 0.7rem;border-bottom:1px solid var(--border);position:sticky;top:3px;
+                  background:var(--bg-glass);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);z-index:1">
         <div>
-          <div style="font-size:0.9rem;font-weight:700;color:var(--text)">Live Metrics</div>
-          <div id="metricsTs" style="font-size:0.68rem;color:var(--text3)">${cachedTs}</div>
+          <div style="font-size:0.92rem;font-weight:800;color:var(--text);letter-spacing:-0.015em">Live Metrics</div>
+          <div id="metricsTs" style="font-size:0.67rem;color:var(--text3);margin-top:1px">${cachedTs}</div>
         </div>
         <button onclick="closeMetricsPanel()"
-                style="background:none;border:none;color:var(--text3);cursor:pointer;
-                       font-size:1.1rem;padding:0.2rem 0.4rem;border-radius:6px;
-                       transition:color 0.15s"
-                onmouseover="this.style.color='var(--text)'"
-                onmouseout="this.style.color='var(--text3)'">✕</button>
+                style="background:var(--border);border:1px solid var(--border2);color:var(--text2);
+                       cursor:pointer;width:28px;height:28px;border-radius:7px;font-size:0.8rem;
+                       display:flex;align-items:center;justify-content:center;transition:all 0.15s"
+                onmouseover="this.style.background='var(--border2)';this.style.color='var(--text)'"
+                onmouseout="this.style.background='var(--border)';this.style.color='var(--text2)'">✕</button>
       </div>
-      <div id="metricsBody" style="padding:1rem">
+      <div id="metricsBody" style="padding:1rem;overflow-y:auto;max-height:calc(80vh - 60px)">
         <div style="color:var(--text3);font-size:0.8rem">Loading…</div>
       </div>
     </div>`;
@@ -3163,7 +3181,7 @@ function renderUnsupervisedPanel(id) {
         <div class="sidebar-label" style="margin-bottom:0.5rem">Upload Dataset</div>
         <div class="upload-zone" id="uUploadZone">
           <input type="file" id="uCsvInput" accept=".csv" onchange="handleUFile(event)">
-          <div class="upload-zone-icon">&#x1F4C2;</div>
+          <div class="upload-zone-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><rect x="3" y="3" width="38" height="38" rx="10" stroke="#818cf8" stroke-width="1.3" opacity="0.22"/><path d="M22 30V17" stroke="#818cf8" stroke-width="1.9" stroke-linecap="round"/><path d="M15 24l7-7 7 7" stroke="#38bdf8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 35h18" stroke="#34d399" stroke-width="1.9" stroke-linecap="round"/></svg></div>
           <div class="upload-zone-text">Click to browse or drag &amp; drop</div>
           <div class="upload-zone-sub">CSV files only</div>
         </div>
@@ -3457,7 +3475,7 @@ function selectEDA() {
            ondragleave="this.classList.remove('drag')"
            ondrop="_edaDrop(event)">
         <input type="file" accept=".csv" onchange="_edaFileSelected(this)">
-        <div class="upload-zone-icon">📊</div>
+        <div class="upload-zone-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><rect x="3" y="3" width="38" height="38" rx="10" stroke="#818cf8" stroke-width="1.3" opacity="0.2"/><rect x="9" y="26" width="7" height="11" rx="2" fill="#818cf8" opacity="0.65"/><rect x="18.5" y="19" width="7" height="18" rx="2" fill="#38bdf8" opacity="0.65"/><rect x="28" y="22" width="7" height="15" rx="2" fill="#34d399" opacity="0.65"/><path d="M7 37h30" stroke="#64748b" stroke-width="1" stroke-linecap="round" opacity="0.35"/></svg></div>
         <div class="upload-zone-text">Drop a CSV file here, or click to browse</div>
         <div class="upload-zone-sub">Any tabular CSV — columns are auto-detected</div>
       </div>
