@@ -161,7 +161,8 @@ def favicon():
 def favicon_svg():
     path = os.path.join(HERE, "frontend", "icon.svg")
     if os.path.exists(path):
-        return FileResponse(path, media_type="image/svg+xml")
+        return FileResponse(path, media_type="image/svg+xml",
+                            headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
     return HTMLResponse(status_code=204)
 
 @app.get("/health")
