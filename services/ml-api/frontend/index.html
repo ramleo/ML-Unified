@@ -66,7 +66,7 @@ body {
 
 /* ── Gradient text ── */
 .gradient-text {
-  background: linear-gradient(135deg, #818cf8 0%, #38bdf8 50%, #34d399 100%);
+  background: linear-gradient(135deg, var(--accent-from) 0%, var(--accent-via) 50%, var(--accent-to) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -88,10 +88,10 @@ body {
 }
 .nav-logo-mark {
   width: 30px; height: 30px; border-radius: 8px;
-  background: linear-gradient(135deg, #818cf8, #38bdf8, #34d399);
+  background: linear-gradient(135deg, var(--accent-from), var(--accent-via), var(--accent-to));
   display: flex; align-items: center; justify-content: center;
   font-weight: 800; font-size: 0.75rem; color: #fff;
-  box-shadow: 0 0 12px rgba(129,140,248,0.35);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent-from) 35%, transparent);
 }
 .nav-title { font-weight: 800; font-size: 0.95rem; letter-spacing: -0.02em; }
 .nav-sub   { font-size: 0.7rem; color: var(--text3); margin-top: 1px; }
@@ -255,7 +255,7 @@ body {
 }
 .btn:hover { opacity: 0.88; transform: translateY(-1px); }
 .btn:active { transform: translateY(0); }
-.btn-primary  { background: linear-gradient(135deg, #6366f1, #38bdf8); color: #fff; box-shadow: 0 4px 16px rgba(99,102,241,0.35); }
+.btn-primary  { background: linear-gradient(135deg, var(--accent-from), var(--accent-via)); color: #fff; box-shadow: 0 4px 16px color-mix(in srgb, var(--accent-from) 35%, transparent); }
 .btn-sample   { background: rgba(129,140,248,0.15); border: 1px solid rgba(129,140,248,0.35); color: var(--accent); }
 .btn-clear    { background: var(--border); border: 1px solid var(--border2); color: var(--text2); }
 
@@ -3019,7 +3019,7 @@ function _renderMetrics(api, vision) {
                   padding-left:0.75rem;position:relative">
         <div style="position:absolute;left:0;top:50%;transform:translateY(-50%);
                     width:3px;height:14px;border-radius:4px;
-                    background:linear-gradient(180deg,#818cf8,#34d399)"></div>
+                    background:linear-gradient(180deg,var(--accent-from),var(--accent-to))"></div>
         <span style="font-size:0.68rem;font-weight:700;color:var(--text2);text-transform:uppercase;
                      letter-spacing:0.1em">${label}</span>
         ${url ? rawBtn(url) : ''}
@@ -3076,7 +3076,7 @@ function openMetricsPanel() {
                 background:var(--bg-glass);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
                 border:1px solid var(--border2);border-radius:16px;
                 box-shadow:0 12px 48px rgba(0,0,0,0.55);display:flex;flex-direction:column;overflow:hidden">
-      <div style="height:3px;background:linear-gradient(90deg,#818cf8,#38bdf8,#34d399);flex-shrink:0"></div>
+      <div style="height:3px;background:linear-gradient(90deg,var(--accent-from),var(--accent-via),var(--accent-to));flex-shrink:0"></div>
       <div style="display:flex;align-items:center;justify-content:space-between;
                   padding:0.85rem 1rem 0.7rem;border-bottom:1px solid var(--border);position:sticky;top:3px;
                   background:var(--bg-glass);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);z-index:1">
