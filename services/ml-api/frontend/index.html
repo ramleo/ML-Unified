@@ -221,7 +221,10 @@ body {
   transition: border-color 0.15s;
   appearance: none;
 }
-.field-input:focus, .field-select:focus { border-color: var(--accent); }
+.field-input:focus, .field-select:focus {
+  border-color: var(--active-accent, var(--accent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--active-accent, #818cf8) 18%, transparent);
+}
 .field-select {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%2364748b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
@@ -665,6 +668,90 @@ body {
 .u-stat-row    { display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:0.35rem 0; font-size:0.83rem; color:var(--text2); }
 .u-stat-divider { border-top:1px solid var(--border1); margin:0.5rem 0; }
 
+/* ══ Animation system ═══════════════════════════════════════════ */
+
+/* Keyframes */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes panelIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes dotPulse {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.6); box-shadow: 0 0 12px var(--active-accent,#818cf8); }
+  100% { transform: scale(1); }
+}
+@keyframes shimmer {
+  from { background-position: 200% center; }
+  to   { background-position: -200% center; }
+}
+@keyframes successFlash {
+  0%   { background: linear-gradient(135deg,#34d399,#10b981); box-shadow: 0 4px 22px rgba(52,211,153,0.55); }
+  100% { background: linear-gradient(135deg,#6366f1,#38bdf8); box-shadow: 0 4px 16px rgba(99,102,241,0.35); }
+}
+@keyframes blobDrift1 {
+  0%,100% { transform: translate(0,0) scale(1); }
+  50%      { transform: translate(55px,-40px) scale(1.09); }
+}
+@keyframes blobDrift2 {
+  0%,100% { transform: translate(0,0) scale(1); }
+  50%      { transform: translate(-42px,28px) scale(1.06); }
+}
+
+/* Particle canvas */
+#bg-canvas {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 0;
+}
+
+/* Ambient blobs */
+.bg-blob {
+  position: fixed; border-radius: 50%;
+  pointer-events: none; z-index: 0; filter: blur(72px);
+}
+.bg-blob-1 {
+  width: 480px; height: 480px; top: -130px; left: -130px;
+  background: rgba(99,102,241,0.07);
+  animation: blobDrift1 20s ease-in-out infinite;
+}
+.bg-blob-2 {
+  width: 380px; height: 380px; bottom: 60px; right: -90px;
+  background: rgba(56,189,248,0.06);
+  animation: blobDrift2 26s ease-in-out infinite;
+}
+[data-theme="light"] .bg-blob-1 { background: rgba(99,102,241,0.04); }
+[data-theme="light"] .bg-blob-2 { background: rgba(56,189,248,0.035); }
+
+/* Layer content above canvas/blobs */
+.gradient-top-bar, nav, .layout { position: relative; z-index: 1; }
+
+/* Sidebar item entrance */
+.sb-anim {
+  opacity: 0; transform: translateY(10px);
+  transition: opacity 0.32s ease, transform 0.32s ease;
+}
+.sb-anim.sb-visible { opacity: 1; transform: translateY(0); }
+
+/* Active dot pulse */
+.dot-pulse { animation: dotPulse 0.45s ease forwards; }
+
+/* Predict button shimmer */
+.btn-shimmer {
+  background: linear-gradient(90deg,#6366f1,#818cf8,#38bdf8,#818cf8,#6366f1) !important;
+  background-size: 300% auto !important;
+  animation: shimmer 1.2s linear infinite !important;
+  box-shadow: 0 4px 24px rgba(99,102,241,0.5) !important;
+}
+
+/* Predict button success flash */
+.btn-success-flash { animation: successFlash 0.85s ease forwards !important; }
+
+/* Result card entrance */
+.result-reveal { animation: panelIn 0.38s cubic-bezier(0.22,1,0.36,1) both; }
+
 @media print {
   nav, .sidebar, #topbar, .upload-zone, .eda-sticky-nav, #eda-export-btn { display:none !important; }
   body { background:#fff !important; color:#000 !important; }
@@ -687,6 +774,11 @@ body {
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" defer></script>
 </head>
 <body>
+
+<!-- Particle canvas + ambient blobs -->
+<canvas id="bg-canvas"></canvas>
+<div class="bg-blob bg-blob-1"></div>
+<div class="bg-blob bg-blob-2"></div>
 
 <!-- Gradient top bar -->
 <div class="gradient-top-bar"></div>
@@ -811,6 +903,7 @@ async function init() {
     const res = await fetch(`${API}/models`);
     allModels  = await res.json();
     renderSidebar();
+    animateSidebarIn();
     // Auto-select the appropriate default panel based on mode
     if (APP_MODE === 'vision') {
       selectVision();
@@ -933,15 +1026,20 @@ function renderSidebar() {
 
 // ── Select model ──────────────────────────────────────────────
 async function selectModel(id) {
-  // Update active button
+  // Update active button + pulse dot
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById(`btn-${id}`);
-  if (btn) btn.classList.add('active');
+  if (btn) {
+    btn.classList.add('active');
+    const dot = btn.querySelector('.model-dot');
+    if (dot) { dot.classList.remove('dot-pulse'); void dot.offsetWidth; dot.classList.add('dot-pulse'); }
+  }
 
-  // Fetch schema
+  // Fetch schema + fade out in parallel
   const [schemaRes, modelMeta] = await Promise.all([
     fetch(`${API}/schemas/${id}`).then(r => r.json()),
     Promise.resolve(allModels.find(m => m.id === id)),
+    animateMainOut(),
   ]);
 
   activeModel = { ...modelMeta, schema: schemaRes };
@@ -953,6 +1051,8 @@ async function selectModel(id) {
   if (btn) btn.style.setProperty('--active-accent', modelMeta.accent);
 
   renderMain();
+  animateMainIn();
+  countUpMetricPill();
 }
 
 // ── Render main area ──────────────────────────────────────────
@@ -1081,9 +1181,10 @@ async function runPredict() {
     return;
   }
 
-  // Loading state
+  // Loading state with shimmer
   btn.innerHTML = '<span class="spinner"></span> Predicting…';
   btn.disabled  = true;
+  btn.classList.add('btn-shimmer');
   errEl.style.display = 'none';
 
   try {
@@ -1097,12 +1198,23 @@ async function runPredict() {
     renderResult(result);
     emptyEl.style.display  = 'none';
     resultEl.style.display = 'block';
+    resultEl.classList.remove('result-reveal');
+    void resultEl.offsetWidth;
+    resultEl.classList.add('result-reveal');
+    // Success flash on button
+    btn.classList.remove('btn-shimmer');
+    btn.innerHTML = 'Predict →';
+    btn.disabled  = false;
+    btn.classList.add('btn-success-flash');
+    setTimeout(() => btn.classList.remove('btn-success-flash'), 900);
+    return;
   } catch(e) {
     errEl.textContent = `Prediction failed: ${e.message}`;
     errEl.style.display = 'block';
     emptyEl.style.display = 'none';
     resultEl.style.display = 'none';
   } finally {
+    btn.classList.remove('btn-shimmer');
     btn.innerHTML = 'Predict →';
     btn.disabled  = false;
   }
@@ -1144,13 +1256,18 @@ function renderResult(result) {
           <div class="proba-row">
             <div class="proba-name">${classNames[i] || classes[i] || i}</div>
             <div class="proba-bar-wrap">
-              <div class="proba-bar-fill" style="width:${(p*100).toFixed(1)}%;background:${m.accent}"></div>
+              <div class="proba-bar-fill" data-w="${(p*100).toFixed(1)}" style="width:0%;background:${m.accent}"></div>
             </div>
             <div class="proba-pct" style="color:${m.accent}">${(p*100).toFixed(1)}%</div>
           </div>
         `).join('')}
       </div>
     `;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      document.querySelectorAll('.proba-bar-fill[data-w]').forEach(bar => {
+        bar.style.width = bar.dataset.w + '%';
+      });
+    }));
   } else if (schema.task === 'clustering') {
     const cluster = result.prediction;
     const label   = result.cluster_label || ('Cluster ' + (cluster + 1));
@@ -1174,12 +1291,17 @@ function renderResult(result) {
       ? result.prediction.toLocaleString('en-IN', { maximumFractionDigits: 0 })
       : result.prediction;
 
+    const numericVal = typeof result.prediction === 'number' ? result.prediction : null;
     body.innerHTML = `
       <div class="result-reg-main">
         <div class="result-reg-label">${label}</div>
-        <div class="result-reg-value" style="color:${m.accent}">${unit}${val}</div>
+        <div class="result-reg-value" id="regVal" style="color:${m.accent}">${unit}${val}</div>
       </div>
     `;
+    if (numericVal !== null) {
+      const el = document.getElementById('regVal');
+      if (el) countUp(el, numericVal, unit, 700);
+    }
   }
 }
 
@@ -2497,6 +2619,143 @@ function renderSegClassList(q) {
   ).join('');
   count.textContent = q ? `${filtered.length} of 150 matching` : '150 classes';
 }
+
+// ── Animation helpers ─────────────────────────────────────────
+
+function animateSidebarIn() {
+  const items = document.querySelectorAll('#sidebar .model-btn, #sidebar .sidebar-label');
+  items.forEach((el, i) => {
+    el.classList.add('sb-anim');
+    setTimeout(() => el.classList.add('sb-visible'), i * 55 + 30);
+  });
+}
+
+function animateMainOut() {
+  const main = document.getElementById('main');
+  if (!main) return Promise.resolve();
+  return new Promise(resolve => {
+    main.style.transition = 'opacity 0.14s ease, transform 0.14s ease';
+    main.style.opacity    = '0';
+    main.style.transform  = 'translateY(-6px)';
+    setTimeout(resolve, 140);
+  });
+}
+
+function animateMainIn() {
+  const main = document.getElementById('main');
+  if (!main) return;
+  main.style.transition = 'none';
+  main.style.opacity    = '0';
+  main.style.transform  = 'translateY(16px)';
+  void main.offsetWidth;
+  main.style.transition = 'opacity 0.38s cubic-bezier(0.22,1,0.36,1), transform 0.38s cubic-bezier(0.22,1,0.36,1)';
+  main.style.opacity    = '1';
+  main.style.transform  = 'translateY(0)';
+}
+
+function countUpMetricPill() {
+  const el = document.querySelector('.metric-val');
+  if (!el) return;
+  const raw = el.textContent.trim();
+  const num = parseFloat(raw.replace(/[^0-9.]/g, ''));
+  if (isNaN(num)) return;
+  const prefix = raw.match(/^[^0-9]*/)?.[0] || '';
+  const suffix = raw.match(/[^0-9.]+$/)?.[0] || '';
+  const dec    = (raw.replace(/[^0-9.]/g,'').split('.')[1] || '').length;
+  const start  = performance.now();
+  const dur    = 600;
+  (function tick(now) {
+    const t = Math.min((now - start) / dur, 1);
+    const ease = 1 - Math.pow(1 - t, 3);
+    el.textContent = prefix + (num * ease).toFixed(dec) + suffix;
+    if (t < 1) requestAnimationFrame(tick);
+  })(performance.now());
+}
+
+function countUp(el, endVal, prefix, duration) {
+  const dec = endVal % 1 === 0 ? 0 : 0;
+  const start = performance.now();
+  (function tick(now) {
+    const t    = Math.min((now - start) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 3);
+    const cur  = endVal * ease;
+    el.textContent = prefix + cur.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+    if (t < 1) requestAnimationFrame(tick);
+  })(performance.now());
+}
+
+// ── Particle background ────────────────────────────────────────
+(function initParticles() {
+  const canvas = document.getElementById('bg-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let W, H, pts;
+  const N = 65, CONN = 130, REPEL = 110;
+  const mouse = { x: -999, y: -999 };
+
+  function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+
+  function spawn() {
+    pts = Array.from({ length: N }, () => {
+      const x = Math.random() * W, y = Math.random() * H;
+      return { x, y, ox: x, oy: y, vx: 0, vy: 0, r: Math.random() * 1.2 + 0.5 };
+    });
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const dark = document.documentElement.getAttribute('data-theme') !== 'light';
+    const dotColor  = dark ? '129,140,248' : '99,102,241';
+    const lineColor = dark ? '129,140,248' : '99,102,241';
+
+    pts.forEach(p => {
+      const dx = p.x - mouse.x, dy = p.y - mouse.y;
+      const d  = Math.sqrt(dx * dx + dy * dy);
+      if (d < REPEL && d > 0) {
+        const f = ((REPEL - d) / REPEL) * 1.2;
+        p.vx += (dx / d) * f;
+        p.vy += (dy / d) * f;
+      }
+      p.vx += (p.ox - p.x) * 0.018;
+      p.vy += (p.oy - p.y) * 0.018;
+      p.vx *= 0.82; p.vy *= 0.82;
+      p.x  += p.vx;  p.y  += p.vy;
+    });
+
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        const dx = pts[i].x - pts[j].x, dy = pts[i].y - pts[j].y;
+        const d  = Math.sqrt(dx * dx + dy * dy);
+        if (d < CONN) {
+          ctx.globalAlpha = (1 - d / CONN) * (dark ? 0.18 : 0.10);
+          ctx.strokeStyle = `rgba(${lineColor},1)`;
+          ctx.lineWidth   = 0.6;
+          ctx.beginPath();
+          ctx.moveTo(pts[i].x, pts[i].y);
+          ctx.lineTo(pts[j].x, pts[j].y);
+          ctx.stroke();
+        }
+      }
+    }
+
+    pts.forEach(p => {
+      ctx.globalAlpha = dark ? 0.35 : 0.22;
+      ctx.fillStyle   = `rgba(${dotColor},1)`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(draw);
+  }
+
+  window.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+  window.addEventListener('resize',    () => { resize(); spawn(); });
+  resize(); spawn(); draw();
+})();
 
 function renderSegmentationResult(data) {
   const accent  = '#a78bfa';
