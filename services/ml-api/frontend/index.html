@@ -172,13 +172,12 @@ body {
 .model-header {
   margin-bottom: 1.75rem;
   padding: 1.5rem;
-  background: var(--bg-glass);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: var(--bg-card);
   border: 1px solid var(--border2);
   border-radius: 16px;
   position: relative;
   overflow: hidden;
+  box-shadow: var(--shadow);
 }
 .model-header::before {
   content: '';
@@ -265,22 +264,19 @@ body {
 .empty-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   padding: 3rem 1rem; gap: 0.75rem;
-  background: var(--bg-glass);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px dashed var(--border2); border-radius: 16px;
+  background: var(--bg-card);
+  border: 1.5px dashed var(--border2); border-radius: 16px;
   color: var(--text3); font-size: 0.85rem; text-align: center;
+  box-shadow: var(--shadow);
 }
 .empty-icon { display:flex; align-items:center; justify-content:center; opacity:0.75; }
 
 .result-state {
   display: none;
-  background: var(--bg-glass);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: var(--bg-card);
   border: 1px solid var(--border2);
   border-radius: 14px; overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  box-shadow: var(--shadow);
 }
 .result-accent-bar { height: 3px; }
 
@@ -325,13 +321,11 @@ body {
 .shap-panel {
   display: none;
   margin-top: 0.75rem;
-  background: var(--bg-glass);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: var(--bg-card);
   border: 1px solid var(--border2);
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  box-shadow: var(--shadow);
 }
 .shap-panel.visible { display: block; }
 .shap-header {
@@ -400,110 +394,134 @@ body {
   color: var(--text3); background: transparent; cursor: pointer;
   transition: all 0.18s;
 }
-.model-tab:hover { color: var(--text2); background: var(--bg-glass); border-color: var(--border); }
+.model-tab:hover { color: var(--text2); background: var(--bg-card); border-color: var(--border2); }
 .model-tab.active {
   color: var(--active-accent, var(--accent-from));
   background: color-mix(in srgb, var(--active-accent, var(--accent-from)) 10%, transparent);
-  border-color: color-mix(in srgb, var(--active-accent, var(--accent-from)) 30%, transparent);
+  border-color: color-mix(in srgb, var(--active-accent, var(--accent-from)) 35%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--active-accent, var(--accent-from)) 20%, transparent);
 }
 
 /* ── Pipeline flow view ── */
-#pipelineView { display: none; padding: 0.25rem 0 1.5rem; }
+#pipelineView { display: none; padding: 0.5rem 0 1.5rem; }
 #pipelineView.visible { display: block; }
 
+/* Timeline container */
 .pipe-flow {
-  display: flex; flex-direction: column; align-items: stretch; gap: 0;
+  display: flex; flex-direction: column;
+  position: relative; padding: 0.25rem 0;
 }
-.pipe-step {
-  background: var(--bg-glass); border: 1px solid var(--border);
-  border-radius: 14px; overflow: hidden;
+/* Vertical line running through all steps */
+.pipe-flow::before {
+  content: ''; position: absolute;
+  left: 14px; top: 14px; bottom: 14px; width: 2px;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--active-accent, var(--accent-from)) 40%, transparent),
+    color-mix(in srgb, var(--active-accent, var(--accent-from)) 15%, transparent)
+  );
+  border-radius: 2px;
 }
-.pipe-step-header {
-  display: flex; align-items: center; gap: 0.6rem;
-  padding: 0.7rem 1rem;
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--active-accent, var(--accent-from)) 6%, transparent);
-}
-.pipe-step-icon {
-  width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  background: color-mix(in srgb, var(--active-accent, var(--accent-from)) 18%, transparent);
-}
-.pipe-step-title { font-size: 0.72rem; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.07em; }
-.pipe-step-name  { font-size: 0.92rem; font-weight: 700; color: var(--text); }
 
-/* Input features */
+/* Each step row: badge + card */
+.pipe-step {
+  display: flex; align-items: flex-start; gap: 1rem;
+  margin-bottom: 1.25rem; position: relative;
+}
+.pipe-step:last-child { margin-bottom: 0; }
+
+/* Numbered badge */
+.pipe-step-num {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  background: var(--active-accent, var(--accent-from));
+  color: #fff; font-size: 0.72rem; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1; margin-top: 2px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--active-accent, var(--accent-from)) 18%, transparent),
+              0 2px 8px rgba(0,0,0,0.18);
+}
+
+/* Card */
+.pipe-card {
+  flex: 1; border-radius: 14px; overflow: hidden;
+  background: var(--bg-card);
+  border: 1px solid var(--border2);
+  border-left: 3px solid var(--active-accent, var(--accent-from));
+  box-shadow: var(--shadow);
+}
+
+/* Card header */
+.pipe-card-header {
+  display: flex; align-items: baseline; gap: 0.6rem;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--active-accent, var(--accent-from)) 5%, transparent);
+}
+.pipe-card-eyebrow {
+  font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.09em; color: var(--active-accent, var(--accent-from));
+  white-space: nowrap;
+}
+.pipe-card-title { font-size: 0.92rem; font-weight: 700; color: var(--text); }
+
+/* Input feature chips */
 .pipe-input-chips {
-  display: flex; flex-wrap: wrap; gap: 0.4rem;
-  padding: 0.75rem 1rem;
+  display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0.8rem 1rem;
 }
 .pipe-chip {
-  padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.7rem; font-weight: 500;
+  padding: 0.22rem 0.55rem; border-radius: 6px;
+  font-size: 0.68rem; font-weight: 500;
   background: color-mix(in srgb, var(--active-accent, var(--accent-from)) 10%, transparent);
   color: var(--active-accent, var(--accent-from));
-  border: 1px solid color-mix(in srgb, var(--active-accent, var(--accent-from)) 25%, transparent);
+  border: 1px solid color-mix(in srgb, var(--active-accent, var(--accent-from)) 28%, transparent);
 }
 
-/* Preprocessor transformer columns */
-.pipe-transformers {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 1px; background: var(--border);
+/* Transformer branches */
+.pipe-branches {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem; padding: 0.8rem 1rem;
 }
-.pipe-transformer {
-  background: var(--bg); padding: 0.75rem 1rem;
-  display: flex; flex-direction: column; gap: 0.5rem;
+.pipe-branch {
+  background: var(--bg); border: 1px solid var(--border2);
+  border-radius: 10px; padding: 0.65rem 0.8rem;
 }
-.pipe-transformer-name {
-  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.07em; color: var(--text3);
+.pipe-branch-name {
+  font-size: 0.64rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text3); margin-bottom: 0.45rem;
 }
-.pipe-transformer-cols {
-  display: flex; flex-wrap: wrap; gap: 0.3rem;
+.pipe-branch-cols {
+  display: flex; flex-wrap: wrap; gap: 0.25rem; margin-bottom: 0.55rem;
 }
-.pipe-transformer-col {
-  font-size: 0.65rem; padding: 0.15rem 0.45rem; border-radius: 5px;
-  background: var(--bg-glass); border: 1px solid var(--border);
-  color: var(--text2);
+.pipe-branch-col {
+  font-size: 0.62rem; padding: 0.1rem 0.4rem; border-radius: 4px;
+  background: var(--bg-card); border: 1px solid var(--border2); color: var(--text2);
 }
-.pipe-sub-steps { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.2rem; }
-.pipe-sub-step {
-  display: flex; align-items: center; gap: 0.4rem;
-  font-size: 0.72rem; color: var(--text2);
+.pipe-branch-steps {
+  display: flex; flex-direction: column; gap: 0.35rem;
+  padding-top: 0.55rem; border-top: 1px solid var(--border);
 }
-.pipe-sub-step-label { font-weight: 600; color: var(--text); }
-.pipe-sub-param { font-size: 0.65rem; color: var(--text3); }
+.pipe-branch-step {
+  display: flex; align-items: flex-start; gap: 0.45rem; font-size: 0.71rem;
+}
+.pipe-branch-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 4px;
+  background: var(--active-accent, var(--accent-from));
+}
+.pipe-branch-step-name { font-weight: 600; color: var(--text); }
+.pipe-branch-step-params { color: var(--text3); font-size: 0.64rem; margin-top: 1px; }
 
 /* Estimator params */
 .pipe-params {
-  display: flex; flex-wrap: wrap; gap: 0.5rem;
-  padding: 0.75rem 1rem;
+  display: flex; flex-wrap: wrap; gap: 0.45rem; padding: 0.8rem 1rem;
 }
 .pipe-param {
   display: flex; align-items: center; gap: 0.35rem;
-  background: var(--bg-glass); border: 1px solid var(--border);
-  border-radius: 7px; padding: 0.3rem 0.65rem;
-  font-size: 0.7rem;
+  background: var(--bg); border: 1px solid var(--border2);
+  border-radius: 7px; padding: 0.28rem 0.6rem; font-size: 0.7rem;
 }
-.pipe-param-key   { color: var(--text3); }
-.pipe-param-val   { font-weight: 700; color: var(--text); }
+.pipe-param-key { color: var(--text3); }
+.pipe-param-val { font-weight: 700; color: var(--text); }
 
-/* Connector arrow between steps */
-.pipe-arrow {
-  display: flex; justify-content: center; align-items: center;
-  height: 28px; position: relative;
-}
-.pipe-arrow::before {
-  content: ''; width: 1px; height: 100%;
-  background: color-mix(in srgb, var(--active-accent, var(--accent-from)) 40%, transparent);
-  position: absolute;
-}
-.pipe-arrow-head {
-  width: 0; height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-top: 7px solid color-mix(in srgb, var(--active-accent, var(--accent-from)) 60%, transparent);
-  position: absolute; bottom: 0;
-}
 .pipe-loading {
   padding: 2rem; text-align: center; color: var(--text3); font-size: 0.85rem;
   display: flex; align-items: center; justify-content: center; gap: 0.5rem;
@@ -1415,83 +1433,73 @@ async function loadPipeline() {
 }
 
 function renderPipelineHTML(data) {
-  const accent = activeModel.accent;
-
-  // Step icons
-  const icons = {
-    input:       `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="${accent}" stroke-width="2" stroke-linecap="round"><path d="M2 4h12M2 8h8M2 12h10"/></svg>`,
-    preprocessor:`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="${accent}" stroke-width="2" stroke-linecap="round"><path d="M1 4h2m0 0a2 2 0 004 0m0 0h8M1 12h8m0 0a2 2 0 004 0m0 0h2"/></svg>`,
-    estimator:   `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="${accent}" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>`,
-  };
-
-  const arrow = `<div class="pipe-arrow"><div class="pipe-arrow-head"></div></div>`;
-
   const inputBlock = `
     <div class="pipe-step">
-      <div class="pipe-step-header">
-        <div class="pipe-step-icon">${icons.input}</div>
-        <div>
-          <div class="pipe-step-title">Input</div>
-          <div class="pipe-step-name">${data.input_fields.length} Features</div>
+      <div class="pipe-step-num">1</div>
+      <div class="pipe-card">
+        <div class="pipe-card-header">
+          <span class="pipe-card-eyebrow">Input</span>
+          <span class="pipe-card-title">${data.input_fields.length} Features</span>
         </div>
-      </div>
-      <div class="pipe-input-chips">
-        ${data.input_fields.map(f => `<span class="pipe-chip">${f}</span>`).join('')}
+        <div class="pipe-input-chips">
+          ${data.input_fields.map(f => `<span class="pipe-chip">${f}</span>`).join('')}
+        </div>
       </div>
     </div>`;
 
-  const stepBlocks = data.steps.map(step => {
+  const stepBlocks = data.steps.map((step, i) => {
+    const num = i + 2;
     if (step.kind === 'preprocessor') {
-      const transformerCols = step.transformers.map(t => `
-        <div class="pipe-transformer">
-          <div class="pipe-transformer-name">${t.name}</div>
-          <div class="pipe-transformer-cols">
-            ${t.columns.map(c => `<span class="pipe-transformer-col">${c}</span>`).join('')}
+      const branches = step.transformers.map(t => `
+        <div class="pipe-branch">
+          <div class="pipe-branch-name">${t.name} &middot; ${t.columns.length} col${t.columns.length !== 1 ? 's' : ''}</div>
+          <div class="pipe-branch-cols">
+            ${t.columns.map(c => `<span class="pipe-branch-col">${c}</span>`).join('')}
           </div>
-          <div class="pipe-sub-steps">
+          <div class="pipe-branch-steps">
             ${t.steps.map(s => `
-              <div class="pipe-sub-step">
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="3" fill="${accent}" opacity="0.7"/></svg>
-                <span class="pipe-sub-step-label">${s.label}</span>
-                ${Object.entries(s.params).map(([k,v]) => `<span class="pipe-sub-param">${k}: ${v}</span>`).join('')}
+              <div class="pipe-branch-step">
+                <div class="pipe-branch-dot"></div>
+                <div>
+                  <div class="pipe-branch-step-name">${s.label}</div>
+                  ${Object.keys(s.params).length ? `<div class="pipe-branch-step-params">${Object.entries(s.params).map(([k,v]) => `${k}: ${v}`).join(' &middot; ')}</div>` : ''}
+                </div>
               </div>`).join('')}
           </div>
         </div>`).join('');
       return `
         <div class="pipe-step">
-          <div class="pipe-step-header">
-            <div class="pipe-step-icon">${icons.preprocessor}</div>
-            <div>
-              <div class="pipe-step-title">Preprocessing</div>
-              <div class="pipe-step-name">${step.label}</div>
+          <div class="pipe-step-num">${num}</div>
+          <div class="pipe-card">
+            <div class="pipe-card-header">
+              <span class="pipe-card-eyebrow">Preprocessing</span>
+              <span class="pipe-card-title">${step.label}</span>
             </div>
+            <div class="pipe-branches">${branches}</div>
           </div>
-          <div class="pipe-transformers">${transformerCols}</div>
         </div>`;
     }
-    // estimator
     const params = Object.entries(step.params || {});
     return `
       <div class="pipe-step">
-        <div class="pipe-step-header">
-          <div class="pipe-step-icon">${icons.estimator}</div>
-          <div>
-            <div class="pipe-step-title">Estimator · ${data.task}</div>
-            <div class="pipe-step-name">${step.label}</div>
+        <div class="pipe-step-num">${num}</div>
+        <div class="pipe-card">
+          <div class="pipe-card-header">
+            <span class="pipe-card-eyebrow">Estimator &middot; ${data.task}</span>
+            <span class="pipe-card-title">${step.label}</span>
           </div>
+          ${params.length ? `<div class="pipe-params">
+            ${params.map(([k, v]) => `
+              <div class="pipe-param">
+                <span class="pipe-param-key">${k}:</span>
+                <span class="pipe-param-val">${v}</span>
+              </div>`).join('')}
+          </div>` : ''}
         </div>
-        ${params.length ? `<div class="pipe-params">
-          ${params.map(([k, v]) => `
-            <div class="pipe-param">
-              <span class="pipe-param-key">${k}:</span>
-              <span class="pipe-param-val">${v}</span>
-            </div>`).join('')}
-        </div>` : ''}
       </div>`;
   });
 
-  const allBlocks = [inputBlock, ...stepBlocks];
-  return `<div class="pipe-flow">${allBlocks.join(arrow)}</div>`;
+  return `<div class="pipe-flow">${[inputBlock, ...stepBlocks].join('')}</div>`;
 }
 
 // ── Render form fields ────────────────────────────────────────
