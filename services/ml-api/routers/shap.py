@@ -64,8 +64,18 @@ def _aggregate(shap_1d: np.ndarray, feat_names_out: list[str], orig_fields: list
 
 
 def _compute(model, X_prep: np.ndarray, task: str, pred_class: int | None):
-    """Run TreeExplainer and return (shap_1d, base_value)."""
+    """Run TreeExplainer and return (shap_1d, base_value).
+
+    Handles the three output shapes that shap >= 0.40 can return:
+      - list of (n_samples, n_features) arrays — one per class (older behaviour)
+      - ndarray (n_samples, n_features, n_classes) — 3-D, newer classifiers
+      - ndarray (n_samples, n_features) — regression or single-output
+    """
     import shap  # lazy import — keeps startup fast on Render free tier
+
+    # Convert sparse to dense (some externally-trained pipelines use sparse OHE)
+    if hasattr(X_prep, "toarray"):
+        X_prep = X_prep.toarray()
 
     explainer = shap.TreeExplainer(model)
     sv = explainer.shap_values(X_prep)
@@ -73,17 +83,35 @@ def _compute(model, X_prep: np.ndarray, task: str, pred_class: int | None):
 
     if task == "classification":
         if isinstance(sv, list):
-            idx = pred_class if pred_class is not None and pred_class < len(sv) else 0
-            shap_1d = sv[idx][0]
-            base = float(ev[idx]) if hasattr(ev, "__len__") else float(ev)
+            # Old format: list[class] of (n_samples, n_features)
+            idx = pred_class if (pred_class is not None and pred_class < len(sv)) else 0
+            shap_1d = np.asarray(sv[idx]).ravel()[:X_prep.shape[1]]
+            ev_arr = np.asarray(ev).ravel()
+            base = float(ev_arr[idx]) if idx < ev_arr.size else float(ev_arr[0])
         else:
-            shap_1d = sv[0]
-            base = float(ev)
+            sv_arr = np.asarray(sv)
+            ev_arr = np.asarray(ev).ravel()
+            if sv_arr.ndim == 3:
+                # Could be (n_samples, n_features, n_classes) or (n_classes, n_samples, n_features)
+                if sv_arr.shape[0] == X_prep.shape[0]:
+                    n_cls = sv_arr.shape[2]
+                    idx = pred_class if (pred_class is not None and pred_class < n_cls) else n_cls - 1
+                    shap_1d = sv_arr[0, :, idx]
+                else:
+                    n_cls = sv_arr.shape[0]
+                    idx = pred_class if (pred_class is not None and pred_class < n_cls) else n_cls - 1
+                    shap_1d = sv_arr[idx, 0, :]
+                base = float(ev_arr[idx]) if idx < ev_arr.size else float(ev_arr[0])
+            else:
+                # 2-D (n_samples, n_features) — binary, values for class 1
+                shap_1d = sv_arr[0]
+                base = float(ev_arr[0]) if ev_arr.size > 0 else 0.0
     else:
-        shap_1d = sv[0] if sv.ndim == 2 else sv
-        base = float(ev)
+        sv_arr = np.asarray(sv)
+        shap_1d = sv_arr[0] if sv_arr.ndim == 2 else sv_arr.ravel()
+        base = float(np.asarray(ev).flat[0])
 
-    return np.asarray(shap_1d, dtype=float), base
+    return np.asarray(shap_1d, dtype=float).ravel(), base
 
 
 def _build_response(shap_1d, base_value, feat_names_out, orig_fields, field_labels, input_values, task, pred_class):
