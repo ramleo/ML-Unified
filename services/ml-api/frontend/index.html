@@ -407,6 +407,55 @@ body {
 .train-curve-range { font-size: 0.72rem; color: var(--text3); font-variant-numeric: tabular-nums; }
 .train-sparkline { width: 100%; display: block; overflow: visible; }
 .train-no-data { font-size: 0.82rem; color: var(--text3); padding: 2rem 0; text-align: center; }
+/* ── Drift panel ── */
+.drift-summary {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 1rem 1.25rem; border-radius: 14px;
+  border: 1px solid var(--border2); background: var(--bg-glass);
+  backdrop-filter: blur(6px); margin-bottom: 1.25rem;
+}
+.drift-summary-icon { font-size: 1.4rem; line-height: 1; }
+.drift-summary-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); }
+.drift-summary-value { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+.drift-badge {
+  margin-left: auto; padding: 0.25rem 0.65rem; border-radius: 9999px;
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.drift-badge--low    { background: color-mix(in srgb,#34d399 16%,transparent); color: #34d399; }
+.drift-badge--medium { background: color-mix(in srgb,#fbbf24 16%,transparent); color: #fbbf24; }
+.drift-badge--high   { background: color-mix(in srgb,#f87171 16%,transparent); color: #f87171; }
+.drift-features { display: flex; flex-direction: column; gap: 0.7rem; }
+.drift-feature {
+  padding: 0.9rem 1.1rem; border-radius: 12px;
+  border: 1px solid var(--border2); background: var(--bg-card);
+}
+.drift-feature-top {
+  display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.55rem;
+}
+.drift-fname { font-size: 0.82rem; font-weight: 600; color: var(--text); flex: 1; }
+.drift-score-wrap {
+  width: 100%; background: var(--border2); border-radius: 6px; height: 6px; overflow: hidden; margin-bottom: 0.5rem;
+}
+.drift-score-fill {
+  height: 100%; border-radius: 6px; transition: width 0.6s cubic-bezier(0.25,0.46,0.45,0.94);
+}
+.drift-score-fill--low    { background: #34d399; }
+.drift-score-fill--medium { background: #fbbf24; }
+.drift-score-fill--high   { background: #f87171; }
+.drift-stats { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.drift-stat { display: flex; flex-direction: column; gap: 2px; }
+.drift-stat-label { font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text3); }
+.drift-stat-val { font-size: 0.8rem; font-weight: 600; color: var(--text2); font-variant-numeric: tabular-nums; }
+.drift-cat-bars { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.3rem; }
+.drift-cat-row { display: flex; align-items: center; gap: 0.6rem; font-size: 0.72rem; }
+.drift-cat-name { width: 90px; flex-shrink: 0; color: var(--text2); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drift-cat-bar-wrap { flex: 1; position: relative; height: 12px; background: var(--border2); border-radius: 4px; overflow: hidden; }
+.drift-cat-bar-ref    { position: absolute; top: 0; left: 0; height: 100%; border-radius: 4px; background: var(--border2); opacity: 0.6; }
+.drift-cat-bar-recent { position: absolute; top: 0; left: 0; height: 100%; border-radius: 4px; background: var(--active-accent, var(--accent-from)); opacity: 0.85; transition: width 0.5s ease; }
+.drift-cat-pct { width: 34px; text-align: right; color: var(--text3); font-size: 0.68rem; }
+.drift-empty { text-align: center; padding: 3rem 1rem; color: var(--text3); font-size: 0.85rem; }
+.drift-note { font-size: 0.68rem; color: var(--text3); margin-top: 1rem; }
+
 .whatif-desc { font-size: 0.82rem; color: var(--text3); margin: 0.35rem 0 1rem; line-height: 1.55; }
 .whatif-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.25rem; }
 .whatif-chip {
@@ -1591,6 +1640,10 @@ function renderMain() {
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="5" x2="15" y2="5"/><line x1="1" y1="11" x2="15" y2="11"/><circle cx="5" cy="5" r="2" fill="currentColor" stroke="none"/><circle cx="11" cy="11" r="2" fill="currentColor" stroke="none"/></svg>
           What-if
         </button>
+        <button class="model-tab" id="tabDrift" onclick="setModelTab('drift')">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 11 Q4 5 8 8 Q12 11 15 5"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/></svg>
+          Drift
+        </button>
       </div>
     </div>
 
@@ -1599,6 +1652,9 @@ function renderMain() {
 
     <!-- Training view -->
     <div id="trainingView"></div>
+
+    <!-- Drift view -->
+    <div id="driftView"></div>
 
     <!-- Form -->
     <form id="pForm" onsubmit="return false">
@@ -1648,18 +1704,22 @@ function setModelTab(tab) {
   const resultEl   = document.getElementById('resultWrap');
   const pipelineEl = document.getElementById('pipelineView');
   const trainingEl = document.getElementById('trainingView');
+  const driftEl    = document.getElementById('driftView');
   const tabPredict  = document.getElementById('tabPredict');
   const tabPipeline = document.getElementById('tabPipeline');
   const tabTraining = document.getElementById('tabTraining');
+  const tabDrift    = document.getElementById('tabDrift');
 
   // Hide all panels, deactivate all tabs
   if (predictEl)  predictEl.style.display  = 'none';
   if (resultEl)   resultEl.style.display   = 'none';
   pipelineEl?.classList.remove('visible');
   trainingEl?.classList.remove('visible');
+  driftEl?.classList.remove('visible');
   tabPredict?.classList.remove('active');
   tabPipeline?.classList.remove('active');
   tabTraining?.classList.remove('active');
+  tabDrift?.classList.remove('active');
 
   if (tab === 'pipeline') {
     pipelineEl?.classList.add('visible');
@@ -1669,6 +1729,10 @@ function setModelTab(tab) {
     trainingEl?.classList.add('visible');
     tabTraining?.classList.add('active');
     if (!trainingEl?.dataset.loaded) loadWhatif();
+  } else if (tab === 'drift') {
+    driftEl?.classList.add('visible');
+    tabDrift?.classList.add('active');
+    loadDriftPanel();
   } else {
     if (predictEl) predictEl.style.display = '';
     if (resultEl)  resultEl.style.display  = '';
@@ -1714,6 +1778,90 @@ function loadWhatif() {
     </div>`;
   el.dataset.loaded = '1';
   runWhatifSweep(defaultField.name);
+}
+
+async function loadDriftPanel() {
+  const el = document.getElementById('driftView');
+  if (!el) return;
+  el.innerHTML = `<div class="drift-empty"><span class="spinner"></span> Loading…</div>`;
+  try {
+    const res = await fetch(`${API}/drift/${activeModel.id}`);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    el.innerHTML = renderDriftHTML(data);
+  } catch {
+    el.innerHTML = `<div class="drift-empty">Drift data unavailable.</div>`;
+  }
+}
+
+function renderDriftHTML(data) {
+  const accent = activeModel?.accent || 'var(--accent-from)';
+  const { n_recent, overall_score, overall_level, features } = data;
+
+  const summaryIcon = overall_level === 'high' ? '⚠️' : overall_level === 'medium' ? '〰️' : '✓';
+  const summaryText = overall_level === 'high' ? 'High drift detected' :
+                      overall_level === 'medium' ? 'Moderate drift' : 'Input within expected range';
+
+  const summaryHTML = `
+    <div class="drift-summary">
+      <div class="drift-summary-icon">${summaryIcon}</div>
+      <div>
+        <div class="drift-summary-label">Overall drift</div>
+        <div class="drift-summary-value">${summaryText}</div>
+      </div>
+      <span class="drift-badge drift-badge--${overall_level}">${overall_level}</span>
+    </div>`;
+
+  if (n_recent === 0) {
+    return summaryHTML + `<div class="drift-empty">Make a few predictions to see per-feature drift analysis.</div>`;
+  }
+
+  const featHTML = features.map(f => {
+    const pct = Math.round(f.drift_score * 100);
+    const topRow = `
+      <div class="drift-feature-top">
+        <div class="drift-fname">${f.label}</div>
+        <span class="drift-badge drift-badge--${f.drift_level}">${f.drift_level}</span>
+      </div>
+      <div class="drift-score-wrap">
+        <div class="drift-score-fill drift-score-fill--${f.drift_level}" style="width:${pct}%"></div>
+      </div>`;
+
+    if (f.type === 'numeric') {
+      const refLine   = f.ref_mean !== null ? `${f.ref_mean.toFixed(2)} ± ${f.ref_std.toFixed(2)}` : '—';
+      const recentLine = f.recent_mean !== null ? `${f.recent_mean.toFixed(2)} ± ${(f.recent_std||0).toFixed(2)}` : '—';
+      return `<div class="drift-feature">
+        ${topRow}
+        <div class="drift-stats">
+          <div class="drift-stat"><div class="drift-stat-label">Expected</div><div class="drift-stat-val">${refLine}</div></div>
+          <div class="drift-stat"><div class="drift-stat-label">Recent (${f.n_recent})</div><div class="drift-stat-val">${recentLine}</div></div>
+          <div class="drift-stat"><div class="drift-stat-label">Drift score</div><div class="drift-stat-val">${pct}%</div></div>
+        </div>
+      </div>`;
+    } else {
+      const bars = f.options.map(opt => {
+        const refPct    = Math.round((f.ref_dist[opt]    || 0) * 100);
+        const recentPct = Math.round((f.recent_dist[opt] || 0) * 100);
+        return `<div class="drift-cat-row">
+          <div class="drift-cat-name">${opt}</div>
+          <div class="drift-cat-bar-wrap">
+            <div class="drift-cat-bar-ref"    style="width:${refPct}%"></div>
+            <div class="drift-cat-bar-recent" style="width:${recentPct}%;background:${accent}"></div>
+          </div>
+          <div class="drift-cat-pct">${recentPct}%</div>
+        </div>`;
+      }).join('');
+      return `<div class="drift-feature">
+        ${topRow}
+        <div class="drift-cat-bars">${bars}</div>
+      </div>`;
+    }
+  }).join('');
+
+  return `
+    ${summaryHTML}
+    <div class="drift-features">${featHTML}</div>
+    <div class="drift-note">Baseline estimated from field ranges · ${n_recent} recent prediction${n_recent === 1 ? '' : 's'} in window</div>`;
 }
 
 function selectWhatifFeature(btn, fieldName) {

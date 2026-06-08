@@ -4,6 +4,7 @@ from routers import eda as _eda_router
 from routers import shap as _shap_router
 from routers import pipeline as _pipeline_router
 from routers import training as _training_router
+from routers import drift as _drift_router
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -234,6 +235,8 @@ async def predict(model_id: str, request: Request):
 
     pipeline = m["pipeline"]
     le       = m["le"]
+
+    _drift_router.record_input(model_id, dict(data))
 
     if schema["task"] == "classification":
         pred  = pipeline.predict(df)[0]
@@ -675,6 +678,7 @@ app.include_router(_eda_router.router)
 app.include_router(_shap_router.router)
 app.include_router(_pipeline_router.router)
 app.include_router(_training_router.router)
+app.include_router(_drift_router.router)
 
 if __name__ == "__main__":
     import uvicorn
