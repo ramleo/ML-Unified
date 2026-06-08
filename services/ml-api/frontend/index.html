@@ -374,7 +374,7 @@ body {
   font-size: 0.7rem; font-weight: 700;
   text-align: right; font-variant-numeric: tabular-nums;
 }
-.shap-val.pos { color: var(--accent-from); }
+.shap-val.pos { color: var(--active-accent, var(--accent-from)); }
 .shap-val.neg { color: rgba(248,113,113,0.9); }
 .shap-base {
   padding: 0.6rem 1.25rem;
@@ -1228,7 +1228,7 @@ function renderMain() {
       <!-- SHAP Feature Impact panel -->
       <div class="shap-panel" id="shapPanel">
         <div class="shap-header">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--accent-from)" stroke-width="2" stroke-linecap="round"><path d="M8 1v14M1 8h14"/></svg>
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--active-accent,var(--accent-from))" stroke-width="2" stroke-linecap="round"><path d="M8 1v14M1 8h14"/></svg>
           <span class="shap-title">Feature Impact</span>
           <span class="shap-subtitle">what drove this prediction</span>
         </div>
@@ -1622,7 +1622,7 @@ async function runCustomShap() {
     resultEl.innerHTML = `
       <div class="shap-panel visible" style="margin-top:0">
         <div class="shap-header">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--accent-from)" stroke-width="2" stroke-linecap="round"><path d="M8 1v14M1 8h14"/></svg>
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--active-accent,var(--accent-from))" stroke-width="2" stroke-linecap="round"><path d="M8 1v14M1 8h14"/></svg>
           <span class="shap-title">Feature Impact</span>
           <span class="shap-subtitle">${shap.task} · base ${shap.base_value.toFixed(3)}</span>
         </div>
