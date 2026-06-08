@@ -395,6 +395,20 @@ body {
 #pipelineView { display: none; padding: 0.5rem 0 1.5rem; }
 #pipelineView.visible { display: block; }
 
+/* ── Training view ── */
+#trainingView { display: none; padding: 0.5rem 0 1.5rem; }
+#trainingView.visible { display: block; }
+.train-card {
+  background: var(--bg-card); border: 1px solid var(--border2); border-radius: 14px;
+  padding: 1.25rem 1.35rem; margin-bottom: 1.25rem; box-shadow: var(--shadow);
+}
+.train-curve-meta { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 0.85rem; gap: 0.5rem; }
+.train-curve-label { font-size: 0.78rem; font-weight: 600; color: var(--text2); }
+.train-curve-range { font-size: 0.72rem; color: var(--text3); font-variant-numeric: tabular-nums; }
+.train-sparkline { width: 100%; height: 64px; display: block; overflow: visible; }
+.train-sparkline-fill { opacity: 0.12; }
+.train-no-data { font-size: 0.82rem; color: var(--text3); padding: 2rem 0; text-align: center; }
+
 /* Timeline container */
 .pipe-flow {
   display: flex; flex-direction: column;
@@ -1338,11 +1352,18 @@ function renderMain() {
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="2" width="14" height="4" rx="1.5"/><rect x="1" y="10" width="14" height="4" rx="1.5"/><path d="M8 6v4"/></svg>
           Pipeline
         </button>
+        <button class="model-tab" id="tabTraining" onclick="setModelTab('training')">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="9" width="3" height="6" rx="1"/><rect x="6" y="5" width="3" height="10" rx="1"/><rect x="11" y="2" width="3" height="13" rx="1"/></svg>
+          Training
+        </button>
       </div>
     </div>
 
     <!-- Pipeline view -->
     <div id="pipelineView"></div>
+
+    <!-- Training view -->
+    <div id="trainingView"></div>
 
     <!-- Form -->
     <form id="pForm" onsubmit="return false">
@@ -1391,22 +1412,32 @@ function setModelTab(tab) {
   const predictEl  = document.getElementById('pForm');
   const resultEl   = document.getElementById('resultWrap');
   const pipelineEl = document.getElementById('pipelineView');
+  const trainingEl = document.getElementById('trainingView');
   const tabPredict  = document.getElementById('tabPredict');
   const tabPipeline = document.getElementById('tabPipeline');
+  const tabTraining = document.getElementById('tabTraining');
+
+  // Hide all panels, deactivate all tabs
+  if (predictEl)  predictEl.style.display  = 'none';
+  if (resultEl)   resultEl.style.display   = 'none';
+  pipelineEl?.classList.remove('visible');
+  trainingEl?.classList.remove('visible');
+  tabPredict?.classList.remove('active');
+  tabPipeline?.classList.remove('active');
+  tabTraining?.classList.remove('active');
 
   if (tab === 'pipeline') {
-    if (predictEl)  predictEl.style.display  = 'none';
-    if (resultEl)   resultEl.style.display   = 'none';
-    if (pipelineEl) pipelineEl.classList.add('visible');
-    tabPredict?.classList.remove('active');
+    pipelineEl?.classList.add('visible');
     tabPipeline?.classList.add('active');
     if (!pipelineEl?.dataset.loaded) loadPipeline();
+  } else if (tab === 'training') {
+    trainingEl?.classList.add('visible');
+    tabTraining?.classList.add('active');
+    if (!trainingEl?.dataset.loaded) loadTraining();
   } else {
-    if (predictEl)  predictEl.style.display  = '';
-    if (resultEl)   resultEl.style.display   = '';
-    if (pipelineEl) pipelineEl.classList.remove('visible');
+    if (predictEl) predictEl.style.display = '';
+    if (resultEl)  resultEl.style.display  = '';
     tabPredict?.classList.add('active');
-    tabPipeline?.classList.remove('active');
   }
 }
 
@@ -1423,6 +1454,92 @@ async function loadPipeline() {
   } catch {
     el.innerHTML = `<div class="pipe-loading" style="color:var(--text3)">Pipeline info unavailable</div>`;
   }
+}
+
+async function loadTraining() {
+  const el = document.getElementById('trainingView');
+  if (!el) return;
+  el.innerHTML = `<div class="pipe-loading"><span class="spinner"></span> Loading training data…</div>`;
+  try {
+    const res = await fetch(`${API}/training/${activeModel.id}`);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    el.innerHTML = renderTrainingHTML(data);
+    el.dataset.loaded = '1';
+    // Stagger bar animations
+    el.querySelectorAll('.proba-bar-fill[data-w]').forEach(bar => {
+      const delay = parseInt(bar.dataset.delay || '0');
+      setTimeout(() => { bar.style.width = bar.dataset.w + '%'; }, delay);
+    });
+  } catch {
+    el.innerHTML = `<div class="pipe-loading" style="color:var(--text3)">Training info unavailable</div>`;
+  }
+}
+
+function _sparklinePath(values, w, h, accent) {
+  if (!values || values.length < 2) return '';
+  const mn = Math.min(...values), mx = Math.max(...values);
+  const range = mx - mn || 1;
+  const pad = 4;
+  const pts = values.map((v, i) => {
+    const x = pad + (i / (values.length - 1)) * (w - pad * 2);
+    const y = pad + (1 - (v - mn) / range) * (h - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const polyPts = pts.join(' ');
+  // Closed area for fill
+  const fillPts = `${pad},${h - pad} ` + polyPts + ` ${w - pad},${h - pad}`;
+  return `
+    <defs>
+      <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${accent}" stop-opacity="0.3"/>
+        <stop offset="100%" stop-color="${accent}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <polygon points="${fillPts}" fill="url(#sg)"/>
+    <polyline points="${polyPts}" fill="none" stroke="${accent}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+}
+
+function renderTrainingHTML(data) {
+  const accent = activeModel?.accent || 'var(--accent-from)';
+  const features = (data.feature_importances || []).slice(0, 10);
+  const curve    = data.training_curve;
+
+  const fiSection = features.length ? `
+    <div class="section-eyebrow">Feature Importance</div>
+    <div class="train-card">
+      <div class="proba-section">
+        ${features.map((f, i) => {
+          const pct = (f.importance * 100).toFixed(1);
+          return `
+          <div class="proba-row">
+            <div class="proba-row-top">
+              <div class="proba-name">${f.label}</div>
+              <div class="proba-pct" style="color:${accent}">${pct}%</div>
+            </div>
+            <div class="proba-bar-wrap">
+              <div class="proba-bar-fill" data-w="${pct}" data-delay="${i * 55}" style="width:0%;background:${accent}"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : `<div class="train-no-data">No feature importance data for this model type.</div>`;
+
+  const curveSection = curve ? (() => {
+    const vals = curve.values;
+    const svgContent = _sparklinePath(vals, 400, 60, accent);
+    return `
+    <div class="section-eyebrow" style="margin-top:1.5rem">Training Loss</div>
+    <div class="train-card">
+      <div class="train-curve-meta">
+        <span class="train-curve-label">${curve.label} · ${curve.n_estimators} estimators</span>
+        <span class="train-curve-range">${vals[0].toFixed(3)} → ${vals[vals.length - 1].toFixed(3)}</span>
+      </div>
+      <svg class="train-sparkline" viewBox="0 0 400 60" preserveAspectRatio="none">${svgContent}</svg>
+    </div>`;
+  })() : '';
+
+  return fiSection + curveSection;
 }
 
 function renderPipelineHTML(data) {
