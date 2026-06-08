@@ -4,7 +4,7 @@
   "description": "Estimates annual insurance premium based on personal and policy details.",
   "task": "regression",
   "accent": "#fbbf24",
-  "model": "Gradient Boosting",
+  "model": "Random Forest",
   "metric": "±668",
   "metricLabel": "MAE (₹)",
   "id_cols": [],
