@@ -1306,7 +1306,6 @@ function renderSidebar() {
 
 // ── Select model ──────────────────────────────────────────────
 async function selectModel(id) {
-  setAmbientTheme(...AMBIENT_DEFAULT);
   // Update active button + pulse dot
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById(`btn-${id}`);
@@ -1330,6 +1329,7 @@ async function selectModel(id) {
   document.documentElement.style.setProperty('--active-accent', modelMeta.accent);
   document.documentElement.style.setProperty('--header-accent', modelMeta.accent);
   if (btn) btn.style.setProperty('--active-accent', modelMeta.accent);
+  setAmbientFromAccent(modelMeta.accent);
 
   renderMain();
   animateMainIn();
@@ -2425,11 +2425,23 @@ const VISION_MODEL_META = {
   googlenet:   { label: 'GoogLeNet',      desc: 'Multi-scale Inception (28 MB)' },
 };
 
+function hexToRgba(hex, alpha) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 function setAmbientTheme(c1, c2) {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const dim = rgba => rgba.replace(/([\d.]+)\)$/, (_, a) => (parseFloat(a) * 0.45).toFixed(3) + ')');
   const b1 = document.querySelector('.bg-blob-1');
   const b2 = document.querySelector('.bg-blob-2');
-  if (b1) b1.style.background = c1;
-  if (b2) b2.style.background = c2;
+  if (b1) b1.style.background = isLight ? dim(c1) : c1;
+  if (b2) b2.style.background = isLight ? dim(c2) : c2;
+}
+function setAmbientFromAccent(hex) {
+  setAmbientTheme(hexToRgba(hex, 0.14), hexToRgba(hex, 0.09));
 }
 const AMBIENT_DEFAULT = ['rgba(99,102,241,0.14)', 'rgba(56,189,248,0.11)'];
 
@@ -2906,7 +2918,7 @@ function selectObjectDetection() {
   const btn = document.getElementById('vbtn-detection');
   if (btn) btn.classList.add('active');
   document.documentElement.style.setProperty('--accent', '#38bdf8');
-  setAmbientTheme('rgba(56,189,248,0.17)', 'rgba(14,165,233,0.10)');
+  setAmbientTheme('rgba(56,189,248,0.11)', 'rgba(14,165,233,0.07)');
   renderObjectDetectionPanel();
 }
 
@@ -3948,7 +3960,6 @@ const UNSUPERVISED_META = {
 };
 
 function selectUnsupervised(id, label, accent) {
-  setAmbientTheme(...AMBIENT_DEFAULT);
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('ubtn-' + id);
   if (btn) btn.classList.add('active');
@@ -3958,6 +3969,7 @@ function selectUnsupervised(id, label, accent) {
     document.documentElement.style.setProperty('--accent', meta.accent);
     document.documentElement.style.setProperty('--active-accent', meta.accent);
     document.documentElement.style.setProperty('--header-accent', meta.accent);
+    setAmbientFromAccent(meta.accent);
   }
   renderUnsupervisedPanel(id);
 }
@@ -4250,13 +4262,13 @@ let _edaCurrentFilename = null;
 let _edaCurrentFile = null;
 
 function selectEDA() {
-  setAmbientTheme(...AMBIENT_DEFAULT);
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('ebtn-eda');
   if (btn) btn.classList.add('active');
   document.documentElement.style.setProperty('--accent', '#34d399');
   document.documentElement.style.setProperty('--active-accent', '#34d399');
   document.documentElement.style.setProperty('--header-accent', '#34d399');
+  setAmbientFromAccent('#34d399');
   document.getElementById('main').innerHTML = `
     <div class="eda-panel">
       <div class="eda-header">
