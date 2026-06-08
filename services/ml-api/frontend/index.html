@@ -941,6 +941,7 @@ body {
 .bg-blob {
   position: fixed; border-radius: 50%;
   pointer-events: none; z-index: 0; filter: blur(72px);
+  transition: background 1.5s ease;
 }
 .bg-blob-1 {
   width: 560px; height: 560px; top: -150px; left: -150px;
@@ -1305,6 +1306,7 @@ function renderSidebar() {
 
 // ── Select model ──────────────────────────────────────────────
 async function selectModel(id) {
+  setAmbientTheme(...AMBIENT_DEFAULT);
   // Update active button + pulse dot
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById(`btn-${id}`);
@@ -2423,6 +2425,14 @@ const VISION_MODEL_META = {
   googlenet:   { label: 'GoogLeNet',      desc: 'Multi-scale Inception (28 MB)' },
 };
 
+function setAmbientTheme(c1, c2) {
+  const b1 = document.querySelector('.bg-blob-1');
+  const b2 = document.querySelector('.bg-blob-2');
+  if (b1) b1.style.background = c1;
+  if (b2) b2.style.background = c2;
+}
+const AMBIENT_DEFAULT = ['rgba(99,102,241,0.14)', 'rgba(56,189,248,0.11)'];
+
 function selectVision() {
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('vbtn-classifier');
@@ -2430,6 +2440,7 @@ function selectVision() {
   document.documentElement.style.setProperty('--accent', '#e879f9');
   document.documentElement.style.setProperty('--active-accent', '#e879f9');
   document.documentElement.style.setProperty('--header-accent', '#e879f9');
+  setAmbientTheme('rgba(232,121,249,0.16)', 'rgba(168,85,247,0.10)');
   renderImageClassifierPanel();
 }
 
@@ -2701,6 +2712,7 @@ function selectImageProcessing() {
   const btn = document.getElementById('vbtn-processing');
   if (btn) btn.classList.add('active');
   document.documentElement.style.setProperty('--accent', '#fb923c');
+  setAmbientTheme('rgba(251,146,60,0.15)', 'rgba(249,115,22,0.09)');
   renderImageProcessingPanel();
 }
 
@@ -2894,6 +2906,7 @@ function selectObjectDetection() {
   const btn = document.getElementById('vbtn-detection');
   if (btn) btn.classList.add('active');
   document.documentElement.style.setProperty('--accent', '#38bdf8');
+  setAmbientTheme('rgba(56,189,248,0.17)', 'rgba(14,165,233,0.10)');
   renderObjectDetectionPanel();
 }
 
@@ -3216,6 +3229,7 @@ function selectSegmentation() {
   const btn = document.getElementById('vbtn-segmentation');
   if (btn) btn.classList.add('active');
   document.documentElement.style.setProperty('--accent', '#a78bfa');
+  setAmbientTheme('rgba(167,139,250,0.16)', 'rgba(139,92,246,0.10)');
   renderSegmentationPanel();
 }
 
@@ -3934,6 +3948,7 @@ const UNSUPERVISED_META = {
 };
 
 function selectUnsupervised(id, label, accent) {
+  setAmbientTheme(...AMBIENT_DEFAULT);
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('ubtn-' + id);
   if (btn) btn.classList.add('active');
@@ -4235,6 +4250,7 @@ let _edaCurrentFilename = null;
 let _edaCurrentFile = null;
 
 function selectEDA() {
+  setAmbientTheme(...AMBIENT_DEFAULT);
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('ebtn-eda');
   if (btn) btn.classList.add('active');
