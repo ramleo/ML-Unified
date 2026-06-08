@@ -395,7 +395,7 @@ body {
 #pipelineView { display: none; padding: 0.5rem 0 1.5rem; }
 #pipelineView.visible { display: block; }
 
-/* ── Training view ── */
+/* ── What-if view ── */
 #trainingView { display: none; padding: 0.5rem 0 1.5rem; }
 #trainingView.visible { display: block; }
 .train-card {
@@ -405,9 +405,21 @@ body {
 .train-curve-meta { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 0.85rem; gap: 0.5rem; }
 .train-curve-label { font-size: 0.78rem; font-weight: 600; color: var(--text2); }
 .train-curve-range { font-size: 0.72rem; color: var(--text3); font-variant-numeric: tabular-nums; }
-.train-sparkline { width: 100%; height: 64px; display: block; overflow: visible; }
-.train-sparkline-fill { opacity: 0.12; }
+.train-sparkline { width: 100%; display: block; overflow: visible; }
 .train-no-data { font-size: 0.82rem; color: var(--text3); padding: 2rem 0; text-align: center; }
+.whatif-desc { font-size: 0.82rem; color: var(--text3); margin: 0.35rem 0 1rem; line-height: 1.55; }
+.whatif-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.25rem; }
+.whatif-chip {
+  padding: 0.3rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600;
+  border: 1px solid var(--border2); background: var(--bg-card); color: var(--text2);
+  cursor: pointer; transition: all 0.15s;
+}
+.whatif-chip:hover { border-color: color-mix(in srgb,var(--active-accent,var(--accent-from)) 40%,transparent); color: var(--active-accent,var(--accent-from)); }
+.whatif-chip.active {
+  background: color-mix(in srgb,var(--active-accent,var(--accent-from)) 14%,transparent);
+  border-color: color-mix(in srgb,var(--active-accent,var(--accent-from)) 45%,transparent);
+  color: var(--active-accent,var(--accent-from));
+}
 
 /* Timeline container */
 .pipe-flow {
@@ -1353,8 +1365,8 @@ function renderMain() {
           Pipeline
         </button>
         <button class="model-tab" id="tabTraining" onclick="setModelTab('training')">
-          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="9" width="3" height="6" rx="1"/><rect x="6" y="5" width="3" height="10" rx="1"/><rect x="11" y="2" width="3" height="13" rx="1"/></svg>
-          Training
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="1" y1="5" x2="15" y2="5"/><line x1="1" y1="11" x2="15" y2="11"/><circle cx="5" cy="5" r="2" fill="currentColor" stroke="none"/><circle cx="11" cy="11" r="2" fill="currentColor" stroke="none"/></svg>
+          What-if
         </button>
       </div>
     </div>
@@ -1433,7 +1445,7 @@ function setModelTab(tab) {
   } else if (tab === 'training') {
     trainingEl?.classList.add('visible');
     tabTraining?.classList.add('active');
-    if (!trainingEl?.dataset.loaded) loadTraining();
+    if (!trainingEl?.dataset.loaded) loadWhatif();
   } else {
     if (predictEl) predictEl.style.display = '';
     if (resultEl)  resultEl.style.display  = '';
@@ -1456,90 +1468,160 @@ async function loadPipeline() {
   }
 }
 
-async function loadTraining() {
+function loadWhatif() {
   const el = document.getElementById('trainingView');
   if (!el) return;
-  el.innerHTML = `<div class="pipe-loading"><span class="spinner"></span> Loading training data…</div>`;
+  const schema = activeModel.schema;
+  const fields = schema.fields || [];
+  const defaultField = fields.find(f => f.type === 'number') || fields[0];
+  if (!defaultField) { el.innerHTML = `<div class="train-no-data">No fields available.</div>`; return; }
+  el.innerHTML = `
+    <div class="section-eyebrow">What-if Analysis</div>
+    <div class="whatif-desc">Hold all other inputs at sample values — see how changing one feature shifts the prediction.</div>
+    <div class="whatif-chips">
+      ${fields.map(f => `
+        <button class="whatif-chip${f.name === defaultField.name ? ' active' : ''}"
+                onclick="selectWhatifFeature(this,'${f.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')"
+                data-field="${f.name.replace(/"/g,'&quot;')}">
+          ${f.label || f.name}
+        </button>`).join('')}
+    </div>
+    <div class="train-card" id="whatifChart">
+      <div class="pipe-loading"><span class="spinner"></span> Computing…</div>
+    </div>`;
+  el.dataset.loaded = '1';
+  runWhatifSweep(defaultField.name);
+}
+
+function selectWhatifFeature(btn, fieldName) {
+  document.querySelectorAll('.whatif-chip').forEach(c => c.classList.toggle('active', c === btn));
+  runWhatifSweep(fieldName);
+}
+
+async function runWhatifSweep(fieldName) {
+  const chartEl = document.getElementById('whatifChart');
+  if (!chartEl) return;
+  chartEl.innerHTML = `<div class="pipe-loading"><span class="spinner"></span> Computing…</div>`;
+  const m = activeModel;
+  const schema = m.schema;
+  const field = schema.fields.find(f => f.name === fieldName);
+  if (!field) return;
+  const sample = schema.sample || {};
+  const base = {};
+  schema.fields.forEach(f => { base[f.name] = sample[f.name] ?? null; });
+
+  const sweepVals = field.type === 'select'
+    ? field.options.map(o => o.value)
+    : (() => {
+        const mn = field.min ?? 0, mx = field.max ?? 1, n = 20;
+        const vals = Array.from({length: n}, (_, i) => mn + (mx - mn) * i / (n - 1));
+        const dec = field.step ? (field.step.toString().split('.')[1] || '').length : 2;
+        return vals.map(v => parseFloat(v.toFixed(dec)));
+      })();
+
   try {
-    const res = await fetch(`${API}/training/${activeModel.id}`);
-    if (!res.ok) throw new Error(res.status);
-    const data = await res.json();
-    el.innerHTML = renderTrainingHTML(data);
-    el.dataset.loaded = '1';
-    // Stagger bar animations
-    el.querySelectorAll('.proba-bar-fill[data-w]').forEach(bar => {
-      const delay = parseInt(bar.dataset.delay || '0');
-      setTimeout(() => { bar.style.width = bar.dataset.w + '%'; }, delay);
-    });
+    const predictions = await Promise.all(sweepVals.map(async val => {
+      const res = await fetch(`${API}/predict/${m.id}`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({...base, [fieldName]: val}),
+      });
+      if (!res.ok) throw new Error(res.status);
+      const data = await res.json();
+      let y;
+      if (schema.task === 'classification') {
+        const p = data.probabilities || [];
+        y = p.length === 2 ? p[1] : Math.max(...p);
+      } else {
+        y = data.prediction;
+      }
+      return {x: val, y};
+    }));
+    chartEl.innerHTML = drawWhatifChart(predictions, field, schema);
   } catch {
-    el.innerHTML = `<div class="pipe-loading" style="color:var(--text3)">Training info unavailable</div>`;
+    chartEl.innerHTML = `<div class="train-no-data">Sweep failed — try another feature.</div>`;
   }
 }
 
-function _sparklinePath(values, w, h, accent) {
-  if (!values || values.length < 2) return '';
-  const mn = Math.min(...values), mx = Math.max(...values);
-  const range = mx - mn || 1;
-  const pad = 4;
-  const pts = values.map((v, i) => {
-    const x = pad + (i / (values.length - 1)) * (w - pad * 2);
-    const y = pad + (1 - (v - mn) / range) * (h - pad * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  const polyPts = pts.join(' ');
-  // Closed area for fill
-  const fillPts = `${pad},${h - pad} ` + polyPts + ` ${w - pad},${h - pad}`;
-  return `
-    <defs>
-      <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="${accent}" stop-opacity="0.3"/>
-        <stop offset="100%" stop-color="${accent}" stop-opacity="0"/>
-      </linearGradient>
-    </defs>
-    <polygon points="${fillPts}" fill="url(#sg)"/>
-    <polyline points="${polyPts}" fill="none" stroke="${accent}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
-}
-
-function renderTrainingHTML(data) {
+function drawWhatifChart(points, field, schema) {
   const accent = activeModel?.accent || 'var(--accent-from)';
-  const features = (data.feature_importances || []).slice(0, 10);
-  const curve    = data.training_curve;
+  const isCat  = field.type === 'select';
+  const isClf  = schema.task === 'classification';
+  const W = 400, H = 130, padL = 46, padR = 12, padT = 16, padB = 34;
+  const cW = W - padL - padR, cH = H - padT - padB;
 
-  const fiSection = features.length ? `
-    <div class="section-eyebrow">Feature Importance</div>
-    <div class="train-card">
-      <div class="proba-section">
-        ${features.map((f, i) => {
-          const pct = (f.importance * 100).toFixed(1);
-          return `
-          <div class="proba-row">
-            <div class="proba-row-top">
-              <div class="proba-name">${f.label}</div>
-              <div class="proba-pct" style="color:${accent}">${pct}%</div>
-            </div>
-            <div class="proba-bar-wrap">
-              <div class="proba-bar-fill" data-w="${pct}" data-delay="${i * 55}" style="width:0%;background:${accent}"></div>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>` : `<div class="train-no-data">No feature importance data for this model type.</div>`;
+  const ys = points.map(p => p.y);
+  const yMin = isClf ? 0 : Math.min(...ys);
+  const yMax = isClf ? 1 : Math.max(...ys);
+  const yRng = (yMax - yMin) || 1;
+  const xOf  = i => isCat ? padL + (i + 0.5) * cW / points.length : padL + (i / (points.length - 1)) * cW;
+  const yOf  = v => padT + (1 - (v - yMin) / yRng) * cH;
 
-  const curveSection = curve ? (() => {
-    const vals = curve.values;
-    const svgContent = _sparklinePath(vals, 400, 60, accent);
-    return `
-    <div class="section-eyebrow" style="margin-top:1.5rem">Training Loss</div>
-    <div class="train-card">
-      <div class="train-curve-meta">
-        <span class="train-curve-label">${curve.label} · ${curve.n_estimators} estimators</span>
-        <span class="train-curve-range">${vals[0].toFixed(3)} → ${vals[vals.length - 1].toFixed(3)}</span>
-      </div>
-      <svg class="train-sparkline" viewBox="0 0 400 60" preserveAspectRatio="none">${svgContent}</svg>
-    </div>`;
-  })() : '';
+  const pts = points.map((p, i) => ({...p, sx: xOf(i), sy: yOf(p.y)}));
 
-  return fiSection + curveSection;
+  // Line path + fill (numeric only)
+  const linePath = !isCat
+    ? pts.map((p, i) => `${i ? 'L' : 'M'}${p.sx.toFixed(1)},${p.sy.toFixed(1)}`).join(' ') : '';
+  const fillPath = !isCat
+    ? `${linePath} L${pts[pts.length-1].sx.toFixed(1)},${(padT+cH).toFixed(1)} L${pts[0].sx.toFixed(1)},${(padT+cH).toFixed(1)} Z` : '';
+
+  // Y axis ticks
+  const yTicks = isClf
+    ? [0, 0.25, 0.5, 0.75, 1].map(v => ({v, label: `${(v*100).toFixed(0)}%`}))
+    : [yMin, (yMin+yMax)/2, yMax].map(v => ({v, label: v >= 1000 ? `${(v/1000).toFixed(1)}k` : v.toFixed(v >= 10 ? 0 : 1)}));
+
+  // X axis labels
+  const xLabels = isCat
+    ? pts.map(p => ({sx: p.sx, label: String(p.x).slice(0, 12)}))
+    : [pts[0], pts[Math.floor(pts.length/2)], pts[pts.length-1]].map(p => ({
+        sx: p.sx,
+        label: field.step >= 1 || !field.step ? Math.round(p.x) : p.x.toFixed(1),
+      }));
+
+  // Sample value marker
+  const sampleVal = schema.sample?.[field.name];
+  const markerX   = (!isCat && sampleVal != null)
+    ? padL + ((sampleVal - (field.min ?? 0)) / ((field.max ?? 1) - (field.min ?? 0))) * cW : null;
+
+  // Y axis label
+  const yLabel = isClf
+    ? (schema.output?.class_names?.[1] ?? 'Positive class') + ' probability'
+    : schema.output?.target_col ?? 'Prediction';
+
+  // Cat bars
+  const catBars = isCat ? pts.map(p => {
+    const bw = cW / pts.length * 0.58;
+    const bh = ((p.y - yMin) / yRng) * cH;
+    return `<rect x="${(p.sx - bw/2).toFixed(1)}" y="${(padT+cH-bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="${accent}" opacity="0.8"/>`;
+  }).join('') : '';
+
+  return `
+    <div class="train-curve-meta">
+      <span class="train-curve-label">${field.label || field.name}</span>
+      <span class="train-curve-range">${yLabel}</span>
+    </div>
+    <svg viewBox="0 0 ${W} ${H}" class="train-sparkline" style="height:${H}px">
+      <defs>
+        <linearGradient id="wg${field.name.replace(/\W/g,'')}" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${accent}" stop-opacity="0.22"/>
+          <stop offset="100%" stop-color="${accent}" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      ${yTicks.map(t => {
+        const sy = yOf(t.v).toFixed(1);
+        return `<line x1="${padL}" y1="${sy}" x2="${W-padR}" y2="${sy}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3,4"/>
+                <text x="${padL-5}" y="${sy}" font-size="9" fill="var(--text3)" text-anchor="end" dominant-baseline="middle">${t.label}</text>`;
+      }).join('')}
+      <line x1="${padL}" y1="${padT+cH}" x2="${W-padR}" y2="${padT+cH}" stroke="var(--border2)" stroke-width="1"/>
+      ${xLabels.map(l => `<text x="${l.sx.toFixed(1)}" y="${padT+cH+15}" font-size="9" fill="var(--text3)" text-anchor="middle">${l.label}</text>`).join('')}
+      ${markerX != null ? `
+        <line x1="${markerX.toFixed(1)}" y1="${padT}" x2="${markerX.toFixed(1)}" y2="${padT+cH}" stroke="${accent}" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.55"/>
+        <text x="${markerX.toFixed(1)}" y="${padT-4}" font-size="8" fill="${accent}" text-anchor="middle" opacity="0.7">sample</text>` : ''}
+      ${!isCat ? `
+        <path d="${fillPath}" fill="url(#wg${field.name.replace(/\W/g,'')})"/>
+        <path d="${linePath}" fill="none" stroke="${accent}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        ${pts.map(p => `<circle cx="${p.sx.toFixed(1)}" cy="${p.sy.toFixed(1)}" r="2.5" fill="${accent}"/>`).join('')}
+      ` : catBars}
+    </svg>`;
 }
 
 function renderPipelineHTML(data) {
