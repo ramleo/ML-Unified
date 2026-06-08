@@ -387,6 +387,128 @@ body {
 }
 .result-cluster-sub   { font-size:0.78rem; color:var(--text3); margin-top:0.15rem; }
 
+/* ── Model content tabs (Predict / Pipeline) ── */
+.model-tabs {
+  display: flex; gap: 0.35rem;
+  margin-top: 1rem; padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+.model-tab {
+  display: flex; align-items: center; gap: 0.4rem;
+  padding: 0.4rem 0.85rem; border-radius: 8px; border: 1px solid transparent;
+  font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;
+  color: var(--text3); background: transparent; cursor: pointer;
+  transition: all 0.18s;
+}
+.model-tab:hover { color: var(--text2); background: var(--bg-glass); border-color: var(--border); }
+.model-tab.active {
+  color: var(--active-accent, var(--accent-from));
+  background: color-mix(in srgb, var(--active-accent, var(--accent-from)) 10%, transparent);
+  border-color: color-mix(in srgb, var(--active-accent, var(--accent-from)) 30%, transparent);
+}
+
+/* ── Pipeline flow view ── */
+#pipelineView { display: none; padding: 0.25rem 0 1.5rem; }
+#pipelineView.visible { display: block; }
+
+.pipe-flow {
+  display: flex; flex-direction: column; align-items: stretch; gap: 0;
+}
+.pipe-step {
+  background: var(--bg-glass); border: 1px solid var(--border);
+  border-radius: 14px; overflow: hidden;
+}
+.pipe-step-header {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--active-accent, var(--accent-from)) 6%, transparent);
+}
+.pipe-step-icon {
+  width: 28px; height: 28px; border-radius: 7px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--active-accent, var(--accent-from)) 18%, transparent);
+}
+.pipe-step-title { font-size: 0.72rem; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.07em; }
+.pipe-step-name  { font-size: 0.92rem; font-weight: 700; color: var(--text); }
+
+/* Input features */
+.pipe-input-chips {
+  display: flex; flex-wrap: wrap; gap: 0.4rem;
+  padding: 0.75rem 1rem;
+}
+.pipe-chip {
+  padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.7rem; font-weight: 500;
+  background: color-mix(in srgb, var(--active-accent, var(--accent-from)) 10%, transparent);
+  color: var(--active-accent, var(--accent-from));
+  border: 1px solid color-mix(in srgb, var(--active-accent, var(--accent-from)) 25%, transparent);
+}
+
+/* Preprocessor transformer columns */
+.pipe-transformers {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1px; background: var(--border);
+}
+.pipe-transformer {
+  background: var(--bg); padding: 0.75rem 1rem;
+  display: flex; flex-direction: column; gap: 0.5rem;
+}
+.pipe-transformer-name {
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--text3);
+}
+.pipe-transformer-cols {
+  display: flex; flex-wrap: wrap; gap: 0.3rem;
+}
+.pipe-transformer-col {
+  font-size: 0.65rem; padding: 0.15rem 0.45rem; border-radius: 5px;
+  background: var(--bg-glass); border: 1px solid var(--border);
+  color: var(--text2);
+}
+.pipe-sub-steps { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.2rem; }
+.pipe-sub-step {
+  display: flex; align-items: center; gap: 0.4rem;
+  font-size: 0.72rem; color: var(--text2);
+}
+.pipe-sub-step-label { font-weight: 600; color: var(--text); }
+.pipe-sub-param { font-size: 0.65rem; color: var(--text3); }
+
+/* Estimator params */
+.pipe-params {
+  display: flex; flex-wrap: wrap; gap: 0.5rem;
+  padding: 0.75rem 1rem;
+}
+.pipe-param {
+  display: flex; align-items: center; gap: 0.35rem;
+  background: var(--bg-glass); border: 1px solid var(--border);
+  border-radius: 7px; padding: 0.3rem 0.65rem;
+  font-size: 0.7rem;
+}
+.pipe-param-key   { color: var(--text3); }
+.pipe-param-val   { font-weight: 700; color: var(--text); }
+
+/* Connector arrow between steps */
+.pipe-arrow {
+  display: flex; justify-content: center; align-items: center;
+  height: 28px; position: relative;
+}
+.pipe-arrow::before {
+  content: ''; width: 1px; height: 100%;
+  background: color-mix(in srgb, var(--active-accent, var(--accent-from)) 40%, transparent);
+  position: absolute;
+}
+.pipe-arrow-head {
+  width: 0; height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid color-mix(in srgb, var(--active-accent, var(--accent-from)) 60%, transparent);
+  position: absolute; bottom: 0;
+}
+.pipe-loading {
+  padding: 2rem; text-align: center; color: var(--text3); font-size: 0.85rem;
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+}
+
 /* Error state */
 .err-state {
   display: none;
@@ -1200,7 +1322,20 @@ function renderMain() {
           <div class="metric-label">${m.metricLabel}</div>
         </div>
       </div>
+      <div class="model-tabs">
+        <button class="model-tab active" id="tabPredict" onclick="setModelTab('predict')">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="3,2 13,8 3,14"/></svg>
+          Predict
+        </button>
+        <button class="model-tab" id="tabPipeline" onclick="setModelTab('pipeline')">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="2" width="14" height="4" rx="1.5"/><rect x="1" y="10" width="14" height="4" rx="1.5"/><path d="M8 6v4"/></svg>
+          Pipeline
+        </button>
+      </div>
     </div>
+
+    <!-- Pipeline view -->
+    <div id="pipelineView"></div>
 
     <!-- Form -->
     <form id="pForm" onsubmit="return false">
@@ -1215,7 +1350,7 @@ function renderMain() {
     </form>
 
     <!-- Result -->
-    <div class="result-wrap">
+    <div class="result-wrap" id="resultWrap">
       <div class="empty-state" id="emptyState">
         <div class="empty-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><rect x="3" y="3" width="38" height="38" rx="10" stroke="var(--accent-from)" stroke-width="1.3" opacity="0.2"/><rect x="9" y="26" width="7" height="11" rx="2" style="fill:var(--accent-from)" opacity="0.65"/><rect x="18.5" y="19" width="7" height="18" rx="2" style="fill:var(--accent-via)" opacity="0.65"/><rect x="28" y="22" width="7" height="15" rx="2" style="fill:var(--accent-to)" opacity="0.65"/><path d="M7 37h30" stroke="#64748b" stroke-width="1" stroke-linecap="round" opacity="0.35"/><path d="M9 26l10-10 9 5 9-11" stroke="var(--active-accent,var(--accent-from))" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/></svg></div>
         <div>Fill in the fields and click Predict</div>
@@ -1238,6 +1373,125 @@ function renderMain() {
   `;
 
   renderFormFields(s.fields);
+}
+
+// ── Model content tabs ────────────────────────────────────────
+function setModelTab(tab) {
+  const predictEl  = document.getElementById('pForm');
+  const resultEl   = document.getElementById('resultWrap');
+  const pipelineEl = document.getElementById('pipelineView');
+  const tabPredict  = document.getElementById('tabPredict');
+  const tabPipeline = document.getElementById('tabPipeline');
+
+  if (tab === 'pipeline') {
+    if (predictEl)  predictEl.style.display  = 'none';
+    if (resultEl)   resultEl.style.display   = 'none';
+    if (pipelineEl) pipelineEl.classList.add('visible');
+    tabPredict?.classList.remove('active');
+    tabPipeline?.classList.add('active');
+    if (!pipelineEl?.dataset.loaded) loadPipeline();
+  } else {
+    if (predictEl)  predictEl.style.display  = '';
+    if (resultEl)   resultEl.style.display   = '';
+    if (pipelineEl) pipelineEl.classList.remove('visible');
+    tabPredict?.classList.add('active');
+    tabPipeline?.classList.remove('active');
+  }
+}
+
+async function loadPipeline() {
+  const el = document.getElementById('pipelineView');
+  if (!el) return;
+  el.innerHTML = `<div class="pipe-loading"><span class="spinner"></span> Loading pipeline…</div>`;
+  try {
+    const res = await fetch(`${API}/pipeline/${activeModel.id}`);
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    el.innerHTML = renderPipelineHTML(data);
+    el.dataset.loaded = '1';
+  } catch {
+    el.innerHTML = `<div class="pipe-loading" style="color:var(--text3)">Pipeline info unavailable</div>`;
+  }
+}
+
+function renderPipelineHTML(data) {
+  const accent = activeModel.accent;
+
+  // Step icons
+  const icons = {
+    input:       `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="${accent}" stroke-width="2" stroke-linecap="round"><path d="M2 4h12M2 8h8M2 12h10"/></svg>`,
+    preprocessor:`<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="${accent}" stroke-width="2" stroke-linecap="round"><path d="M1 4h2m0 0a2 2 0 004 0m0 0h8M1 12h8m0 0a2 2 0 004 0m0 0h2"/></svg>`,
+    estimator:   `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="${accent}" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>`,
+  };
+
+  const arrow = `<div class="pipe-arrow"><div class="pipe-arrow-head"></div></div>`;
+
+  const inputBlock = `
+    <div class="pipe-step">
+      <div class="pipe-step-header">
+        <div class="pipe-step-icon">${icons.input}</div>
+        <div>
+          <div class="pipe-step-title">Input</div>
+          <div class="pipe-step-name">${data.input_fields.length} Features</div>
+        </div>
+      </div>
+      <div class="pipe-input-chips">
+        ${data.input_fields.map(f => `<span class="pipe-chip">${f}</span>`).join('')}
+      </div>
+    </div>`;
+
+  const stepBlocks = data.steps.map(step => {
+    if (step.kind === 'preprocessor') {
+      const transformerCols = step.transformers.map(t => `
+        <div class="pipe-transformer">
+          <div class="pipe-transformer-name">${t.name}</div>
+          <div class="pipe-transformer-cols">
+            ${t.columns.map(c => `<span class="pipe-transformer-col">${c}</span>`).join('')}
+          </div>
+          <div class="pipe-sub-steps">
+            ${t.steps.map(s => `
+              <div class="pipe-sub-step">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="3" fill="${accent}" opacity="0.7"/></svg>
+                <span class="pipe-sub-step-label">${s.label}</span>
+                ${Object.entries(s.params).map(([k,v]) => `<span class="pipe-sub-param">${k}: ${v}</span>`).join('')}
+              </div>`).join('')}
+          </div>
+        </div>`).join('');
+      return `
+        <div class="pipe-step">
+          <div class="pipe-step-header">
+            <div class="pipe-step-icon">${icons.preprocessor}</div>
+            <div>
+              <div class="pipe-step-title">Preprocessing</div>
+              <div class="pipe-step-name">${step.label}</div>
+            </div>
+          </div>
+          <div class="pipe-transformers">${transformerCols}</div>
+        </div>`;
+    }
+    // estimator
+    const params = Object.entries(step.params || {});
+    return `
+      <div class="pipe-step">
+        <div class="pipe-step-header">
+          <div class="pipe-step-icon">${icons.estimator}</div>
+          <div>
+            <div class="pipe-step-title">Estimator · ${data.task}</div>
+            <div class="pipe-step-name">${step.label}</div>
+          </div>
+        </div>
+        ${params.length ? `<div class="pipe-params">
+          ${params.map(([k, v]) => `
+            <div class="pipe-param">
+              <span class="pipe-param-key">${k}:</span>
+              <span class="pipe-param-val">${v}</span>
+            </div>`).join('')}
+        </div>` : ''}
+      </div>`;
+  });
+
+  const allBlocks = [inputBlock, ...stepBlocks];
+  return `<div class="pipe-flow">${allBlocks.join(arrow)}</div>`;
 }
 
 // ── Render form fields ────────────────────────────────────────
