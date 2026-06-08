@@ -3185,8 +3185,17 @@ function renderDetectionResult(data) {
           &nbsp;·&nbsp; confidence ≥ ${(data.confidence_threshold*100).toFixed(0)}%
           &nbsp;·&nbsp; ${data.orig_width}×${data.orig_height} px
         </div>
-        <img src="${data.image_b64}" class="det-result-img" alt="detection result">
-        <div style="margin-top:0.25rem">${tagsHTML}</div>
+        <div class="ip-before-after">
+          <div class="ip-image-box">
+            <div class="ip-image-label">Original</div>
+            <img src="${detImageURL}" class="ip-image-result" alt="original">
+          </div>
+          <div class="ip-image-box">
+            <div class="ip-image-label">Detected</div>
+            <img src="${data.image_b64}" class="ip-image-result" alt="detection result">
+          </div>
+        </div>
+        <div style="margin-top:0.75rem">${tagsHTML}</div>
         ${data.count > 0 ? `
         <div style="margin-top:1rem">
           <a href="${data.image_b64}" download="detected_objects.png"
@@ -3570,8 +3579,17 @@ function renderSegmentationResult(data) {
           ${classes.length} class${classes.length !== 1 ? 'es' : ''} detected
           &nbsp;·&nbsp; ${data.orig_width}×${data.orig_height} px
         </div>
-        <img src="${data.image_b64}" class="seg-result-img" alt="segmentation result">
-        <div class="seg-class-list">${chipsHTML}</div>
+        <div class="ip-before-after">
+          <div class="ip-image-box">
+            <div class="ip-image-label">Original</div>
+            <img src="${segImageURL}" class="ip-image-result" alt="original">
+          </div>
+          <div class="ip-image-box">
+            <div class="ip-image-label">Segmented</div>
+            <img src="${data.image_b64}" class="ip-image-result" alt="segmentation result">
+          </div>
+        </div>
+        <div class="seg-class-list" style="margin-top:0.75rem">${chipsHTML}</div>
         ${classes.length > 0 ? `
         <div style="margin-top:1rem">
           <a href="${data.image_b64}" download="segmentation_result.png"
