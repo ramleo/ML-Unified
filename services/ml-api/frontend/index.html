@@ -627,7 +627,7 @@ body {
 .train-result-label  { font-size: 0.8rem; color: var(--text3); margin-bottom: 1.5rem; }
 
 /* ── Vision Panel ── */
-.vision-panel { padding: 1.5rem; max-width: 860px; }
+.vision-panel { padding: 0; max-width: 860px; }
 
 .vision-model-grid {
   display: grid;
@@ -689,8 +689,8 @@ body {
 .det-conf-row {
   display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;
 }
-.det-conf-row input[type=range] { flex: 1; accent-color: #38bdf8; }
-.det-conf-val { font-size: 0.82rem; font-weight: 700; color: #38bdf8; min-width: 36px; }
+.det-conf-row input[type=range] { flex: 1; accent-color: var(--active-accent,var(--accent-from)); }
+.det-conf-val { font-size: 0.82rem; font-weight: 700; color: var(--active-accent,var(--accent-from)); min-width: 36px; }
 
 .det-result-img {
   width: 100%; border-radius: 12px; border: 1px solid var(--border2);
@@ -719,28 +719,20 @@ body {
 }
 
 /* ── EDA Explorer Panel ── */
-.eda-panel { padding:1.5rem; max-width:960px; }
-.eda-header { display:flex; gap:1rem; align-items:flex-start; margin-bottom:1.5rem; }
+.eda-panel { padding:0; max-width:960px; }
+.eda-header { margin-bottom:1.75rem; padding-top:0; }
 
-/* Glassmorphism section cards */
+/* Section cards */
 .eda-section-card {
-  background:rgba(255,255,255,0.03);
-  border:1px solid rgba(255,255,255,0.09);
+  background:var(--bg-card);
+  border:1px solid var(--border2);
   border-radius:16px; padding:1.35rem; margin-bottom:1.25rem;
-  backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
-  box-shadow:0 8px 32px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.06);
-  opacity:0; transform:translateY(22px);
-  transition:opacity 0.45s ease, transform 0.45s ease, box-shadow 0.3s ease;
+  box-shadow:var(--shadow);
+  opacity:0; transform:translateY(16px);
+  transition:opacity 0.4s ease, transform 0.4s ease;
 }
 .eda-section-card.eda-visible { opacity:1; transform:translateY(0); }
-.eda-section-card:hover {
-  box-shadow:0 12px 44px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.09);
-}
-[data-theme="light"] .eda-section-card {
-  background:rgba(255,255,255,0.72);
-  border:1px solid rgba(0,0,0,0.08);
-  box-shadow:0 4px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.9);
-}
+.eda-section-card:hover { box-shadow:0 6px 28px rgba(0,0,0,0.1); }
 
 /* Section title — gradient left accent */
 .eda-section-title {
@@ -753,14 +745,14 @@ body {
   content:''; position:absolute; left:0; top:50%;
   transform:translateY(-50%);
   width:3px; height:100%; min-height:14px;
-  background:linear-gradient(180deg,#34d399,#38bdf8);
+  background:linear-gradient(180deg,var(--active-accent,var(--accent-from)),var(--accent-via));
   border-radius:4px;
 }
 
 /* Sticky nav */
 .eda-sticky-nav {
   position:sticky; top:0; z-index:10;
-  background:var(--bg); border-bottom:1px solid rgba(255,255,255,0.06);
+  background:var(--bg); border-bottom:1px solid var(--border);
   display:flex; gap:0.25rem; padding:0.5rem 0;
   margin:-0.25rem 0 1.25rem; overflow-x:auto; scrollbar-width:none;
 }
@@ -771,8 +763,16 @@ body {
   background:transparent; border:1px solid transparent;
   white-space:nowrap; transition:all 0.18s;
 }
-.eda-nav-tab:hover { background:rgba(52,211,153,0.12); color:#34d399; border-color:rgba(52,211,153,0.25); }
-.eda-nav-tab.eda-nav-active { background:rgba(52,211,153,0.15); color:#34d399; border-color:rgba(52,211,153,0.4); box-shadow:0 0 8px rgba(52,211,153,0.2); }
+.eda-nav-tab:hover {
+  background:color-mix(in srgb, var(--active-accent,var(--accent-from)) 10%, transparent);
+  color:var(--active-accent,var(--accent-from));
+  border-color:color-mix(in srgb, var(--active-accent,var(--accent-from)) 25%, transparent);
+}
+.eda-nav-tab.eda-nav-active {
+  background:color-mix(in srgb, var(--active-accent,var(--accent-from)) 14%, transparent);
+  color:var(--active-accent,var(--accent-from));
+  border-color:color-mix(in srgb, var(--active-accent,var(--accent-from)) 40%, transparent);
+}
 
 /* Overview chip grid */
 .eda-overview-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:0.75rem; }
@@ -824,13 +824,11 @@ body {
   padding:0.5rem 0.75rem; text-align:left;
   font-size:0.63rem; font-weight:700; text-transform:uppercase;
   letter-spacing:0.07em; color:var(--text3);
-  border-bottom:1px solid rgba(255,255,255,0.07);
-  background:rgba(255,255,255,0.02);
+  border-bottom:1px solid var(--border);
+  background:var(--bg);
 }
-[data-theme="light"] .eda-table th { border-color:rgba(0,0,0,0.08); background:rgba(0,0,0,0.02); }
-.eda-table td { padding:0.45rem 0.75rem; border-bottom:1px solid rgba(255,255,255,0.04); color:var(--text2); }
-[data-theme="light"] .eda-table td { border-color:rgba(0,0,0,0.05); }
-.eda-table tbody tr:hover td { background:rgba(52,211,153,0.05); }
+.eda-table td { padding:0.45rem 0.75rem; border-bottom:1px solid var(--border); color:var(--text2); }
+.eda-table tbody tr:hover td { background:color-mix(in srgb,var(--active-accent,var(--accent-from)) 5%,transparent); }
 .eda-type-badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:0.6rem; font-weight:700; }
 .eda-type-num { background:rgba(56,189,248,0.15); color:#38bdf8; }
 .eda-type-cat { background:rgba(167,139,250,0.15); color:#a78bfa; }
@@ -838,12 +836,14 @@ body {
 /* Distribution grid */
 .eda-dist-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:1rem; }
 .eda-dist-card {
-  background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.07);
+  background:var(--bg-card); border:1px solid var(--border2);
   border-radius:10px; padding:0.85rem;
-  transition:border-color 0.2s ease, transform 0.2s ease;
+  transition:border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
-.eda-dist-card:hover { border-color:rgba(52,211,153,0.35); transform:translateY(-2px); }
-[data-theme="light"] .eda-dist-card { background:rgba(0,0,0,0.02); border-color:rgba(0,0,0,0.08); }
+.eda-dist-card:hover {
+  border-color:color-mix(in srgb,var(--active-accent,var(--accent-from)) 40%,transparent);
+  transform:translateY(-2px); box-shadow:var(--shadow);
+}
 .eda-dist-title {
   font-size:0.72rem; font-weight:700; color:var(--text2);
   margin-bottom:0.25rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
@@ -852,11 +852,12 @@ body {
 .eda-corr-plot { width:100%; }
 
 /* ── Unsupervised Panel ── */
-.u-panel { padding: 1.5rem; max-width: 860px; }
-.u-header { display:flex; gap:1rem; align-items:flex-start; margin-bottom:1.5rem; }
-.u-dot    { width:14px; height:14px; border-radius:50%; flex-shrink:0; margin-top:4px; }
-.u-title  { font-size:1.2rem; font-weight:800; }
-.u-subtitle { font-size:0.82rem; color:var(--text3); line-height:1.55; margin-top:0.2rem; max-width:560px; }
+.u-panel { padding:0; max-width: 860px; }
+.u-header { padding-top:2rem; margin-bottom:1.75rem; }
+.eda-header { padding-top:2rem; }
+.u-dot    { display:none; }
+.u-title  { font-size:1.8rem; font-weight:800; letter-spacing:-0.03em; line-height:1.15; color:var(--text); }
+.u-subtitle { font-size:0.88rem; color:var(--text2); line-height:1.65; margin-top:0.5rem; max-width:520px; }
 .u-upload-section { margin-bottom:1.25rem; }
 .u-param-row  { display:flex; align-items:center; gap:1rem; margin-bottom:0.75rem; }
 .u-param-row .wizard-label { min-width:220px; margin-bottom:0; }
@@ -2235,11 +2236,9 @@ function renderImageClassifierPanel() {
   document.getElementById('main').innerHTML = `
     <div class="vision-panel">
       <div class="u-header">
-        <div class="u-dot" style="background:#e879f9"></div>
-        <div>
-          <div class="u-title">Image Classifier</div>
-          <div class="u-subtitle">Upload any image — classify it against 1,000 ImageNet categories using four pre-trained deep learning models.</div>
-        </div>
+        <div class="model-eyebrow" style="color:#e879f9">Vision &middot; Image Classification</div>
+        <div class="u-title">Image Classifier</div>
+        <div class="u-subtitle">Upload any image — classify it against 1,000 ImageNet categories using four pre-trained deep learning models.</div>
       </div>
 
       <div class="wizard-section">
@@ -2507,11 +2506,9 @@ function renderImageProcessingPanel() {
   document.getElementById('main').innerHTML = `
     <div class="vision-panel">
       <div class="u-header">
-        <div class="u-dot" style="background:#fb923c"></div>
-        <div>
-          <div class="u-title">Image Processing</div>
-          <div class="u-subtitle">Apply classical image operations — blur, sharpen, edge detection, rotation, colour adjustments, and more — all in the browser with instant before/after comparison.</div>
-        </div>
+        <div class="model-eyebrow" style="color:#fb923c">Vision &middot; Image Processing</div>
+        <div class="u-title">Image Processing</div>
+        <div class="u-subtitle">Apply classical image operations — blur, sharpen, edge detection, rotation, colour adjustments, and more — all in the browser with instant before/after comparison.</div>
       </div>
 
       <div class="wizard-section">
@@ -2696,11 +2693,9 @@ function renderObjectDetectionPanel() {
   document.getElementById('main').innerHTML = `
     <div class="vision-panel">
       <div class="u-header">
-        <div class="u-dot" style="background:#38bdf8"></div>
-        <div>
-          <div class="u-title">Object Detection</div>
-          <div class="u-subtitle">Upload any photo — detect and locate objects from 80 COCO categories (people, cars, animals, furniture, food…) using TinyYOLOv3 (35 MB, MIT license). Bounding boxes are drawn directly on the image.</div>
-        </div>
+        <div class="model-eyebrow" style="color:#38bdf8">Vision &middot; Object Detection</div>
+        <div class="u-title">Object Detection</div>
+        <div class="u-subtitle">Upload any photo — detect and locate objects from 80 COCO categories (people, cars, animals, furniture, food…) using TinyYOLOv3 (35 MB, MIT license). Bounding boxes are drawn directly on the image.</div>
       </div>
 
       <div class="wizard-section">
@@ -3011,11 +3006,9 @@ function renderSegmentationPanel() {
   document.getElementById('main').innerHTML = `
     <div class="vision-panel">
       <div class="u-header">
-        <div class="u-dot" style="background:#a78bfa"></div>
-        <div>
-          <div class="u-title">Image Segmentation</div>
-          <div class="u-subtitle">Upload any photo — each pixel is classified into one of 150 ADE20K categories (people, vehicles, furniture, nature…) using SegFormer-B0. Classes are colour-overlaid on the original image.</div>
-        </div>
+        <div class="model-eyebrow" style="color:#a78bfa">Vision &middot; Image Segmentation</div>
+        <div class="u-title">Image Segmentation</div>
+        <div class="u-subtitle">Upload any photo — each pixel is classified into one of 150 ADE20K categories (people, vehicles, furniture, nature…) using SegFormer-B0. Classes are colour-overlaid on the original image.</div>
       </div>
 
       <div class="upload-zone" id="segUploadZone">
@@ -3646,7 +3639,7 @@ let activeUnsupervised = null;
 
 const UNSUPERVISED_META = {
   kmeans: {
-    label: 'K-Means', accent: '#818cf8',
+    label: 'K-Means', type: 'Clustering', accent: '#818cf8',
     desc:  'Partitions data into k clusters. Every point is assigned to the nearest centroid. Works best when clusters are roughly spherical and similar in size.',
     params: `
       <div class="u-param-row">
@@ -3662,7 +3655,7 @@ const UNSUPERVISED_META = {
       </div>`
   },
   dbscan: {
-    label: 'DBSCAN', accent: '#38bdf8',
+    label: 'DBSCAN', type: 'Density Clustering', accent: '#38bdf8',
     desc:  'Finds clusters of arbitrary shape based on point density. Automatically detects the number of clusters and labels sparse points as outliers (−1). Sensitive to eps and min_samples.',
     params: `
       <div class="u-param-row">
@@ -3682,7 +3675,7 @@ const UNSUPERVISED_META = {
       </div>`
   },
   tsne: {
-    label: 't-SNE', accent: '#f472b6',
+    label: 't-SNE', type: 'Visualization', accent: '#f472b6',
     desc:  'Non-linear dimensionality reduction for visualization. Preserves local structure — similar points in high dimensions stay close in 2D. Not suitable for prediction; use only to explore data shape.',
     params: `
       <div class="u-param-row">
@@ -3698,7 +3691,7 @@ const UNSUPERVISED_META = {
       </div>`
   },
   pca: {
-    label: 'PCA', accent: '#34d399',
+    label: 'PCA', type: 'Dimensionality Reduction', accent: '#34d399',
     desc:  'Linear dimensionality reduction. Finds directions of maximum variance. Shows how much variance each principal component explains.',
     params: `
       <div class="u-param-row">
@@ -3731,11 +3724,9 @@ function renderUnsupervisedPanel(id) {
   document.getElementById('main').innerHTML = `
     <div class="u-panel">
       <div class="u-header">
-        <div class="u-dot" style="background:${accent}"></div>
-        <div>
-          <div class="u-title">${meta.label}</div>
-          <div class="u-subtitle">${meta.desc}</div>
-        </div>
+        <div class="model-eyebrow" style="color:${accent}">Unsupervised Analysis &middot; ${meta.type || meta.label}</div>
+        <div class="u-title">${meta.label}</div>
+        <div class="u-subtitle">${meta.desc}</div>
       </div>
       <div class="u-upload-section">
         <div class="sidebar-label" style="margin-bottom:0.5rem">Upload Dataset</div>
@@ -4024,11 +4015,9 @@ function selectEDA() {
   document.getElementById('main').innerHTML = `
     <div class="eda-panel">
       <div class="eda-header">
-        <div class="u-dot" style="background:#34d399;margin-top:4px"></div>
-        <div>
-          <div class="u-title">EDA Explorer</div>
-          <div class="u-subtitle">Upload any CSV to explore its shape, distributions, missing values, and feature correlations.</div>
-        </div>
+        <div class="model-eyebrow" style="color:#34d399">Data Tools &middot; Exploratory Analysis</div>
+        <div class="u-title">EDA Explorer</div>
+        <div class="u-subtitle">Upload any CSV to explore its shape, distributions, missing values, and feature correlations.</div>
       </div>
       <div class="upload-zone" id="edaUploadZone"
            ondragover="event.preventDefault();this.classList.add('drag')"
