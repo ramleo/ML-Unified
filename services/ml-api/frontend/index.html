@@ -455,6 +455,28 @@ body {
 .drift-cat-pct { width: 34px; text-align: right; color: var(--text3); font-size: 0.68rem; }
 .drift-empty { text-align: center; padding: 3rem 1rem; color: var(--text3); font-size: 0.85rem; }
 .drift-note { font-size: 0.68rem; color: var(--text3); margin-top: 1rem; }
+.drift-mode-bar {
+  display: flex; gap: 0.35rem; margin-bottom: 1.25rem;
+  background: var(--border); border-radius: 10px; padding: 0.25rem;
+}
+.drift-mode-btn {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.45rem;
+  padding: 0.45rem 0.75rem; border-radius: 8px; border: none; background: transparent;
+  color: var(--text3); font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.15s;
+}
+.drift-mode-btn.active { background: var(--bg-card); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
+.drift-upload-zone {
+  border: 1.5px dashed var(--border2); border-radius: 14px;
+  padding: 2.5rem 1.5rem; text-align: center; cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  display: flex; flex-direction: column; align-items: center; gap: 0.6rem;
+}
+.drift-upload-zone:hover, .drift-upload-zone.drag-over {
+  border-color: var(--active-accent, var(--accent-from));
+  background: color-mix(in srgb,var(--active-accent,var(--accent-from)) 5%,transparent);
+}
+.drift-upload-label { font-size: 0.85rem; font-weight: 600; color: var(--text2); }
+.drift-upload-sub   { font-size: 0.72rem; color: var(--text3); }
 
 .whatif-desc { font-size: 0.82rem; color: var(--text3); margin: 0.35rem 0 1rem; line-height: 1.55; }
 .whatif-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 1.25rem; }
@@ -1780,17 +1802,90 @@ function loadWhatif() {
   runWhatifSweep(defaultField.name);
 }
 
+let _driftMode = 'predictions'; // 'predictions' | 'upload'
+
 async function loadDriftPanel() {
   const el = document.getElementById('driftView');
   if (!el) return;
-  el.innerHTML = `<div class="drift-empty"><span class="spinner"></span> Loading…</div>`;
+  el.innerHTML = _driftShell();
+  if (_driftMode === 'predictions') await _loadDriftPredictions();
+}
+
+function _driftShell() {
+  return `
+    <div class="drift-mode-bar">
+      <button class="drift-mode-btn${_driftMode === 'predictions' ? ' active' : ''}"
+              onclick="_switchDriftMode('predictions')">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="3,2 13,8 3,14"/></svg>
+        From predictions
+      </button>
+      <button class="drift-mode-btn${_driftMode === 'upload' ? ' active' : ''}"
+              onclick="_switchDriftMode('upload')">
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 2v9M4 6l4-4 4 4"/><path d="M2 13h12"/></svg>
+        Upload dataset
+      </button>
+    </div>
+    <div id="driftBody"></div>`;
+}
+
+function _switchDriftMode(mode) {
+  _driftMode = mode;
+  const el = document.getElementById('driftView');
+  if (!el) return;
+  el.innerHTML = _driftShell();
+  if (mode === 'predictions') _loadDriftPredictions();
+  else _showDriftUploadZone();
+}
+
+async function _loadDriftPredictions() {
+  const body = document.getElementById('driftBody');
+  if (!body) return;
+  body.innerHTML = `<div class="drift-empty"><span class="spinner"></span> Loading…</div>`;
   try {
     const res = await fetch(`${API}/drift/${activeModel.id}`);
     if (!res.ok) throw new Error(res.status);
-    const data = await res.json();
-    el.innerHTML = renderDriftHTML(data);
+    body.innerHTML = renderDriftHTML(await res.json());
   } catch {
-    el.innerHTML = `<div class="drift-empty">Drift data unavailable.</div>`;
+    body.innerHTML = `<div class="drift-empty">Drift data unavailable.</div>`;
+  }
+}
+
+function _showDriftUploadZone() {
+  const body = document.getElementById('driftBody');
+  if (!body) return;
+  body.innerHTML = `
+    <div class="drift-upload-zone" id="driftUploadZone"
+         onclick="document.getElementById('driftFileInput').click()"
+         ondragover="event.preventDefault();this.classList.add('drag-over')"
+         ondragleave="this.classList.remove('drag-over')"
+         ondrop="event.preventDefault();this.classList.remove('drag-over');_handleDriftDrop(event)">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.45"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <div class="drift-upload-label">Drop a CSV or click to browse</div>
+      <div class="drift-upload-sub">Rows should match the model's input fields</div>
+    </div>
+    <input type="file" id="driftFileInput" accept=".csv" style="display:none"
+           onchange="_handleDriftFile(this.files[0])">`;
+}
+
+function _handleDriftDrop(e) {
+  const file = e.dataTransfer?.files?.[0];
+  if (file) _handleDriftFile(file);
+}
+
+async function _handleDriftFile(file) {
+  if (!file) return;
+  const body = document.getElementById('driftBody');
+  if (!body) return;
+  body.innerHTML = `<div class="drift-empty"><span class="spinner"></span> Analysing ${file.name}…</div>`;
+  const form = new FormData();
+  form.append('file', file);
+  try {
+    const res = await fetch(`${API}/drift/${activeModel.id}/upload`, { method: 'POST', body: form });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    body.innerHTML = renderDriftHTML(data);
+  } catch (err) {
+    body.innerHTML = `<div class="drift-empty">Could not analyse file — check it matches the model's input columns.</div>`;
   }
 }
 
@@ -1863,10 +1958,14 @@ function renderDriftHTML(data) {
     }
   }).join('');
 
+  const sourceNote = data.source === 'upload'
+    ? `Baseline estimated from field ranges · ${n_recent} row${n_recent === 1 ? '' : 's'} from ${data.filename || 'uploaded file'}`
+    : `Baseline estimated from field ranges · ${n_recent} recent prediction${n_recent === 1 ? '' : 's'} in window`;
+
   return `
     ${summaryHTML}
     <div class="drift-features">${featHTML}</div>
-    <div class="drift-note">Baseline estimated from field ranges · ${n_recent} recent prediction${n_recent === 1 ? '' : 's'} in window</div>`;
+    <div class="drift-note">${sourceNote}</div>`;
 }
 
 function selectWhatifFeature(btn, fieldName) {
