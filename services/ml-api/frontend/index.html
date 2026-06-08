@@ -320,6 +320,71 @@ body {
 .result-cluster-icon  { font-size:2rem; line-height:1; }
 .result-cluster-label { font-size:0.7rem; color:var(--text3); text-transform:uppercase; letter-spacing:0.06em; }
 .result-cluster-value { font-size:2rem; font-weight:800; line-height:1.1; }
+
+/* ── SHAP Feature Impact ── */
+.shap-panel {
+  display: none;
+  margin-top: 0.75rem;
+  background: var(--bg-glass);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+.shap-panel.visible { display: block; }
+.shap-header {
+  padding: 0.9rem 1.25rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.shap-title {
+  font-size: 0.78rem; font-weight: 700; color: var(--text);
+  text-transform: uppercase; letter-spacing: 0.07em;
+}
+.shap-subtitle { font-size: 0.7rem; color: var(--text3); margin-left: auto; }
+.shap-body { padding: 1rem 1.25rem; display: flex; flex-direction: column; gap: 0.55rem; }
+.shap-row {
+  display: grid;
+  grid-template-columns: 130px 1fr 52px;
+  align-items: center;
+  gap: 0.6rem;
+}
+.shap-feat-name {
+  font-size: 0.73rem; font-weight: 600; color: var(--text2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-align: right;
+}
+.shap-bar-wrap {
+  position: relative; height: 18px;
+  display: flex; align-items: center;
+}
+.shap-bar-center {
+  position: absolute; left: 50%; top: 0; bottom: 0;
+  width: 1px; background: var(--border2);
+}
+.shap-bar-fill {
+  position: absolute; height: 10px; border-radius: 3px;
+  transition: width 0.5s ease, left 0.5s ease;
+}
+.shap-bar-fill.pos { background: var(--accent-from); left: 50%; }
+.shap-bar-fill.neg { background: rgba(248,113,113,0.85); right: 50%; }
+.shap-val {
+  font-size: 0.7rem; font-weight: 700;
+  text-align: right; font-variant-numeric: tabular-nums;
+}
+.shap-val.pos { color: var(--accent-from); }
+.shap-val.neg { color: rgba(248,113,113,0.9); }
+.shap-base {
+  padding: 0.6rem 1.25rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.68rem; color: var(--text3);
+}
+.shap-loading {
+  padding: 1.5rem; text-align: center; color: var(--text3); font-size: 0.82rem;
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+}
 .result-cluster-sub   { font-size:0.78rem; color:var(--text3); margin-top:0.15rem; }
 
 /* Error state */
@@ -1054,6 +1119,12 @@ function renderSidebar() {
            <path d="M8 2v9M4 6l4-4 4 4"/><path d="M2 13h12"/>
          </svg>
          Train New Model
+       </button>
+       <button class="sidebar-upload-btn" onclick="showShapAnalyzer()" style="margin-top:0.35rem;border-color:var(--accent-from)44;color:var(--accent-from)">
+         <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+           <path d="M2 12h3M6 8h3M11 4h3"/><path d="M5 12v2M9 8v6M14 4v10"/>
+         </svg>
+         SHAP Analyzer
        </button>`
     : '';
 
@@ -1154,6 +1225,15 @@ function renderMain() {
         <div class="result-body" id="resultBody"></div>
       </div>
       <div class="err-state" id="errState"></div>
+      <!-- SHAP Feature Impact panel -->
+      <div class="shap-panel" id="shapPanel">
+        <div class="shap-header">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--accent-from)" stroke-width="2" stroke-linecap="round"><path d="M8 1v14M1 8h14"/></svg>
+          <span class="shap-title">Feature Impact</span>
+          <span class="shap-subtitle">what drove this prediction</span>
+        </div>
+        <div id="shapBody"></div>
+      </div>
     </div>
   `;
 
@@ -1259,6 +1339,8 @@ async function runPredict() {
     btn.disabled  = false;
     btn.classList.add('btn-success-flash');
     setTimeout(() => btn.classList.remove('btn-success-flash'), 900);
+    // Fetch SHAP asynchronously — don't block the prediction result
+    if (activeModel.schema.task !== 'clustering') fetchAndRenderShap(data);
     return;
   } catch(e) {
     errEl.textContent = `Prediction failed: ${e.message}`;
@@ -1357,6 +1439,72 @@ function renderResult(result) {
   }
 }
 
+// ── SHAP Feature Impact ───────────────────────────────────────
+async function fetchAndRenderShap(data) {
+  const panel   = document.getElementById('shapPanel');
+  const body    = document.getElementById('shapBody');
+  if (!panel || !body) return;
+
+  panel.classList.add('visible');
+  body.innerHTML = '<div class="shap-loading"><span class="spinner" style="width:16px;height:16px;border-width:2px"></span> Computing feature impact…</div>';
+
+  try {
+    const res = await fetch(`${API}/shap/${activeModel.id}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error(`${res.status}`);
+    const shap = await res.json();
+    renderShap(shap);
+  } catch (e) {
+    body.innerHTML = `<div class="shap-loading" style="color:var(--text3)">Feature impact unavailable</div>`;
+  }
+}
+
+function renderShap(shap) {
+  const body = document.getElementById('shapBody');
+  if (!body) return;
+
+  const features = shap.features || [];
+  if (!features.length) {
+    body.innerHTML = '<div class="shap-loading">No features to display</div>';
+    return;
+  }
+
+  const maxAbs = Math.max(...features.map(f => Math.abs(f.shap)), 0.001);
+
+  body.innerHTML = `
+    <div class="shap-body">
+      ${features.map(f => {
+        const isPos  = f.shap >= 0;
+        const pct    = Math.min((Math.abs(f.shap) / maxAbs) * 48, 48); // max 48% of half-width
+        const barStyle = isPos
+          ? `left:50%;width:0%`
+          : `right:50%;width:0%`;
+        const sign   = isPos ? '+' : '';
+        return `
+        <div class="shap-row">
+          <div class="shap-feat-name" title="${f.label}">${f.label}</div>
+          <div class="shap-bar-wrap">
+            <div class="shap-bar-center"></div>
+            <div class="shap-bar-fill ${isPos ? 'pos' : 'neg'}" data-pct="${pct}" style="${barStyle}"></div>
+          </div>
+          <div class="shap-val ${isPos ? 'pos' : 'neg'}">${sign}${f.shap.toFixed(3)}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="shap-base">Base value (avg prediction): <strong>${shap.base_value.toFixed(3)}</strong></div>
+  `;
+
+  // Animate bars in
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    document.querySelectorAll('.shap-bar-fill[data-pct]').forEach(bar => {
+      bar.style.width = bar.dataset.pct + '%';
+    });
+  }));
+}
+
 // ── Start ─────────────────────────────────────────────────────
 
 // ── Wizard state ─────────────────────────────────────────────
@@ -1378,6 +1526,133 @@ function wizardStepsHTML(active, allDone) {
 }
 
 // ── Show wizard step 1 ────────────────────────────────────────
+// ── SHAP Analyzer (custom model upload) ───────────────────────
+function showShapAnalyzer() {
+  document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('main').innerHTML = `
+    <div class="wizard">
+      <h2 style="font-size:1.3rem;font-weight:800;margin-bottom:0.4rem">SHAP Analyzer</h2>
+      <p style="font-size:0.85rem;color:var(--text2);margin-bottom:1.5rem;line-height:1.6">
+        Upload a trained scikit-learn Pipeline (.pkl) and a one-row CSV to see which features drove the prediction.
+      </p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.25rem">
+        <!-- Model upload -->
+        <div>
+          <div class="wizard-label">Model file (.pkl)</div>
+          <label class="upload-zone" id="shapModelZone" style="cursor:pointer;min-height:90px">
+            <div class="upload-zone-icon">
+              <svg width="32" height="32" viewBox="0 0 44 44" fill="none">
+                <rect x="3" y="3" width="38" height="38" rx="10" stroke="var(--accent-from)" stroke-width="1.5" opacity="0.5"/>
+                <path d="M22 28V18" stroke="var(--accent-from)" stroke-width="2" stroke-linecap="round"/>
+                <path d="M16 23l6-6 6 6" stroke="var(--accent-via)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M14 33h16" stroke="var(--accent-to)" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div id="shapModelName" style="font-size:0.78rem;color:var(--text3)">Click to upload .pkl</div>
+            <input type="file" id="shapModelFile" accept=".pkl" style="display:none"
+              onchange="document.getElementById('shapModelName').textContent=this.files[0]?.name||'Click to upload .pkl'">
+          </label>
+        </div>
+
+        <!-- Data upload -->
+        <div>
+          <div class="wizard-label">Test row CSV (1 row + header)</div>
+          <label class="upload-zone" id="shapDataZone" style="cursor:pointer;min-height:90px">
+            <div class="upload-zone-icon">
+              <svg width="32" height="32" viewBox="0 0 44 44" fill="none">
+                <rect x="3" y="8" width="38" height="28" rx="5" stroke="var(--accent-from)" stroke-width="1.5" opacity="0.5"/>
+                <path d="M3 16h38M12 16v20M22 16v20M32 16v20" stroke="var(--accent-via)" stroke-width="1.2" opacity="0.5"/>
+              </svg>
+            </div>
+            <div id="shapDataName" style="font-size:0.78rem;color:var(--text3)">Click to upload CSV</div>
+            <input type="file" id="shapDataFile" accept=".csv" style="display:none"
+              onchange="document.getElementById('shapDataName').textContent=this.files[0]?.name||'Click to upload CSV'">
+          </label>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="shapRunBtn" onclick="runCustomShap()" style="width:100%">
+        Compute Feature Impact →
+      </button>
+
+      <div id="shapCustomResult" style="margin-top:1rem"></div>
+    </div>
+  `;
+
+  // Wire up label clicks to hidden inputs
+  document.getElementById('shapModelZone').onclick = () => document.getElementById('shapModelFile').click();
+  document.getElementById('shapDataZone').onclick  = () => document.getElementById('shapDataFile').click();
+}
+
+async function runCustomShap() {
+  const modelFile = document.getElementById('shapModelFile')?.files?.[0];
+  const dataFile  = document.getElementById('shapDataFile')?.files?.[0];
+  const resultEl  = document.getElementById('shapCustomResult');
+  const btn       = document.getElementById('shapRunBtn');
+
+  if (!modelFile) { resultEl.innerHTML = '<div class="err-state" style="display:block">Please upload a .pkl model file.</div>'; return; }
+  if (!dataFile)  { resultEl.innerHTML = '<div class="err-state" style="display:block">Please upload a CSV data file.</div>'; return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Computing…';
+  resultEl.innerHTML = '';
+
+  const form = new FormData();
+  form.append('model_file', modelFile);
+  form.append('data_file',  dataFile);
+
+  try {
+    const res = await fetch(`${API}/shap/custom/upload`, { method: 'POST', body: form });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Unknown error' }));
+      throw new Error(err.detail || `Server error ${res.status}`);
+    }
+    const shap = await res.json();
+
+    // Reuse renderShap logic but inject into #shapCustomResult
+    const features = shap.features || [];
+    const maxAbs = Math.max(...features.map(f => Math.abs(f.shap)), 0.001);
+
+    resultEl.innerHTML = `
+      <div class="shap-panel visible" style="margin-top:0">
+        <div class="shap-header">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--accent-from)" stroke-width="2" stroke-linecap="round"><path d="M8 1v14M1 8h14"/></svg>
+          <span class="shap-title">Feature Impact</span>
+          <span class="shap-subtitle">${shap.task} · base ${shap.base_value.toFixed(3)}</span>
+        </div>
+        <div class="shap-body">
+          ${features.map(f => {
+            const isPos = f.shap >= 0;
+            const pct   = Math.min((Math.abs(f.shap) / maxAbs) * 48, 48);
+            const barStyle = isPos ? 'left:50%;width:0%' : 'right:50%;width:0%';
+            return `
+              <div class="shap-row">
+                <div class="shap-feat-name" title="${f.label}">${f.label}</div>
+                <div class="shap-bar-wrap">
+                  <div class="shap-bar-center"></div>
+                  <div class="shap-bar-fill ${isPos?'pos':'neg'}" data-pct="${pct}" style="${barStyle}"></div>
+                </div>
+                <div class="shap-val ${isPos?'pos':'neg'}">${isPos?'+':''}${f.shap.toFixed(3)}</div>
+              </div>`;
+          }).join('')}
+        </div>
+        <div class="shap-base">Base value: <strong>${shap.base_value.toFixed(3)}</strong></div>
+      </div>`;
+
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      document.querySelectorAll('#shapCustomResult .shap-bar-fill[data-pct]').forEach(bar => {
+        bar.style.width = bar.dataset.pct + '%';
+      });
+    }));
+  } catch (e) {
+    resultEl.innerHTML = `<div class="err-state" style="display:block">Error: ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Compute Feature Impact →';
+  }
+}
+
 function showUploadWizard() {
   wizardFile = null;
   wizardAnalysis = null;
