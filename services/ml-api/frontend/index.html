@@ -282,13 +282,16 @@ body {
 .result-class-label { font-size: 0.7rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
 .result-class-value { font-size: 1.4rem; font-weight: 800; margin-top: 2px; }
 
-.proba-section { display: flex; flex-direction: column; gap: 0.6rem; }
-.proba-section-label { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); margin-bottom: 0.25rem; }
-.proba-row { display: flex; align-items: center; gap: 0.75rem; }
-.proba-name { font-size: 0.78rem; color: var(--text2); width: 140px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.proba-bar-wrap { flex: 1; background: var(--border2); border-radius: 9999px; height: 6px; overflow: hidden; }
-.proba-bar-fill { height: 100%; border-radius: 9999px; transition: width 0.6s ease; }
-.proba-pct { font-size: 0.75rem; font-weight: 600; width: 40px; text-align: right; flex-shrink: 0; }
+.proba-section { display:flex; flex-direction:column; gap:0.85rem; margin-top:0.25rem; }
+.proba-section-label { font-size:0.62rem; font-weight:700; text-transform:uppercase; letter-spacing:0.09em; color:var(--text3); margin-bottom:0.1rem; }
+.proba-row { display:flex; flex-direction:column; gap:0.32rem; }
+.proba-row-top { display:flex; align-items:center; justify-content:space-between; gap:0.5rem; }
+.proba-name { font-size:0.78rem; font-weight:600; color:var(--text2); display:flex; align-items:center; gap:0.45rem; }
+.proba-winner-badge { font-size:0.58rem; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; padding:0.13rem 0.48rem; border-radius:9999px; background:color-mix(in srgb,var(--active-accent,var(--accent-from)) 16%,transparent); color:var(--active-accent,var(--accent-from)); flex-shrink:0; }
+.proba-pct { font-size:0.78rem; font-weight:700; flex-shrink:0; }
+.proba-bar-wrap { width:100%; background:var(--border2); border-radius:6px; height:10px; overflow:hidden; }
+.proba-bar-fill { height:100%; border-radius:6px; transition:width 0.65s cubic-bezier(0.25,0.46,0.45,0.94); }
+.proba-row--winner .proba-bar-wrap { background:color-mix(in srgb,var(--active-accent,var(--accent-from)) 14%,transparent); }
 
 /* Regression result */
 .result-reg-main {
@@ -1643,20 +1646,29 @@ function renderResult(result) {
       </div>
       <div class="proba-section">
         <div class="proba-section-label">Confidence</div>
-        ${proba.map((p, i) => `
-          <div class="proba-row">
-            <div class="proba-name">${classNames[i] || classes[i] || i}</div>
-            <div class="proba-bar-wrap">
-              <div class="proba-bar-fill" data-w="${(p*100).toFixed(1)}" style="width:0%;background:${m.accent}"></div>
+        ${proba.map((p, i) => {
+          const winner = i === predIdx;
+          const pct = (p*100).toFixed(1);
+          return `
+          <div class="proba-row${winner ? ' proba-row--winner' : ''}">
+            <div class="proba-row-top">
+              <div class="proba-name">
+                ${classNames[i] || classes[i] || i}
+                ${winner ? '<span class="proba-winner-badge">Predicted</span>' : ''}
+              </div>
+              <div class="proba-pct" style="color:${winner ? m.accent : 'var(--text3)'}">${pct}%</div>
             </div>
-            <div class="proba-pct" style="color:${m.accent}">${(p*100).toFixed(1)}%</div>
-          </div>
-        `).join('')}
+            <div class="proba-bar-wrap">
+              <div class="proba-bar-fill" data-w="${pct}" data-delay="${i * 80}" style="width:0%;background:${winner ? m.accent : m.accent + '66'}"></div>
+            </div>
+          </div>`;
+        }).join('')}
       </div>
     `;
     requestAnimationFrame(() => requestAnimationFrame(() => {
       document.querySelectorAll('.proba-bar-fill[data-w]').forEach(bar => {
-        bar.style.width = bar.dataset.w + '%';
+        const delay = parseInt(bar.dataset.delay || '0');
+        setTimeout(() => { bar.style.width = bar.dataset.w + '%'; }, delay);
       });
     }));
   } else if (schema.task === 'clustering') {
