@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
-from app import app
+from app import app  # noqa: E402
 
 client = TestClient(app)
 

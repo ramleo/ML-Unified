@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 from contextlib import asynccontextmanager
-from routers import eda as _eda_router
 from routers import shap as _shap_router
 from routers import pipeline as _pipeline_router
 from routers import training as _training_router
@@ -141,14 +140,11 @@ def _load():
 def index():
     if os.path.exists(FRONTEND):
         vision_url = os.environ.get("ML_VISION_URL", "").rstrip("/")
+        eda_url    = os.environ.get("ML_EDA_URL", "").rstrip("/")
         with open(FRONTEND, encoding="utf-8") as f:
             html = f.read()
-        # Pre-populate VISION_API so it is set before any JS runs (avoids race with initVisionUrl)
-        html = html.replace(
-            "let VISION_API = '';",
-            f"let VISION_API = '{vision_url}';",
-            1,
-        )
+        html = html.replace("let VISION_API = '';", f"let VISION_API = '{vision_url}';", 1)
+        html = html.replace("let EDA_API = '';",    f"let EDA_API = '{eda_url}';",       1)
         return HTMLResponse(
             html,
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
@@ -177,7 +173,10 @@ def health():
 @app.get("/app-config")
 def app_config():
     """Return runtime config consumed by the frontend (e.g. vision service URL)."""
-    return {"vision_url": os.environ.get("ML_VISION_URL", "")}
+    return {
+        "vision_url": os.environ.get("ML_VISION_URL", ""),
+        "eda_url":    os.environ.get("ML_EDA_URL", ""),
+    }
 
 @app.get("/models")
 def list_models():
@@ -763,7 +762,6 @@ async def train_model(
     )
 
 
-app.include_router(_eda_router.router)
 app.include_router(_shap_router.router)
 app.include_router(_pipeline_router.router)
 app.include_router(_training_router.router)

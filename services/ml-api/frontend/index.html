@@ -1356,7 +1356,8 @@ body {
 <script>
 // ── Config ──────────────────────────────────────────────────
 const API = '';  // same origin; ml-api serves frontend
-let VISION_API = '';  // ml-vision base URL — set by initVisionUrl() on load
+let VISION_API = '';  // ml-vision base URL — set by initServiceUrls() on load
+let EDA_API = '';     // ml-eda base URL — set by initServiceUrls() on load
 
 async function initVisionUrl() {
   try {
@@ -1364,6 +1365,7 @@ async function initVisionUrl() {
     if (r.ok) {
       const cfg = await r.json();
       if (cfg.vision_url) VISION_API = cfg.vision_url.replace(/\/$/, '');
+      if (cfg.eda_url)    EDA_API    = cfg.eda_url.replace(/\/$/, '');
     }
   } catch (_) {}
 }
@@ -5046,12 +5048,20 @@ async function _runEDA(file) {
   const errEl = document.getElementById('edaErr');
   const resEl = document.getElementById('edaResults');
   errEl.style.display = 'none';
+
+  if (!EDA_API) {
+    resEl.innerHTML = '';
+    errEl.textContent = 'EDA service is not configured. Set ML_EDA_URL on the server.';
+    errEl.style.display = 'block';
+    return;
+  }
+
   resEl.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text3)"><span class="spinner" style="border-color:rgba(52,211,153,0.3);border-top-color:#34d399;width:20px;height:20px;border-width:3px"></span><div style="margin-top:0.75rem;font-size:0.85rem">Analysing dataset…</div></div>';
 
   const fd = new FormData();
   fd.append('file', file);
   try {
-    const r = await fetch(`${API}/eda`, { method: 'POST', body: fd });
+    const r = await fetch(`${EDA_API}/eda`, { method: 'POST', body: fd });
     if (!r.ok) {
       const msg = await r.json().catch(() => ({ detail: 'Upload failed' }));
       throw new Error(msg.detail || 'Upload failed');
