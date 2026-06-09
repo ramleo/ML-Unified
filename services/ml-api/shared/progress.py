@@ -91,7 +91,11 @@ class StreamingTask:
             t = threading.Thread(target=_run, daemon=True)
             t.start()
             while True:
-                item = await self._queue.get()
+                try:
+                    item = await asyncio.wait_for(self._queue.get(), timeout=2.0)
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"  # SSE comment — ignored by browser, prevents proxy timeout
+                    continue
                 yield f"data: {json.dumps(item)}\n\n"
                 if item.get("done"):
                     break
