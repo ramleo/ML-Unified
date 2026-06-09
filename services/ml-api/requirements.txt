@@ -3,11 +3,10 @@ uvicorn==0.41.0
 scikit-learn==1.8.0
 pandas==2.2.2
 numpy==1.26.4
-scipy==1.14.1
 joblib==1.5.3
 python-multipart
 tqdm==4.67.1
-xgboost==3.2.0
+xgboost==2.1.1
 lightgbm==4.6.0
 catboost==1.2.10
 shap==0.47.2
