@@ -5,7 +5,9 @@ import joblib
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi.responses import StreamingResponse
 from sklearn.base import is_classifier
+from shared.progress import StreamingTask
 
 router = APIRouter(prefix="/shap", tags=["shap"])
 
@@ -152,25 +154,42 @@ async def compute_shap(model_id: str, request: Request):
     data = await request.json()
     df   = _prep_df(data, schema)
 
-    try:
-        preprocessor, model = _extract(m["pipeline"])
-        X_prep = preprocessor.transform(df)
-        feat_names_out = _feature_names(preprocessor, X_prep.shape[1])
+    _m      = m
+    _schema = schema
+    _data   = data
+    _df     = df
 
-        pred_class = None
-        if schema["task"] == "classification":
-            pred_class = int(model.predict(X_prep)[0])
+    task = StreamingTask()
 
-        shap_1d, base_value = _compute(model, X_prep, schema["task"], pred_class)
+    def _work(p):
+        try:
+            p.update(10, "Preprocessing features…")
+            preprocessor, model = _extract(_m["pipeline"])
+            X_prep = preprocessor.transform(_df)
+            feat_names_out = _feature_names(preprocessor, X_prep.shape[1])
 
-        orig_fields  = [f["name"]  for f in schema.get("fields", [])]
-        field_labels = {f["name"]: f.get("label", f["name"]) for f in schema.get("fields", [])}
+            pred_class = None
+            if _schema["task"] == "classification":
+                pred_class = int(model.predict(X_prep)[0])
 
-        return _build_response(shap_1d, base_value, feat_names_out, orig_fields, field_labels, data, schema["task"], pred_class)
+            p.update(30, "Computing SHAP values…")
+            shap_1d, base_value = _compute(model, X_prep, _schema["task"], pred_class)
 
-    except Exception as exc:
-        traceback.print_exc()
-        raise HTTPException(500, f"SHAP computation failed: {exc}")
+            p.update(88, "Aggregating feature importance…")
+            orig_fields  = [f["name"]  for f in _schema.get("fields", [])]
+            field_labels = {f["name"]: f.get("label", f["name"]) for f in _schema.get("fields", [])}
+            result = _build_response(shap_1d, base_value, feat_names_out, orig_fields, field_labels, _data, _schema["task"], pred_class)
+            p.finish(result=result)
+
+        except Exception as exc:
+            traceback.print_exc()
+            p.finish(error=f"SHAP computation failed: {exc}")
+
+    return StreamingResponse(
+        task.stream(_work),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── /shap/custom/upload ──────────────────────────────────────────────────────

@@ -1,9 +1,26 @@
 import io
+import json
 import os
 from fastapi.testclient import TestClient
 from app import app, MODELS, SCHEMA_DIR, MODEL_DIR
 
 client = TestClient(app)
+
+
+def _sse_result(response) -> dict:
+    """Parse an SSE streaming response and return the final result payload."""
+    result = {}
+    for line in response.text.splitlines():
+        if line.startswith("data: "):
+            try:
+                ev = json.loads(line[6:])
+                if ev.get("error"):
+                    raise RuntimeError(ev["error"])
+                if ev.get("result"):
+                    result = ev["result"]
+            except (json.JSONDecodeError, KeyError):
+                pass
+    return result
 
 # ── Health & meta ─────────────────────────────────────────────────────────────
 
@@ -192,7 +209,7 @@ def test_unsupervised_kmeans():
     r = client.post("/unsupervised", files={"file": ("clusters.csv", io.BytesIO(CLUSTER_CSV), "text/csv")},
                     data={"algorithm": "K-Means", "n_clusters": "3", "n_dims": "2"})
     assert r.status_code == 200
-    data = r.json()
+    data = _sse_result(r)
     assert "plot_data" in data
     assert "stats" in data
     assert data["stats"].get("n_clusters") == 3
@@ -201,14 +218,14 @@ def test_unsupervised_pca():
     r = client.post("/unsupervised", files={"file": ("clusters.csv", io.BytesIO(CLUSTER_CSV), "text/csv")},
                     data={"algorithm": "PCA", "n_dims": "2"})
     assert r.status_code == 200
-    data = r.json()
+    data = _sse_result(r)
     assert "plot_data" in data
 
 def test_unsupervised_dbscan():
     r = client.post("/unsupervised", files={"file": ("clusters.csv", io.BytesIO(CLUSTER_CSV), "text/csv")},
                     data={"algorithm": "DBSCAN", "eps": "0.5", "min_samples": "2", "n_dims": "2"})
     assert r.status_code == 200
-    assert "plot_data" in r.json()
+    assert "plot_data" in _sse_result(r)
 
 # ── Train ─────────────────────────────────────────────────────────────────────
 
@@ -232,7 +249,7 @@ def test_train_classification():
               "task": "classification", "algorithm": "Random Forest",
               "accent": "#818cf8"})
     assert r.status_code == 200
-    data = r.json()
+    data = _sse_result(r)
     assert data["id"] == "ci-test-classifier"
     assert "%" in data["metric"]
     assert data["metricLabel"] == "Accuracy"
@@ -256,7 +273,7 @@ def test_train_regression():
               "task": "regression", "algorithm": "Random Forest",
               "accent": "#34d399"})
     assert r.status_code == 200
-    data = r.json()
+    data = _sse_result(r)
     assert data["id"] == "ci-test-regressor"
     assert data["metricLabel"] == "MAE"
     assert "±" in data["metric"]
