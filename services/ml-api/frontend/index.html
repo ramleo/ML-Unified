@@ -648,6 +648,27 @@ body {
   color: #f87171; font-size: 0.85rem;
 }
 
+/* ── SSE progress bar ── */
+.sse-progress {
+  width: 100%; max-width: 400px; margin: 0 auto;
+}
+.sse-progress-track {
+  width: 100%; height: 8px; background: var(--border2);
+  border-radius: 9999px; overflow: hidden; margin-bottom: 0.6rem;
+}
+.sse-progress-fill {
+  height: 100%; border-radius: 9999px;
+  background: linear-gradient(90deg, var(--active-accent, var(--accent-from)), color-mix(in srgb, var(--active-accent, var(--accent-from)) 70%, white));
+  transition: width 0.35s cubic-bezier(0.25,0.46,0.45,0.94);
+  min-width: 4px;
+}
+.sse-progress-row {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 0.5rem; margin-top: 0.25rem;
+}
+.sse-progress-msg { font-size: 0.78rem; color: var(--text2); flex: 1; text-align: left; }
+.sse-progress-pct { font-size: 0.78rem; font-weight: 700; color: var(--text3); font-variant-numeric: tabular-nums; }
+
 /* Loading spinner */
 .spinner {
   display: inline-block; width: 14px; height: 14px;
@@ -2504,7 +2525,7 @@ async function fetchAndRenderShap(data) {
   if (!panel || !body) return;
 
   panel.classList.add('visible');
-  body.innerHTML = '<div class="shap-loading"><span class="spinner" style="width:16px;height:16px;border-width:2px"></span> Computing feature impact…</div>';
+  body.innerHTML = `<div class="shap-loading" style="padding:1rem 0">${_progressBarHTML('shapFill','shapMsg','shapPct')}</div>`;
 
   try {
     const res = await fetch(`${API}/shap/${activeModel.id}`, {
@@ -2513,8 +2534,15 @@ async function fetchAndRenderShap(data) {
       body:    JSON.stringify(data),
     });
     if (!res.ok) throw new Error(`${res.status}`);
-    const shap = await res.json();
-    renderShap(shap);
+
+    let shap = null;
+    for await (const ev of _sseStream(res)) {
+      if (ev.error) throw new Error(ev.error);
+      if (ev.pct !== undefined) _updateProgressBar('shapFill','shapMsg','shapPct', ev.pct, ev.msg);
+      if (ev.result) shap = ev.result;
+    }
+    if (shap) renderShap(shap);
+    else throw new Error('No SHAP result received.');
   } catch (e) {
     body.innerHTML = `<div class="shap-loading" style="color:var(--text3)">Feature impact unavailable</div>`;
   }
@@ -2888,6 +2916,47 @@ function showWizardError(msg) {
   if (el) el.innerHTML = '<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem;margin-bottom:1rem">' + msg + '</div>';
 }
 
+// ── SSE streaming helpers ─────────────────────────────────────
+async function* _sseStream(response) {
+  const reader  = response.body.getReader();
+  const decoder = new TextDecoder();
+  let   buffer  = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop();
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        try { yield JSON.parse(line.slice(6)); } catch {}
+      }
+    }
+  }
+  if (buffer.startsWith('data: ')) {
+    try { yield JSON.parse(buffer.slice(6)); } catch {}
+  }
+}
+
+function _progressBarHTML(fillId, msgId, pctId) {
+  return `<div class="sse-progress">
+    <div class="sse-progress-track"><div class="sse-progress-fill" id="${fillId}" style="width:4%"></div></div>
+    <div class="sse-progress-row">
+      <span class="sse-progress-msg" id="${msgId}">Starting…</span>
+      <span class="sse-progress-pct" id="${pctId}">0%</span>
+    </div>
+  </div>`;
+}
+
+function _updateProgressBar(fillId, msgId, pctId, pct, msg) {
+  const fill = document.getElementById(fillId);
+  const msgEl = document.getElementById(msgId);
+  const pctEl = document.getElementById(pctId);
+  if (fill)  fill.style.width  = Math.max(4, pct) + '%';
+  if (msgEl) msgEl.textContent = msg || '';
+  if (pctEl) pctEl.textContent = pct + '%';
+}
+
 // ── Train ─────────────────────────────────────────────────────
 async function runTrain() {
   const modelName = document.getElementById('wModelName').value.trim();
@@ -2903,10 +2972,8 @@ async function runTrain() {
   document.getElementById('main').innerHTML = `
     <div class="wizard" style="text-align:center;padding:3rem 1rem">
       ${wizardStepsHTML(3, false)}
-      <div style="font-size:3rem;margin-bottom:1rem">\u2699\uFE0F</div>
-      <div style="font-size:1rem;font-weight:700;margin-bottom:0.5rem">Training\u2026</div>
-      <div style="font-size:0.82rem;color:var(--text3);margin-bottom:1.5rem">This may take a few seconds</div>
-      <span class="spinner" style="width:20px;height:20px;border-width:3px"></span>
+      <div style="font-size:1rem;font-weight:700;margin-bottom:1.25rem">Training model\u2026</div>
+      ${_progressBarHTML('trainFill','trainMsg','trainPct')}
     </div>`;
 
   const nClusters = parseInt(document.getElementById('wNClusters') ? document.getElementById('wNClusters').value : 3) || 3;
@@ -2923,7 +2990,14 @@ async function runTrain() {
   try {
     const res = await fetch(API + '/train', { method: 'POST', body: form });
     if (!res.ok) { const t = await res.text(); throw new Error(t); }
-    const result = await res.json();
+
+    let result = null;
+    for await (const ev of _sseStream(res)) {
+      if (ev.error) throw new Error(ev.error);
+      if (ev.pct !== undefined) _updateProgressBar('trainFill','trainMsg','trainPct', ev.pct, ev.msg);
+      if (ev.result) result = ev.result;
+    }
+    if (!result) throw new Error('No result received from server.');
 
     const mr = await fetch(API + '/models');
     allModels = await mr.json();
@@ -4706,9 +4780,9 @@ async function runUnsupervisedAnalysis(id) {
   btn.disabled = true; btn.style.opacity = '0.5'; btn.textContent = 'Running…';
   document.getElementById('uErr').innerHTML = '';
   document.getElementById('uResult').innerHTML = `
-    <div style="text-align:center;padding:2rem 1rem;color:var(--text3)">
-      <span class="spinner" style="width:20px;height:20px;border-width:3px;display:inline-block"></span>
-      <div style="margin-top:0.75rem;font-size:0.82rem">Analysing dataset — this may take up to 60 s on the free tier…</div>
+    <div style="text-align:center;padding:2rem 1rem">
+      <div style="font-size:0.9rem;font-weight:600;margin-bottom:1rem;color:var(--text2)">Running analysis…</div>
+      ${_progressBarHTML('uFill','uMsg','uPct')}
     </div>`;
 
   const nDims = parseInt(
@@ -4731,7 +4805,14 @@ async function runUnsupervisedAnalysis(id) {
   try {
     const res = await fetch(API + '/unsupervised', { method: 'POST', body: form });
     if (!res.ok) { const t = await res.text(); throw new Error(t); }
-    const data = await res.json();
+
+    let data = null;
+    for await (const ev of _sseStream(res)) {
+      if (ev.error) throw new Error(ev.error);
+      if (ev.pct !== undefined) _updateProgressBar('uFill','uMsg','uPct', ev.pct, ev.msg);
+      if (ev.result) data = ev.result;
+    }
+    if (!data) throw new Error('No result received from server.');
     renderUnsupervisedResult(id, data);
   } catch(e) {
     document.getElementById('uResult').innerHTML = '';

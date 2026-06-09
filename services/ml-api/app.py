@@ -6,7 +6,8 @@ from routers import pipeline as _pipeline_router
 from routers import training as _training_router
 from routers import drift as _drift_router
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
+from shared.progress import StreamingTask
 from fastapi.middleware.cors import CORSMiddleware
 import collections
 import time
@@ -321,6 +322,8 @@ async def run_unsupervised(
         raise HTTPException(400, f"Could not parse CSV: {e}")
     if len(df.columns) < 2:
         raise HTTPException(400, "CSV must have at least 2 columns")
+    if algorithm not in ("K-Means", "DBSCAN", "t-SNE", "PCA"):
+        raise HTTPException(400, f"Unknown algorithm: {algorithm}")
 
     color_labels = None
     if color_col and color_col in df.columns:
@@ -349,116 +352,156 @@ async def run_unsupervised(
     if not transformers:
         raise HTTPException(400, "No usable numeric or categorical columns found")
 
-    prep = ColumnTransformer(transformers, remainder="drop")
-    X_prep = prep.fit_transform(X)
-    n_samples = len(X_prep)
+    # Capture closure variables for the worker thread
+    _alg          = algorithm
+    _color_labels = color_labels
+    _color_col    = color_col
+    _n_clusters   = n_clusters
+    _eps          = eps
+    _min_samples  = min_samples
+    _perplexity   = perplexity
+    _n_dims       = n_dims
 
-    stats = {"algorithm": algorithm, "rows": n_samples}
-    cluster_ids = None
+    task = StreamingTask()
 
-    if algorithm == "K-Means":
-        k   = max(2, min(n_clusters, n_samples - 1))
-        km  = KMeans(n_clusters=k, random_state=42, n_init=10)
-        cluster_ids = km.fit_predict(X_prep).tolist()
-        sil = silhouette_score(X_prep, cluster_ids) if k > 1 and len(set(cluster_ids)) > 1 else 0.0
-        sizes = {str(i): cluster_ids.count(i) for i in range(k)}
-        stats.update({"n_clusters": k, "silhouette": round(sil, 3), "cluster_sizes": sizes})
+    def _work(p):
+        p.update(5, "Preparing feature matrix…")
+        prep    = ColumnTransformer(transformers, remainder="drop")
+        X_prep  = prep.fit_transform(X)
+        n_samp  = len(X_prep)
+        stats   = {"algorithm": _alg, "rows": n_samp}
+        p.update(20, "Transformers fitted…")
 
-    elif algorithm == "DBSCAN":
-        n_comp_db = min(max(2, n_dims), X_prep.shape[1])
-        pca_db    = PCA(n_components=n_comp_db)
-        coords_db = pca_db.fit_transform(X_prep)
-        eps_val   = max(0.01, eps)
-        db        = DBSCAN(eps=eps_val, min_samples=min_samples)
-        cluster_ids = db.fit_predict(coords_db).tolist()
-        n_found  = len(set(c for c in cluster_ids if c >= 0))
-        n_noise  = cluster_ids.count(-1)
-        sil = silhouette_score(coords_db, cluster_ids) if n_found > 1 and len(set(cluster_ids)) > 1 else 0.0
-        stats.update({"n_clusters": n_found, "n_noise": n_noise, "silhouette": round(sil, 3)})
-        def pt_db(i):
-            p = {"x": round(float(coords_db[i, 0]), 4),
-                 "y": round(float(coords_db[i, 1] if n_comp_db > 1 else 0.0), 4),
-                 "cluster": int(cluster_ids[i]),
-                 "label": color_labels[i] if color_labels else ""}
-            if n_dims >= 3 and n_comp_db >= 3:
-                p["z"] = round(float(coords_db[i, 2]), 4)
-            return p
-        plot_data = [pt_db(i) for i in range(n_samples)]
-        if color_labels:
-            unique_labels = sorted(set(color_labels))
+        cluster_ids = None
+
+        if _alg == "K-Means":
+            p.update(25, f"Running K-Means (k={_n_clusters})…")
+            k           = max(2, min(_n_clusters, n_samp - 1))
+            km          = KMeans(n_clusters=k, random_state=42, n_init=10)
+            cluster_ids = km.fit_predict(X_prep).tolist()
+            sil         = silhouette_score(X_prep, cluster_ids) if k > 1 and len(set(cluster_ids)) > 1 else 0.0
+            sizes       = {str(i): cluster_ids.count(i) for i in range(k)}
+            stats.update({"n_clusters": k, "silhouette": round(sil, 3), "cluster_sizes": sizes})
+            p.update(75, "K-Means complete — building plot…")
+
+        elif _alg == "DBSCAN":
+            p.update(25, "Reducing dimensions for DBSCAN…")
+            n_comp_db = min(max(2, _n_dims), X_prep.shape[1])
+            pca_db    = PCA(n_components=n_comp_db)
+            coords_db = pca_db.fit_transform(X_prep)
+            p.update(50, f"Running DBSCAN (eps={_eps})…")
+            db          = DBSCAN(eps=max(0.01, _eps), min_samples=_min_samples)
+            cluster_ids = db.fit_predict(coords_db).tolist()
+            n_found     = len(set(c for c in cluster_ids if c >= 0))
+            n_noise     = cluster_ids.count(-1)
+            sil         = silhouette_score(coords_db, cluster_ids) if n_found > 1 and len(set(cluster_ids)) > 1 else 0.0
+            stats.update({"n_clusters": n_found, "n_noise": n_noise, "silhouette": round(sil, 3)})
+            p.update(85, "Building scatter plot…")
+
+            def _pt_db(i):
+                pt = {"x": round(float(coords_db[i, 0]), 4),
+                      "y": round(float(coords_db[i, 1] if n_comp_db > 1 else 0.0), 4),
+                      "cluster": int(cluster_ids[i]),
+                      "label": _color_labels[i] if _color_labels else ""}
+                if _n_dims >= 3 and n_comp_db >= 3:
+                    pt["z"] = round(float(coords_db[i, 2]), 4)
+                return pt
+
+            plot_data = [_pt_db(i) for i in range(n_samp)]
+            if _color_labels:
+                stats["color_labels"] = sorted(set(_color_labels))
+            stats["color_col"] = _color_col if _color_col else ""
+            p.finish(result={"plot_data": plot_data, "stats": stats})
+            return
+
+        elif _alg == "t-SNE":
+            perp   = min(float(_perplexity), max(5.0, (n_samp - 1) / 3))
+            t_comp = min(max(2, _n_dims), 3)
+            p.update(25, f"Running t-SNE (perplexity={perp:.0f}) — this may take a while…")
+            tsne   = TSNE(n_components=t_comp, random_state=42, perplexity=perp,
+                          max_iter=1000, init="pca" if X_prep.shape[1] >= 2 else "random")
+            coords = tsne.fit_transform(X_prep)
+            stats.update({"perplexity": round(perp, 1),
+                          "kl_divergence": round(float(tsne.kl_divergence_), 4),
+                          "color_col": _color_col if _color_col else ""})
+            p.update(85, "t-SNE complete — building plot…")
+
+            def _pt_tsne(i):
+                pt = {"x": round(float(coords[i, 0]), 4), "y": round(float(coords[i, 1]), 4),
+                      "cluster": -1, "label": _color_labels[i] if _color_labels else ""}
+                if _n_dims >= 3 and t_comp >= 3:
+                    pt["z"] = round(float(coords[i, 2]), 4)
+                return pt
+
+            plot_data = [_pt_tsne(i) for i in range(n_samp)]
+            if _color_labels:
+                unique_labels = sorted(set(_color_labels))
+                label_to_id   = {lbl: idx for idx, lbl in enumerate(unique_labels)}
+                for pt in plot_data:
+                    pt["cluster"] = label_to_id[pt["label"]]
+                stats["color_labels"] = unique_labels
+            p.finish(result={"plot_data": plot_data, "stats": stats})
+            return
+
+        elif _alg == "PCA":
+            n_comp = min(max(2, _n_dims), X_prep.shape[1])
+            p.update(25, f"Running PCA ({n_comp} components)…")
+            pca    = PCA(n_components=n_comp)
+            coords = pca.fit_transform(X_prep)
+            ev     = pca.explained_variance_ratio_.tolist()
+            stats.update({
+                "explained_variance": [round(v * 100, 2) for v in ev],
+                "total_variance":     round(sum(ev) * 100, 2),
+                "color_col":          _color_col if _color_col else "",
+            })
+            p.update(85, "PCA complete — building plot…")
+
+            def _pt_pca(i):
+                pt = {"x": round(float(coords[i, 0]), 4),
+                      "y": round(float(coords[i, 1] if n_comp > 1 else 0.0), 4),
+                      "cluster": -1, "label": _color_labels[i] if _color_labels else ""}
+                if _n_dims >= 3 and n_comp >= 3:
+                    pt["z"] = round(float(coords[i, 2]), 4)
+                return pt
+
+            plot_data = [_pt_pca(i) for i in range(n_samp)]
+            if _color_labels:
+                unique_labels = sorted(set(_color_labels))
+                label_to_id   = {lbl: idx for idx, lbl in enumerate(unique_labels)}
+                for pt in plot_data:
+                    pt["cluster"] = label_to_id[pt["label"]]
+                stats["color_labels"] = unique_labels
+            p.finish(result={"plot_data": plot_data, "stats": stats})
+            return
+
+        # K-Means path — visualise with PCA
+        p.update(80, "Building scatter plot…")
+        n_comp  = min(max(2, _n_dims), X_prep.shape[1])
+        pca_viz = PCA(n_components=n_comp)
+        coords  = pca_viz.fit_transform(X_prep)
+
+        def _pt_cl(i):
+            pt = {"x": round(float(coords[i, 0]), 4),
+                  "y": round(float(coords[i, 1] if n_comp > 1 else 0.0), 4),
+                  "cluster": int(cluster_ids[i]),
+                  "label": _color_labels[i] if _color_labels else ""}
+            if _n_dims >= 3 and n_comp >= 3:
+                pt["z"] = round(float(coords[i, 2]), 4)
+            return pt
+
+        plot_data = [_pt_cl(i) for i in range(n_samp)]
+        if _color_labels:
+            unique_labels = sorted(set(_color_labels))
+            label_to_id   = {lbl: idx for idx, lbl in enumerate(unique_labels)}
             stats["color_labels"] = unique_labels
-        stats["color_col"] = color_col if color_col else ""
-        return {"plot_data": plot_data, "stats": stats}
+        stats["color_col"] = _color_col if _color_col else ""
+        p.finish(result={"plot_data": plot_data, "stats": stats})
 
-    elif algorithm == "t-SNE":
-        perp   = min(float(perplexity), max(5.0, (n_samples - 1) / 3))
-        t_comp = min(max(2, n_dims), 3)
-        tsne   = TSNE(n_components=t_comp, random_state=42, perplexity=perp,
-                      max_iter=1000, init="pca" if X_prep.shape[1] >= 2 else "random")
-        coords = tsne.fit_transform(X_prep)
-        stats.update({"perplexity": round(perp, 1), "kl_divergence": round(float(tsne.kl_divergence_), 4),
-                       "color_col": color_col if color_col else ""})
-        def pt_tsne(i):
-            p = {"x": round(float(coords[i, 0]), 4), "y": round(float(coords[i, 1]), 4),
-                 "cluster": -1, "label": color_labels[i] if color_labels else ""}
-            if n_dims >= 3 and t_comp >= 3:
-                p["z"] = round(float(coords[i, 2]), 4)
-            return p
-        plot_data = [pt_tsne(i) for i in range(n_samples)]
-        if color_labels:
-            unique_labels = sorted(set(color_labels))
-            label_to_id   = {lbl: i for i, lbl in enumerate(unique_labels)}
-            for p in plot_data:
-                p["cluster"] = label_to_id[p["label"]]
-            stats["color_labels"] = unique_labels
-        return {"plot_data": plot_data, "stats": stats}
-
-    elif algorithm == "PCA":
-        n_comp = min(max(2, n_dims), X_prep.shape[1])
-        pca    = PCA(n_components=n_comp)
-        coords = pca.fit_transform(X_prep)
-        ev     = pca.explained_variance_ratio_.tolist()
-        stats.update({
-            "explained_variance": [round(v * 100, 2) for v in ev],
-            "total_variance":     round(sum(ev) * 100, 2),
-            "color_col":          color_col if color_col else "",
-        })
-        def pt_pca(i):
-            p = {"x": round(float(coords[i, 0]), 4),
-                 "y": round(float(coords[i, 1] if n_comp > 1 else 0.0), 4),
-                 "cluster": -1, "label": color_labels[i] if color_labels else ""}
-            if n_dims >= 3 and n_comp >= 3:
-                p["z"] = round(float(coords[i, 2]), 4)
-            return p
-        plot_data = [pt_pca(i) for i in range(n_samples)]
-        if color_labels:
-            unique_labels = sorted(set(color_labels))
-            label_to_id   = {lbl: i for i, lbl in enumerate(unique_labels)}
-            for p in plot_data:
-                p["cluster"] = label_to_id[p["label"]]
-            stats["color_labels"] = unique_labels
-        return {"plot_data": plot_data, "stats": stats}
-    else:
-        raise HTTPException(400, f"Unknown algorithm: {algorithm}")
-
-    n_comp  = min(max(2, n_dims), X_prep.shape[1])
-    pca_viz = PCA(n_components=n_comp)
-    coords  = pca_viz.fit_transform(X_prep)
-    def pt_cl(i):
-        p = {"x": round(float(coords[i, 0]), 4),
-             "y": round(float(coords[i, 1] if n_comp > 1 else 0.0), 4),
-             "cluster": int(cluster_ids[i]),
-             "label": color_labels[i] if color_labels else ""}
-        if n_dims >= 3 and n_comp >= 3:
-            p["z"] = round(float(coords[i, 2]), 4)
-        return p
-    plot_data = [pt_cl(i) for i in range(n_samples)]
-    if color_labels:
-        unique_labels = sorted(set(color_labels))
-        label_to_id   = {lbl: i for i, lbl in enumerate(unique_labels)}
-        stats["color_labels"] = unique_labels
-    stats["color_col"] = color_col if color_col else ""
-    return {"plot_data": plot_data, "stats": stats}
+    return StreamingResponse(
+        task.stream(_work),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/train")
@@ -513,168 +556,211 @@ async def train_model(
     if not transformers:
         raise HTTPException(400, "No usable feature columns found after cleaning")
 
-    preprocessor = ColumnTransformer(transformers, remainder="drop")
+    # Capture closure variables for the worker thread
+    _task      = task
+    _algorithm = algorithm
+    _accent    = accent
+    _model_id  = model_id
+    _model_name = model_name
+    _target_col = target_col
+    _n_clusters = n_clusters
+    _y          = y
 
-    le = None
-    plot_data = None
+    streaming_task = StreamingTask()
 
-    # Lazy-import boosting libraries — each ~20-200 MB of shared libs;
-    # keeping them out of module-level imports frees ~200 MB at startup.
-    from xgboost import XGBClassifier, XGBRegressor          # noqa: PLC0415
-    from lightgbm import LGBMClassifier, LGBMRegressor        # noqa: PLC0415
-    from catboost import CatBoostClassifier, CatBoostRegressor  # noqa: PLC0415
+    def _work(p):
+        # Lazy-import boosting libraries — each ~20-200 MB of shared libs;
+        # keeping them out of module-level imports frees ~200 MB at startup.
+        from xgboost import XGBClassifier, XGBRegressor          # noqa: PLC0415
+        from lightgbm import LGBMClassifier, LGBMRegressor        # noqa: PLC0415
+        from catboost import CatBoostClassifier, CatBoostRegressor  # noqa: PLC0415
 
-    if task == "clustering":
-        preprocessor.fit(X)
-        X_prep = preprocessor.transform(X)
-        n_comp = min(2, X_prep.shape[1])
+        preprocessor = ColumnTransformer(transformers, remainder="drop")
+        le        = None
+        plot_data = None
+        metric = metric_label = ""
 
-        if algorithm == "t-SNE":
-            reducer = TSNE(n_components=n_comp, random_state=42, perplexity=min(30, max(5, len(X)//10)))
-            coords  = reducer.fit_transform(X_prep)
-            labels  = [-1] * len(X)
-            metric, metric_label = "N/A", "Visualization"
-            pipeline = Pipeline([("prep", preprocessor)])
-        elif algorithm == "PCA":
-            reducer = PCA(n_components=n_comp)
-            coords  = reducer.fit_transform(X_prep)
-            labels  = [-1] * len(X)
-            ev      = reducer.explained_variance_ratio_
-            metric, metric_label = f"{sum(ev)*100:.1f}%", "Variance Explained"
-            pipeline = Pipeline([("prep", preprocessor)])
-        elif algorithm == "DBSCAN":
-            db      = DBSCAN(eps=0.5, min_samples=5)
-            labels  = db.fit_predict(X_prep).tolist()
-            n_found = len(set(lbl for lbl in labels if lbl >= 0))
-            sil     = silhouette_score(X_prep, labels) if n_found > 1 and len(set(labels)) > 1 else 0.0
-            metric, metric_label = f"{sil:.2f}", "Silhouette"
-            pca_viz = PCA(n_components=n_comp)
-            coords  = pca_viz.fit_transform(X_prep)
-            pipeline = Pipeline([("prep", preprocessor)])
-        else:  # K-Means
-            km       = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-            pipeline = Pipeline([("prep", preprocessor), ("model", km)])
-            pipeline.fit(X)
-            labels   = pipeline.predict(X).tolist()
-            sil      = silhouette_score(X_prep, labels) if n_clusters > 1 and len(set(labels)) > 1 else 0.0
-            metric, metric_label = f"{sil:.2f}", "Silhouette"
-            pca_viz  = PCA(n_components=n_comp)
-            coords   = pca_viz.fit_transform(X_prep)
+        p.update(5, "Preparing feature matrix…")
 
-        if n_comp == 1:
-            plot_data = [{"x": round(float(coords[i, 0]), 4), "y": 0.0, "cluster": int(labels[i])} for i in range(len(coords))]
+        if _task == "clustering":
+            p.update(10, "Fitting preprocessing…")
+            preprocessor.fit(X)
+            X_prep = preprocessor.transform(X)
+            n_comp = min(2, X_prep.shape[1])
+
+            if _algorithm == "t-SNE":
+                p.update(20, "Running t-SNE (this may take a while)…")
+                reducer = TSNE(n_components=n_comp, random_state=42,
+                               perplexity=min(30, max(5, len(X) // 10)))
+                coords  = reducer.fit_transform(X_prep)
+                labels  = [-1] * len(X)
+                metric, metric_label = "N/A", "Visualization"
+                pipeline = Pipeline([("prep", preprocessor)])
+
+            elif _algorithm == "PCA":
+                p.update(20, "Running PCA…")
+                reducer = PCA(n_components=n_comp)
+                coords  = reducer.fit_transform(X_prep)
+                labels  = [-1] * len(X)
+                ev      = reducer.explained_variance_ratio_
+                metric, metric_label = f"{sum(ev)*100:.1f}%", "Variance Explained"
+                pipeline = Pipeline([("prep", preprocessor)])
+
+            elif _algorithm == "DBSCAN":
+                p.update(20, "Running DBSCAN…")
+                db      = DBSCAN(eps=0.5, min_samples=5)
+                labels  = db.fit_predict(X_prep).tolist()
+                n_found = len(set(lbl for lbl in labels if lbl >= 0))
+                sil     = silhouette_score(X_prep, labels) if n_found > 1 and len(set(labels)) > 1 else 0.0
+                metric, metric_label = f"{sil:.2f}", "Silhouette"
+                pca_viz = PCA(n_components=n_comp)
+                coords  = pca_viz.fit_transform(X_prep)
+                pipeline = Pipeline([("prep", preprocessor)])
+
+            else:  # K-Means
+                p.update(20, f"Running K-Means (k={_n_clusters})…")
+                km       = KMeans(n_clusters=_n_clusters, random_state=42, n_init=10)
+                pipeline = Pipeline([("prep", preprocessor), ("model", km)])
+                pipeline.fit(X)
+                labels   = pipeline.predict(X).tolist()
+                sil      = silhouette_score(X_prep, labels) if _n_clusters > 1 and len(set(labels)) > 1 else 0.0
+                metric, metric_label = f"{sil:.2f}", "Silhouette"
+                pca_viz  = PCA(n_components=n_comp)
+                coords   = pca_viz.fit_transform(X_prep)
+
+            p.update(80, "Building cluster plot…")
+            if n_comp == 1:
+                plot_data = [{"x": round(float(coords[i, 0]), 4), "y": 0.0, "cluster": int(labels[i])} for i in range(len(coords))]
+            else:
+                plot_data = [{"x": round(float(coords[i, 0]), 4), "y": round(float(coords[i, 1]), 4), "cluster": int(labels[i])} for i in range(len(coords))]
+
+        elif _task == "classification":
+            p.update(10, "Encoding labels…")
+            le    = LabelEncoder()
+            y_enc = le.fit_transform(_y.astype(str))
+            if _algorithm == "XGBoost":
+                estimator = XGBClassifier(n_estimators=100, random_state=42, eval_metric="logloss", verbosity=0)
+            elif _algorithm == "LightGBM":
+                estimator = LGBMClassifier(n_estimators=100, random_state=42, verbose=-1)
+            elif _algorithm == "CatBoost":
+                estimator = CatBoostClassifier(iterations=100, random_seed=42, verbose=0)
+            elif _algorithm == "Random Forest":
+                estimator = RandomForestClassifier(n_estimators=100, random_state=42)
+            else:
+                estimator = GradientBoostingClassifier(n_estimators=100, random_state=42)
+            pipeline = Pipeline([("prep", preprocessor), ("model", estimator)])
+            split    = 0.2 if len(X) >= 10 else 0.1
+            X_train, X_test, y_train, y_test = train_test_split(X, y_enc, test_size=split, random_state=42)
+            p.update(20, f"Training {_algorithm} classifier…")
+            pipeline.fit(X_train, y_train)
+            p.update(82, "Evaluating on test set…")
+            score        = accuracy_score(y_test, pipeline.predict(X_test))
+            metric       = f"{score * 100:.1f}%"
+            metric_label = "Accuracy"
+
+        else:  # regression
+            p.update(10, "Preparing regression target…")
+            y_num = pd.to_numeric(_y, errors="coerce")
+            y_enc = y_num.fillna(float(y_num.median()))
+            if _algorithm == "XGBoost":
+                estimator = XGBRegressor(n_estimators=100, random_state=42, verbosity=0)
+            elif _algorithm == "LightGBM":
+                estimator = LGBMRegressor(n_estimators=100, random_state=42, verbose=-1)
+            elif _algorithm == "CatBoost":
+                estimator = CatBoostRegressor(iterations=100, random_seed=42, verbose=0)
+            elif _algorithm == "Gradient Boosting":
+                estimator = GradientBoostingRegressor(n_estimators=100, random_state=42)
+            else:
+                estimator = RandomForestRegressor(n_estimators=100, random_state=42)
+            pipeline = Pipeline([("prep", preprocessor), ("model", estimator)])
+            split    = 0.2 if len(X) >= 10 else 0.1
+            X_train, X_test, y_train, y_test = train_test_split(X, y_enc, test_size=split, random_state=42)
+            p.update(20, f"Training {_algorithm} regressor…")
+            pipeline.fit(X_train, y_train)
+            p.update(82, "Evaluating on test set…")
+            mae          = mean_absolute_error(y_test, pipeline.predict(X_test))
+            metric       = f"±{mae:.0f}"
+            metric_label = "MAE"
+
+        p.update(88, "Building schema…")
+        feature_cols = X.columns.tolist()
+        fields: list = []
+        sample: dict = {}
+        for col in feature_cols:
+            is_cat = not pd.api.types.is_numeric_dtype(X[col]) or X[col].nunique() <= 15
+            if is_cat:
+                opts     = [{"value": str(v), "label": str(v)} for v in sorted(X[col].dropna().unique())]
+                col_vals = X[col].dropna()
+                n_col    = len(col_vals)
+                cat_freq = {str(v): round(int((col_vals == v).sum()) / n_col, 6) for v in col_vals.unique()} if n_col else {}
+                fields.append({"name": col, "label": col, "type": "select", "options": opts, "cat_freq": cat_freq})
+                mode = X[col].mode()
+                sample[col] = str(mode[0]) if not mode.empty else ""
+            else:
+                cmin = round(float(X[col].min()), 4)
+                cmax = round(float(X[col].max()), 4)
+                rng  = cmax - cmin
+                step = max(round(rng / 100, 4) if rng > 0 else 1.0, 0.0001)
+                fields.append({"name": col, "label": col, "type": "number",
+                               "min": cmin, "max": cmax, "step": step})
+                sample[col] = round(float(X[col].median()), 4)
+
+        output_meta: dict = {"type": _task}
+        if _task == "clustering":
+            output_meta["n_clusters"] = _n_clusters
         else:
-            plot_data = [{"x": round(float(coords[i, 0]), 4), "y": round(float(coords[i, 1]), 4), "cluster": int(labels[i])} for i in range(len(coords))]
-    elif task == "classification":
-        le    = LabelEncoder()
-        y_enc = le.fit_transform(y.astype(str))
-        if algorithm == "XGBoost":
-            estimator = XGBClassifier(n_estimators=100, random_state=42, eval_metric="logloss", verbosity=0)
-        elif algorithm == "LightGBM":
-            estimator = LGBMClassifier(n_estimators=100, random_state=42, verbose=-1)
-        elif algorithm == "CatBoost":
-            estimator = CatBoostClassifier(iterations=100, random_seed=42, verbose=0)
-        elif algorithm == "Random Forest":
-            estimator = RandomForestClassifier(n_estimators=100, random_state=42)
-        else:
-            estimator = GradientBoostingClassifier(n_estimators=100, random_state=42)
-        pipeline = Pipeline([("prep", preprocessor), ("model", estimator)])
-        split    = 0.2 if len(X) >= 10 else 0.1
-        X_train, X_test, y_train, y_test = train_test_split(X, y_enc, test_size=split, random_state=42)
-        pipeline.fit(X_train, y_train)
-        score        = accuracy_score(y_test, pipeline.predict(X_test))
-        metric       = f"{score * 100:.1f}%"
-        metric_label = "Accuracy"
-    else:
-        y_num = pd.to_numeric(y, errors="coerce")
-        y_enc = y_num.fillna(float(y_num.median()))
-        if algorithm == "XGBoost":
-            estimator = XGBRegressor(n_estimators=100, random_state=42, verbosity=0)
-        elif algorithm == "LightGBM":
-            estimator = LGBMRegressor(n_estimators=100, random_state=42, verbose=-1)
-        elif algorithm == "CatBoost":
-            estimator = CatBoostRegressor(iterations=100, random_seed=42, verbose=0)
-        elif algorithm == "Gradient Boosting":
-            estimator = GradientBoostingRegressor(n_estimators=100, random_state=42)
-        else:
-            estimator = RandomForestRegressor(n_estimators=100, random_state=42)
-        pipeline = Pipeline([("prep", preprocessor), ("model", estimator)])
-        split    = 0.2 if len(X) >= 10 else 0.1
-        X_train, X_test, y_train, y_test = train_test_split(X, y_enc, test_size=split, random_state=42)
-        pipeline.fit(X_train, y_train)
-        mae          = mean_absolute_error(y_test, pipeline.predict(X_test))
-        metric       = f"±{mae:.0f}"
-        metric_label = "MAE"
+            output_meta["target_col"] = _target_col
+        if _task == "classification" and le is not None:
+            output_meta["class_names"] = [str(c) for c in le.classes_]
 
-    feature_cols = X.columns.tolist()
-    fields, sample = [], {}
-    for col in feature_cols:
-        is_cat = not pd.api.types.is_numeric_dtype(X[col]) or X[col].nunique() <= 15
-        if is_cat:
-            opts = [{"value": str(v), "label": str(v)} for v in sorted(X[col].dropna().unique())]
-            col_vals  = X[col].dropna()
-            n_col     = len(col_vals)
-            cat_freq  = {str(v): round(int((col_vals == v).sum()) / n_col, 6) for v in col_vals.unique()} if n_col else {}
-            fields.append({"name": col, "label": col, "type": "select", "options": opts, "cat_freq": cat_freq})
-            mode = X[col].mode()
-            sample[col] = str(mode[0]) if not mode.empty else ""
-        else:
-            cmin = round(float(X[col].min()), 4)
-            cmax = round(float(X[col].max()), 4)
-            rng  = cmax - cmin
-            step = max(round(rng / 100, 4) if rng > 0 else 1.0, 0.0001)
-            fields.append({"name": col, "label": col, "type": "number",
-                           "min": cmin, "max": cmax, "step": step})
-            sample[col] = round(float(X[col].median()), 4)
+        schema = {
+            "id":          _model_id,
+            "title":       _model_name,
+            "description": f"Auto-trained {_task} model using {_algorithm}.",
+            "task":        _task,
+            "accent":      _accent,
+            "model":       _algorithm,
+            "metric":      metric,
+            "metricLabel": metric_label,
+            "id_cols":     [],
+            "ensure_cols": [],
+            "fields":      fields,
+            "sample":      sample,
+            "output":      output_meta,
+        }
 
-    output_meta: dict = {"type": task}
-    if task == "clustering":
-        output_meta["n_clusters"] = n_clusters
-    else:
-        output_meta["target_col"] = target_col
-    if task == "classification" and le is not None:
-        output_meta["class_names"] = [str(c) for c in le.classes_]
+        p.update(93, "Saving model to disk…")
+        with open(os.path.join(SCHEMA_DIR, f"{_model_id}.json"), "w") as f:
+            json.dump(schema, f, indent=2)
+        joblib.dump(pipeline, os.path.join(MODEL_DIR, f"{_model_id}_pipeline.pkl"))
+        if le is not None:
+            joblib.dump(le, os.path.join(MODEL_DIR, f"{_model_id}_labels.pkl"))
 
-    schema = {
-        "id":          model_id,
-        "title":       model_name,
-        "description": f"Auto-trained {task} model using {algorithm}.",
-        "task":        task,
-        "accent":      accent,
-        "model":       algorithm,
-        "metric":      metric,
-        "metricLabel": metric_label,
-        "id_cols":     [],
-        "ensure_cols": [],
-        "fields":      fields,
-        "sample":      sample,
-        "output":      output_meta,
-    }
+        MODELS[_model_id] = {
+            "pipeline": pipeline,
+            "le":       le,
+            "classes":  le.classes_.tolist() if le is not None else None,
+            "schema":   schema,
+        }
 
-    with open(os.path.join(SCHEMA_DIR, f"{model_id}.json"), "w") as f:
-        json.dump(schema, f, indent=2)
-    joblib.dump(pipeline, os.path.join(MODEL_DIR, f"{model_id}_pipeline.pkl"))
-    if le is not None:
-        joblib.dump(le, os.path.join(MODEL_DIR, f"{model_id}_labels.pkl"))
+        resp = {
+            "id":          _model_id,
+            "title":       _model_name,
+            "metric":      metric,
+            "metricLabel": metric_label,
+            "accent":      _accent,
+        }
+        if plot_data is not None:
+            resp["plot_data"]  = plot_data
+            resp["n_clusters"] = _n_clusters
 
-    MODELS[model_id] = {
-        "pipeline": pipeline,
-        "le":       le,
-        "classes":  le.classes_.tolist() if le is not None else None,
-        "schema":   schema,
-    }
+        p.finish(result=resp)
 
-    resp = {
-        "id":          model_id,
-        "title":       model_name,
-        "metric":      metric,
-        "metricLabel": metric_label,
-        "accent":      accent,
-    }
-    if plot_data is not None:
-        resp["plot_data"]  = plot_data
-        resp["n_clusters"] = n_clusters
-    return resp
+    return StreamingResponse(
+        streaming_task.stream(_work),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 app.include_router(_eda_router.router)
