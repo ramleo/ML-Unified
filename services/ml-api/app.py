@@ -23,7 +23,7 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import (accuracy_score, mean_absolute_error, silhouette_score,
-                             f1_score, roc_auc_score, r2_score)
+                             f1_score, roc_auc_score)
 from typing import Any, Dict
 import io
 import joblib
@@ -698,9 +698,9 @@ async def train_model(
             mae          = mean_absolute_error(y_test, y_pred)
             metric       = f"±{mae:.2f}"
             metric_label = "MAE"
-            extra_metrics = []
-            r2 = r2_score(y_test, y_pred)
-            extra_metrics.append({"label": "R²", "value": f"{r2:.3f}"})
+            import numpy as np  # noqa: PLC0415
+            rmse = float(np.sqrt(np.mean((y_test - y_pred) ** 2)))
+            extra_metrics = [{"label": "RMSE", "value": f"{rmse:.2f}"}]
 
         p.update(88, "Building schema…")
         feature_cols = X.columns.tolist()
