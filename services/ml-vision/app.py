@@ -482,7 +482,7 @@ async def detect_objects(
                 session = _load_det_session(model_name)
             except Exception as e:
                 p.finish(error=f"Failed to load detection model: {e}")
-            return
+                return
 
         size = cfg["input_size"]
 
@@ -794,7 +794,7 @@ async def segment_image(
                 session = _load_segformer_session()
             except Exception as e:
                 p.finish(error=f"Failed to load segmentation model: {e}")
-            return
+                return
 
         p.update(40, "Preprocessing image")
         try:
