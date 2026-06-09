@@ -3857,13 +3857,19 @@ function cancelDetRetry() {
 
 async function runObjectDetect() {
   if (!detFile) return;
-  const btn    = document.getElementById('detRunBtn');
-  const errEl  = document.getElementById('detErr');
-  const conf   = parseInt(document.getElementById('detConf').value) / 100;
+  const btn   = document.getElementById('detRunBtn');
+  const errEl = document.getElementById('detErr');
+  const conf  = parseInt(document.getElementById('detConf').value) / 100;
 
   btn.innerHTML = '<span class="spinner"></span> Detecting…';
   btn.disabled  = true;
   errEl.innerHTML = '';
+
+  document.getElementById('detResult').innerHTML = `
+    <div style="padding:2.5rem 1.5rem;text-align:center">
+      ${_progressBarHTML('detFill','detMsg','detPct')}
+      <div style="font-size:0.7rem;color:var(--text3);margin-top:0.7rem;opacity:0.75">First call downloads ~35 MB — may take up to 60 s on free tier</div>
+    </div>`;
 
   const form = new FormData();
   form.append('file',       detFile);
@@ -3872,9 +3878,7 @@ async function runObjectDetect() {
   form.append('max_dets',   20);
 
   try {
-    const res = await _postWithProgress(
-      `${VISION_API}/detect-objects`, form, 'detResult', '#38bdf8',
-      'First call downloads ~35 MB — may take up to 60 s on free tier');
+    const res = await fetch(`${VISION_API}/detect-objects`, { method: 'POST', body: form });
     if (!res.ok) {
       const raw = await res.text();
       let msg;
@@ -3882,7 +3886,13 @@ async function runObjectDetect() {
       if (res.status === 503) { showDetRetry(msg); return; }
       throw new Error(msg);
     }
-    const data = await res.json();
+    let data = null;
+    for await (const ev of _sseStream(res)) {
+      if (ev.error) throw new Error(ev.error);
+      if (ev.pct !== undefined) _updateProgressBar('detFill','detMsg','detPct', ev.pct, ev.msg);
+      if (ev.result) data = ev.result;
+    }
+    if (!data) throw new Error('No result received from server.');
     renderDetectionResult(data);
   } catch(e) {
     document.getElementById('detResult').innerHTML = '';
@@ -4077,6 +4087,7 @@ async function runSegmentation() {
   if (!segFile) return;
   const btn   = document.getElementById('segRunBtn');
   const errEl = document.getElementById('segErr');
+  const model = document.querySelector('input[name="segModel"]:checked')?.value || 'segformer_b0';
 
   btn.innerHTML = '<span class="spinner"></span> Segmenting…';
   btn.disabled  = true;
@@ -4084,12 +4095,42 @@ async function runSegmentation() {
 
   const form = new FormData();
   form.append('file',       segFile);
-  form.append('model_name', 'segformer_b0');
+  form.append('model_name', model);
+
+  // color_segmentation is fast plain-JSON — no SSE progress needed
+  if (model === 'color_segmentation') {
+    document.getElementById('segResult').innerHTML = `
+      <div style="padding:2.5rem 1.5rem;text-align:center">
+        ${_progressBarHTML('segFill','segMsg','segPct')}
+      </div>`;
+    _updateProgressBar('segFill','segMsg','segPct', 50, 'Analyzing colors');
+    try {
+      const res = await fetch(`${VISION_API}/segment-image`, { method: 'POST', body: form });
+      if (!res.ok) {
+        const raw = await res.text();
+        let msg; try { msg = JSON.parse(raw).detail || raw; } catch { msg = raw; }
+        if (res.status === 503) { showSegRetry(msg); return; }
+        throw new Error(msg);
+      }
+      const data = await res.json();
+      renderSegmentationResult(data);
+    } catch(e) {
+      document.getElementById('segResult').innerHTML = '';
+      errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">${e.message}</div>`;
+    } finally {
+      btn.innerHTML = 'Segment Image →'; btn.disabled = false;
+    }
+    return;
+  }
+
+  document.getElementById('segResult').innerHTML = `
+    <div style="padding:2.5rem 1.5rem;text-align:center">
+      ${_progressBarHTML('segFill','segMsg','segPct')}
+      <div style="font-size:0.7rem;color:var(--text3);margin-top:0.7rem;opacity:0.75">First call downloads ~4.4 MB — may take ~30 s on free tier cold start</div>
+    </div>`;
 
   try {
-    const res = await _postWithProgress(
-      `${VISION_API}/segment-image`, form, 'segResult', '#a78bfa',
-      'First call downloads ~4.4 MB — may take ~30 s on free tier cold start');
+    const res = await fetch(`${VISION_API}/segment-image`, { method: 'POST', body: form });
     if (!res.ok) {
       const raw = await res.text();
       let msg;
@@ -4097,7 +4138,13 @@ async function runSegmentation() {
       if (res.status === 503) { showSegRetry(msg); return; }
       throw new Error(msg);
     }
-    const data = await res.json();
+    let data = null;
+    for await (const ev of _sseStream(res)) {
+      if (ev.error) throw new Error(ev.error);
+      if (ev.pct !== undefined) _updateProgressBar('segFill','segMsg','segPct', ev.pct, ev.msg);
+      if (ev.result) data = ev.result;
+    }
+    if (!data) throw new Error('No result received from server.');
     renderSegmentationResult(data);
   } catch(e) {
     document.getElementById('segResult').innerHTML = '';

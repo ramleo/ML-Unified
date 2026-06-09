@@ -1,10 +1,27 @@
 import io
+import json
 import numpy as np
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from app import app
 
 client = TestClient(app)
+
+
+def _sse_result(response):
+    """Parse an SSE streaming response; raise on error, return final result dict."""
+    result = None
+    for line in response.iter_lines():
+        if isinstance(line, bytes):
+            line = line.decode()
+        if not line.startswith("data:"):
+            continue
+        ev = json.loads(line[5:].strip())
+        if ev.get("error"):
+            raise AssertionError(ev["error"])
+        if ev.get("result"):
+            result = ev["result"]
+    return result
 
 
 def _make_png(w=64, h=64, color=(128, 64, 32)) -> io.BytesIO:
@@ -234,13 +251,15 @@ def test_detect_objects_inference():
 
     import app as app_module
     fake_slot = {"model_type": "det", "model_id": "tiny_yolov3", "session": mock_session}
-    with patch.object(app_module, "_large_vision_cache", fake_slot):
-        r = client.post("/detect-objects",
-            files={"file": ("test.png", _make_png(640, 480), "image/png")},
-            data={"model_name": "tiny_yolov3", "confidence": "0.5"})
+    with patch.object(app_module, "_large_vision_cache", fake_slot), \
+         patch("os.path.exists", lambda p: True):
+        with client.stream("POST", "/detect-objects",
+                files={"file": ("test.png", _make_png(640, 480), "image/png")},
+                data={"model_name": "tiny_yolov3", "confidence": "0.5"}) as r:
+            assert r.status_code == 200
+            data = _sse_result(r)
 
-    assert r.status_code == 200
-    data = r.json()
+    assert data is not None
     assert data["count"]                      == 1
     assert data["detections"][0]["label"]     == "person"
     assert data["detections"][0]["confidence"] == 0.95
@@ -266,13 +285,15 @@ def test_detect_objects_confidence_filter():
 
     import app as app_module
     fake_slot = {"model_type": "det", "model_id": "tiny_yolov3", "session": mock_session}
-    with patch.object(app_module, "_large_vision_cache", fake_slot):
-        r = client.post("/detect-objects",
-            files={"file": ("test.png", _make_png(640, 480), "image/png")},
-            data={"model_name": "tiny_yolov3", "confidence": "0.5"})
+    with patch.object(app_module, "_large_vision_cache", fake_slot), \
+         patch("os.path.exists", lambda p: True):
+        with client.stream("POST", "/detect-objects",
+                files={"file": ("test.png", _make_png(640, 480), "image/png")},
+                data={"model_name": "tiny_yolov3", "confidence": "0.5"}) as r:
+            assert r.status_code == 200
+            data = _sse_result(r)
 
-    assert r.status_code == 200
-    data = r.json()
+    assert data is not None
     assert data["count"] == 1
     assert data["detections"][0]["label"] == "person"
 
@@ -344,12 +365,13 @@ def test_segment_image_segformer_inference():
     # Pretend the model file exists so the 503 guard doesn't fire
     with patch.object(app_module, "_large_vision_cache", fake_slot), \
          patch("os.path.exists", lambda p: True):
-        r = client.post("/segment-image",
-            files={"file": ("test.png", _make_png(64, 64), "image/png")},
-            data={"model_name": "segformer_b0"})
+        with client.stream("POST", "/segment-image",
+                files={"file": ("test.png", _make_png(64, 64), "image/png")},
+                data={"model_name": "segformer_b0"}) as r:
+            assert r.status_code == 200
+            data = _sse_result(r)
 
-    assert r.status_code == 200
-    data = r.json()
+    assert data is not None
     assert data["model"]      == "segformer_b0"
     assert data["orig_width"] == 64
     assert isinstance(data["classes_found"], list)
