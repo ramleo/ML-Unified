@@ -22,7 +22,8 @@ from sklearn.cluster import KMeans, DBSCAN
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, mean_absolute_error, silhouette_score
+from sklearn.metrics import (accuracy_score, mean_absolute_error, silhouette_score,
+                             f1_score, roc_auc_score, r2_score)
 from typing import Any, Dict
 import io
 import joblib
@@ -575,9 +576,10 @@ async def train_model(
         from catboost import CatBoostClassifier, CatBoostRegressor  # noqa: PLC0415
 
         preprocessor = ColumnTransformer(transformers, remainder="drop")
-        le        = None
-        plot_data = None
+        le           = None
+        plot_data    = None
         metric = metric_label = ""
+        extra_metrics: list = []
 
         p.update(5, "Preparing feature matrix…")
 
@@ -653,9 +655,24 @@ async def train_model(
             p.update(20, f"Training {_algorithm} classifier…")
             pipeline.fit(X_train, y_train)
             p.update(82, "Evaluating on test set…")
-            score        = accuracy_score(y_test, pipeline.predict(X_test))
+            y_pred       = pipeline.predict(X_test)
+            score        = accuracy_score(y_test, y_pred)
             metric       = f"{score * 100:.1f}%"
             metric_label = "Accuracy"
+            extra_metrics: list = []
+            f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
+            extra_metrics.append({"label": "F1 (weighted)", "value": f"{f1:.3f}"})
+            try:
+                n_cls = len(set(y_enc))
+                if n_cls == 2:
+                    proba = pipeline.predict_proba(X_test)[:, 1]
+                    auc   = roc_auc_score(y_test, proba)
+                else:
+                    proba = pipeline.predict_proba(X_test)
+                    auc   = roc_auc_score(y_test, proba, multi_class="ovr", average="macro")
+                extra_metrics.append({"label": "ROC-AUC", "value": f"{auc:.3f}"})
+            except Exception:
+                pass
 
         else:  # regression
             p.update(10, "Preparing regression target…")
@@ -677,9 +694,13 @@ async def train_model(
             p.update(20, f"Training {_algorithm} regressor…")
             pipeline.fit(X_train, y_train)
             p.update(82, "Evaluating on test set…")
-            mae          = mean_absolute_error(y_test, pipeline.predict(X_test))
-            metric       = f"±{mae:.0f}"
+            y_pred       = pipeline.predict(X_test)
+            mae          = mean_absolute_error(y_test, y_pred)
+            metric       = f"±{mae:.2f}"
             metric_label = "MAE"
+            extra_metrics = []
+            r2 = r2_score(y_test, y_pred)
+            extra_metrics.append({"label": "R²", "value": f"{r2:.3f}"})
 
         p.update(88, "Building schema…")
         feature_cols = X.columns.tolist()
@@ -743,11 +764,12 @@ async def train_model(
         }
 
         resp = {
-            "id":          _model_id,
-            "title":       _model_name,
-            "metric":      metric,
-            "metricLabel": metric_label,
-            "accent":      _accent,
+            "id":           _model_id,
+            "title":        _model_name,
+            "metric":       metric,
+            "metricLabel":  metric_label,
+            "extraMetrics": extra_metrics,
+            "accent":       _accent,
         }
         if plot_data is not None:
             resp["plot_data"]  = plot_data
