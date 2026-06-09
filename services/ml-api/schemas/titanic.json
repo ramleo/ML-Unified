@@ -11,15 +11,18 @@
   "ensure_cols": ["Name", "Ticket"],
   "fields": [
     { "name": "Pclass",   "label": "Passenger Class", "type": "select",
-      "options": [{"value": 1, "label": "1st Class"}, {"value": 2, "label": "2nd Class"}, {"value": 3, "label": "3rd Class"}] },
+      "options": [{"value": 1, "label": "1st Class"}, {"value": 2, "label": "2nd Class"}, {"value": 3, "label": "3rd Class"}],
+      "cat_freq": {"1": 0.2424, "2": 0.2065, "3": 0.5511} },
     { "name": "Sex",      "label": "Sex", "type": "select",
-      "options": [{"value": "male", "label": "Male"}, {"value": "female", "label": "Female"}] },
+      "options": [{"value": "male", "label": "Male"}, {"value": "female", "label": "Female"}],
+      "cat_freq": {"male": 0.6476, "female": 0.3524} },
     { "name": "Age",      "label": "Age",                       "type": "number", "min": 0,  "max": 80,     "step": 1    },
     { "name": "SibSp",    "label": "Siblings / Spouses Aboard", "type": "number", "min": 0,  "max": 8,      "step": 1    },
     { "name": "Parch",    "label": "Parents / Children Aboard", "type": "number", "min": 0,  "max": 5,      "step": 1    },
     { "name": "Fare",     "label": "Fare (£)",                  "type": "number", "min": 0,  "max": 512.33, "step": 0.01 },
     { "name": "Embarked", "label": "Port of Embarkation", "type": "select",
-      "options": [{"value": "C", "label": "Cherbourg"}, {"value": "Q", "label": "Queenstown"}, {"value": "S", "label": "Southampton"}] }
+      "options": [{"value": "C", "label": "Cherbourg"}, {"value": "Q", "label": "Queenstown"}, {"value": "S", "label": "Southampton"}],
+      "cat_freq": {"C": 0.1890, "Q": 0.0866, "S": 0.7244} }
   ],
   "sample": {
     "Pclass": 1, "Sex": "female", "Age": 29, "SibSp": 0, "Parch": 0, "Fare": 211.34, "Embarked": "S"

@@ -9,3 +9,4 @@ build/
 .DS_Store
 .mcp.json
 vision_cache/
+services/ml-api/data/*.json

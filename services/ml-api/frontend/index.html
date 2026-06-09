@@ -453,6 +453,33 @@ body {
 .drift-cat-bar-ref    { position: absolute; top: 0; left: 0; height: 100%; border-radius: 4px; background: var(--border2); opacity: 0.6; }
 .drift-cat-bar-recent { position: absolute; top: 0; left: 0; height: 100%; border-radius: 4px; background: var(--active-accent, var(--accent-from)); opacity: 0.85; transition: width 0.5s ease; }
 .drift-cat-pct { width: 34px; text-align: right; color: var(--text3); font-size: 0.68rem; }
+/* PSI badge */
+.drift-psi { font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.45rem; border-radius: 6px; margin-left: 0.35rem; }
+.drift-psi--low    { background: color-mix(in srgb,#34d399 14%,transparent); color: #34d399; }
+.drift-psi--medium { background: color-mix(in srgb,#fbbf24 14%,transparent); color: #fbbf24; }
+.drift-psi--high   { background: color-mix(in srgb,#f87171 14%,transparent); color: #f87171; }
+/* KS + null rate inline chips */
+.drift-ks   { font-size: 0.68rem; color: var(--text3); margin-top: 0.35rem; }
+.drift-null { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.65rem; font-weight: 600;
+              padding: 0.1rem 0.4rem; border-radius: 5px;
+              background: color-mix(in srgb,#f87171 12%,transparent); color: #f87171; margin-left: 0.3rem; }
+/* Distribution histogram overlay */
+.drift-hist { display: flex; align-items: flex-end; gap: 1px; height: 36px; margin-top: 0.55rem; width: 100%; }
+.drift-hist-bin { flex: 1; position: relative; height: 100%; display: flex; align-items: flex-end; }
+.drift-hist-ref    { position: absolute; bottom: 0; left: 0; right: 0; border-radius: 2px 2px 0 0;
+                     background: var(--border2); opacity: 0.7; }
+.drift-hist-actual { position: absolute; bottom: 0; left: 0; right: 0; border-radius: 2px 2px 0 0;
+                     background: var(--active-accent, var(--accent-from)); opacity: 0.7;
+                     transition: height 0.5s ease; }
+.drift-hist-legend { display: flex; gap: 0.75rem; margin-top: 0.25rem; }
+.drift-hist-key { font-size: 0.6rem; color: var(--text3); display: flex; align-items: center; gap: 0.3rem; }
+.drift-hist-swatch { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+/* Trend sparkline */
+.drift-trend { margin-bottom: 1.25rem; }
+.drift-trend-label { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text3); margin-bottom: 0.35rem; }
+.drift-trend-svg { width: 100%; height: 42px; display: block; overflow: visible; }
+/* Cat baseline note */
+.drift-cat-note { font-size: 0.62rem; color: var(--text3); margin-top: 0.3rem; font-style: italic; }
 .drift-empty { text-align: center; padding: 3rem 1rem; color: var(--text3); font-size: 0.85rem; }
 .drift-note { font-size: 0.68rem; color: var(--text3); margin-top: 1rem; }
 .drift-mode-bar {
@@ -1902,34 +1929,65 @@ function renderDriftHTML(data) {
   const summaryText = overall_level === 'high' ? 'High drift detected' :
                       overall_level === 'medium' ? 'Moderate drift' : 'Input within expected range';
 
+  const overallPct = Math.round((overall_score || 0) * 100);
   const summaryHTML = `
     <div class="drift-summary">
       <div class="drift-summary-icon">${summaryIcon}</div>
-      <div>
+      <div style="flex:1">
         <div class="drift-summary-label">Overall drift</div>
         <div class="drift-summary-value">${summaryText}</div>
       </div>
-      <span class="drift-badge drift-badge--${overall_level}">${overall_level}</span>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.25rem">
+        <span class="drift-badge drift-badge--${overall_level}">${overall_level}</span>
+        <span style="font-size:0.62rem;color:var(--text3)">score ${overallPct}%</span>
+      </div>
     </div>`;
 
+  // ── Trend sparkline ────────────────────────────────────────────────────────
+  const trendHTML = _renderDriftTrend(data.trend || []);
+
   if (n_recent === 0) {
-    return summaryHTML + `<div class="drift-empty">Make a few predictions to see per-feature drift analysis.</div>`;
+    return summaryHTML + trendHTML + `<div class="drift-empty">Make a few predictions to see per-feature drift analysis.</div>`;
   }
 
+  // ── Per-feature cards ──────────────────────────────────────────────────────
   const featHTML = features.map(f => {
     const pct = Math.round(f.drift_score * 100);
+
+    // PSI badge
+    const psiTag = f.psi != null
+      ? `<span class="drift-psi drift-psi--${f.psi_level}" title="Population Stability Index">PSI ${f.psi.toFixed(3)}</span>`
+      : '';
+
+    // Null rate warning (only if > 0)
+    const nullTag = (f.null_rate > 0)
+      ? `<span class="drift-null" title="Missing value rate">
+           <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor"><circle cx="5" cy="5" r="5"/><text x="5" y="8" text-anchor="middle" fill="white" font-size="8" font-weight="bold">!</text></svg>
+           ${Math.round(f.null_rate * 100)}% null
+         </span>`
+      : '';
+
     const topRow = `
       <div class="drift-feature-top">
-        <div class="drift-fname">${f.label}</div>
-        <span class="drift-badge drift-badge--${f.drift_level}">${f.drift_level}</span>
+        <div class="drift-fname">${f.label}${nullTag}</div>
+        <span class="drift-badge drift-badge--${f.drift_level}">${f.drift_level}</span>${psiTag}
       </div>
       <div class="drift-score-wrap">
         <div class="drift-score-fill drift-score-fill--${f.drift_level}" style="width:${pct}%"></div>
       </div>`;
 
     if (f.type === 'numeric') {
-      const refLine   = f.ref_mean !== null ? `${f.ref_mean.toFixed(2)} ± ${f.ref_std.toFixed(2)}` : '—';
+      const refLine    = f.ref_mean !== null ? `${f.ref_mean.toFixed(2)} ± ${f.ref_std.toFixed(2)}` : '—';
       const recentLine = f.recent_mean !== null ? `${f.recent_mean.toFixed(2)} ± ${(f.recent_std||0).toFixed(2)}` : '—';
+
+      // KS test line (upload mode only)
+      const ksLine = (f.ks_stat != null)
+        ? `<div class="drift-ks">KS stat: <strong>${f.ks_stat.toFixed(3)}</strong> · p-value: <strong>${f.ks_pvalue < 0.001 ? '<0.001' : f.ks_pvalue.toFixed(3)}</strong>${f.ks_pvalue <= 0.05 ? ' — significant' : ' — within range'}</div>`
+        : '';
+
+      // Distribution histogram
+      const histHTML = _renderDriftHistogram(f.histogram, accent);
+
       return `<div class="drift-feature">
         ${topRow}
         <div class="drift-stats">
@@ -1937,13 +1995,15 @@ function renderDriftHTML(data) {
           <div class="drift-stat"><div class="drift-stat-label">Recent (${f.n_recent})</div><div class="drift-stat-val">${recentLine}</div></div>
           <div class="drift-stat"><div class="drift-stat-label">Drift score</div><div class="drift-stat-val">${pct}%</div></div>
         </div>
+        ${histHTML}
+        ${ksLine}
       </div>`;
     } else {
       const bars = f.options.map(opt => {
         const refPct    = Math.round((f.ref_dist[opt]    || 0) * 100);
         const recentPct = Math.round((f.recent_dist[opt] || 0) * 100);
         return `<div class="drift-cat-row">
-          <div class="drift-cat-name">${opt}</div>
+          <div class="drift-cat-name" title="${opt}">${opt}</div>
           <div class="drift-cat-bar-wrap">
             <div class="drift-cat-bar-ref"    style="width:${refPct}%"></div>
             <div class="drift-cat-bar-recent" style="width:${recentPct}%;background:${accent}"></div>
@@ -1951,9 +2011,13 @@ function renderDriftHTML(data) {
           <div class="drift-cat-pct">${recentPct}%</div>
         </div>`;
       }).join('');
+      const catNote = f.cat_baseline === 'training'
+        ? 'Reference from training data'
+        : 'Reference assumes uniform distribution';
       return `<div class="drift-feature">
         ${topRow}
         <div class="drift-cat-bars">${bars}</div>
+        <div class="drift-cat-note">${catNote}</div>
       </div>`;
     }
   }).join('');
@@ -1967,9 +2031,56 @@ function renderDriftHTML(data) {
 
   return `
     ${summaryHTML}
+    ${trendHTML}
     <div class="drift-features">${featHTML}</div>
-    <div class="drift-note">${sourceNote}</div>`;
+    <div class="drift-note">${sourceNote} · PSI &lt; 0.10 stable / 0.10–0.25 caution / &gt; 0.25 unstable</div>`;
 }
+
+function _renderDriftHistogram(bins, accent) {
+  if (!bins || bins.length === 0) return '';
+  const binsHTML = bins.map(b => {
+    const rh = Math.round(b.ref_h * 100);
+    const ah = Math.round(b.actual_h * 100);
+    return `<div class="drift-hist-bin">
+      <div class="drift-hist-ref"    style="height:${rh}%"></div>
+      <div class="drift-hist-actual" style="height:${ah}%;background:${accent}"></div>
+    </div>`;
+  }).join('');
+  return `
+    <div class="drift-hist">${binsHTML}</div>
+    <div class="drift-hist-legend">
+      <div class="drift-hist-key"><div class="drift-hist-swatch" style="background:var(--border2)"></div>Expected</div>
+      <div class="drift-hist-key"><div class="drift-hist-swatch" style="background:${accent}"></div>Actual</div>
+    </div>`;
+}
+
+function _renderDriftTrend(trend) {
+  if (!trend || trend.length < 2) return '';
+  const W = 400, H = 36, pad = 6;
+  const cW = W - pad * 2, cH = H - pad * 2;
+  const n  = trend.length;
+  const scores = trend.map(t => t.overall_score || 0);
+  const maxS   = Math.max(...scores, 0.01);
+
+  const pts = scores.map((s, i) => ({
+    x: pad + (i / (n - 1)) * cW,
+    y: pad + (1 - s / maxS) * cH,
+  }));
+
+  const linePath = pts.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const fillPath = `${linePath} L${pts[n-1].x.toFixed(1)},${(pad+cH).toFixed(1)} L${pts[0].x.toFixed(1)},${(pad+cH).toFixed(1)} Z`;
+
+  const lastLevel = trend[trend.length - 1]?.overall_level || 'low';
+  const lineColor = lastLevel === 'high' ? '#f87171' : lastLevel === 'medium' ? '#fbbf24' : '#34d399';
+
+  return `<div class="drift-trend">
+    <div class="drift-trend-label">Drift history (${n} snapshot${n===1?'':'s'})</div>
+    <svg class="drift-trend-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <path d="${fillPath}" fill="${lineColor}" opacity="0.12"/>
+      <path d="${linePath}" fill="none" stroke="${lineColor}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+      ${pts.map((p, i) => i === n - 1 ? `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="${lineColor}"/>` : '').join('')}
+    </svg>
+  </div>`;
 
 function selectWhatifFeature(btn, fieldName) {
   document.querySelectorAll('.whatif-chip').forEach(c => c.classList.toggle('active', c === btn));

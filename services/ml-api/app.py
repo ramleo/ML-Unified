@@ -612,7 +612,10 @@ async def train_model(
         is_cat = not pd.api.types.is_numeric_dtype(X[col]) or X[col].nunique() <= 15
         if is_cat:
             opts = [{"value": str(v), "label": str(v)} for v in sorted(X[col].dropna().unique())]
-            fields.append({"name": col, "label": col, "type": "select", "options": opts})
+            col_vals  = X[col].dropna()
+            n_col     = len(col_vals)
+            cat_freq  = {str(v): round(int((col_vals == v).sum()) / n_col, 6) for v in col_vals.unique()} if n_col else {}
+            fields.append({"name": col, "label": col, "type": "select", "options": opts, "cat_freq": cat_freq})
             mode = X[col].mode()
             sample[col] = str(mode[0]) if not mode.empty else ""
         else:
