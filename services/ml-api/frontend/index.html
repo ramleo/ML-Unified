@@ -661,6 +661,14 @@ body {
   background: linear-gradient(90deg, var(--active-accent, var(--accent-from)), color-mix(in srgb, var(--active-accent, var(--accent-from)) 70%, white));
   transition: width 0.35s cubic-bezier(0.25,0.46,0.45,0.94);
   min-width: 4px;
+  position: relative; overflow: hidden;
+}
+.sse-progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -60%; width: 50%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.32), transparent);
+  animation: progressShimmer 1.5s ease-in-out infinite;
 }
 .sse-progress-row {
   display: flex; justify-content: space-between; align-items: center;
@@ -1135,6 +1143,10 @@ body {
 @keyframes shimmer {
   from { background-position: 200% center; }
   to   { background-position: -200% center; }
+}
+@keyframes progressShimmer {
+  0%   { left: -60%; }
+  100% { left: 160%; }
 }
 @keyframes successFlash {
   0%   { background: linear-gradient(135deg,#34d399,#10b981); box-shadow: 0 4px 22px rgba(52,211,153,0.55); }
