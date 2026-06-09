@@ -467,7 +467,8 @@ async def detect_objects(
         try:
             img = PILImage.open(io.BytesIO(content)).convert("RGB")
         except Exception as e:
-            p.finish(error=f"Could not load image: {e}"); return
+            p.finish(error=f"Could not load image: {e}")
+            return
         orig_w, orig_h = img.width, img.height
 
         with _large_vision_lock:
@@ -480,7 +481,8 @@ async def detect_objects(
             try:
                 session = _load_det_session(model_name)
             except Exception as e:
-                p.finish(error=f"Failed to load detection model: {e}"); return
+                p.finish(error=f"Failed to load detection model: {e}")
+            return
 
         size = cfg["input_size"]
 
@@ -501,7 +503,8 @@ async def detect_objects(
             if len(inp) >= 2:
                 feed[inp[1].name] = image_shape
         except Exception as e:
-            p.finish(error=f"Preprocessing failed: {e}"); return
+            p.finish(error=f"Preprocessing failed: {e}")
+            return
 
         p.update(65, "Running inference")
         try:
@@ -544,7 +547,8 @@ async def detect_objects(
             detections.sort(key=lambda d: d["confidence"], reverse=True)
             detections = detections[:max_dets]
         except Exception as e:
-            p.finish(error=f"Inference failed: {e}"); return
+            p.finish(error=f"Inference failed: {e}")
+            return
 
         p.update(85, "Drawing detections")
         try:
@@ -564,7 +568,8 @@ async def detect_objects(
             img.save(buf, format="PNG")
             b64 = base64.b64encode(buf.getvalue()).decode()
         except Exception as e:
-            p.finish(error=f"Drawing failed: {e}"); return
+            p.finish(error=f"Drawing failed: {e}")
+            return
 
         p.finish(result={
             "model":                model_name,
@@ -774,7 +779,8 @@ async def segment_image(
         try:
             img = PILImage2.open(io.BytesIO(raw)).convert("RGB")
         except Exception:
-            p.finish(error="Cannot read image file"); return
+            p.finish(error="Cannot read image file")
+            return
         orig_w, orig_h = img.width, img.height
 
         with _large_vision_lock:
@@ -787,7 +793,8 @@ async def segment_image(
             try:
                 session = _load_segformer_session()
             except Exception as e:
-                p.finish(error=f"Failed to load segmentation model: {e}"); return
+                p.finish(error=f"Failed to load segmentation model: {e}")
+            return
 
         p.update(40, "Preprocessing image")
         try:
@@ -795,13 +802,15 @@ async def segment_image(
             arr = (arr - np.array([0.485, 0.456, 0.406])) / np.array([0.229, 0.224, 0.225])
             arr = arr.transpose(2, 0, 1)[np.newaxis].astype(np.float32)
         except Exception as e:
-            p.finish(error=f"Preprocessing failed: {e}"); return
+            p.finish(error=f"Preprocessing failed: {e}")
+            return
 
         p.update(65, "Running inference")
         try:
             logits = session.run(["logits"], {"pixel_values": arr})[0]
         except Exception:
-            p.finish(error="Segmentation failed — please try again"); return
+            p.finish(error="Segmentation failed — please try again")
+            return
 
         p.update(85, "Building overlay")
         try:
@@ -834,7 +843,8 @@ async def segment_image(
             composite.save(buf, format="PNG")
             b64 = base64.b64encode(buf.getvalue()).decode()
         except Exception as e:
-            p.finish(error=f"Overlay failed: {e}"); return
+            p.finish(error=f"Overlay failed: {e}")
+            return
 
         p.finish(result={
             "model":         "segformer_b0",
