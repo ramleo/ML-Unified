@@ -66,7 +66,10 @@ def _aggregate(shap_1d: np.ndarray, feat_names_out: list[str], orig_fields: list
 
 
 def _compute(model, X_prep: np.ndarray, task: str, pred_class: int | None):
-    """Run TreeExplainer and return (shap_1d, base_value).
+    """Run the best available SHAP explainer and return (shap_1d, base_value).
+
+    Tries TreeExplainer first (fast, exact for ensembles), then LinearExplainer
+    (for LogisticRegression / LinearSVC etc.), then errors out clearly.
 
     Handles the three output shapes that shap >= 0.40 can return:
       - list of (n_samples, n_features) arrays — one per class (older behaviour)
@@ -79,7 +82,15 @@ def _compute(model, X_prep: np.ndarray, task: str, pred_class: int | None):
     if hasattr(X_prep, "toarray"):
         X_prep = X_prep.toarray()
 
-    explainer = shap.TreeExplainer(model)
+    try:
+        explainer = shap.TreeExplainer(model)
+    except Exception:
+        # Fall back to LinearExplainer for linear models (LogisticRegression, Ridge, etc.)
+        try:
+            explainer = shap.LinearExplainer(model, X_prep)
+        except Exception as exc:
+            raise ValueError(f"No suitable SHAP explainer for {type(model).__name__}: {exc}") from exc
+
     sv = explainer.shap_values(X_prep)
     ev = explainer.expected_value
 

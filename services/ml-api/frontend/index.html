@@ -2558,7 +2558,7 @@ async function fetchAndRenderShap(data) {
     if (shap) renderShap(shap);
     else throw new Error('No SHAP result received.');
   } catch (e) {
-    body.innerHTML = `<div class="shap-loading" style="color:var(--text3)">Feature impact unavailable</div>`;
+    body.innerHTML = `<div class="shap-loading" style="color:var(--text3)">Feature impact unavailable${e.message ? ': ' + e.message : ''}</div>`;
   }
 }
 

@@ -4,7 +4,7 @@
   "description": "Classifies iris flowers into 3 species based on petal and sepal measurements.",
   "task": "classification",
   "accent": "#818cf8",
-  "model": "Random Forest",
+  "model": "Logistic Regression",
   "metric": "96.7%",
   "metricLabel": "Accuracy",
   "id_cols": ["Id"],
