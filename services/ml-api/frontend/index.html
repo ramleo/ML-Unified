@@ -1958,9 +1958,12 @@ function renderDriftHTML(data) {
     }
   }).join('');
 
+  const baselineNote = data.baseline === 'training'
+    ? 'Numeric baseline from training data'
+    : 'Numeric baseline estimated from field ranges';
   const sourceNote = data.source === 'upload'
-    ? `Baseline estimated from field ranges · ${n_recent} row${n_recent === 1 ? '' : 's'} from ${data.filename || 'uploaded file'}`
-    : `Baseline estimated from field ranges · ${n_recent} recent prediction${n_recent === 1 ? '' : 's'} in window`;
+    ? `${baselineNote} · ${n_recent} row${n_recent === 1 ? '' : 's'} from ${data.filename || 'uploaded file'}`
+    : `${baselineNote} · ${n_recent} recent prediction${n_recent === 1 ? '' : 's'} in window`;
 
   return `
     ${summaryHTML}
