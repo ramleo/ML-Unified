@@ -542,8 +542,8 @@ def _histogram(
 
 def _is_number(v) -> bool:
     try:
-        float(v)
-        return True
+        f = float(v)
+        return not math.isnan(f) and not math.isinf(f)
     except (TypeError, ValueError):
         return False
 
