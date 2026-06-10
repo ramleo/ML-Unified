@@ -42,19 +42,19 @@
 
 /* ── Light theme ── */
 [data-theme="light"] {
-  --bg:          #f0f4f8;
-  --bg-card:     #ffffff;
-  --bg-glass:    rgba(255,255,255,0.70);
-  --bg-section:  rgba(240,244,248,0.84);
-  --bg-nav:      rgba(248,250,252,0.95);
-  --bg-input:    #f1f5f9;
+  --bg:          #e8eef6;
+  --bg-card:     rgba(255,255,255,0.75);
+  --bg-glass:    rgba(255,255,255,0.55);
+  --bg-section:  rgba(255,255,255,0.45);
+  --bg-nav:      rgba(248,250,252,0.90);
+  --bg-input:    rgba(241,245,249,0.85);
   --text:        #0f172a;
   --text2:       #475569;
   --text3:       #94a3b8;
-  --border:      rgba(0,0,0,0.07);
-  --border2:     rgba(0,0,0,0.12);
-  --shadow:      0 2px 16px rgba(0,0,0,0.08);
-  --shadow-lg:   0 6px 32px rgba(0,0,0,0.12);
+  --border:      rgba(99,102,241,0.10);
+  --border2:     rgba(99,102,241,0.16);
+  --shadow:      0 2px 20px rgba(99,102,241,0.10);
+  --shadow-lg:   0 6px 36px rgba(99,102,241,0.14);
   --accent:      #6366f1;
   --accent-from: #6366f1;
   --accent-via:  #0ea5e9;
@@ -443,6 +443,8 @@ body {
 .result-state {
   display: none;
   background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border2);
   border-radius: 16px; overflow: hidden;
   box-shadow: var(--shadow);
@@ -495,6 +497,8 @@ body {
   display: none;
   margin-top: 0.6rem;
   background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border2);
   border-radius: 16px;
   overflow: hidden;
