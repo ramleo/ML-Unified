@@ -1633,21 +1633,6 @@ const ACCENT_PALETTE_DEFAULT = [
   "#f87171","#fb923c","#a78bfa","#4ade80",
 ];
 
-// ── Theme ────────────────────────────────────────────────────
-(function () {
-  const params   = new URLSearchParams(window.location.search);
-  const urlTheme = params.get('theme');
-  if (urlTheme === 'light' || urlTheme === 'dark') {
-    setTheme(urlTheme);
-    try { localStorage.setItem('theme', urlTheme); } catch(e) {}
-    params.delete('theme');
-    const qs = params.toString();
-    history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : ''));
-  } else {
-    try { if (localStorage.getItem('theme') === 'light') setTheme('light'); } catch(e) {}
-  }
-})();
-
 // ── Theme system ──────────────────────────────────────────────
 const THEMES = {
   dark:     { label: 'Dark',     gradient: 'linear-gradient(135deg,#818cf8,#34d399)' },
