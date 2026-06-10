@@ -2754,7 +2754,7 @@ function renderResult(result) {
               <div class="proba-pct" style="color:${winner ? m.accent : 'var(--text3)'}">${pct}%</div>
             </div>
             <div class="proba-bar-wrap">
-              <div class="proba-bar-fill" data-w="${pct}" data-delay="${i * 80}" style="width:0%;background:${winner ? m.accent : m.accent + '66'}"></div>
+              <div class="proba-bar-fill" data-w="${pct}" data-delay="${i * 80}" style="width:0%;background:${winner ? `linear-gradient(90deg,${m.accent}88,${m.accent})` : m.accent + '33'}"></div>
             </div>
           </div>`;
         }).join('')}
