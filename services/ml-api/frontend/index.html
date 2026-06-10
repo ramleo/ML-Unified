@@ -42,19 +42,19 @@
 
 /* ── Light theme ── */
 [data-theme="light"] {
-  --bg:          #e8eef6;
-  --bg-card:     #ffffff;
-  --bg-glass:    rgba(255,255,255,0.72);
-  --bg-section:  rgba(255,255,255,0.50);
-  --bg-nav:      rgba(255,255,255,0.90);
-  --bg-input:    #f1f5f9;
+  --bg:          #dce4f0;
+  --bg-card:     #eef2f8;
+  --bg-glass:    rgba(238,242,248,0.82);
+  --bg-section:  rgba(220,228,240,0.70);
+  --bg-nav:      rgba(220,228,240,0.88);
+  --bg-input:    #e4eaf4;
   --text:        #0f172a;
-  --text2:       #475569;
-  --text3:       #94a3b8;
-  --border:      rgba(99,102,241,0.10);
-  --border2:     rgba(99,102,241,0.18);
-  --shadow:      0 2px 20px rgba(99,102,241,0.10);
-  --shadow-lg:   0 6px 36px rgba(99,102,241,0.14);
+  --text2:       #3d5070;
+  --text3:       #7a90b0;
+  --border:      rgba(99,102,241,0.12);
+  --border2:     rgba(99,102,241,0.20);
+  --shadow:      0 2px 12px rgba(30,50,100,0.08), 0 1px 3px rgba(30,50,100,0.06);
+  --shadow-lg:   0 6px 28px rgba(30,50,100,0.12), 0 2px 8px rgba(30,50,100,0.07);
   --accent:      #6366f1;
   --accent-from: #6366f1;
   --accent-via:  #0ea5e9;
@@ -443,11 +443,9 @@ body {
 .result-state {
   display: none;
   background: var(--bg-card);
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border2));
+  border: 1px solid var(--border2);
   border-radius: 16px; overflow: hidden;
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent),
-    0 8px 28px color-mix(in srgb, var(--accent) 14%, rgba(0,0,0,0.12));
+  box-shadow: var(--shadow-lg);
 }
 .result-accent-bar { height: 3px; }
 
@@ -497,12 +495,10 @@ body {
   display: none;
   margin-top: 0.6rem;
   background: var(--bg-card);
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border2));
+  border: 1px solid var(--border2);
   border-radius: 16px;
   overflow: hidden;
-  box-shadow:
-    0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent),
-    0 8px 28px color-mix(in srgb, var(--accent) 14%, rgba(0,0,0,0.12));
+  box-shadow: var(--shadow-lg);
 }
 .shap-panel.visible { display: block; }
 .shap-header {
