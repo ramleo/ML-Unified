@@ -425,7 +425,7 @@ body {
 }
 .btn:hover { opacity: 0.88; transform: translateY(-1px); }
 .btn:active { transform: translateY(0); }
-.btn-primary  { background: linear-gradient(in oklch 135deg, var(--accent-from), var(--accent-via)); color: #fff; box-shadow: 0 4px 16px color-mix(in srgb, var(--accent-from) 35%, transparent); }
+.btn-primary  { background: var(--active-accent, var(--accent-from)); color: #fff; box-shadow: 0 4px 16px color-mix(in srgb, var(--active-accent, var(--accent-from)) 35%, transparent); }
 .btn-sample   { background: color-mix(in srgb, var(--active-accent, var(--accent)) 12%, transparent); border: 1px solid color-mix(in srgb, var(--active-accent, var(--accent)) 30%, transparent); color: var(--active-accent, var(--accent)); }
 .btn-clear    { background: var(--border); border: 1px solid var(--border2); color: var(--text2); }
 
