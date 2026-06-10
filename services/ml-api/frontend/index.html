@@ -43,11 +43,11 @@
 /* ── Light theme ── */
 [data-theme="light"] {
   --bg:          #e8eef6;
-  --bg-card:     #f4f7fc;
-  --bg-glass:    rgba(244,247,252,0.80);
-  --bg-section:  rgba(235,240,250,0.70);
-  --bg-nav:      rgba(248,250,252,0.92);
-  --bg-input:    #edf1f8;
+  --bg-card:     #ffffff;
+  --bg-glass:    rgba(255,255,255,0.72);
+  --bg-section:  rgba(255,255,255,0.50);
+  --bg-nav:      rgba(255,255,255,0.90);
+  --bg-input:    #f1f5f9;
   --text:        #0f172a;
   --text2:       #475569;
   --text3:       #94a3b8;
@@ -442,10 +442,12 @@ body {
 
 .result-state {
   display: none;
-  background: linear-gradient(145deg, var(--bg-card), color-mix(in srgb, var(--accent) 5%, var(--bg-card)));
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border2));
+  background: var(--bg-card);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border2));
   border-radius: 16px; overflow: hidden;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 6%, transparent), var(--shadow);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent),
+    0 8px 28px color-mix(in srgb, var(--accent) 14%, rgba(0,0,0,0.12));
 }
 .result-accent-bar { height: 3px; }
 
@@ -494,11 +496,13 @@ body {
 .shap-panel {
   display: none;
   margin-top: 0.6rem;
-  background: linear-gradient(145deg, var(--bg-card), color-mix(in srgb, var(--accent) 5%, var(--bg-card)));
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border2));
+  background: var(--bg-card);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border2));
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 6%, transparent), var(--shadow);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent),
+    0 8px 28px color-mix(in srgb, var(--accent) 14%, rgba(0,0,0,0.12));
 }
 .shap-panel.visible { display: block; }
 .shap-header {
@@ -2041,7 +2045,6 @@ function renderMain() {
       <!-- SHAP Feature Impact panel -->
       <div class="shap-panel" id="shapPanel">
         <div class="shap-header">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--active-accent,var(--accent-from))" stroke-width="2" stroke-linecap="round"><path d="M8 1v14M1 8h14"/></svg>
           <span class="shap-title">Feature Impact</span>
           <span class="shap-subtitle">what drove this prediction</span>
         </div>
@@ -2988,7 +2991,6 @@ async function runCustomShap() {
     resultEl.innerHTML = `
       <div class="shap-panel visible" style="margin-top:0">
         <div class="shap-header">
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--active-accent,var(--accent-from))" stroke-width="2" stroke-linecap="round"><path d="M8 1v14M1 8h14"/></svg>
           <span class="shap-title">Feature Impact</span>
           <span class="shap-subtitle">${shap.task} · base ${shap.base_value.toFixed(3)}</span>
         </div>
