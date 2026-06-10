@@ -127,11 +127,12 @@ def record_input(model_id: str, fields: dict) -> None:
 
 @router.get("/{model_id}")
 def get_drift(model_id: str):
-    from app import MODELS  # noqa: PLC0415
+    from app import MODELS, _ensure_pipeline  # noqa: PLC0415
 
     if model_id not in MODELS:
         raise HTTPException(404, "Model not found")
 
+    _ensure_pipeline(model_id)
     m        = MODELS[model_id]
     baseline = _get_baseline(model_id, m)
     rows     = list(_recent[model_id])
@@ -145,7 +146,7 @@ def get_drift(model_id: str):
 
 @router.post("/{model_id}/upload")
 async def upload_drift(model_id: str, file: UploadFile = File(...)):
-    from app import MODELS  # noqa: PLC0415
+    from app import MODELS, _ensure_pipeline  # noqa: PLC0415
 
     if model_id not in MODELS:
         raise HTTPException(404, "Model not found")
@@ -159,6 +160,7 @@ async def upload_drift(model_id: str, file: UploadFile = File(...)):
     if df.empty:
         raise HTTPException(400, "CSV is empty")
 
+    _ensure_pipeline(model_id)
     m        = MODELS[model_id]
     baseline = _get_baseline(model_id, m)
     rows     = df.to_dict(orient="records")

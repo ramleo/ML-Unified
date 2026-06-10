@@ -156,6 +156,8 @@ async def compute_shap(model_id: str, request: Request):
     if model_id not in MODELS:
         raise HTTPException(404, "Model not found")
 
+    from app import _ensure_pipeline
+    _ensure_pipeline(model_id)
     m      = MODELS[model_id]
     schema = m["schema"]
 
