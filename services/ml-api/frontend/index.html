@@ -859,6 +859,30 @@ body {
 }
 .sse-progress-msg { font-size: 0.78rem; color: var(--text2); flex: 1; text-align: left; }
 .sse-progress-pct { font-size: 0.78rem; font-weight: 700; color: var(--text3); font-variant-numeric: tabular-nums; }
+/* Reusable JS-injected message boxes */
+.js-err-box {
+  padding: 0.75rem 1rem;
+  background: var(--color-danger-bg);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 25%, transparent);
+  border-radius: 10px;
+  color: var(--color-danger);
+  font-size: 0.83rem;
+}
+.js-warn-box {
+  padding: 0.75rem 1rem;
+  background: var(--color-warning-bg);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 30%, transparent);
+  border-radius: 10px;
+  color: var(--color-warning);
+  font-size: 0.83rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+/* Drift severity icon colors */
+.drift-icon--low    { color: var(--color-success); display: inline-flex; }
+.drift-icon--medium { color: var(--color-warning); display: inline-flex; }
+.drift-icon--high   { color: var(--color-danger);  display: inline-flex; }
 
 /* Loading spinner */
 .spinner {
@@ -2203,9 +2227,9 @@ function renderDriftHTML(data) {
   const { n_recent, overall_score, overall_level, features } = data;
 
   const DRIFT_ICONS = {
-    low:    `<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l3.5 3.5L13 4"/></svg>`,
-    medium: `<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round"><path d="M2 9 Q5 5 8 8 Q11 11 14 7"/></svg>`,
-    high:   `<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v6M8 11v2"/><circle cx="8" cy="8" r="7"/></svg>`,
+    low:    `<span class="drift-icon--low"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l3.5 3.5L13 4"/></svg></span>`,
+    medium: `<span class="drift-icon--medium"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 9 Q5 5 8 8 Q11 11 14 7"/></svg></span>`,
+    high:   `<span class="drift-icon--high"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v6M8 11v2"/><circle cx="8" cy="8" r="7"/></svg></span>`,
   };
   const summaryIcon = DRIFT_ICONS[overall_level] || DRIFT_ICONS.low;
   const summaryText = overall_level === 'high' ? 'High drift detected' :
@@ -3174,7 +3198,7 @@ function suggestTask() {
 
 function showWizardError(msg) {
   const el = document.getElementById('wizardErr');
-  if (el) el.innerHTML = '<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem;margin-bottom:1rem">' + msg + '</div>';
+  if (el) el.innerHTML = '<div class="js-err-box" style="margin-bottom:1rem">' + msg + '</div>';
 }
 
 // ── SSE streaming helpers ─────────────────────────────────────
@@ -3302,7 +3326,7 @@ async function runTrain() {
       <div class="wizard">
         ${wizardStepsHTML(2, false)}
         <h2 style="font-size:1.3rem;font-weight:800;margin-bottom:1rem">Configure Model</h2>
-        <div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem;margin-bottom:1.25rem">
+        <div class="js-err-box" style="margin-bottom:1.25rem">
           Training failed: ${e.message}
         </div>
         <button class="btn btn-clear" onclick="renderWizardStep2()">\u2190 Back</button>
@@ -3385,9 +3409,6 @@ function selectVision() {
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('vbtn-classifier');
   if (btn) btn.classList.add('active');
-  document.documentElement.style.setProperty('--accent', '#e879f9');
-  document.documentElement.style.setProperty('--active-accent', '#e879f9');
-  document.documentElement.style.setProperty('--header-accent', '#e879f9');
   setAmbientTheme('rgba(232,121,249,0.16)', 'rgba(168,85,247,0.10)');
   _mobileVisionPanel = 'classifier'; syncBottomTab('vision');
   renderImageClassifierPanel();
@@ -3566,14 +3587,14 @@ function _updateBatchCard(i, state, data) {
       ${rest.length ? `<div class="batch-card-top2">${rest.map(p => `${p.label} · ${(p.confidence*100).toFixed(1)}%`).join('<br>')}</div>` : ''}`;
   } else {
     card.classList.add('batch-card--error');
-    status.innerHTML = `<span style="color:#f87171;font-size:0.7rem">Failed</span>`;
+    status.innerHTML = `<span style="color:var(--color-danger);font-size:0.7rem">Failed</span>`;
   }
 }
 
 async function runBatchClassify() {
   if (!batchFiles.length) return;
   if (!VISION_API) {
-    document.getElementById('vErr').innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">Vision service not connected.</div>`;
+    document.getElementById('vErr').innerHTML = `<div class="js-err-box">Vision service not connected.</div>`;
     return;
   }
   const btn      = document.getElementById('vClassifyBtn');
@@ -3726,7 +3747,6 @@ function selectImageProcessing() {
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('vbtn-processing');
   if (btn) btn.classList.add('active');
-  document.documentElement.style.setProperty('--accent', '#fb923c');
   setAmbientTheme('rgba(251,146,60,0.15)', 'rgba(249,115,22,0.09)');
   _mobileVisionPanel = 'processing'; syncBottomTab('vision');
   renderImageProcessingPanel();
@@ -3868,7 +3888,7 @@ async function runImageProcess() {
     renderIpResult(data);
   } catch(e) {
     document.getElementById('ipResult').innerHTML = '';
-    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">${e.message}</div>`;
+    errEl.innerHTML = `<div class="js-err-box">${e.message}</div>`;
   } finally {
     btn.innerHTML = 'Apply →';
     btn.disabled  = false;
@@ -3921,7 +3941,6 @@ function selectObjectDetection() {
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('vbtn-detection');
   if (btn) btn.classList.add('active');
-  document.documentElement.style.setProperty('--accent', '#38bdf8');
   setAmbientTheme('rgba(56,189,248,0.11)', 'rgba(14,165,233,0.07)');
   _mobileVisionPanel = 'detection'; syncBottomTab('vision');
   renderObjectDetectionPanel();
@@ -4168,7 +4187,7 @@ async function runObjectDetect() {
     renderDetectionResult(data);
   } catch(e) {
     document.getElementById('detResult').innerHTML = '';
-    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">${e.message}</div>`;
+    errEl.innerHTML = `<div class="js-err-box">${e.message}</div>`;
   } finally {
     btn.innerHTML = 'Detect Objects →';
     btn.disabled  = false;
@@ -4181,14 +4200,13 @@ function showDetRetry(msg) {
   btn.innerHTML = 'Detect Objects →'; btn.disabled = false;
   if (_detRetryCount >= 3) {
     _detRetryCount = 0;
-    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">
-      ✗ Model unavailable after 3 attempts. Please try again later.</div>`;
+    errEl.innerHTML = `<div class="js-err-box">✗ Model unavailable after 3 attempts. Please try again later.</div>`;
     return;
   }
   _detRetryCount++;
   let secs = 20;
   const tick = () => {
-    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:10px;color:#fbbf24;font-size:0.83rem;display:flex;align-items:center;gap:0.75rem">
+    errEl.innerHTML = `<div class="js-warn-box">
       <span>⏳ ${msg} Auto-retrying in ${secs}s… (attempt ${_detRetryCount}/3)</span>
       <button onclick="cancelDetRetry()" style="padding:0.2rem 0.6rem;border:1px solid #fbbf2466;border-radius:6px;background:transparent;color:#fbbf24;cursor:pointer;font-size:0.78rem;flex-shrink:0">Stop</button>
     </div>`;
@@ -4255,7 +4273,6 @@ function selectSegmentation() {
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('vbtn-segmentation');
   if (btn) btn.classList.add('active');
-  document.documentElement.style.setProperty('--accent', '#a78bfa');
   setAmbientTheme('rgba(167,139,250,0.16)', 'rgba(139,92,246,0.10)');
   _mobileVisionPanel = 'segment'; syncBottomTab('vision');
   renderSegmentationPanel();
@@ -4388,7 +4405,7 @@ async function runSegmentation() {
       renderSegmentationResult(data);
     } catch(e) {
       document.getElementById('segResult').innerHTML = '';
-      errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">${e.message}</div>`;
+      errEl.innerHTML = `<div class="js-err-box">${e.message}</div>`;
     } finally {
       btn.innerHTML = 'Segment Image →'; btn.disabled = false;
     }
@@ -4420,7 +4437,7 @@ async function runSegmentation() {
     renderSegmentationResult(data);
   } catch(e) {
     document.getElementById('segResult').innerHTML = '';
-    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">${e.message}</div>`;
+    errEl.innerHTML = `<div class="js-err-box">${e.message}</div>`;
   } finally {
     btn.innerHTML = 'Segment Image →';
     btn.disabled  = false;
@@ -4433,14 +4450,13 @@ function showSegRetry(msg) {
   btn.innerHTML = 'Segment Image →'; btn.disabled = false;
   if (_segRetryCount >= 3) {
     _segRetryCount = 0;
-    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">
-      ✗ Model unavailable after 3 attempts. Please try again later.</div>`;
+    errEl.innerHTML = `<div class="js-err-box">✗ Model unavailable after 3 attempts. Please try again later.</div>`;
     return;
   }
   _segRetryCount++;
   let secs = 30;
   const tick = () => {
-    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:10px;color:#fbbf24;font-size:0.83rem;display:flex;align-items:center;gap:0.75rem">
+    errEl.innerHTML = `<div class="js-warn-box">
       <span>⏳ Vision service is warming up — please try again in ~30 seconds. Auto-retrying in ${secs}s… (attempt ${_segRetryCount}/3)</span>
       <button onclick="cancelSegRetry()" style="padding:0.2rem 0.6rem;border:1px solid #fbbf2466;border-radius:6px;background:transparent;color:#fbbf24;cursor:pointer;font-size:0.78rem;flex-shrink:0">Stop</button>
     </div>`;
@@ -5137,7 +5153,7 @@ async function runUnsupervisedAnalysis(id) {
     renderUnsupervisedResult(id, data);
   } catch(e) {
     document.getElementById('uResult').innerHTML = '';
-    document.getElementById('uErr').innerHTML = '<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">' + e.message + '</div>';
+    document.getElementById('uErr').innerHTML = '<div class="js-err-box">' + e.message + '</div>';
   } finally {
     const meta = UNSUPERVISED_META[id];
     btn.disabled = false; btn.style.opacity = '1'; btn.textContent = 'Run ' + meta.label;
@@ -5326,9 +5342,6 @@ function selectEDA() {
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('ebtn-eda');
   if (btn) btn.classList.add('active');
-  document.documentElement.style.setProperty('--accent', '#34d399');
-  document.documentElement.style.setProperty('--active-accent', '#34d399');
-  document.documentElement.style.setProperty('--header-accent', '#34d399');
   setAmbientFromAccent('#34d399');
   syncBottomTab('eda');
   document.getElementById('main').innerHTML = `
@@ -5375,7 +5388,7 @@ async function _runEDA(file) {
     return;
   }
 
-  resEl.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text3)"><span class="spinner" style="border-color:rgba(52,211,153,0.3);border-top-color:#34d399;width:20px;height:20px;border-width:3px"></span><div style="margin-top:0.75rem;font-size:0.85rem">Analysing dataset…</div></div>';
+  resEl.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text3)"><span class="spinner" style="border-color:var(--color-success-bg);border-top-color:var(--color-success);width:20px;height:20px;border-width:3px"></span><div style="margin-top:0.75rem;font-size:0.85rem">Analysing dataset…</div></div>';
 
   const fd = new FormData();
   fd.append('file', file);
@@ -6153,7 +6166,7 @@ function _buildExportHTML(d, filename, distKeys, distImgs, boxImg, corrImg, miIm
 
   // ML Readiness
   const readinessHTML = (d.readiness && d.readiness.length) ? (() => {
-    const vColor = { pass: '#34d399', warn: '#fbbf24', fail: '#f87171' };
+    const vColor = { pass: 'var(--color-success)', warn: 'var(--color-warning)', fail: 'var(--color-danger)' };
     const vLabel = { pass: 'Ready', warn: 'Review', fail: 'Fix' };
     const vIcon  = { pass: '✓', warn: '⚠', fail: '✗' };
     return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0.6rem">
@@ -6170,8 +6183,8 @@ function _buildExportHTML(d, filename, distKeys, distImgs, boxImg, corrImg, miIm
 
   // Insights
   const insightsHTML = (d.insights && d.insights.length) ? d.insights.map(ins => {
-    const bgs = { danger: 'rgba(248,113,113,0.07)', warning: 'rgba(251,191,36,0.07)', info: 'rgba(56,189,248,0.06)' };
-    const bds = { danger: '#f8717140', warning: '#fbbf2440', info: '#38bdf840' };
+    const bgs = { danger: 'var(--color-danger-bg)', warning: 'var(--color-warning-bg)', info: 'var(--color-info-bg)' };
+    const bds = { danger: 'color-mix(in srgb,var(--color-danger) 25%,transparent)', warning: 'color-mix(in srgb,var(--color-warning) 25%,transparent)', info: 'color-mix(in srgb,var(--color-info) 25%,transparent)' };
     return `<div style="display:flex;gap:0.5rem;padding:0.55rem 0.85rem;border-radius:8px;font-size:0.8rem;line-height:1.5;margin-bottom:0.35rem;background:${bgs[ins.type]};border:1px solid ${bds[ins.type]}">
       <span>${insightIcons[ins.type]}</span><span style="color:#cbd5e1">${ins.text}</span></div>`;
   }).join('') : '';
@@ -6315,44 +6328,44 @@ function _buildExportHTML(d, filename, distKeys, distImgs, boxImg, corrImg, miIm
   <div class="rpt-h1">Exploratory Analysis</div>
   <div class="rpt-meta">${filename} &nbsp;·&nbsp; ${now}</div>
   <div class="rpt-badges">
-    <span class="rpt-badge" style="background:rgba(52,211,153,0.1);color:#34d399;border:1px solid rgba(52,211,153,0.25)">${d.overview.rows.toLocaleString()} rows</span>
-    <span class="rpt-badge" style="background:rgba(56,189,248,0.1);color:#38bdf8;border:1px solid rgba(56,189,248,0.25)">${d.overview.cols} columns</span>
-    <span class="rpt-badge" style="background:rgba(167,139,250,0.1);color:#a78bfa;border:1px solid rgba(167,139,250,0.25)">Quality ${qScore}/100</span>
-    ${d.overview.duplicates > 0 ? `<span class="rpt-badge" style="background:rgba(248,113,113,0.1);color:#f87171;border:1px solid rgba(248,113,113,0.25)">${d.overview.duplicates} duplicates</span>` : ''}
+    <span class="rpt-badge" style="background:var(--color-success-bg);color:var(--color-success);border:1px solid color-mix(in srgb,var(--color-success) 25%,transparent)">${d.overview.rows.toLocaleString()} rows</span>
+    <span class="rpt-badge" style="background:var(--color-info-bg);color:var(--color-info);border:1px solid color-mix(in srgb,var(--color-info) 25%,transparent)">${d.overview.cols} columns</span>
+    <span class="rpt-badge" style="background:color-mix(in srgb,var(--accent) 10%,transparent);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent)">Quality ${qScore}/100</span>
+    ${d.overview.duplicates > 0 ? `<span class="rpt-badge" style="background:var(--color-danger-bg);color:var(--color-danger);border:1px solid color-mix(in srgb,var(--color-danger) 25%,transparent)">${d.overview.duplicates} duplicates</span>` : ''}
   </div>
 </div>
 
 <div class="rpt-body">
 
-  ${sec('Overview', '📋', chipsHTML, '#38bdf8')}
+  ${sec('Overview', '📋', chipsHTML, 'var(--color-info)')}
 
-  ${narrativeHTML ? sec('Analyst Summary', '📝', narrativeHTML, '#a78bfa') : ''}
+  ${narrativeHTML ? sec('Analyst Summary', '📝', narrativeHTML, 'var(--accent)') : ''}
 
-  ${insightsHTML ? sec('Smart Insights', '💡', insightsHTML, '#fbbf24') : ''}
+  ${insightsHTML ? sec('Smart Insights', '💡', insightsHTML, 'var(--color-warning)') : ''}
 
-  ${readinessHTML ? sec('ML Readiness', '⚙', readinessHTML, '#34d399') : ''}
+  ${readinessHTML ? sec('ML Readiness', '⚙', readinessHTML, 'var(--color-success)') : ''}
 
-  ${sampleHTML ? sec('Sample Data', '👁', sampleHTML, '#38bdf8') : ''}
+  ${sampleHTML ? sec('Sample Data', '👁', sampleHTML, 'var(--color-info)') : ''}
 
-  ${sec('Column Info', '🗂', colsHTML, '#94a3b8')}
+  ${sec('Column Info', '🗂', colsHTML, 'var(--text3)')}
 
-  ${statsHTML ? sec('Descriptive Statistics', '📊', statsHTML, '#38bdf8') : ''}
+  ${statsHTML ? sec('Descriptive Statistics', '📊', statsHTML, 'var(--color-info)') : ''}
 
-  ${boxImg ? sec('Box Plots', '📦', imgSection(boxImg), '#a78bfa') : ''}
+  ${boxImg ? sec('Box Plots', '📦', imgSection(boxImg), 'var(--accent)') : ''}
 
-  ${distGridHTML ? sec('Distributions', '📈', distGridHTML, '#34d399') : ''}
+  ${distGridHTML ? sec('Distributions', '📈', distGridHTML, 'var(--color-success)') : ''}
 
-  ${miImg ? sec('Mutual Information', '🔗', imgSection(miImg, 'Normalized 0–1 · captures non-linear + categorical relationships'), '#38bdf8') : ''}
+  ${miImg ? sec('Mutual Information', '🔗', imgSection(miImg, 'Normalized 0–1 · captures non-linear + categorical relationships'), 'var(--color-info)') : ''}
 
-  ${splomImg ? sec('Scatter Plot Matrix', '⊡', imgSection(splomImg, `${(d.splom||{cols:[]}).cols.length} features · pairwise relationships`), '#34d399') : ''}
+  ${splomImg ? sec('Scatter Plot Matrix', '⊡', imgSection(splomImg, `${(d.splom||{cols:[]}).cols.length} features · pairwise relationships`), 'var(--color-success)') : ''}
 
   ${d.pca ? sec('PCA 3D Scatter', '🔵',
     `<p style="font-size:0.82rem;color:#64748b;line-height:1.7;padding:0.75rem 1rem;background:rgba(255,255,255,0.02);border-radius:8px;border:1px dashed rgba(255,255,255,0.1)">
       ⓘ PCA 3D scatter uses WebGL and cannot be captured as a static image. Open the live EDA Explorer to interact with the 3D plot.<br>
       <span style="font-size:0.75rem;opacity:0.6">PC1 ${d.pca.explained_variance[0]}% · PC2 ${d.pca.explained_variance[1]}% · PC3 ${d.pca.explained_variance[2]}% explained variance · ${d.pca.coords.length} points</span>
-    </p>`, '#a78bfa') : ''}
+    </p>`, 'var(--accent)') : ''}
 
-  ${corrImg ? sec('Correlation Heatmap', '🔥', imgSection(corrImg, 'Pearson · blue = positive · red = negative'), '#f87171') : ''}
+  ${corrImg ? sec('Correlation Heatmap', '🔥', imgSection(corrImg, 'Pearson · blue = positive · red = negative'), 'var(--color-danger)') : ''}
 
   <div class="rpt-footer">
     ${!isPrint ? '<p style="font-size:0.72rem;color:#475569;margin-bottom:0.75rem">To save as PDF: press <kbd style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:1px 6px;font-size:0.7rem">Ctrl+P</kbd> (Windows) or <kbd style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:1px 6px;font-size:0.7rem">⌘+P</kbd> (Mac)</p>' : ''}
