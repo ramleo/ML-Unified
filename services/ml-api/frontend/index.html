@@ -443,11 +443,10 @@ body {
 
 .result-state {
   display: none;
-  background: color-mix(in srgb, var(--bg-card) 55%, transparent);
-  border: 1px solid var(--border);
+  background: transparent;
+  border: 1px solid var(--border2);
   border-radius: 16px; overflow: hidden;
-  box-shadow: 0 2px 16px rgba(0,0,0,0.18);
-  backdrop-filter: blur(10px);
+  box-shadow: none;
 }
 .result-accent-bar { height: 3px; background: linear-gradient(in oklch to right, var(--active-accent, var(--accent-from)), color-mix(in srgb, var(--active-accent, var(--accent-from)) 30%, transparent)); }
 
@@ -496,12 +495,11 @@ body {
 .shap-panel {
   display: none;
   margin-top: 0.6rem;
-  background: color-mix(in srgb, var(--bg-card) 55%, transparent);
-  border: 1px solid var(--border);
+  background: transparent;
+  border: 1px solid var(--border2);
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 2px 16px rgba(0,0,0,0.18);
-  backdrop-filter: blur(10px);
+  box-shadow: none;
 }
 .shap-panel.visible { display: block; }
 .shap-header {
