@@ -570,8 +570,8 @@ body {
 }
 .model-tab:hover { color: var(--text2); }
 .model-tab.active {
-  color: var(--active-accent, var(--accent-from));
-  border-bottom-color: var(--active-accent, var(--accent-from));
+  color: var(--accent-from);
+  border-bottom-color: var(--accent-from);
 }
 
 /* ── Pipeline flow view ── */
@@ -755,7 +755,7 @@ body {
 }
 .pipe-card-eyebrow {
   font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.09em; color: var(--active-accent, var(--accent-from));
+  letter-spacing: 0.09em; color: var(--accent-from);
   white-space: nowrap;
 }
 .pipe-card-title { font-size: 0.92rem; font-weight: 700; color: var(--text); }
@@ -950,7 +950,7 @@ body {
   text-transform: uppercase; letter-spacing: 0.06em; transition: color 0.15s;
 }
 .bottom-tab svg { width: 20px; height: 20px; }
-.bottom-tab.active { color: var(--active-accent, var(--accent-from)); }
+.bottom-tab.active { color: var(--accent-from); }
 
 /* ── Tools bottom sheet ── */
 .tools-sheet-overlay {
@@ -1948,10 +1948,9 @@ async function selectModel(id) {
 
   activeModel = { ...modelMeta, schema: schemaRes };
 
-  // Set CSS accent + sidebar active accent + header accent bar
-  document.documentElement.style.setProperty('--accent', modelMeta.accent);
+  // Model accent only — never override the theme's --accent
+  document.documentElement.style.setProperty('--model-accent', modelMeta.accent);
   document.documentElement.style.setProperty('--active-accent', modelMeta.accent);
-  document.documentElement.style.setProperty('--header-accent', modelMeta.accent);
   if (btn) btn.style.setProperty('--active-accent', modelMeta.accent);
   setAmbientFromAccent(modelMeta.accent);
 
@@ -5386,7 +5385,7 @@ async function _runEDA(file) {
     return;
   }
 
-  resEl.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text3)"><span class="spinner" style="border-color:var(--color-success-bg);border-top-color:var(--color-success);width:20px;height:20px;border-width:3px"></span><div style="margin-top:0.75rem;font-size:0.85rem">Analysing dataset…</div></div>';
+  resEl.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text3)"><span class="spinner" style="border-color:var(--border2);border-top-color:var(--color-success);width:20px;height:20px;border-width:3px"></span><div style="margin-top:0.75rem;font-size:0.85rem">Analysing dataset…</div></div>';
 
   const fd = new FormData();
   fd.append('file', file);
