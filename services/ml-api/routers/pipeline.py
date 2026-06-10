@@ -98,12 +98,11 @@ def _describe_transformer(name: str, tobj, cols, field_labels: dict) -> dict:
 
 @router.get("/{model_id}")
 def get_pipeline(model_id: str):
-    from app import MODELS, _ensure_pipeline  # lazy — avoids circular import at load time
+    from app import MODELS  # lazy — avoids circular import at load time
 
     if model_id not in MODELS:
         raise HTTPException(404, "Model not found")
 
-    _ensure_pipeline(model_id)
     m        = MODELS[model_id]
     pipeline = m["pipeline"]
     schema   = m["schema"]

@@ -122,27 +122,20 @@ def slugify(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 def _load():
-    """Load only schemas at startup — pipelines are loaded lazily on first request."""
     for fname in sorted(os.listdir(SCHEMA_DIR)):
         if not fname.endswith(".json"):
             continue
         mid    = fname[:-5]
         schema = json.load(open(os.path.join(SCHEMA_DIR, fname)))
-        le_path = os.path.join(MODEL_DIR, f"{mid}_labels.pkl")
-        le = joblib.load(le_path) if os.path.exists(le_path) else None
+        pipeline = joblib.load(os.path.join(MODEL_DIR, f"{mid}_pipeline.pkl"))
+        le_path  = os.path.join(MODEL_DIR, f"{mid}_labels.pkl")
+        le       = joblib.load(le_path) if os.path.exists(le_path) else None
         MODELS[mid] = {
-            "pipeline": None,   # loaded on first predict/shap request
+            "pipeline": pipeline,
             "le":       le,
             "classes":  le.classes_.tolist() if le is not None else None,
             "schema":   schema,
         }
-
-def _ensure_pipeline(mid: str):
-    """Load and cache the pipeline pkl on first use."""
-    if MODELS[mid]["pipeline"] is None:
-        MODELS[mid]["pipeline"] = joblib.load(
-            os.path.join(MODEL_DIR, f"{mid}_pipeline.pkl")
-        )
 
 @app.get("/")
 def index():
@@ -219,7 +212,6 @@ async def predict(model_id: str, request: Request):
     if model_id not in MODELS:
         raise HTTPException(404, "Model not found")
 
-    _ensure_pipeline(model_id)
     m      = MODELS[model_id]
     schema = m["schema"]
     row    = dict(data)

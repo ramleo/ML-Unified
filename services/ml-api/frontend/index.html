@@ -11,184 +11,40 @@
 <style>
 /* ── Theme variables ── */
 :root {
-  /* Dark (default) */
-  --bg:          #0a0f1e;
-  --bg-card:     #111827;
-  --bg-glass:    rgba(17,24,39,0.60);
-  --bg-section:  rgba(10,15,30,0.84);
-  --bg-nav:      rgba(10,15,30,0.88);
-  --bg-input:    #1e293b;
-  --text:        #f1f5f9;
-  --text2:       #94a3b8;
-  --text3:       #64748b;
-  --border:      rgba(255,255,255,0.07);
-  --border2:     rgba(255,255,255,0.13);
-  --shadow:      0 4px 24px rgba(0,0,0,0.4);
-  --shadow-lg:   0 8px 40px rgba(0,0,0,0.5);
+  --bg:        #0a0f1e;
+  --bg-card:   #111827;
+  --bg-glass:  rgba(17,24,39,0.60);
+  --bg-section:rgba(10,15,30,0.84);
+  --bg-nav:    rgba(10,15,30,0.88);
+  --bg-input:  #1e293b;
+  --text:      #f1f5f9;
+  --text2:     #94a3b8;
+  --text3:     #64748b;
+  --border:    rgba(255,255,255,0.07);
+  --border2:   rgba(255,255,255,0.13);
+  --shadow:    0 4px 24px rgba(0,0,0,0.4);
   --accent:      #818cf8;
   --accent-from: #818cf8;
   --accent-via:  #38bdf8;
   --accent-to:   #34d399;
-  /* Semantic colours */
-  --color-success: #34d399;
-  --color-warning: #fbbf24;
-  --color-danger:  #f87171;
-  --color-info:    #38bdf8;
-  --color-success-bg: rgba(52,211,153,0.10);
-  --color-warning-bg: rgba(251,191,36,0.10);
-  --color-danger-bg:  rgba(248,113,113,0.10);
-  --color-info-bg:    rgba(56,189,248,0.10);
 }
-
-/* ── Light theme ── */
-[data-theme="light"] {
-  --bg:          #dce4f0;
-  --bg-card:     #eef2f8;
-  --bg-glass:    rgba(238,242,248,0.82);
-  --bg-section:  rgba(220,228,240,0.70);
-  --bg-nav:      rgba(220,228,240,0.88);
-  --bg-input:    #e4eaf4;
-  --text:        #0f172a;
-  --text2:       #3d5070;
-  --text3:       #7a90b0;
-  --border:      rgba(99,102,241,0.12);
-  --border2:     rgba(99,102,241,0.20);
-  --shadow:      0 2px 12px rgba(30,50,100,0.08), 0 1px 3px rgba(30,50,100,0.06);
-  --shadow-lg:   0 6px 28px rgba(30,50,100,0.12), 0 2px 8px rgba(30,50,100,0.07);
-  --accent:      #6366f1;
-  --accent-from: #6366f1;
-  --accent-via:  #0ea5e9;
-  --accent-to:   #10b981;
-  --color-success: #059669;
-  --color-warning: #d97706;
-  --color-danger:  #dc2626;
-  --color-info:    #0284c7;
-  --color-success-bg: rgba(5,150,105,0.10);
-  --color-warning-bg: rgba(217,119,6,0.10);
-  --color-danger-bg:  rgba(220,38,38,0.10);
-  --color-info-bg:    rgba(2,132,199,0.10);
-}
-
-/* ── Midnight theme ── */
-[data-theme="midnight"] {
-  --bg:          #000000;
-  --bg-card:     #0d0d0d;
-  --bg-glass:    rgba(13,13,13,0.75);
-  --bg-section:  rgba(0,0,0,0.92);
-  --bg-nav:      rgba(0,0,0,0.96);
-  --bg-input:    #1a1a1a;
-  --text:        #f0f0f0;
-  --text2:       #909090;
-  --text3:       #555555;
-  --border:      rgba(255,255,255,0.06);
-  --border2:     rgba(255,255,255,0.11);
-  --shadow:      0 4px 28px rgba(0,0,0,0.8);
-  --shadow-lg:   0 8px 48px rgba(0,0,0,0.9);
-  --accent:      #a855f7;
-  --accent-from: #a855f7;
-  --accent-via:  #ec4899;
-  --accent-to:   #f43f5e;
-  --color-success: #34d399;
-  --color-warning: #fbbf24;
-  --color-danger:  #f87171;
-  --color-info:    #a855f7;
-  --color-success-bg: rgba(52,211,153,0.10);
-  --color-warning-bg: rgba(251,191,36,0.10);
-  --color-danger-bg:  rgba(248,113,113,0.10);
-  --color-info-bg:    rgba(168,85,247,0.12);
-}
-
-/* ── Ocean theme ── */
-[data-theme="ocean"] {
-  --bg:          #020c1b;
-  --bg-card:     #0a1628;
-  --bg-glass:    rgba(10,22,40,0.72);
-  --bg-section:  rgba(2,12,27,0.92);
-  --bg-nav:      rgba(2,12,27,0.96);
-  --bg-input:    #112240;
-  --text:        #ccd6f6;
-  --text2:       #8892b0;
-  --text3:       #4d5f82;
-  --border:      rgba(100,255,218,0.07);
-  --border2:     rgba(100,255,218,0.13);
-  --shadow:      0 4px 24px rgba(0,0,0,0.55);
-  --shadow-lg:   0 8px 40px rgba(0,0,0,0.65);
-  --accent:      #0ea5e9;
-  --accent-from: #0ea5e9;
-  --accent-via:  #06b6d4;
-  --accent-to:   #64ffda;
-  --color-success: #64ffda;
-  --color-warning: #fbbf24;
-  --color-danger:  #f87171;
-  --color-info:    #0ea5e9;
-  --color-success-bg: rgba(100,255,218,0.08);
-  --color-warning-bg: rgba(251,191,36,0.10);
-  --color-danger-bg:  rgba(248,113,113,0.10);
-  --color-info-bg:    rgba(14,165,233,0.10);
-}
-
-/* ── Sunset theme ── */
-[data-theme="sunset"] {
-  --bg:          #180c04;
-  --bg-card:     #211208;
-  --bg-glass:    rgba(33,18,8,0.75);
-  --bg-section:  rgba(24,12,4,0.92);
-  --bg-nav:      rgba(20,10,3,0.96);
-  --bg-input:    #2e1a0a;
-  --text:        #fef3e2;
-  --text2:       #c4956a;
-  --text3:       #7a5430;
-  --border:      rgba(249,115,22,0.09);
-  --border2:     rgba(249,115,22,0.18);
-  --shadow:      0 4px 24px rgba(0,0,0,0.55);
-  --shadow-lg:   0 8px 40px rgba(0,0,0,0.65);
-  --accent:      #f97316;
-  --accent-from: #f97316;
-  --accent-via:  #f59e0b;
-  --accent-to:   #fbbf24;
-  --color-success: #4ade80;
-  --color-warning: #fbbf24;
-  --color-danger:  #f87171;
-  --color-info:    #fb923c;
-  --color-success-bg: rgba(74,222,128,0.10);
-  --color-warning-bg: rgba(251,191,36,0.10);
-  --color-danger-bg:  rgba(248,113,113,0.10);
-  --color-info-bg:    rgba(251,146,60,0.12);
-}
-
-/* ── Forest theme ── */
-[data-theme="forest"] {
-  --bg:          #020f05;
-  --bg-card:     #081a0c;
-  --bg-glass:    rgba(8,26,12,0.72);
-  --bg-section:  rgba(2,15,5,0.92);
-  --bg-nav:      rgba(2,12,4,0.96);
-  --bg-input:    #0e2914;
-  --text:        #dcfce7;
-  --text2:       #86efac;
-  --text3:       #4d9960;
-  --border:      rgba(74,222,128,0.07);
-  --border2:     rgba(74,222,128,0.13);
-  --shadow:      0 4px 24px rgba(0,0,0,0.55);
-  --shadow-lg:   0 8px 40px rgba(0,0,0,0.65);
-  --accent:      #22c55e;
-  --accent-from: #22c55e;
-  --accent-via:  #10b981;
-  --accent-to:   #06b6d4;
-  --color-success: #4ade80;
-  --color-warning: #fbbf24;
-  --color-danger:  #f87171;
-  --color-info:    #22c55e;
-  --color-success-bg: rgba(74,222,128,0.10);
-  --color-warning-bg: rgba(251,191,36,0.10);
-  --color-danger-bg:  rgba(248,113,113,0.10);
-  --color-info-bg:    rgba(34,197,94,0.10);
-}
-
-/* Legacy palette overrides — still work for URL ?palette= param */
 [data-palette="sunset"] { --accent: #f97316; --accent-from: #f97316; --accent-via: #f59e0b; --accent-to: #fbbf24; }
 [data-palette="aurora"] { --accent: #a855f7; --accent-from: #a855f7; --accent-via: #ec4899; --accent-to: #f43f5e; }
 [data-palette="ocean"]  { --accent: #0ea5e9; --accent-from: #0ea5e9; --accent-via: #06b6d4; --accent-to: #10b981; }
+[data-theme="light"] {
+  --bg:        #f0f4f8;
+  --bg-card:   #ffffff;
+  --bg-glass:  rgba(255,255,255,0.60);
+  --bg-section:rgba(240,244,248,0.84);
+  --bg-nav:    rgba(240,244,248,0.92);
+  --bg-input:  #f8fafc;
+  --text:      #0f172a;
+  --text2:     #475569;
+  --text3:     #94a3b8;
+  --border:    rgba(0,0,0,0.07);
+  --border2:   rgba(0,0,0,0.13);
+  --shadow:    0 4px 24px rgba(0,0,0,0.08);
+}
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -204,13 +60,13 @@ body {
 /* ── Gradient top bar ── */
 .gradient-top-bar {
   height: 3px;
-  background: linear-gradient(in oklch to right, var(--accent-from), var(--accent-via), var(--accent-to));
+  background: linear-gradient(90deg, var(--accent-from), var(--accent-via), var(--accent-to));
   flex-shrink: 0;
 }
 
 /* ── Gradient text ── */
 .gradient-text {
-  background: linear-gradient(in oklch 135deg, var(--accent-from) 0%, var(--accent-via) 50%, var(--accent-to) 100%);
+  background: linear-gradient(135deg, var(--accent-from) 0%, var(--accent-via) 50%, var(--accent-to) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -232,7 +88,7 @@ body {
 }
 .nav-logo-mark {
   width: 30px; height: 30px; border-radius: 8px;
-  background: linear-gradient(in oklch 135deg, var(--accent-from), var(--accent-via), var(--accent-to));
+  background: linear-gradient(135deg, var(--accent-from), var(--accent-via), var(--accent-to));
   display: flex; align-items: center; justify-content: center;
   font-weight: 800; font-size: 0.75rem; color: #fff;
   box-shadow: 0 0 12px color-mix(in srgb, var(--accent-from) 35%, transparent);
@@ -247,43 +103,6 @@ body {
   cursor: pointer; font-size: 1rem; transition: background 0.15s;
 }
 .theme-btn:hover { background: var(--border2); }
-
-/* ── Theme picker ── */
-.theme-picker-wrap { position: relative; }
-.theme-picker-btn {
-  display: flex; align-items: center; gap: 0.35rem;
-  padding: 0 0.7rem; height: 34px; border-radius: 8px;
-  background: var(--border); border: 1px solid var(--border2);
-  color: var(--text2); cursor: pointer; font-size: 0.75rem; font-weight: 600;
-  transition: background 0.15s, color 0.15s;
-  white-space: nowrap;
-}
-.theme-picker-btn:hover { background: var(--border2); color: var(--text); }
-.theme-picker-swatch {
-  width: 12px; height: 12px; border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
-  flex-shrink: 0;
-}
-.theme-picker-dropdown {
-  display: none; position: absolute; right: 0; top: calc(100% + 6px);
-  background: var(--bg-card); border: 1px solid var(--border2);
-  border-radius: 12px; box-shadow: var(--shadow-lg);
-  padding: 0.4rem; z-index: 200; min-width: 150px;
-}
-.theme-picker-dropdown.open { display: block; }
-.theme-option {
-  display: flex; align-items: center; gap: 0.55rem;
-  padding: 0.45rem 0.65rem; border-radius: 8px; cursor: pointer;
-  font-size: 0.78rem; font-weight: 500; color: var(--text2);
-  border: none; background: transparent; width: 100%; text-align: left;
-  transition: background 0.12s, color 0.12s;
-}
-.theme-option:hover { background: var(--border); color: var(--text); }
-.theme-option.active { background: var(--border2); color: var(--text); font-weight: 700; }
-.theme-option-dot {
-  width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
-  border: 1.5px solid rgba(255,255,255,0.15);
-}
 
 /* ── Layout ── */
 .layout {
@@ -307,7 +126,7 @@ body {
 }
 .model-btn {
   display: flex; align-items: center; gap: 0.75rem;
-  padding: 0.7rem 0.75rem 0.7rem 1rem; border-radius: 12px;
+  padding: 0.75rem 0.75rem 0.75rem 1rem; border-radius: 10px;
   cursor: pointer; border: 1px solid transparent; background: transparent;
   color: var(--text2); text-align: left; width: 100%;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -321,7 +140,6 @@ body {
   color: var(--text);
   border-color: var(--border2);
   padding-left: 1.25rem;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
 }
 .model-btn.active::before {
   content: '';
@@ -363,12 +181,11 @@ body {
 .model-eyebrow {
   font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.1em; margin-bottom: 0.55rem;
-  color: var(--accent-from);
 }
 .model-title { font-size: 2rem; font-weight: 800; color: var(--text); line-height: 1.15; letter-spacing: -0.03em; }
 .model-desc  { font-size: 0.88rem; color: var(--text2); margin-top: 0.55rem; line-height: 1.65; max-width: 520px; }
 .model-metric { text-align: right; flex-shrink: 0; padding-top: 0.25rem; }
-.metric-val   { font-size: 1.75rem; font-weight: 800; line-height: 1; color: var(--accent-from); }
+.metric-val   { font-size: 1.75rem; font-weight: 800; line-height: 1; }
 .metric-label { font-size: 0.62rem; color: var(--text3); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
 
 /* Section label used above form inputs */
@@ -426,12 +243,12 @@ body {
 }
 .btn:hover { opacity: 0.88; transform: translateY(-1px); }
 .btn:active { transform: translateY(0); }
-.btn-primary  { background: var(--active-accent, var(--accent-from)); color: #fff; box-shadow: 0 2px 10px color-mix(in srgb, var(--active-accent, var(--accent-from)) 20%, transparent); }
+.btn-primary  { background: linear-gradient(135deg, var(--accent-from), var(--accent-via)); color: #fff; box-shadow: 0 4px 16px color-mix(in srgb, var(--accent-from) 35%, transparent); }
 .btn-sample   { background: color-mix(in srgb, var(--active-accent, var(--accent)) 12%, transparent); border: 1px solid color-mix(in srgb, var(--active-accent, var(--accent)) 30%, transparent); color: var(--active-accent, var(--accent)); }
 .btn-clear    { background: var(--border); border: 1px solid var(--border2); color: var(--text2); }
 
 /* ── Result panel ── */
-.result-wrap { margin-top: 0.75rem; }
+.result-wrap { margin-top: 0.5rem; }
 
 .empty-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -443,14 +260,14 @@ body {
 
 .result-state {
   display: none;
-  background: transparent;
+  background: var(--bg-card);
   border: 1px solid var(--border2);
-  border-radius: 16px; overflow: hidden;
-  box-shadow: none;
+  border-radius: 14px; overflow: hidden;
+  box-shadow: var(--shadow);
 }
-.result-accent-bar { display: none; }
+.result-accent-bar { height: 3px; }
 
-.result-body { padding: 1.75rem 1.5rem 1.5rem; }
+.result-body { padding: 1.5rem; }
 
 /* Classification result */
 .result-class-main {
@@ -472,10 +289,9 @@ body {
 .proba-name { font-size:0.78rem; font-weight:600; color:var(--text2); display:flex; align-items:center; gap:0.45rem; }
 .proba-winner-badge { font-size:0.58rem; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; padding:0.13rem 0.48rem; border-radius:9999px; background:color-mix(in srgb,var(--active-accent,var(--accent-from)) 16%,transparent); color:var(--active-accent,var(--accent-from)); flex-shrink:0; }
 .proba-pct { font-size:0.78rem; font-weight:700; flex-shrink:0; }
-.proba-bar-wrap { width:100%; background:var(--border2); border-radius:9999px; height:8px; overflow:hidden; }
-.proba-bar-fill { height:100%; border-radius:9999px; transition:width 0.65s cubic-bezier(0.25,0.46,0.45,0.94);
-  background: linear-gradient(90deg, var(--active-accent, var(--accent-from)), color-mix(in srgb, var(--active-accent, var(--accent-via)) 80%, var(--accent-to))); }
-.proba-row--winner .proba-bar-wrap { background:color-mix(in srgb,var(--active-accent,var(--accent-from)) 12%,transparent); }
+.proba-bar-wrap { width:100%; background:var(--border2); border-radius:6px; height:10px; overflow:hidden; }
+.proba-bar-fill { height:100%; border-radius:6px; transition:width 0.65s cubic-bezier(0.25,0.46,0.45,0.94); }
+.proba-row--winner .proba-bar-wrap { background:color-mix(in srgb,var(--active-accent,var(--accent-from)) 14%,transparent); }
 
 /* Regression result */
 .result-reg-main {
@@ -494,38 +310,38 @@ body {
 /* ── SHAP Feature Impact ── */
 .shap-panel {
   display: none;
-  margin-top: 0.6rem;
-  background: transparent;
+  margin-top: 0.75rem;
+  background: var(--bg-card);
   border: 1px solid var(--border2);
-  border-radius: 16px;
+  border-radius: 14px;
   overflow: hidden;
-  box-shadow: none;
+  box-shadow: var(--shadow);
 }
 .shap-panel.visible { display: block; }
 .shap-header {
-  padding: 1rem 1.5rem 0.8rem;
+  padding: 0.9rem 1.25rem 0.7rem;
   border-bottom: 1px solid var(--border);
   display: flex; align-items: center; gap: 0.5rem;
 }
 .shap-title {
-  font-size: 0.72rem; font-weight: 700; color: var(--text2);
-  text-transform: uppercase; letter-spacing: 0.08em;
+  font-size: 0.78rem; font-weight: 700; color: var(--text);
+  text-transform: uppercase; letter-spacing: 0.07em;
 }
 .shap-subtitle { font-size: 0.7rem; color: var(--text3); margin-left: auto; }
-.shap-body { padding: 1.1rem 1.5rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.shap-body { padding: 1rem 1.25rem; display: flex; flex-direction: column; gap: 0.55rem; }
 .shap-row {
   display: grid;
-  grid-template-columns: 160px 1fr 56px;
+  grid-template-columns: 130px 1fr 52px;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.6rem;
 }
 .shap-feat-name {
-  font-size: 0.75rem; font-weight: 600; color: var(--text2);
+  font-size: 0.73rem; font-weight: 600; color: var(--text2);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   text-align: right;
 }
 .shap-bar-wrap {
-  position: relative; height: 20px;
+  position: relative; height: 18px;
   display: flex; align-items: center;
 }
 .shap-bar-center {
@@ -533,21 +349,21 @@ body {
   width: 1px; background: var(--border2);
 }
 .shap-bar-fill {
-  position: absolute; height: 10px; border-radius: 4px;
+  position: absolute; height: 10px; border-radius: 3px;
   transition: width 0.5s ease, left 0.5s ease;
 }
 .shap-bar-fill.pos { background: var(--active-accent, var(--accent-from)); left: 50%; }
-.shap-bar-fill.neg { background: color-mix(in srgb, var(--color-danger) 85%, transparent); right: 50%; }
+.shap-bar-fill.neg { background: rgba(248,113,113,0.85); right: 50%; }
 .shap-val {
-  font-size: 0.72rem; font-weight: 700;
+  font-size: 0.7rem; font-weight: 700;
   text-align: right; font-variant-numeric: tabular-nums;
 }
 .shap-val.pos { color: var(--active-accent, var(--accent-from)); }
-.shap-val.neg { color: var(--color-danger); }
+.shap-val.neg { color: rgba(248,113,113,0.9); }
 .shap-base {
-  padding: 0.7rem 1.5rem;
+  padding: 0.6rem 1.25rem;
   border-top: 1px solid var(--border);
-  font-size: 0.7rem; color: var(--text3);
+  font-size: 0.68rem; color: var(--text3);
 }
 .shap-loading {
   padding: 1.5rem; text-align: center; color: var(--text3); font-size: 0.82rem;
@@ -571,8 +387,8 @@ body {
 }
 .model-tab:hover { color: var(--text2); }
 .model-tab.active {
-  color: var(--accent-from);
-  border-bottom-color: var(--accent-from);
+  color: var(--active-accent, var(--accent-from));
+  border-bottom-color: var(--active-accent, var(--accent-from));
 }
 
 /* ── Pipeline flow view ── */
@@ -583,8 +399,8 @@ body {
 #trainingView { display: none; padding: 0.5rem 0 1.5rem; }
 #trainingView.visible { display: block; }
 .train-card {
-  background: transparent; border: 1px solid var(--border2); border-radius: 14px;
-  padding: 1.25rem 1.35rem; margin-bottom: 1.25rem;
+  background: var(--bg-card); border: 1px solid var(--border2); border-radius: 14px;
+  padding: 1.25rem 1.35rem; margin-bottom: 1.25rem; box-shadow: var(--shadow);
 }
 .train-curve-meta { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 0.85rem; gap: 0.5rem; }
 .train-curve-label { font-size: 0.78rem; font-weight: 600; color: var(--text2); }
@@ -595,8 +411,8 @@ body {
 .drift-summary {
   display: flex; align-items: center; gap: 0.75rem;
   padding: 1rem 1.25rem; border-radius: 14px;
-  border: 1px solid var(--border2); background: transparent;
-  margin-bottom: 1.25rem;
+  border: 1px solid var(--border2); background: var(--bg-glass);
+  backdrop-filter: blur(6px); margin-bottom: 1.25rem;
 }
 .drift-summary-icon { display: flex; align-items: center; flex-shrink: 0; }
 .drift-summary-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); }
@@ -605,13 +421,13 @@ body {
   margin-left: auto; padding: 0.25rem 0.65rem; border-radius: 9999px;
   font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
 }
-.drift-badge--low    { background: var(--color-success-bg); color: var(--color-success); }
-.drift-badge--medium { background: var(--color-warning-bg); color: var(--color-warning); }
-.drift-badge--high   { background: var(--color-danger-bg);  color: var(--color-danger);  }
+.drift-badge--low    { background: color-mix(in srgb,#34d399 16%,transparent); color: #34d399; }
+.drift-badge--medium { background: color-mix(in srgb,#fbbf24 16%,transparent); color: #fbbf24; }
+.drift-badge--high   { background: color-mix(in srgb,#f87171 16%,transparent); color: #f87171; }
 .drift-features { display: flex; flex-direction: column; gap: 0.7rem; }
 .drift-feature {
   padding: 0.9rem 1.1rem; border-radius: 12px;
-  border: 1px solid var(--border2); background: transparent;
+  border: 1px solid var(--border2); background: var(--bg-card);
 }
 .drift-feature-top {
   display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.55rem;
@@ -623,9 +439,9 @@ body {
 .drift-score-fill {
   height: 100%; border-radius: 6px; transition: width 0.6s cubic-bezier(0.25,0.46,0.45,0.94);
 }
-.drift-score-fill--low    { background: var(--color-success); }
-.drift-score-fill--medium { background: var(--color-warning); }
-.drift-score-fill--high   { background: var(--color-danger);  }
+.drift-score-fill--low    { background: #34d399; }
+.drift-score-fill--medium { background: #fbbf24; }
+.drift-score-fill--high   { background: #f87171; }
 .drift-stats { display: flex; gap: 1.5rem; flex-wrap: wrap; }
 .drift-stat { display: flex; flex-direction: column; gap: 2px; }
 .drift-stat-label { font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text3); }
@@ -639,9 +455,9 @@ body {
 .drift-cat-pct { width: 34px; text-align: right; color: var(--text3); font-size: 0.68rem; }
 /* PSI badge */
 .drift-psi { font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.45rem; border-radius: 6px; margin-left: 0.35rem; }
-.drift-psi--low    { background: var(--color-success-bg); color: var(--color-success); }
-.drift-psi--medium { background: var(--color-warning-bg); color: var(--color-warning); }
-.drift-psi--high   { background: var(--color-danger-bg);  color: var(--color-danger);  }
+.drift-psi--low    { background: color-mix(in srgb,#34d399 14%,transparent); color: #34d399; }
+.drift-psi--medium { background: color-mix(in srgb,#fbbf24 14%,transparent); color: #fbbf24; }
+.drift-psi--high   { background: color-mix(in srgb,#f87171 14%,transparent); color: #f87171; }
 /* KS + null rate inline chips */
 .drift-ks   { font-size: 0.68rem; color: var(--text3); margin-top: 0.35rem; }
 .drift-null { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.65rem; font-weight: 600;
@@ -741,9 +557,10 @@ body {
 /* Card */
 .pipe-card {
   flex: 1; border-radius: 14px; overflow: hidden;
-  background: transparent;
+  background: var(--bg-card);
   border: 1px solid var(--border2);
-  box-shadow: none;
+  border-left: 3px solid var(--active-accent, var(--accent-from));
+  box-shadow: var(--shadow);
 }
 
 /* Card header */
@@ -751,11 +568,11 @@ body {
   display: flex; align-items: baseline; gap: 0.6rem;
   padding: 0.65rem 1rem;
   border-bottom: 1px solid var(--border);
-  background: transparent;
+  background: color-mix(in srgb, var(--active-accent, var(--accent-from)) 5%, transparent);
 }
 .pipe-card-eyebrow {
   font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.09em; color: var(--accent-from);
+  letter-spacing: 0.09em; color: var(--active-accent, var(--accent-from));
   white-space: nowrap;
 }
 .pipe-card-title { font-size: 0.92rem; font-weight: 700; color: var(--text); }
@@ -778,7 +595,7 @@ body {
   gap: 0.75rem; padding: 0.8rem 1rem;
 }
 .pipe-branch {
-  background: transparent; border: 1px solid var(--border2);
+  background: var(--bg); border: 1px solid var(--border2);
   border-radius: 10px; padding: 0.65rem 0.8rem;
 }
 .pipe-branch-name {
@@ -859,30 +676,6 @@ body {
 }
 .sse-progress-msg { font-size: 0.78rem; color: var(--text2); flex: 1; text-align: left; }
 .sse-progress-pct { font-size: 0.78rem; font-weight: 700; color: var(--text3); font-variant-numeric: tabular-nums; }
-/* Reusable JS-injected message boxes */
-.js-err-box {
-  padding: 0.75rem 1rem;
-  background: var(--color-danger-bg);
-  border: 1px solid color-mix(in srgb, var(--color-danger) 25%, transparent);
-  border-radius: 10px;
-  color: var(--color-danger);
-  font-size: 0.83rem;
-}
-.js-warn-box {
-  padding: 0.75rem 1rem;
-  background: var(--color-warning-bg);
-  border: 1px solid color-mix(in srgb, var(--color-warning) 30%, transparent);
-  border-radius: 10px;
-  color: var(--color-warning);
-  font-size: 0.83rem;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-/* Drift severity icon colors */
-.drift-icon--low    { color: var(--color-success); display: inline-flex; }
-.drift-icon--medium { color: var(--color-warning); display: inline-flex; }
-.drift-icon--high   { color: var(--color-danger);  display: inline-flex; }
 
 /* Loading spinner */
 .spinner {
@@ -950,7 +743,7 @@ body {
   text-transform: uppercase; letter-spacing: 0.06em; transition: color 0.15s;
 }
 .bottom-tab svg { width: 20px; height: 20px; }
-.bottom-tab.active { color: var(--accent-from); }
+.bottom-tab.active { color: var(--active-accent, var(--accent-from)); }
 
 /* ── Tools bottom sheet ── */
 .tools-sheet-overlay {
@@ -1011,7 +804,7 @@ body {
   background: var(--border2); color: var(--text3);
 }
 .wizard-step.active .wizard-step-num { background: var(--accent); color: #fff; }
-.wizard-step.done   .wizard-step-num { background: var(--color-success); color: #fff; }
+.wizard-step.done   .wizard-step-num { background: #34d399; color: #fff; }
 .wizard-sep { flex: 1; height: 1px; background: var(--border2); margin: 0 0.5rem; min-width: 16px; }
 
 /* ── Upload zone ── */
@@ -1102,8 +895,8 @@ body {
   box-shadow: var(--shadow); transition: border-color 0.3s;
 }
 .batch-card--done  { border-color: color-mix(in srgb,#e879f9 35%,transparent); }
-.batch-card--low   { border-color: color-mix(in srgb, var(--color-warning) 40%, transparent); }
-.batch-card--error { border-color: color-mix(in srgb, var(--color-danger)  35%, transparent); }
+.batch-card--low   { border-color: color-mix(in srgb,#fbbf24 40%,transparent); }
+.batch-card--error { border-color: color-mix(in srgb,#f87171 35%,transparent); }
 .batch-card-img {
   width: 100%; aspect-ratio: 1; object-fit: cover; display: block;
 }
@@ -1253,7 +1046,7 @@ body {
 .eda-chip-rows    { background:rgba(52,211,153,0.09);  border-color:rgba(52,211,153,0.2); }
 .eda-chip-cols    { background:rgba(56,189,248,0.09);  border-color:rgba(56,189,248,0.2); }
 .eda-chip-missing { background:rgba(251,191,36,0.09);  border-color:rgba(251,191,36,0.2); }
-.eda-chip-dups    { background: var(--color-danger-bg); border-color: color-mix(in srgb, var(--color-danger) 30%, transparent); }
+.eda-chip-dups    { background:rgba(248,113,113,0.09); border-color:rgba(248,113,113,0.2); }
 .eda-chip-quality { background:rgba(167,139,250,0.09); border-color:rgba(167,139,250,0.2); }
 [data-theme="light"] .eda-chip { border-color:rgba(0,0,0,0.1); }
 .eda-chip-icon  { font-size:1.1rem; display:block; margin-bottom:0.3rem; }
@@ -1276,9 +1069,9 @@ body {
   line-height:1.5; margin-bottom:0.5rem;
   border-left:3px solid; backdrop-filter:blur(8px);
 }
-.eda-insight-danger  { background: var(--color-danger-bg);  border-color: var(--color-danger);  }
-.eda-insight-warning { background: var(--color-warning-bg); border-color: var(--color-warning); }
-.eda-insight-info    { background: var(--color-info-bg);    border-color: var(--color-info);    }
+.eda-insight-danger  { background:rgba(248,113,113,0.07); border-color:#f87171; }
+.eda-insight-warning { background:rgba(251,191,36,0.07);  border-color:#fbbf24; }
+.eda-insight-info    { background:rgba(56,189,248,0.07);  border-color:#38bdf8; }
 
 /* Tables */
 .eda-table { width:100%; border-collapse:collapse; font-size:0.82rem; }
@@ -1292,7 +1085,7 @@ body {
 .eda-table td { padding:0.45rem 0.75rem; border-bottom:1px solid var(--border); color:var(--text2); }
 .eda-table tbody tr:hover td { background:color-mix(in srgb,var(--active-accent,var(--accent-from)) 5%,transparent); }
 .eda-type-badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:0.6rem; font-weight:700; }
-.eda-type-num { background: var(--color-info-bg); color: var(--color-info); }
+.eda-type-num { background:rgba(56,189,248,0.15); color:#38bdf8; }
 .eda-type-cat { background:rgba(167,139,250,0.15); color:#a78bfa; }
 
 /* Distribution grid */
@@ -1493,21 +1286,7 @@ body {
     </svg>
     Portfolio
   </a>
-  <div class="theme-picker-wrap" id="themePickerWrap">
-    <button class="theme-picker-btn" onclick="toggleThemePicker()" id="themePickerBtn" title="Change theme">
-      <span class="theme-picker-swatch" id="themePickerSwatch"></span>
-      <span id="themePickerLabel">Dark</span>
-      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 3.5l3 3 3-3"/></svg>
-    </button>
-    <div class="theme-picker-dropdown" id="themePickerDropdown">
-      <button class="theme-option" onclick="setThemeChoice('dark')"     data-theme-opt="dark">     <span class="theme-option-dot" style="background:linear-gradient(135deg,#818cf8,#34d399)"></span> Dark</button>
-      <button class="theme-option" onclick="setThemeChoice('light')"    data-theme-opt="light">    <span class="theme-option-dot" style="background:linear-gradient(135deg,#6366f1,#10b981)"></span> Light</button>
-      <button class="theme-option" onclick="setThemeChoice('midnight')" data-theme-opt="midnight"> <span class="theme-option-dot" style="background:linear-gradient(135deg,#a855f7,#f43f5e)"></span> Midnight</button>
-      <button class="theme-option" onclick="setThemeChoice('ocean')"    data-theme-opt="ocean">    <span class="theme-option-dot" style="background:linear-gradient(135deg,#0ea5e9,#64ffda)"></span> Ocean</button>
-      <button class="theme-option" onclick="setThemeChoice('sunset')"   data-theme-opt="sunset">   <span class="theme-option-dot" style="background:linear-gradient(135deg,#f97316,#fbbf24)"></span> Sunset</button>
-      <button class="theme-option" onclick="setThemeChoice('forest')"   data-theme-opt="forest">   <span class="theme-option-dot" style="background:linear-gradient(135deg,#22c55e,#06b6d4)"></span> Forest</button>
-    </div>
-  </div>
+  <button class="theme-btn" onclick="toggleTheme()" title="Toggle theme" id="themeBtn">☀</button>
 </nav>
 
 <!-- Layout -->
@@ -1515,10 +1294,7 @@ body {
 
   <!-- Sidebar -->
   <aside class="sidebar" id="sidebar">
-    <div class="sidebar-loading" id="sidebarLoading">
-      <span class="spinner" style="width:16px;height:16px;border-width:2px;border-color:var(--border2);border-top-color:var(--accent-from);display:inline-block"></span>
-      <span id="loadingMsg" style="margin-left:0.5rem">Loading models…</span>
-    </div>
+    <div class="sidebar-loading">Loading models…</div>
   </aside>
 
   <!-- Main -->
@@ -1633,67 +1409,32 @@ const ACCENT_PALETTE_DEFAULT = [
   "#f87171","#fb923c","#a78bfa","#4ade80",
 ];
 
-// ── Theme system ──────────────────────────────────────────────
-const THEMES = {
-  dark:     { label: 'Dark',     gradient: 'linear-gradient(135deg,#818cf8,#34d399)' },
-  light:    { label: 'Light',    gradient: 'linear-gradient(135deg,#6366f1,#10b981)' },
-  midnight: { label: 'Midnight', gradient: 'linear-gradient(135deg,#a855f7,#f43f5e)' },
-  ocean:    { label: 'Ocean',    gradient: 'linear-gradient(135deg,#0ea5e9,#64ffda)'  },
-  sunset:   { label: 'Sunset',   gradient: 'linear-gradient(135deg,#f97316,#fbbf24)'  },
-  forest:   { label: 'Forest',   gradient: 'linear-gradient(135deg,#22c55e,#06b6d4)'  },
-};
-function setThemeChoice(t) {
-  if (!THEMES[t]) t = 'dark';
-  document.documentElement.setAttribute('data-theme', t);
-  // Update picker button label + swatch
-  const lbl    = document.getElementById('themePickerLabel');
-  const swatch = document.getElementById('themePickerSwatch');
-  if (lbl)    lbl.textContent = THEMES[t].label;
-  if (swatch) swatch.style.background = THEMES[t].gradient;
-  // Mark active option
-  document.querySelectorAll('.theme-option[data-theme-opt]').forEach(el => {
-    el.classList.toggle('active', el.dataset.themeOpt === t);
-  });
-  // Close dropdown
-  const dd = document.getElementById('themePickerDropdown');
-  if (dd) dd.classList.remove('open');
-  try { localStorage.setItem('theme', t); } catch(e) {}
-}
-function toggleThemePicker() {
-  const dd = document.getElementById('themePickerDropdown');
-  if (dd) dd.classList.toggle('open');
-}
-// Close picker on outside click
-document.addEventListener('click', e => {
-  const wrap = document.getElementById('themePickerWrap');
-  if (wrap && !wrap.contains(e.target)) {
-    const dd = document.getElementById('themePickerDropdown');
-    if (dd) dd.classList.remove('open');
-  }
-});
-// Legacy compat
-function setTheme(t) { setThemeChoice(t); }
-function toggleTheme() {
-  const cur  = document.documentElement.getAttribute('data-theme') || 'dark';
-  const keys = Object.keys(THEMES);
-  setThemeChoice(keys[(keys.indexOf(cur) + 1) % keys.length]);
-}
+// ── Theme ────────────────────────────────────────────────────
 (function () {
   const params   = new URLSearchParams(window.location.search);
   const urlTheme = params.get('theme');
-  if (urlTheme && THEMES[urlTheme]) {
-    setThemeChoice(urlTheme);
+  if (urlTheme === 'light' || urlTheme === 'dark') {
+    setTheme(urlTheme);
+    try { localStorage.setItem('theme', urlTheme); } catch(e) {}
     params.delete('theme');
-    history.replaceState(null, '', window.location.pathname + (params.toString() ? '?' + params : ''));
+    const qs = params.toString();
+    history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : ''));
   } else {
-    try {
-      const saved = localStorage.getItem('theme');
-      setThemeChoice(saved && THEMES[saved] ? saved : 'dark');
-    } catch(e) { setThemeChoice('dark'); }
+    try { if (localStorage.getItem('theme') === 'light') setTheme('light'); } catch(e) {}
   }
 })();
 
-// ── Legacy palette (URL ?palette= still works) ────────────────
+function setTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  document.getElementById('themeBtn').textContent = t === 'light' ? '☾' : '☀';
+}
+function toggleTheme() {
+  const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  setTheme(next);
+  try { localStorage.setItem('theme', next); } catch(e) {}
+}
+
+// ── Palette ───────────────────────────────────────────────────
 const VALID_PALETTES = ['cosmic', 'sunset', 'aurora', 'ocean'];
 function setPalette(p) {
   if (p && p !== 'cosmic') {
@@ -1785,14 +1526,8 @@ function closeToolsSheet() {
 
 // ── Boot ──────────────────────────────────────────────────────
 async function init() {
-  const coldStartTimer = setTimeout(() => {
-    const msg = document.getElementById('loadingMsg');
-    if (msg) msg.textContent = 'Server waking up — please wait ~30s…';
-  }, 5000);
-
   try {
     const res = await fetch(`${API}/models`);
-    clearTimeout(coldStartTimer);
     allModels  = await res.json();
     renderSidebar();
     animateSidebarIn();
@@ -1805,7 +1540,6 @@ async function init() {
       selectModel(allModels[0].id);
     }
   } catch(e) {
-    clearTimeout(coldStartTimer);
     document.getElementById('sidebar').innerHTML =
       '<div class="sidebar-loading" style="color:#f87171">Failed to load models. Is the server running?</div>';
   }
@@ -1943,9 +1677,10 @@ async function selectModel(id) {
 
   activeModel = { ...modelMeta, schema: schemaRes };
 
-  // Model accent only — never override the theme's --accent
-  document.documentElement.style.setProperty('--model-accent', modelMeta.accent);
+  // Set CSS accent + sidebar active accent + header accent bar
+  document.documentElement.style.setProperty('--accent', modelMeta.accent);
   document.documentElement.style.setProperty('--active-accent', modelMeta.accent);
+  document.documentElement.style.setProperty('--header-accent', modelMeta.accent);
   if (btn) btn.style.setProperty('--active-accent', modelMeta.accent);
   setAmbientFromAccent(modelMeta.accent);
 
@@ -1966,12 +1701,12 @@ function renderMain() {
     <div class="model-header">
       <div class="model-header-top">
         <div>
-          <div class="model-eyebrow">${s.task}${m.model ? ' &middot; ' + m.model : ''}</div>
+          <div class="model-eyebrow" style="color:${m.accent}">${s.task}${m.model ? ' &middot; ' + m.model : ''}</div>
           <div class="model-title">${m.title}</div>
           <div class="model-desc">${s.description || ''}</div>
         </div>
         <div class="model-metric">
-          <div class="metric-val">${m.metric}</div>
+          <div class="metric-val" style="color:${m.accent}">${m.metric}</div>
           <div class="metric-label">${m.metricLabel}</div>
         </div>
       </div>
@@ -2028,13 +1763,14 @@ function renderMain() {
         <div>Fill in the fields and click Predict</div>
       </div>
       <div class="result-state" id="resultState">
-        <div class="result-accent-bar"></div>
+        <div class="result-accent-bar" style="background:${m.accent}"></div>
         <div class="result-body" id="resultBody"></div>
       </div>
       <div class="err-state" id="errState"></div>
       <!-- SHAP Feature Impact panel -->
       <div class="shap-panel" id="shapPanel">
         <div class="shap-header">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--active-accent,var(--accent-from))" stroke-width="2" stroke-linecap="round"><path d="M8 1v14M1 8h14"/></svg>
           <span class="shap-title">Feature Impact</span>
           <span class="shap-subtitle">what drove this prediction</span>
         </div>
@@ -2220,9 +1956,9 @@ function renderDriftHTML(data) {
   const { n_recent, overall_score, overall_level, features } = data;
 
   const DRIFT_ICONS = {
-    low:    `<span class="drift-icon--low"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l3.5 3.5L13 4"/></svg></span>`,
-    medium: `<span class="drift-icon--medium"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 9 Q5 5 8 8 Q11 11 14 7"/></svg></span>`,
-    high:   `<span class="drift-icon--high"><svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v6M8 11v2"/><circle cx="8" cy="8" r="7"/></svg></span>`,
+    low:    `<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8l3.5 3.5L13 4"/></svg>`,
+    medium: `<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round"><path d="M2 9 Q5 5 8 8 Q11 11 14 7"/></svg>`,
+    high:   `<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="#f87171" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v6M8 11v2"/><circle cx="8" cy="8" r="7"/></svg>`,
   };
   const summaryIcon = DRIFT_ICONS[overall_level] || DRIFT_ICONS.low;
   const summaryText = overall_level === 'high' ? 'High drift detected' :
@@ -2747,7 +2483,7 @@ function renderResult(result) {
               <div class="proba-pct" style="color:${winner ? m.accent : 'var(--text3)'}">${pct}%</div>
             </div>
             <div class="proba-bar-wrap">
-              <div class="proba-bar-fill" data-w="${pct}" data-delay="${i * 80}" style="width:0%;background:${winner ? `linear-gradient(90deg,${m.accent}88,${m.accent})` : m.accent + '33'}"></div>
+              <div class="proba-bar-fill" data-w="${pct}" data-delay="${i * 80}" style="width:0%;background:${winner ? m.accent : m.accent + '66'}"></div>
             </div>
           </div>`;
         }).join('')}
@@ -2981,6 +2717,7 @@ async function runCustomShap() {
     resultEl.innerHTML = `
       <div class="shap-panel visible" style="margin-top:0">
         <div class="shap-header">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--active-accent,var(--accent-from))" stroke-width="2" stroke-linecap="round"><path d="M8 1v14M1 8h14"/></svg>
           <span class="shap-title">Feature Impact</span>
           <span class="shap-subtitle">${shap.task} · base ${shap.base_value.toFixed(3)}</span>
         </div>
@@ -3190,7 +2927,7 @@ function suggestTask() {
 
 function showWizardError(msg) {
   const el = document.getElementById('wizardErr');
-  if (el) el.innerHTML = '<div class="js-err-box" style="margin-bottom:1rem">' + msg + '</div>';
+  if (el) el.innerHTML = '<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem;margin-bottom:1rem">' + msg + '</div>';
 }
 
 // ── SSE streaming helpers ─────────────────────────────────────
@@ -3318,7 +3055,7 @@ async function runTrain() {
       <div class="wizard">
         ${wizardStepsHTML(2, false)}
         <h2 style="font-size:1.3rem;font-weight:800;margin-bottom:1rem">Configure Model</h2>
-        <div class="js-err-box" style="margin-bottom:1.25rem">
+        <div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem;margin-bottom:1.25rem">
           Training failed: ${e.message}
         </div>
         <button class="btn btn-clear" onclick="renderWizardStep2()">\u2190 Back</button>
@@ -3401,6 +3138,9 @@ function selectVision() {
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('vbtn-classifier');
   if (btn) btn.classList.add('active');
+  document.documentElement.style.setProperty('--accent', '#e879f9');
+  document.documentElement.style.setProperty('--active-accent', '#e879f9');
+  document.documentElement.style.setProperty('--header-accent', '#e879f9');
   setAmbientTheme('rgba(232,121,249,0.16)', 'rgba(168,85,247,0.10)');
   _mobileVisionPanel = 'classifier'; syncBottomTab('vision');
   renderImageClassifierPanel();
@@ -3579,14 +3319,14 @@ function _updateBatchCard(i, state, data) {
       ${rest.length ? `<div class="batch-card-top2">${rest.map(p => `${p.label} · ${(p.confidence*100).toFixed(1)}%`).join('<br>')}</div>` : ''}`;
   } else {
     card.classList.add('batch-card--error');
-    status.innerHTML = `<span style="color:var(--color-danger);font-size:0.7rem">Failed</span>`;
+    status.innerHTML = `<span style="color:#f87171;font-size:0.7rem">Failed</span>`;
   }
 }
 
 async function runBatchClassify() {
   if (!batchFiles.length) return;
   if (!VISION_API) {
-    document.getElementById('vErr').innerHTML = `<div class="js-err-box">Vision service not connected.</div>`;
+    document.getElementById('vErr').innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">Vision service not connected.</div>`;
     return;
   }
   const btn      = document.getElementById('vClassifyBtn');
@@ -3739,6 +3479,7 @@ function selectImageProcessing() {
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('vbtn-processing');
   if (btn) btn.classList.add('active');
+  document.documentElement.style.setProperty('--accent', '#fb923c');
   setAmbientTheme('rgba(251,146,60,0.15)', 'rgba(249,115,22,0.09)');
   _mobileVisionPanel = 'processing'; syncBottomTab('vision');
   renderImageProcessingPanel();
@@ -3880,7 +3621,7 @@ async function runImageProcess() {
     renderIpResult(data);
   } catch(e) {
     document.getElementById('ipResult').innerHTML = '';
-    errEl.innerHTML = `<div class="js-err-box">${e.message}</div>`;
+    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">${e.message}</div>`;
   } finally {
     btn.innerHTML = 'Apply →';
     btn.disabled  = false;
@@ -3933,6 +3674,7 @@ function selectObjectDetection() {
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('vbtn-detection');
   if (btn) btn.classList.add('active');
+  document.documentElement.style.setProperty('--accent', '#38bdf8');
   setAmbientTheme('rgba(56,189,248,0.11)', 'rgba(14,165,233,0.07)');
   _mobileVisionPanel = 'detection'; syncBottomTab('vision');
   renderObjectDetectionPanel();
@@ -4179,7 +3921,7 @@ async function runObjectDetect() {
     renderDetectionResult(data);
   } catch(e) {
     document.getElementById('detResult').innerHTML = '';
-    errEl.innerHTML = `<div class="js-err-box">${e.message}</div>`;
+    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">${e.message}</div>`;
   } finally {
     btn.innerHTML = 'Detect Objects →';
     btn.disabled  = false;
@@ -4192,13 +3934,14 @@ function showDetRetry(msg) {
   btn.innerHTML = 'Detect Objects →'; btn.disabled = false;
   if (_detRetryCount >= 3) {
     _detRetryCount = 0;
-    errEl.innerHTML = `<div class="js-err-box">✗ Model unavailable after 3 attempts. Please try again later.</div>`;
+    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">
+      ✗ Model unavailable after 3 attempts. Please try again later.</div>`;
     return;
   }
   _detRetryCount++;
   let secs = 20;
   const tick = () => {
-    errEl.innerHTML = `<div class="js-warn-box">
+    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:10px;color:#fbbf24;font-size:0.83rem;display:flex;align-items:center;gap:0.75rem">
       <span>⏳ ${msg} Auto-retrying in ${secs}s… (attempt ${_detRetryCount}/3)</span>
       <button onclick="cancelDetRetry()" style="padding:0.2rem 0.6rem;border:1px solid #fbbf2466;border-radius:6px;background:transparent;color:#fbbf24;cursor:pointer;font-size:0.78rem;flex-shrink:0">Stop</button>
     </div>`;
@@ -4265,6 +4008,7 @@ function selectSegmentation() {
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('vbtn-segmentation');
   if (btn) btn.classList.add('active');
+  document.documentElement.style.setProperty('--accent', '#a78bfa');
   setAmbientTheme('rgba(167,139,250,0.16)', 'rgba(139,92,246,0.10)');
   _mobileVisionPanel = 'segment'; syncBottomTab('vision');
   renderSegmentationPanel();
@@ -4397,7 +4141,7 @@ async function runSegmentation() {
       renderSegmentationResult(data);
     } catch(e) {
       document.getElementById('segResult').innerHTML = '';
-      errEl.innerHTML = `<div class="js-err-box">${e.message}</div>`;
+      errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">${e.message}</div>`;
     } finally {
       btn.innerHTML = 'Segment Image →'; btn.disabled = false;
     }
@@ -4429,7 +4173,7 @@ async function runSegmentation() {
     renderSegmentationResult(data);
   } catch(e) {
     document.getElementById('segResult').innerHTML = '';
-    errEl.innerHTML = `<div class="js-err-box">${e.message}</div>`;
+    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">${e.message}</div>`;
   } finally {
     btn.innerHTML = 'Segment Image →';
     btn.disabled  = false;
@@ -4442,13 +4186,14 @@ function showSegRetry(msg) {
   btn.innerHTML = 'Segment Image →'; btn.disabled = false;
   if (_segRetryCount >= 3) {
     _segRetryCount = 0;
-    errEl.innerHTML = `<div class="js-err-box">✗ Model unavailable after 3 attempts. Please try again later.</div>`;
+    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">
+      ✗ Model unavailable after 3 attempts. Please try again later.</div>`;
     return;
   }
   _segRetryCount++;
   let secs = 30;
   const tick = () => {
-    errEl.innerHTML = `<div class="js-warn-box">
+    errEl.innerHTML = `<div style="padding:0.75rem 1rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:10px;color:#fbbf24;font-size:0.83rem;display:flex;align-items:center;gap:0.75rem">
       <span>⏳ Vision service is warming up — please try again in ~30 seconds. Auto-retrying in ${secs}s… (attempt ${_segRetryCount}/3)</span>
       <button onclick="cancelSegRetry()" style="padding:0.2rem 0.6rem;border:1px solid #fbbf2466;border-radius:6px;background:transparent;color:#fbbf24;cursor:pointer;font-size:0.78rem;flex-shrink:0">Stop</button>
     </div>`;
@@ -5145,7 +4890,7 @@ async function runUnsupervisedAnalysis(id) {
     renderUnsupervisedResult(id, data);
   } catch(e) {
     document.getElementById('uResult').innerHTML = '';
-    document.getElementById('uErr').innerHTML = '<div class="js-err-box">' + e.message + '</div>';
+    document.getElementById('uErr').innerHTML = '<div style="padding:0.75rem 1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:10px;color:#f87171;font-size:0.83rem">' + e.message + '</div>';
   } finally {
     const meta = UNSUPERVISED_META[id];
     btn.disabled = false; btn.style.opacity = '1'; btn.textContent = 'Run ' + meta.label;
@@ -5334,6 +5079,9 @@ function selectEDA() {
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('ebtn-eda');
   if (btn) btn.classList.add('active');
+  document.documentElement.style.setProperty('--accent', '#34d399');
+  document.documentElement.style.setProperty('--active-accent', '#34d399');
+  document.documentElement.style.setProperty('--header-accent', '#34d399');
   setAmbientFromAccent('#34d399');
   syncBottomTab('eda');
   document.getElementById('main').innerHTML = `
@@ -5380,7 +5128,7 @@ async function _runEDA(file) {
     return;
   }
 
-  resEl.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text3)"><span class="spinner" style="border-color:var(--border2);border-top-color:var(--color-success);width:20px;height:20px;border-width:3px"></span><div style="margin-top:0.75rem;font-size:0.85rem">Analysing dataset…</div></div>';
+  resEl.innerHTML = '<div style="padding:2rem;text-align:center;color:var(--text3)"><span class="spinner" style="border-color:rgba(52,211,153,0.3);border-top-color:#34d399;width:20px;height:20px;border-width:3px"></span><div style="margin-top:0.75rem;font-size:0.85rem">Analysing dataset…</div></div>';
 
   const fd = new FormData();
   fd.append('file', file);
@@ -6158,7 +5906,7 @@ function _buildExportHTML(d, filename, distKeys, distImgs, boxImg, corrImg, miIm
 
   // ML Readiness
   const readinessHTML = (d.readiness && d.readiness.length) ? (() => {
-    const vColor = { pass: 'var(--color-success)', warn: 'var(--color-warning)', fail: 'var(--color-danger)' };
+    const vColor = { pass: '#34d399', warn: '#fbbf24', fail: '#f87171' };
     const vLabel = { pass: 'Ready', warn: 'Review', fail: 'Fix' };
     const vIcon  = { pass: '✓', warn: '⚠', fail: '✗' };
     return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0.6rem">
@@ -6175,8 +5923,8 @@ function _buildExportHTML(d, filename, distKeys, distImgs, boxImg, corrImg, miIm
 
   // Insights
   const insightsHTML = (d.insights && d.insights.length) ? d.insights.map(ins => {
-    const bgs = { danger: 'var(--color-danger-bg)', warning: 'var(--color-warning-bg)', info: 'var(--color-info-bg)' };
-    const bds = { danger: 'color-mix(in srgb,var(--color-danger) 25%,transparent)', warning: 'color-mix(in srgb,var(--color-warning) 25%,transparent)', info: 'color-mix(in srgb,var(--color-info) 25%,transparent)' };
+    const bgs = { danger: 'rgba(248,113,113,0.07)', warning: 'rgba(251,191,36,0.07)', info: 'rgba(56,189,248,0.06)' };
+    const bds = { danger: '#f8717140', warning: '#fbbf2440', info: '#38bdf840' };
     return `<div style="display:flex;gap:0.5rem;padding:0.55rem 0.85rem;border-radius:8px;font-size:0.8rem;line-height:1.5;margin-bottom:0.35rem;background:${bgs[ins.type]};border:1px solid ${bds[ins.type]}">
       <span>${insightIcons[ins.type]}</span><span style="color:#cbd5e1">${ins.text}</span></div>`;
   }).join('') : '';
@@ -6320,44 +6068,44 @@ function _buildExportHTML(d, filename, distKeys, distImgs, boxImg, corrImg, miIm
   <div class="rpt-h1">Exploratory Analysis</div>
   <div class="rpt-meta">${filename} &nbsp;·&nbsp; ${now}</div>
   <div class="rpt-badges">
-    <span class="rpt-badge" style="background:var(--color-success-bg);color:var(--color-success);border:1px solid color-mix(in srgb,var(--color-success) 25%,transparent)">${d.overview.rows.toLocaleString()} rows</span>
-    <span class="rpt-badge" style="background:var(--color-info-bg);color:var(--color-info);border:1px solid color-mix(in srgb,var(--color-info) 25%,transparent)">${d.overview.cols} columns</span>
-    <span class="rpt-badge" style="background:color-mix(in srgb,var(--accent) 10%,transparent);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent)">Quality ${qScore}/100</span>
-    ${d.overview.duplicates > 0 ? `<span class="rpt-badge" style="background:var(--color-danger-bg);color:var(--color-danger);border:1px solid color-mix(in srgb,var(--color-danger) 25%,transparent)">${d.overview.duplicates} duplicates</span>` : ''}
+    <span class="rpt-badge" style="background:rgba(52,211,153,0.1);color:#34d399;border:1px solid rgba(52,211,153,0.25)">${d.overview.rows.toLocaleString()} rows</span>
+    <span class="rpt-badge" style="background:rgba(56,189,248,0.1);color:#38bdf8;border:1px solid rgba(56,189,248,0.25)">${d.overview.cols} columns</span>
+    <span class="rpt-badge" style="background:rgba(167,139,250,0.1);color:#a78bfa;border:1px solid rgba(167,139,250,0.25)">Quality ${qScore}/100</span>
+    ${d.overview.duplicates > 0 ? `<span class="rpt-badge" style="background:rgba(248,113,113,0.1);color:#f87171;border:1px solid rgba(248,113,113,0.25)">${d.overview.duplicates} duplicates</span>` : ''}
   </div>
 </div>
 
 <div class="rpt-body">
 
-  ${sec('Overview', '📋', chipsHTML, 'var(--color-info)')}
+  ${sec('Overview', '📋', chipsHTML, '#38bdf8')}
 
-  ${narrativeHTML ? sec('Analyst Summary', '📝', narrativeHTML, 'var(--accent)') : ''}
+  ${narrativeHTML ? sec('Analyst Summary', '📝', narrativeHTML, '#a78bfa') : ''}
 
-  ${insightsHTML ? sec('Smart Insights', '💡', insightsHTML, 'var(--color-warning)') : ''}
+  ${insightsHTML ? sec('Smart Insights', '💡', insightsHTML, '#fbbf24') : ''}
 
-  ${readinessHTML ? sec('ML Readiness', '⚙', readinessHTML, 'var(--color-success)') : ''}
+  ${readinessHTML ? sec('ML Readiness', '⚙', readinessHTML, '#34d399') : ''}
 
-  ${sampleHTML ? sec('Sample Data', '👁', sampleHTML, 'var(--color-info)') : ''}
+  ${sampleHTML ? sec('Sample Data', '👁', sampleHTML, '#38bdf8') : ''}
 
-  ${sec('Column Info', '🗂', colsHTML, 'var(--text3)')}
+  ${sec('Column Info', '🗂', colsHTML, '#94a3b8')}
 
-  ${statsHTML ? sec('Descriptive Statistics', '📊', statsHTML, 'var(--color-info)') : ''}
+  ${statsHTML ? sec('Descriptive Statistics', '📊', statsHTML, '#38bdf8') : ''}
 
-  ${boxImg ? sec('Box Plots', '📦', imgSection(boxImg), 'var(--accent)') : ''}
+  ${boxImg ? sec('Box Plots', '📦', imgSection(boxImg), '#a78bfa') : ''}
 
-  ${distGridHTML ? sec('Distributions', '📈', distGridHTML, 'var(--color-success)') : ''}
+  ${distGridHTML ? sec('Distributions', '📈', distGridHTML, '#34d399') : ''}
 
-  ${miImg ? sec('Mutual Information', '🔗', imgSection(miImg, 'Normalized 0–1 · captures non-linear + categorical relationships'), 'var(--color-info)') : ''}
+  ${miImg ? sec('Mutual Information', '🔗', imgSection(miImg, 'Normalized 0–1 · captures non-linear + categorical relationships'), '#38bdf8') : ''}
 
-  ${splomImg ? sec('Scatter Plot Matrix', '⊡', imgSection(splomImg, `${(d.splom||{cols:[]}).cols.length} features · pairwise relationships`), 'var(--color-success)') : ''}
+  ${splomImg ? sec('Scatter Plot Matrix', '⊡', imgSection(splomImg, `${(d.splom||{cols:[]}).cols.length} features · pairwise relationships`), '#34d399') : ''}
 
   ${d.pca ? sec('PCA 3D Scatter', '🔵',
     `<p style="font-size:0.82rem;color:#64748b;line-height:1.7;padding:0.75rem 1rem;background:rgba(255,255,255,0.02);border-radius:8px;border:1px dashed rgba(255,255,255,0.1)">
       ⓘ PCA 3D scatter uses WebGL and cannot be captured as a static image. Open the live EDA Explorer to interact with the 3D plot.<br>
       <span style="font-size:0.75rem;opacity:0.6">PC1 ${d.pca.explained_variance[0]}% · PC2 ${d.pca.explained_variance[1]}% · PC3 ${d.pca.explained_variance[2]}% explained variance · ${d.pca.coords.length} points</span>
-    </p>`, 'var(--accent)') : ''}
+    </p>`, '#a78bfa') : ''}
 
-  ${corrImg ? sec('Correlation Heatmap', '🔥', imgSection(corrImg, 'Pearson · blue = positive · red = negative'), 'var(--color-danger)') : ''}
+  ${corrImg ? sec('Correlation Heatmap', '🔥', imgSection(corrImg, 'Pearson · blue = positive · red = negative'), '#f87171') : ''}
 
   <div class="rpt-footer">
     ${!isPrint ? '<p style="font-size:0.72rem;color:#475569;margin-bottom:0.75rem">To save as PDF: press <kbd style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:1px 6px;font-size:0.7rem">Ctrl+P</kbd> (Windows) or <kbd style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:4px;padding:1px 6px;font-size:0.7rem">⌘+P</kbd> (Mac)</p>' : ''}
