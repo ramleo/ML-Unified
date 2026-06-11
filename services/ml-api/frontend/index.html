@@ -5515,6 +5515,7 @@ function _buildCleanOptions(d, filename) {
   const readiness = d.readiness || [];
   const overview  = d.overview  || {};
   const rows      = overview.rows || 1;
+  const duplicateRows = d.duplicate_rows || null;
 
   // Problem columns for drop section
   const dropCandidates = readiness
@@ -5585,6 +5586,31 @@ function _buildCleanOptions(d, filename) {
               ${overview.duplicates ?? 0} found
             </span>
           </label>
+          ${duplicateRows && duplicateRows.rows.length > 0 ? (() => {
+            const cols = duplicateRows.columns;
+            const dupRows = duplicateRows.rows;
+            const totalDups = overview.duplicates;
+            const showing = dupRows.length;
+            const moreNote = totalDups > showing ? ` (showing first ${showing} of ${totalDups})` : '';
+            const headerCells = cols.map(c =>
+              `<th style="padding:0.3rem 0.6rem;font-size:0.65rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;border-bottom:1px solid var(--border2);text-align:left">${c}</th>`
+            ).join('');
+            const bodyRows = dupRows.map(r =>
+              `<tr>${r.map(v =>
+                `<td style="padding:0.28rem 0.6rem;font-size:0.72rem;color:var(--text2);white-space:nowrap;border-bottom:1px solid rgba(255,255,255,0.04)">${v === null ? '<span style="color:var(--text3);font-style:italic">null</span>' : v}</td>`
+              ).join('')}</tr>`
+            ).join('');
+            return `
+              <div style="margin-top:0.55rem">
+                <button onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none';this.textContent=this.textContent.includes('Show')?'Hide duplicate rows':'Show duplicate rows'" style="font-size:0.72rem;color:#38bdf8;background:none;border:none;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px">Show duplicate rows${moreNote}</button>
+                <div style="display:none;margin-top:0.5rem;overflow-x:auto;border-radius:8px;border:1px solid var(--border2);background:var(--bg-card)">
+                  <table style="border-collapse:collapse;width:max-content;min-width:100%">
+                    <thead><tr>${headerCells}</tr></thead>
+                    <tbody>${bodyRows}</tbody>
+                  </table>
+                </div>
+              </div>`;
+          })() : ''}
         </div>
 
         <!-- DROP COLUMNS -->

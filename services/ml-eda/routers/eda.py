@@ -115,6 +115,17 @@ async def exploratory_analysis(file: UploadFile = File(...)):
         ],
     }
 
+    # Duplicate rows — up to 50, for display in the Clean panel
+    dup_mask = df.duplicated(keep=False)
+    dup_df = df[dup_mask].head(50)
+    duplicate_rows = {
+        "columns": df.columns.tolist(),
+        "rows": [
+            [_to_native(v) for v in row]
+            for row in dup_df.itertuples(index=False, name=None)
+        ],
+    } if overview["duplicates"] > 0 else None
+
     # Smart insights
     insights = []
 
@@ -392,6 +403,7 @@ async def exploratory_analysis(file: UploadFile = File(...)):
         "distributions": distributions,
         "correlations":  correlations,
         "sample":        sample,
+        "duplicate_rows": duplicate_rows,
         "insights":      insights,
         "quality_score": quality_score,
         "readiness":        readiness,
