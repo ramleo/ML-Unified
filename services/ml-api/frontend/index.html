@@ -5454,108 +5454,199 @@ function _cleanFileSelected(input) {
   if (input.files[0]) _cleanReadFile(input.files[0]);
 }
 
-function _cleanReadFile(file) {
+async function _cleanReadFile(file) {
   _cleanCurrentFile = file;
-  _buildCleanOptions([], file.name);  // render panel immediately
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const firstLine = (e.target.result || '').split('\n')[0];
-    const cols = firstLine.split(',').map(c => c.trim().replace(/^"|"$/g, '')).filter(Boolean);
-    const listEl = document.getElementById('sc-coldrop-list');
-    if (!listEl || !cols.length) return;
-    const idHeuristic = /\b(id|index|key|uuid|guid|rownum|row_num|code)\b/i;
-    listEl.innerHTML = cols.map(c => `
-      <label style="display:flex;align-items:center;gap:0.3rem;padding:0.25rem 0.55rem;border-radius:20px;cursor:pointer;font-size:0.75rem;border:1px solid var(--border2);background:var(--bg-card);color:var(--text2)">
-        <input type="checkbox" class="sc-dropcol" value="${c}" ${idHeuristic.test(c) ? 'checked' : ''} style="accent-color:#f87171">
-        ${c}${idHeuristic.test(c) ? ' <span style="font-size:0.62rem;color:#f87171;margin-left:2px">ID?</span>' : ''}
-      </label>`).join('');
-  };
-  reader.onerror = () => {};
-  try { reader.readAsText(file); } catch (_) {}
-}
-
-function _buildCleanOptions(cols, filename) {
   const optEl = document.getElementById('cleanOptions');
   if (!optEl) return;
-  const idHeuristic = /\b(id|index|key|uuid|guid|rownum|row_num|code)\b/i;
+  if (!EDA_API) {
+    optEl.innerHTML = `<div class="eda-section-card eda-visible" style="margin-top:1.25rem;font-size:0.82rem;color:#f87171">EDA service not configured (ML_EDA_URL missing).</div>`;
+    return;
+  }
+  optEl.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--text3)"><span class="spinner" style="border-color:var(--border2);border-top-color:#22d3ee;width:20px;height:20px;border-width:3px;display:inline-block"></span><div style="margin-top:0.75rem;font-size:0.85rem">Analysing columns…</div></div>`;
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const r = await fetch(`${EDA_API}/eda`, { method: 'POST', body: fd });
+    if (!r.ok) throw new Error('Analysis failed');
+    const d = await r.json();
+    _buildCleanOptions(d, file.name);
+  } catch (e) {
+    optEl.innerHTML = `<div class="eda-section-card eda-visible" style="margin-top:1.25rem;font-size:0.82rem;color:#f87171">Failed to analyse file: ${e.message}</div>`;
+  }
+}
+
+function _buildCleanOptions(d, filename) {
+  const optEl = document.getElementById('cleanOptions');
+  if (!optEl) return;
+
+  const stats    = d.stats    || {};
+  const columns  = d.columns  || [];
+  const readiness = d.readiness || [];
+  const overview  = d.overview  || {};
+  const rows      = overview.rows || 1;
+
+  // Problem columns for drop section
+  const dropCandidates = readiness
+    .filter(r => r.verdict === 'fail')
+    .map(r => ({ name: r.name, reason: r.reason }));
+
+  // Columns with missing values (sorted desc)
+  const missingCols = columns
+    .filter(c => c.missing > 0)
+    .sort((a, b) => b.missing_pct - a.missing_pct);
+
+  // Numeric columns with outliers (sorted desc)
+  const outlierCols = Object.entries(stats)
+    .filter(([, s]) => s.outliers > 0)
+    .sort(([, a], [, b]) => b.outliers - a.outliers)
+    .map(([col, s]) => ({ name: col, count: s.outliers, pct: Math.round(s.outliers / rows * 1000) / 10 }));
+
+  // Numeric columns with |skew| > 0.5 (sorted by abs skew desc)
+  const skewedCols = Object.entries(stats)
+    .filter(([, s]) => Math.abs(s.skew) > 0.5)
+    .sort(([, a], [, b]) => Math.abs(b.skew) - Math.abs(a.skew))
+    .map(([col, s]) => ({ name: col, skew: s.skew }));
+
+  const maxOutlierPct = outlierCols.length ? outlierCols[0].pct : 1;
+  const maxAbsSkew    = skewedCols.length  ? Math.abs(skewedCols[0].skew) : 1;
+
+  const sectionTitle = (text, sub) => `
+    <div style="font-size:0.72rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem;display:flex;align-items:center;gap:0.5rem">
+      ${text}${sub ? `<span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3)">${sub}</span>` : ''}
+    </div>`;
+
+  const colRow = (checkClass, accentColor, checked, val, name, barPct, barColor, valStr) => `
+    <label style="display:grid;grid-template-columns:18px 130px 1fr 54px;align-items:center;gap:0.5rem;cursor:pointer;padding:0.3rem 0.4rem;border-radius:7px">
+      <input type="checkbox" class="${checkClass}" value="${name}" ${checked ? 'checked' : ''} style="accent-color:${accentColor};width:14px;height:14px;flex-shrink:0">
+      <span style="font-size:0.75rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${name}">${name}</span>
+      <div style="height:7px;border-radius:4px;background:var(--border2);overflow:hidden">
+        <div style="height:100%;width:${Math.min(barPct,100)}%;background:${barColor};border-radius:4px;transition:width 0.4s ease"></div>
+      </div>
+      <span style="font-size:0.7rem;font-weight:700;color:${barColor};text-align:right;font-variant-numeric:tabular-nums">${valStr}</span>
+    </label>`;
+
   optEl.innerHTML = `
     <div class="eda-section-card eda-visible" style="margin-top:1.25rem">
       <div class="eda-section-title">🧹 Clean &amp; Export
-        <span style="font-weight:400;color:var(--text3);font-size:0.75rem">${filename}</span>
+        <span style="font-weight:400;color:var(--text3);font-size:0.75rem;text-transform:none;letter-spacing:0">${filename}</span>
       </div>
-      <div style="display:flex;flex-direction:column;gap:1.2rem">
+      <div style="display:flex;flex-direction:column;gap:1.5rem">
 
-        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--text)">
-          <input type="checkbox" id="sc-dedup" checked style="width:16px;height:16px;accent-color:var(--color-success)">
-          Remove duplicate rows
-        </label>
-
+        <!-- DEDUP -->
         <div>
-          <div style="font-size:0.82rem;font-weight:600;color:var(--text);margin-bottom:0.5rem">Columns to drop</div>
-          <div style="display:flex;flex-wrap:wrap;gap:0.4rem" id="sc-coldrop-list">
-            ${cols.map(c => `
-              <label style="display:flex;align-items:center;gap:0.3rem;padding:0.25rem 0.55rem;border-radius:20px;cursor:pointer;font-size:0.75rem;border:1px solid var(--border2);background:var(--bg-card);color:var(--text2)">
-                <input type="checkbox" class="sc-dropcol" value="${c}" ${idHeuristic.test(c) ? 'checked' : ''} style="accent-color:#f87171">
-                ${c}${idHeuristic.test(c) ? ' <span style="font-size:0.62rem;color:#f87171;margin-left:2px">ID?</span>' : ''}
-              </label>`).join('')}
-          </div>
-        </div>
-
-        <div>
-          <div style="font-size:0.82rem;font-weight:600;color:var(--text);margin-bottom:0.5rem">Missing value imputation</div>
-          <select id="sc-impute" onchange="_scImpute_onChange()" style="padding:0.4rem 0.6rem;border-radius:8px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text2);font-size:0.8rem;width:100%;max-width:280px">
-            <option value="none">None — leave as-is</option>
-            <option value="mean">Mean (numeric)</option>
-            <option value="median">Median (numeric)</option>
-            <option value="mode">Mode / most frequent (all)</option>
-            <option value="constant">Constant value</option>
-            <option value="knn">KNN (k=5, numeric)</option>
-            <option value="mice">MICE / IterativeImputer (numeric)</option>
-            <option value="ffill">Forward fill</option>
-            <option value="bfill">Backward fill</option>
-            <option value="interpolate">Interpolate</option>
-          </select>
-          <div id="sc-knn-opts" style="display:none;margin-top:0.5rem;align-items:center;gap:0.5rem">
-            <label style="font-size:0.75rem;color:var(--text3)">k:</label>
-            <input type="number" id="sc-knn-k" value="5" min="1" max="20" style="width:55px;padding:0.25rem;border-radius:6px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text);font-size:0.8rem">
-          </div>
-          <div id="sc-const-opts" style="display:none;margin-top:0.5rem;align-items:center;gap:0.5rem">
-            <label style="font-size:0.75rem;color:var(--text3)">Fill value:</label>
-            <input type="text" id="sc-const-val" value="0" style="width:80px;padding:0.25rem;border-radius:6px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text);font-size:0.8rem">
-          </div>
-          <div id="sc-slow-warn" style="display:none;margin-top:0.4rem;font-size:0.72rem;color:#fbbf24">⚠ This method can be slow on large datasets.</div>
-        </div>
-
-        <div>
-          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;font-weight:600;color:var(--text);margin-bottom:0.5rem">
-            <input type="checkbox" id="sc-outlier-on" onchange="_scOutlier_onChange()" style="width:16px;height:16px;accent-color:#fbbf24">
-            Outlier removal
+          ${sectionTitle('Duplicate rows')}
+          <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer">
+            <input type="checkbox" id="sc-dedup" ${overview.duplicates > 0 ? 'checked' : ''} style="width:15px;height:15px;accent-color:var(--color-success)">
+            <span style="font-size:0.82rem;color:var(--text)">Remove duplicates</span>
+            <span style="padding:0.15rem 0.55rem;border-radius:20px;font-size:0.7rem;font-weight:700;background:${overview.duplicates > 0 ? 'rgba(251,191,36,0.15)' : 'rgba(52,211,153,0.12)'};color:${overview.duplicates > 0 ? '#fbbf24' : '#34d399'}">
+              ${overview.duplicates ?? 0} found
+            </span>
           </label>
-          <div id="sc-outlier-opts" style="display:none;padding-left:1.4rem;flex-direction:column;gap:0.5rem">
-            <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
-              <label style="font-size:0.78rem;color:var(--text3)">Method:</label>
-              <select id="sc-outlier-method" onchange="_scOutlier_onChange()" style="padding:0.3rem 0.5rem;border-radius:8px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text2);font-size:0.78rem">
-                <option value="iqr">IQR (multiplier, default 1.5)</option>
-                <option value="zscore">Z-score (std devs, default 3)</option>
-                <option value="winsorize">Winsorize (percentile%, default 5)</option>
+        </div>
+
+        <!-- DROP COLUMNS -->
+        <div>
+          ${sectionTitle('Columns to drop', '— flagged as problematic')}
+          ${dropCandidates.length === 0
+            ? `<div style="font-size:0.75rem;color:var(--text3)">No problematic columns detected</div>`
+            : `<div style="display:flex;flex-direction:column;gap:0.25rem" id="sc-dropcol-list">
+                ${dropCandidates.map(c => `
+                  <label style="display:grid;grid-template-columns:18px 130px 1fr;align-items:center;gap:0.5rem;cursor:pointer;padding:0.3rem 0.5rem;border-radius:8px;background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.14)">
+                    <input type="checkbox" class="sc-dropcol" value="${c.name}" style="accent-color:#f87171;width:14px;height:14px">
+                    <span style="font-size:0.78rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.name}">${c.name}</span>
+                    <span style="font-size:0.68rem;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.reason}</span>
+                  </label>`).join('')}
+              </div>`
+          }
+          <div style="margin-top:0.6rem;display:flex;align-items:center;gap:0.5rem">
+            <select id="sc-addcol" style="padding:0.3rem 0.5rem;border-radius:8px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text2);font-size:0.75rem;max-width:200px">
+              <option value="">+ Add any column to drop</option>
+              ${columns.map(c => `<option value="${c.name}">${c.name}</option>`).join('')}
+            </select>
+            <button onclick="_scAddDropCol()" style="padding:0.2rem 0.55rem;border-radius:8px;font-size:0.72rem;font-weight:600;cursor:pointer;background:rgba(248,113,113,0.12);color:#f87171;border:1px solid rgba(248,113,113,0.3)">Add</button>
+          </div>
+        </div>
+
+        <!-- IMPUTATION -->
+        <div>
+          ${sectionTitle('Missing value imputation')}
+          ${missingCols.length === 0
+            ? `<div style="font-size:0.75rem;color:var(--text3)">No missing values detected</div>`
+            : `<div style="display:flex;flex-direction:column;gap:0.15rem;margin-bottom:0.75rem">
+                ${missingCols.map(c => colRow(
+                  'sc-imputecol', '#38bdf8', c.missing_pct > 5,
+                  c.missing_pct, c.name, c.missing_pct,
+                  c.missing_pct > 20 ? '#f87171' : c.missing_pct > 5 ? '#fbbf24' : '#38bdf8',
+                  c.missing_pct + '%'
+                )).join('')}
+              </div>
+              <select id="sc-impute" onchange="_scImpute_onChange()" style="padding:0.4rem 0.6rem;border-radius:8px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text2);font-size:0.8rem;width:100%;max-width:280px">
+                <option value="none">None — leave as-is</option>
+                <option value="mean">Mean (numeric)</option>
+                <option value="median">Median (numeric)</option>
+                <option value="mode">Mode / most frequent</option>
+                <option value="constant">Constant value</option>
+                <option value="knn">KNN (k=5, numeric)</option>
+                <option value="mice">MICE / IterativeImputer</option>
+                <option value="ffill">Forward fill</option>
+                <option value="bfill">Backward fill</option>
+                <option value="interpolate">Interpolate</option>
               </select>
-            </div>
-            <div style="display:flex;align-items:center;gap:0.5rem">
-              <label style="font-size:0.75rem;color:var(--text3)">Threshold:</label>
-              <input type="number" id="sc-outlier-thresh" value="1.5" step="0.1" min="0" style="width:70px;padding:0.25rem;border-radius:6px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text);font-size:0.8rem">
-            </div>
-          </div>
+              <div id="sc-knn-opts" style="display:none;margin-top:0.5rem;align-items:center;gap:0.5rem">
+                <label style="font-size:0.75rem;color:var(--text3)">k:</label>
+                <input type="number" id="sc-knn-k" value="5" min="1" max="20" style="width:55px;padding:0.25rem;border-radius:6px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text);font-size:0.8rem">
+              </div>
+              <div id="sc-const-opts" style="display:none;margin-top:0.5rem;align-items:center;gap:0.5rem">
+                <label style="font-size:0.75rem;color:var(--text3)">Fill value:</label>
+                <input type="text" id="sc-const-val" value="0" style="width:80px;padding:0.25rem;border-radius:6px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text);font-size:0.8rem">
+              </div>
+              <div id="sc-slow-warn" style="display:none;margin-top:0.4rem;font-size:0.72rem;color:#fbbf24">⚠ This method can be slow on large datasets.</div>`
+          }
         </div>
 
+        <!-- OUTLIER REMOVAL -->
         <div>
-          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;font-weight:600;color:var(--text)">
-            <input type="checkbox" id="sc-power-transform" style="width:16px;height:16px;accent-color:#a78bfa">
-            Yeo-Johnson power transform (numeric)
-          </label>
-          <div style="font-size:0.72rem;color:var(--text3);margin-top:0.2rem;padding-left:1.4rem">Normalises skewed distributions.</div>
+          ${sectionTitle('Outlier removal', '— check columns to clean')}
+          ${outlierCols.length === 0
+            ? `<div style="font-size:0.75rem;color:var(--text3)">No outliers detected</div>`
+            : `<div style="display:flex;flex-direction:column;gap:0.15rem;margin-bottom:0.75rem">
+                ${outlierCols.map(c => colRow(
+                  'sc-outliercol', '#fbbf24', c.pct > 5,
+                  c.pct, c.name, c.pct / maxOutlierPct * 100,
+                  '#fbbf24', c.pct + '%'
+                )).join('')}
+              </div>
+              <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+                <select id="sc-outlier-method" onchange="_scOutlier_onChange()" style="padding:0.3rem 0.5rem;border-radius:8px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text2);font-size:0.78rem">
+                  <option value="iqr">IQR (multiplier, default 1.5)</option>
+                  <option value="zscore">Z-score (std devs, default 3)</option>
+                  <option value="winsorize">Winsorize (percentile%, default 5)</option>
+                </select>
+                <div style="display:flex;align-items:center;gap:0.4rem">
+                  <label style="font-size:0.75rem;color:var(--text3)">Threshold:</label>
+                  <input type="number" id="sc-outlier-thresh" value="1.5" step="0.1" min="0" style="width:65px;padding:0.25rem;border-radius:6px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text);font-size:0.8rem">
+                </div>
+              </div>`
+          }
         </div>
 
+        <!-- POWER TRANSFORM -->
         <div>
+          ${sectionTitle('Power transform (Yeo-Johnson)', '— check skewed columns')}
+          ${skewedCols.length === 0
+            ? `<div style="font-size:0.75rem;color:var(--text3)">No significantly skewed columns</div>`
+            : `<div style="display:flex;flex-direction:column;gap:0.15rem">
+                ${skewedCols.map(c => {
+                  const abs = Math.abs(c.skew);
+                  const col = abs > 2 ? '#f87171' : abs > 1 ? '#fbbf24' : '#a78bfa';
+                  return colRow('sc-skewtcol', '#a78bfa', abs > 1, abs, c.name, abs / maxAbsSkew * 100, col, (c.skew > 0 ? '+' : '') + c.skew);
+                }).join('')}
+              </div>`
+          }
+        </div>
+
+        <!-- SUBMIT -->
+        <div style="padding-top:0.75rem;border-top:1px solid var(--border)">
           <button onclick="_submitClean()" id="sc-btn" style="padding:0.5rem 1.5rem;border-radius:20px;font-size:0.85rem;font-weight:700;cursor:pointer;background:rgba(34,211,238,0.15);color:#22d3ee;border:1px solid rgba(34,211,238,0.35);transition:all 0.2s">
             Clean &amp; Download CSV
           </button>
@@ -5567,30 +5658,48 @@ function _buildCleanOptions(cols, filename) {
         </div>
 
         <div id="sc-summary" style="display:none;padding:1rem;border-radius:12px;background:rgba(34,211,238,0.07);border:1px solid rgba(34,211,238,0.2)"></div>
+
       </div>
     </div>`;
 }
 
 function _scImpute_onChange() {
-  const method = document.getElementById('sc-impute').value;
-  const knn = document.getElementById('sc-knn-opts');
-  const con = document.getElementById('sc-const-opts');
+  const method = document.getElementById('sc-impute')?.value;
+  const knn  = document.getElementById('sc-knn-opts');
+  const con  = document.getElementById('sc-const-opts');
   const warn = document.getElementById('sc-slow-warn');
-  if (knn) knn.style.display = method === 'knn' ? 'flex' : 'none';
-  if (con) con.style.display = method === 'constant' ? 'flex' : 'none';
+  if (knn)  knn.style.display  = method === 'knn'      ? 'flex'  : 'none';
+  if (con)  con.style.display  = method === 'constant' ? 'flex'  : 'none';
   if (warn) warn.style.display = ['knn','mice'].includes(method) ? 'block' : 'none';
 }
 
 function _scOutlier_onChange() {
-  const enabled = document.getElementById('sc-outlier-on')?.checked;
-  const opts = document.getElementById('sc-outlier-opts');
-  if (opts) opts.style.display = enabled ? 'flex' : 'none';
   const method = document.getElementById('sc-outlier-method')?.value;
   const thresh = document.getElementById('sc-outlier-thresh');
   if (thresh && method) {
     const defaults = { iqr: '1.5', zscore: '3', winsorize: '5' };
     thresh.value = defaults[method] || '1.5';
   }
+}
+
+function _scAddDropCol() {
+  const sel = document.getElementById('sc-addcol');
+  if (!sel?.value) return;
+  const col = sel.value;
+  const existing = [...document.querySelectorAll('.sc-dropcol')].map(el => el.value);
+  if (existing.includes(col)) { sel.value = ''; return; }
+  let list = document.getElementById('sc-dropcol-list');
+  if (!list) {
+    list = document.createElement('div');
+    list.id = 'sc-dropcol-list';
+    list.style.cssText = 'display:flex;flex-direction:column;gap:0.25rem';
+    sel.closest('div').insertAdjacentElement('beforebegin', list);
+  }
+  const lbl = document.createElement('label');
+  lbl.style.cssText = 'display:grid;grid-template-columns:18px 130px 1fr;align-items:center;gap:0.5rem;cursor:pointer;padding:0.3rem 0.5rem;border-radius:8px;background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.14)';
+  lbl.innerHTML = `<input type="checkbox" class="sc-dropcol" value="${col}" checked style="accent-color:#f87171;width:14px;height:14px"><span style="font-size:0.78rem;font-weight:600;color:var(--text)">${col}</span><span style="font-size:0.68rem;color:var(--text3)">manually added</span>`;
+  list.appendChild(lbl);
+  sel.value = '';
 }
 
 async function _submitClean() {
@@ -5606,22 +5715,27 @@ async function _submitClean() {
   const summaryEl = document.getElementById('sc-summary');
   btn.disabled = true; spinner.style.display = 'inline'; errEl.style.display = 'none'; summaryEl.style.display = 'none';
 
-  const dropCols = [...document.querySelectorAll('.sc-dropcol:checked')].map(el => el.value);
-  const impMethod = document.getElementById('sc-impute').value;
+  const dropCols     = [...document.querySelectorAll('.sc-dropcol:checked')].map(el => el.value);
+  const imputeCols   = [...document.querySelectorAll('.sc-imputecol:checked')].map(el => el.value);
+  const outlierCols  = [...document.querySelectorAll('.sc-outliercol:checked')].map(el => el.value);
+  const skewCols     = [...document.querySelectorAll('.sc-skewtcol:checked')].map(el => el.value);
+  const impMethod    = document.getElementById('sc-impute')?.value || 'none';
   const config = {
-    dedup: document.getElementById('sc-dedup').checked,
-    drop_id_cols: dropCols,
+    dedup: document.getElementById('sc-dedup')?.checked ?? true,
+    drop_cols: dropCols,
     imputation: {
       method: impMethod,
+      cols: imputeCols.length ? imputeCols : null,
       constant_value: impMethod === 'constant' ? (document.getElementById('sc-const-val')?.value ?? '0') : null,
       knn_k: parseInt(document.getElementById('sc-knn-k')?.value || '5'),
     },
     outliers: {
-      enabled: document.getElementById('sc-outlier-on').checked,
+      enabled: outlierCols.length > 0,
+      cols: outlierCols,
       method: document.getElementById('sc-outlier-method')?.value || 'iqr',
       threshold: parseFloat(document.getElementById('sc-outlier-thresh')?.value || '1.5'),
     },
-    power_transform: document.getElementById('sc-power-transform').checked,
+    power_transform: { enabled: skewCols.length > 0, cols: skewCols },
   };
 
   try {

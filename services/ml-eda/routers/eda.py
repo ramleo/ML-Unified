@@ -431,7 +431,7 @@ async def clean_dataset(file: UploadFile = File(...), config: str = Form(...)):
     rows_removed_dedup = rows_before - rows_after_dedup
 
     # ── 2. Drop ID cols ──────────────────────────────────────────
-    drop_id_cols = cfg.get("drop_id_cols") or []
+    drop_id_cols = cfg.get("drop_cols") or cfg.get("drop_id_cols") or []
     cols_dropped = [c for c in drop_id_cols if c in df.columns]
     if cols_dropped:
         df = df.drop(columns=cols_dropped)
@@ -439,23 +439,27 @@ async def clean_dataset(file: UploadFile = File(...), config: str = Form(...)):
     # ── 3. Imputation ────────────────────────────────────────────
     imp_cfg = cfg.get("imputation") or {}
     imp_method = imp_cfg.get("method", "none")
+    imp_cols_cfg = imp_cfg.get("cols", None)  # None = all numeric cols
     num_cols = df.select_dtypes(include="number").columns.tolist()
 
     if imp_method == "mean":
         from sklearn.impute import SimpleImputer
-        if num_cols:
+        target_num = [c for c in num_cols if imp_cols_cfg is None or c in imp_cols_cfg]
+        if target_num:
             imp = SimpleImputer(strategy="mean")
-            df[num_cols] = imp.fit_transform(df[num_cols])
+            df[target_num] = imp.fit_transform(df[target_num])
 
     elif imp_method == "median":
         from sklearn.impute import SimpleImputer
-        if num_cols:
+        target_num = [c for c in num_cols if imp_cols_cfg is None or c in imp_cols_cfg]
+        if target_num:
             imp = SimpleImputer(strategy="median")
-            df[num_cols] = imp.fit_transform(df[num_cols])
+            df[target_num] = imp.fit_transform(df[target_num])
 
     elif imp_method == "mode":
         from sklearn.impute import SimpleImputer
-        for col in df.columns:
+        cols_for_mode = [c for c in df.columns if imp_cols_cfg is None or c in imp_cols_cfg]
+        for col in cols_for_mode:
             imp = SimpleImputer(strategy="most_frequent")
             df[[col]] = imp.fit_transform(df[[col]])
 
@@ -468,16 +472,18 @@ async def clean_dataset(file: UploadFile = File(...), config: str = Form(...)):
     elif imp_method == "knn":
         from sklearn.impute import KNNImputer
         knn_k = imp_cfg.get("knn_k", 5)
-        if num_cols:
+        target_num = [c for c in num_cols if imp_cols_cfg is None or c in imp_cols_cfg]
+        if target_num:
             imp = KNNImputer(n_neighbors=knn_k)
-            df[num_cols] = imp.fit_transform(df[num_cols])
+            df[target_num] = imp.fit_transform(df[target_num])
 
     elif imp_method == "mice":
         from sklearn.experimental import enable_iterative_imputer  # noqa: F401
         from sklearn.impute import IterativeImputer
-        if num_cols:
+        target_num = [c for c in num_cols if imp_cols_cfg is None or c in imp_cols_cfg]
+        if target_num:
             imp = IterativeImputer()
-            df[num_cols] = imp.fit_transform(df[num_cols])
+            df[target_num] = imp.fit_transform(df[target_num])
 
     elif imp_method == "ffill":
         df = df.ffill()
@@ -486,8 +492,9 @@ async def clean_dataset(file: UploadFile = File(...), config: str = Form(...)):
         df = df.bfill()
 
     elif imp_method == "interpolate":
-        if num_cols:
-            df[num_cols] = df[num_cols].interpolate()
+        target_num = [c for c in num_cols if imp_cols_cfg is None or c in imp_cols_cfg]
+        if target_num:
+            df[target_num] = df[target_num].interpolate()
 
     elif imp_method == "miceforest":
         try:
@@ -503,8 +510,9 @@ async def clean_dataset(file: UploadFile = File(...), config: str = Form(...)):
             from fancyimpute import IterativeSVD
         except ImportError:
             raise HTTPException(400, "fancyimpute not installed on this server")
-        if num_cols:
-            df[num_cols] = IterativeSVD().fit_transform(df[num_cols])
+        target_num = [c for c in num_cols if imp_cols_cfg is None or c in imp_cols_cfg]
+        if target_num:
+            df[target_num] = IterativeSVD().fit_transform(df[target_num])
 
     # ── 4. Outlier removal ───────────────────────────────────────
     outliers_cfg = cfg.get("outliers") or {}
@@ -515,6 +523,9 @@ async def clean_dataset(file: UploadFile = File(...), config: str = Form(...)):
         out_method = outliers_cfg.get("method", "iqr")
         threshold = outliers_cfg.get("threshold", 1.5)
         num_cols_now = df.select_dtypes(include="number").columns.tolist()
+        out_cols_cfg = outliers_cfg.get("cols", None)
+        if out_cols_cfg is not None:
+            num_cols_now = [c for c in num_cols_now if c in out_cols_cfg]
 
         if out_method == "iqr":
             mask = pd.Series([True] * len(df), index=df.index)
@@ -553,9 +564,14 @@ async def clean_dataset(file: UploadFile = File(...), config: str = Form(...)):
         outliers_removed = rows_before_outliers - len(df)
 
     # ── 5. Power transform ───────────────────────────────────────
-    if cfg.get("power_transform", False):
+    pt_cfg = cfg.get("power_transform", False)
+    pt_enabled = pt_cfg if isinstance(pt_cfg, bool) else pt_cfg.get("enabled", False)
+    pt_cols_cfg = None if isinstance(pt_cfg, bool) else pt_cfg.get("cols", None)
+    if pt_enabled:
         from sklearn.preprocessing import PowerTransformer
         num_cols_final = df.select_dtypes(include="number").columns.tolist()
+        if pt_cols_cfg is not None:
+            num_cols_final = [c for c in num_cols_final if c in pt_cols_cfg]
         if num_cols_final:
             pt = PowerTransformer(method="yeo-johnson")
             df[num_cols_final] = pt.fit_transform(df[num_cols_final])
