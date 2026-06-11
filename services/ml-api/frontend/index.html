@@ -5479,7 +5479,7 @@ function _buildCleanOptions(cols, filename) {
   if (!optEl) return;
   const idHeuristic = /\b(id|index|key|uuid|guid|rownum|row_num|code)\b/i;
   optEl.innerHTML = `
-    <div class="eda-section-card" style="margin-top:1.25rem">
+    <div class="eda-section-card eda-visible" style="margin-top:1.25rem">
       <div class="eda-section-title">🧹 Clean &amp; Export
         <span style="font-weight:400;color:var(--text3);font-size:0.75rem">${filename}</span>
       </div>
