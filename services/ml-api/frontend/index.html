@@ -5568,8 +5568,10 @@ function _buildCleanOptions(d, filename) {
   optEl.innerHTML = `
     <div class="eda-section-card eda-visible" style="margin-top:1.25rem;background:transparent;box-shadow:none">
       <div class="shap-header" style="margin:-1.35rem -1.35rem 1.25rem;border-radius:16px 16px 0 0">
-        <span class="shap-title">🧹 Clean &amp; Export</span>
-        <span class="shap-subtitle">${filename}</span>
+        <div style="display:flex;flex-direction:column;gap:0.2rem">
+          <span class="shap-title" style="display:flex;align-items:center;gap:0.45rem"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2 L14 7 L7 14 L2 14 L2 9 Z"/><path d="M9 2 L14 7"/><path d="M6 11 L11 6"/><path d="M2 14 L5 11"/></svg>Clean &amp; Export</span>
+          <span style="font-size:0.75rem;font-weight:600;color:#22d3ee;opacity:0.9;letter-spacing:0.01em;display:flex;align-items:center;gap:0.3rem;overflow:hidden;max-width:340px" title="${filename}"><svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><path d="M9 2H4a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1V6z"/><path d="M9 2v4h4"/></svg><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${filename}</span></span>
+        </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:1.5rem">
 
