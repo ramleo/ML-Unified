@@ -115,8 +115,10 @@ async def exploratory_analysis(file: UploadFile = File(...)):
         ],
     }
 
-    # Duplicate rows — up to 50, for display in the Clean panel
-    dup_mask = df.duplicated(keep=False)
+    # Duplicate rows — up to 50, for display in the Clean panel.
+    # keep='first' shows only the extra copies (rows that WILL be removed),
+    # matching the "X found" badge count from duplicated().sum().
+    dup_mask = df.duplicated(keep="first")
     dup_df = df[dup_mask].head(50)
     duplicate_rows = {
         "columns": df.columns.tolist(),
