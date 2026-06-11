@@ -10,3 +10,10 @@ build/
 .mcp.json
 vision_cache/
 services/ml-api/data/*.json
+
+# Local artifacts
+.playwright-mcp/
+Conversations/
+conversation.md
+*.png
+test_clusters.csv
