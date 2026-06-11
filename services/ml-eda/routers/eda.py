@@ -438,65 +438,73 @@ async def clean_dataset(file: UploadFile = File(...), config: str = Form(...)):
 
     # ── 3. Imputation ────────────────────────────────────────────
     imp_cfg = cfg.get("imputation") or {}
-    imp_method = imp_cfg.get("method", "none")
-    imp_cols_cfg = imp_cfg.get("cols", None)  # None = all numeric cols
+    imp_cols_cfg = imp_cfg.get("cols", None)  # None = all cols of each type
+
     num_cols = df.select_dtypes(include="number").columns.tolist()
+    cat_cols = df.select_dtypes(exclude="number").columns.tolist()
 
-    if imp_method == "mean":
+    # Support split numeric/categorical methods; fall back to legacy "method" key
+    num_method = imp_cfg.get("numeric_method") or imp_cfg.get("method", "none")
+    cat_method = imp_cfg.get("cat_method", "none")
+
+    def _target_num():
+        return [c for c in num_cols if imp_cols_cfg is None or c in imp_cols_cfg]
+
+    def _target_cat():
+        return [c for c in cat_cols if imp_cols_cfg is None or c in imp_cols_cfg]
+
+    # ── Numeric imputation ───────────────────────────────────────
+    if num_method == "mean":
         from sklearn.impute import SimpleImputer
-        target_num = [c for c in num_cols if imp_cols_cfg is None or c in imp_cols_cfg]
-        if target_num:
-            imp = SimpleImputer(strategy="mean")
-            df[target_num] = imp.fit_transform(df[target_num])
+        t = _target_num()
+        if t:
+            df[t] = SimpleImputer(strategy="mean").fit_transform(df[t])
 
-    elif imp_method == "median":
+    elif num_method == "median":
         from sklearn.impute import SimpleImputer
-        target_num = [c for c in num_cols if imp_cols_cfg is None or c in imp_cols_cfg]
-        if target_num:
-            imp = SimpleImputer(strategy="median")
-            df[target_num] = imp.fit_transform(df[target_num])
+        t = _target_num()
+        if t:
+            df[t] = SimpleImputer(strategy="median").fit_transform(df[t])
 
-    elif imp_method == "mode":
-        from sklearn.impute import SimpleImputer
-        cols_for_mode = [c for c in df.columns if imp_cols_cfg is None or c in imp_cols_cfg]
-        for col in cols_for_mode:
-            imp = SimpleImputer(strategy="most_frequent")
-            df[[col]] = imp.fit_transform(df[[col]])
-
-    elif imp_method == "constant":
-        constant_value = imp_cfg.get("constant_value")
-        if constant_value is None:
-            constant_value = 0
-        df = df.fillna(constant_value)
-
-    elif imp_method == "knn":
+    elif num_method == "knn":
         from sklearn.impute import KNNImputer
-        knn_k = imp_cfg.get("knn_k", 5)
-        target_num = [c for c in num_cols if imp_cols_cfg is None or c in imp_cols_cfg]
-        if target_num:
-            imp = KNNImputer(n_neighbors=knn_k)
-            df[target_num] = imp.fit_transform(df[target_num])
+        t = _target_num()
+        if t:
+            df[t] = KNNImputer(n_neighbors=imp_cfg.get("knn_k", 5)).fit_transform(df[t])
 
-    elif imp_method == "mice":
+    elif num_method == "mice":
         from sklearn.experimental import enable_iterative_imputer  # noqa: F401
         from sklearn.impute import IterativeImputer
-        target_num = [c for c in num_cols if imp_cols_cfg is None or c in imp_cols_cfg]
-        if target_num:
-            imp = IterativeImputer()
-            df[target_num] = imp.fit_transform(df[target_num])
+        t = _target_num()
+        if t:
+            df[t] = IterativeImputer().fit_transform(df[t])
 
-    elif imp_method == "ffill":
-        df = df.ffill()
+    elif num_method == "interpolate":
+        t = _target_num()
+        if t:
+            df[t] = df[t].interpolate()
 
-    elif imp_method == "bfill":
-        df = df.bfill()
+    elif num_method == "ffill":
+        t = _target_num()
+        if t:
+            df[t] = df[t].ffill()
 
-    elif imp_method == "interpolate":
-        target_num = [c for c in num_cols if imp_cols_cfg is None or c in imp_cols_cfg]
-        if target_num:
-            df[target_num] = df[target_num].interpolate()
+    elif num_method == "bfill":
+        t = _target_num()
+        if t:
+            df[t] = df[t].bfill()
 
-    elif imp_method == "miceforest":
+    elif num_method == "constant":
+        t = _target_num()
+        val = imp_cfg.get("constant_value", 0)
+        try:
+            val = float(val)
+        except (TypeError, ValueError):
+            val = 0
+        for c in t:
+            df[c] = df[c].fillna(val)
+
+    elif num_method == "miceforest":
         try:
             import miceforest as mf
         except ImportError:
@@ -505,14 +513,35 @@ async def clean_dataset(file: UploadFile = File(...), config: str = Form(...)):
         kernel.mice(1)
         df = kernel.complete_data(0)
 
-    elif imp_method == "fancyimpute":
+    elif num_method == "fancyimpute":
         try:
             from fancyimpute import IterativeSVD
         except ImportError:
             raise HTTPException(400, "fancyimpute not installed on this server")
-        target_num = [c for c in num_cols if imp_cols_cfg is None or c in imp_cols_cfg]
-        if target_num:
-            df[target_num] = IterativeSVD().fit_transform(df[target_num])
+        t = _target_num()
+        if t:
+            df[t] = IterativeSVD().fit_transform(df[t])
+
+    # ── Categorical imputation ───────────────────────────────────
+    if cat_method == "mode":
+        from sklearn.impute import SimpleImputer
+        for col in _target_cat():
+            df[[col]] = SimpleImputer(strategy="most_frequent").fit_transform(df[[col]])
+
+    elif cat_method == "constant":
+        cat_const = imp_cfg.get("cat_constant_value", "Unknown")
+        for col in _target_cat():
+            df[col] = df[col].fillna(cat_const)
+
+    elif cat_method == "ffill":
+        t = _target_cat()
+        if t:
+            df[t] = df[t].ffill()
+
+    elif cat_method == "bfill":
+        t = _target_cat()
+        if t:
+            df[t] = df[t].bfill()
 
     # ── 4. Outlier removal ───────────────────────────────────────
     outliers_cfg = cfg.get("outliers") or {}

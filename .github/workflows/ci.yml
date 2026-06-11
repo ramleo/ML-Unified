@@ -31,6 +31,9 @@ jobs:
       - name: Install ml-vision dependencies
         run: pip install -r services/ml-vision/requirements.txt
 
+      - name: Install ml-eda dependencies
+        run: pip install -r services/ml-eda/requirements.txt
+
       - name: Install dev tools
         run: pip install -r requirements-dev.txt
 
@@ -40,11 +43,17 @@ jobs:
       - name: Lint ml-vision
         run: ruff check services/ml-vision/app.py
 
+      - name: Lint ml-eda
+        run: ruff check services/ml-eda/app.py
+
       - name: Test ml-api
         run: pytest services/ml-api/tests/ -v --tb=short
 
       - name: Test ml-vision
         run: pytest services/ml-vision/tests/ -v --tb=short
+
+      - name: Test ml-eda
+        run: pytest services/ml-eda/tests/ -v --tb=short
 
   deploy:
     needs: test
@@ -70,3 +79,16 @@ jobs:
             "$VISION_HOOK" | grep -q "^2" \
             && echo "ml-vision deploy triggered." \
             || (echo "ml-vision deploy hook failed." && exit 1)
+
+      - name: Trigger ml-eda deploy
+        env:
+          EDA_HOOK: ${{ secrets.RENDER_EDA_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$EDA_HOOK" ]; then
+            echo "RENDER_EDA_DEPLOY_HOOK_URL not set — skipping ml-eda deploy."
+            exit 0
+          fi
+          curl -s -o /dev/null -w "%{http_code}" \
+            "$EDA_HOOK" | grep -q "^2" \
+            && echo "ml-eda deploy triggered." \
+            || (echo "ml-eda deploy hook failed." && exit 1)

@@ -5611,36 +5611,61 @@ function _buildCleanOptions(d, filename) {
         <!-- IMPUTATION -->
         <div>
           ${sectionTitle('Missing value imputation')}
-          ${missingCols.length === 0
-            ? `<div style="font-size:0.75rem;color:var(--text3)">No missing values detected</div>`
-            : `<div style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.75rem">
+          ${(() => {
+            if (missingCols.length === 0) return `<div style="font-size:0.75rem;color:var(--text3)">No missing values detected</div>`;
+            const missingNum = missingCols.filter(c => c.is_numeric);
+            const missingCat = missingCols.filter(c => !c.is_numeric);
+            const dropStyle = 'padding:0.4rem 0.6rem;border-radius:8px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text2);font-size:0.8rem;width:100%;max-width:280px';
+            const labelStyle = 'font-size:0.68rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.3rem';
+            return `
+              <div style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.75rem">
                 ${missingCols.map(c => {
                   const mc = c.missing_pct > 20 ? '#f87171' : c.missing_pct > 5 ? '#fbbf24' : '#38bdf8';
                   return colRow('sc-imputecol', mc, c.missing_pct > 5, c.name, c.missing_pct / maxMissingPct * 100, false, c.missing_pct + '%', true);
                 }).join('')}
               </div>
-              <select id="sc-impute" onchange="_scImpute_onChange()" style="padding:0.4rem 0.6rem;border-radius:8px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text2);font-size:0.8rem;width:100%;max-width:280px">
-                <option value="none">None — leave as-is</option>
-                <option value="mean">Mean (numeric)</option>
-                <option value="median">Median (numeric)</option>
-                <option value="mode">Mode / most frequent</option>
-                <option value="constant">Constant value</option>
-                <option value="knn">KNN (k=5, numeric)</option>
-                <option value="mice">MICE / IterativeImputer</option>
-                <option value="ffill">Forward fill</option>
-                <option value="bfill">Backward fill</option>
-                <option value="interpolate">Interpolate</option>
-              </select>
-              <div id="sc-knn-opts" style="display:none;margin-top:0.5rem;align-items:center;gap:0.5rem">
-                <label style="font-size:0.75rem;color:var(--text3)">k:</label>
-                <input type="number" id="sc-knn-k" value="5" min="1" max="20" style="width:55px;padding:0.25rem;border-radius:6px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text);font-size:0.8rem">
-              </div>
-              <div id="sc-const-opts" style="display:none;margin-top:0.5rem;align-items:center;gap:0.5rem">
-                <label style="font-size:0.75rem;color:var(--text3)">Fill value:</label>
-                <input type="text" id="sc-const-val" value="0" style="width:80px;padding:0.25rem;border-radius:6px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text);font-size:0.8rem">
-              </div>
-              <div id="sc-slow-warn" style="display:none;margin-top:0.4rem;font-size:0.72rem;color:#fbbf24">⚠ This method can be slow on large datasets.</div>`
-          }
+              <div style="display:flex;flex-direction:column;gap:0.85rem">
+                ${missingNum.length ? `
+                <div>
+                  <div style="${labelStyle}">Numeric columns</div>
+                  <select id="sc-impute-num" onchange="_scImpute_onChange()" style="${dropStyle}">
+                    <option value="none">None — leave as-is</option>
+                    <option value="median" selected>Median</option>
+                    <option value="mean">Mean</option>
+                    <option value="knn">KNN (k=5)</option>
+                    <option value="mice">MICE / IterativeImputer</option>
+                    <option value="interpolate">Interpolate</option>
+                    <option value="ffill">Forward fill</option>
+                    <option value="bfill">Backward fill</option>
+                    <option value="constant">Constant value</option>
+                  </select>
+                  <div id="sc-knn-opts" style="display:none;margin-top:0.5rem;align-items:center;gap:0.5rem">
+                    <label style="font-size:0.75rem;color:var(--text3)">k:</label>
+                    <input type="number" id="sc-knn-k" value="5" min="1" max="20" style="width:55px;padding:0.25rem;border-radius:6px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text);font-size:0.8rem">
+                  </div>
+                  <div id="sc-const-num-opts" style="display:none;margin-top:0.5rem;align-items:center;gap:0.5rem">
+                    <label style="font-size:0.75rem;color:var(--text3)">Fill value:</label>
+                    <input type="number" id="sc-const-num-val" value="0" style="width:80px;padding:0.25rem;border-radius:6px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text);font-size:0.8rem">
+                  </div>
+                  <div id="sc-slow-warn" style="display:none;margin-top:0.4rem;font-size:0.72rem;color:#fbbf24">⚠ This method can be slow on large datasets.</div>
+                </div>` : ''}
+                ${missingCat.length ? `
+                <div>
+                  <div style="${labelStyle}">Categorical columns</div>
+                  <select id="sc-impute-cat" onchange="_scImpute_onChange()" style="${dropStyle}">
+                    <option value="none">None — leave as-is</option>
+                    <option value="mode" selected>Mode (most frequent)</option>
+                    <option value="constant">Constant value</option>
+                    <option value="ffill">Forward fill</option>
+                    <option value="bfill">Backward fill</option>
+                  </select>
+                  <div id="sc-const-cat-opts" style="display:none;margin-top:0.5rem;align-items:center;gap:0.5rem">
+                    <label style="font-size:0.75rem;color:var(--text3)">Fill value:</label>
+                    <input type="text" id="sc-const-cat-val" value="Unknown" style="width:100px;padding:0.25rem;border-radius:6px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text);font-size:0.8rem">
+                  </div>
+                </div>` : ''}
+              </div>`;
+          })()}
         </div>
 
         <!-- OUTLIER REMOVAL -->
@@ -5685,10 +5710,15 @@ function _buildCleanOptions(d, filename) {
           <button onclick="_submitClean()" id="sc-btn" style="padding:0.5rem 1.5rem;border-radius:20px;font-size:0.85rem;font-weight:700;cursor:pointer;background:rgba(34,211,238,0.15);color:#22d3ee;border:1px solid rgba(34,211,238,0.35);transition:all 0.2s">
             Clean &amp; Download CSV
           </button>
-          <span id="sc-spinner" style="display:none;margin-left:0.75rem;font-size:0.78rem;color:var(--text3)">
-            <span class="spinner" style="border-color:var(--border2);border-top-color:#22d3ee;width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:middle"></span>
-            Processing…
-          </span>
+          <div id="sc-progress" style="display:none;margin-top:0.75rem;max-width:340px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:0.3rem">
+              <span id="sc-progress-label" style="font-size:0.72rem;color:var(--text3)">Cleaning…</span>
+              <span id="sc-progress-pct" style="font-size:0.72rem;color:#22d3ee;font-variant-numeric:tabular-nums">0%</span>
+            </div>
+            <div style="height:5px;border-radius:6px;background:var(--border2);overflow:hidden">
+              <div id="sc-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#0e7490,#22d3ee);border-radius:6px;transition:width 0.4s cubic-bezier(.4,0,.2,1)"></div>
+            </div>
+          </div>
           <div id="sc-err" style="display:none;margin-top:0.5rem;font-size:0.78rem;color:#f87171"></div>
         </div>
 
@@ -5704,13 +5734,16 @@ function _buildCleanOptions(d, filename) {
 }
 
 function _scImpute_onChange() {
-  const method = document.getElementById('sc-impute')?.value;
-  const knn  = document.getElementById('sc-knn-opts');
-  const con  = document.getElementById('sc-const-opts');
-  const warn = document.getElementById('sc-slow-warn');
-  if (knn)  knn.style.display  = method === 'knn'      ? 'flex'  : 'none';
-  if (con)  con.style.display  = method === 'constant' ? 'flex'  : 'none';
-  if (warn) warn.style.display = ['knn','mice'].includes(method) ? 'block' : 'none';
+  const numMethod = document.getElementById('sc-impute-num')?.value;
+  const catMethod = document.getElementById('sc-impute-cat')?.value;
+  const knn     = document.getElementById('sc-knn-opts');
+  const conNum  = document.getElementById('sc-const-num-opts');
+  const conCat  = document.getElementById('sc-const-cat-opts');
+  const warn    = document.getElementById('sc-slow-warn');
+  if (knn)    knn.style.display    = numMethod === 'knn'      ? 'flex'  : 'none';
+  if (conNum) conNum.style.display = numMethod === 'constant' ? 'flex'  : 'none';
+  if (conCat) conCat.style.display = catMethod === 'constant' ? 'flex'  : 'none';
+  if (warn)   warn.style.display   = ['knn','mice'].includes(numMethod) ? 'block' : 'none';
 }
 
 function _scOutlier_onChange() {
@@ -5749,25 +5782,51 @@ async function _submitClean() {
     if (e) { e.textContent = 'EDA service not configured (ML_EDA_URL missing).'; e.style.display = 'block'; }
     return;
   }
-  const btn = document.getElementById('sc-btn');
-  const spinner = document.getElementById('sc-spinner');
-  const errEl = document.getElementById('sc-err');
-  const summaryEl = document.getElementById('sc-summary');
-  btn.disabled = true; spinner.style.display = 'inline'; errEl.style.display = 'none'; summaryEl.style.display = 'none';
+  const btn        = document.getElementById('sc-btn');
+  const progressEl = document.getElementById('sc-progress');
+  const barEl      = document.getElementById('sc-progress-bar');
+  const pctEl      = document.getElementById('sc-progress-pct');
+  const labelEl    = document.getElementById('sc-progress-label');
+  const errEl      = document.getElementById('sc-err');
+  const summaryEl  = document.getElementById('sc-summary');
 
-  const dropCols     = [...document.querySelectorAll('.sc-dropcol:checked')].map(el => el.value);
-  const imputeCols   = [...document.querySelectorAll('.sc-imputecol:checked')].map(el => el.value);
-  const outlierCols  = [...document.querySelectorAll('.sc-outliercol:checked')].map(el => el.value);
-  const skewCols     = [...document.querySelectorAll('.sc-skewtcol:checked')].map(el => el.value);
-  const impMethod    = document.getElementById('sc-impute')?.value || 'none';
+  const setProgress = (pct, label) => {
+    if (barEl)   barEl.style.width = pct + '%';
+    if (pctEl)   pctEl.textContent = pct + '%';
+    if (labelEl && label) labelEl.textContent = label;
+  };
+
+  btn.disabled = true;
+  progressEl.style.display = 'block';
+  errEl.style.display = 'none';
+  summaryEl.style.display = 'none';
+  setProgress(5, 'Uploading…');
+
+  // Fake progress — crawls to 85% while waiting for server
+  const steps = [[15,'Uploading…'],[35,'Cleaning…'],[55,'Imputing…'],[72,'Removing outliers…'],[85,'Finalising…']];
+  let si = 0;
+  const iv = setInterval(() => {
+    if (si < steps.length) { setProgress(...steps[si]); si++; }
+    else clearInterval(iv);
+  }, 600);
+
+  const dropCols    = [...document.querySelectorAll('.sc-dropcol:checked')].map(el => el.value);
+  const imputeCols  = [...document.querySelectorAll('.sc-imputecol:checked')].map(el => el.value);
+  const outlierCols = [...document.querySelectorAll('.sc-outliercol:checked')].map(el => el.value);
+  const skewCols    = [...document.querySelectorAll('.sc-skewtcol:checked')].map(el => el.value);
+  const numMethod   = document.getElementById('sc-impute-num')?.value || 'none';
+  const catMethod   = document.getElementById('sc-impute-cat')?.value || 'none';
+
   const config = {
     dedup: document.getElementById('sc-dedup')?.checked ?? true,
     drop_cols: dropCols,
     imputation: {
-      method: impMethod,
+      numeric_method: numMethod,
+      cat_method:     catMethod,
       cols: imputeCols.length ? imputeCols : null,
-      constant_value: impMethod === 'constant' ? (document.getElementById('sc-const-val')?.value ?? '0') : null,
       knn_k: parseInt(document.getElementById('sc-knn-k')?.value || '5'),
+      constant_value:     numMethod === 'constant' ? (document.getElementById('sc-const-num-val')?.value ?? '0') : null,
+      cat_constant_value: catMethod === 'constant' ? (document.getElementById('sc-const-cat-val')?.value ?? 'Unknown') : null,
     },
     outliers: {
       enabled: outlierCols.length > 0,
@@ -5783,11 +5842,14 @@ async function _submitClean() {
     fd.append('file', _cleanCurrentFile);
     fd.append('config', JSON.stringify(config));
     const r = await fetch(`${EDA_API}/eda/clean`, { method: 'POST', body: fd });
+    clearInterval(iv);
     if (!r.ok) {
       const msg = await r.json().catch(() => ({ detail: 'Request failed' }));
       throw new Error(msg.detail || 'Request failed');
     }
+    setProgress(95, 'Preparing download…');
     const result = await r.json();
+    setProgress(100, 'Done');
     const s = result.summary;
     summaryEl.style.display = 'block';
     summaryEl.innerHTML = `
@@ -5806,10 +5868,14 @@ async function _submitClean() {
     const a = document.createElement('a');
     a.href = url; a.download = result.filename; a.click();
     URL.revokeObjectURL(url);
+    await new Promise(res => setTimeout(res, 800));
   } catch (e) {
+    clearInterval(iv);
     errEl.textContent = e.message; errEl.style.display = 'block';
   } finally {
-    btn.disabled = false; spinner.style.display = 'none';
+    btn.disabled = false;
+    progressEl.style.display = 'none';
+    setProgress(0, 'Cleaning…');
   }
 }
 
