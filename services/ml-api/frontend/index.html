@@ -5538,24 +5538,28 @@ function _buildCleanOptions(d, filename) {
     .sort(([, a], [, b]) => Math.abs(b.skew) - Math.abs(a.skew))
     .map(([col, s]) => ({ name: col, skew: s.skew }));
 
-  const maxOutlierPct = outlierCols.length ? outlierCols[0].pct : 1;
-  const maxAbsSkew    = skewedCols.length  ? Math.abs(skewedCols[0].skew) : 1;
+  const maxOutlierPct  = outlierCols.length  ? outlierCols[0].pct                : 1;
+  const maxMissingPct  = missingCols.length  ? missingCols[0].missing_pct         : 1;
+  const maxAbsSkew     = skewedCols.length   ? Math.abs(skewedCols[0].skew)       : 1;
 
   const sectionTitle = (text, sub) => `
     <div style="font-size:0.68rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.6rem;display:flex;align-items:center;gap:0.5rem">
       ${text}${sub ? `<span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);opacity:0.7">${sub}</span>` : ''}
     </div>`;
 
-  const colRow = (checkClass, accentColor, checked, name, barPct, isNeg, valStr) => {
+  const colRow = (checkClass, accentColor, checked, name, barPct, isNeg, valStr, leftAnchor = false) => {
     const pct48 = Math.min(barPct / 100 * 48, 48);
     const dir = isNeg ? 'neg' : 'pos';
+    const fillStyle = leftAnchor
+      ? `left:0%;width:0%;background:${accentColor}`
+      : `${isNeg ? 'right:50%' : 'left:50%'};width:0%;background:${accentColor}`;
     return `
     <label style="display:grid;grid-template-columns:18px 160px 1fr 56px;align-items:center;gap:0.75rem;cursor:pointer;padding:0.25rem 0">
       <input type="checkbox" class="${checkClass}" value="${name}" ${checked ? 'checked' : ''} style="accent-color:${accentColor};width:14px;height:14px;flex-shrink:0">
       <div class="shap-feat-name" style="text-align:left" title="${name}">${name}</div>
       <div class="shap-bar-wrap">
-        <div class="shap-bar-center"></div>
-        <div class="shap-bar-fill ${dir}" data-pct="${pct48}" style="${isNeg ? 'right:50%' : 'left:50%'};width:0%;background:${accentColor}"></div>
+        ${leftAnchor ? '' : '<div class="shap-bar-center"></div>'}
+        <div class="shap-bar-fill ${dir}" data-pct="${pct48}" style="${fillStyle}"></div>
       </div>
       <span class="shap-val" style="color:${accentColor}">${valStr}</span>
     </label>`;
@@ -5612,7 +5616,7 @@ function _buildCleanOptions(d, filename) {
             : `<div style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.75rem">
                 ${missingCols.map(c => {
                   const mc = c.missing_pct > 20 ? '#f87171' : c.missing_pct > 5 ? '#fbbf24' : '#38bdf8';
-                  return colRow('sc-imputecol', mc, c.missing_pct > 5, c.name, c.missing_pct, false, c.missing_pct + '%');
+                  return colRow('sc-imputecol', mc, c.missing_pct > 5, c.name, c.missing_pct / maxMissingPct * 100, false, c.missing_pct + '%', true);
                 }).join('')}
               </div>
               <select id="sc-impute" onchange="_scImpute_onChange()" style="padding:0.4rem 0.6rem;border-radius:8px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text2);font-size:0.8rem;width:100%;max-width:280px">
@@ -5645,7 +5649,7 @@ function _buildCleanOptions(d, filename) {
           ${outlierCols.length === 0
             ? `<div style="font-size:0.75rem;color:var(--text3)">No outliers detected</div>`
             : `<div style="display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.75rem">
-                ${outlierCols.map(c => colRow('sc-outliercol', '#fbbf24', c.pct > 5, c.name, c.pct / maxOutlierPct * 100, false, c.pct + '%')).join('')}
+                ${outlierCols.map(c => colRow('sc-outliercol', '#fbbf24', c.pct > 5, c.name, c.pct / maxOutlierPct * 100, false, c.pct + '%', true)).join('')}
               </div>
               <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
                 <select id="sc-outlier-method" onchange="_scOutlier_onChange()" style="padding:0.3rem 0.5rem;border-radius:8px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text2);font-size:0.78rem">
