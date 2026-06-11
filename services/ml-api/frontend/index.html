@@ -6018,42 +6018,78 @@ function _renderEDA(d, filename) {
       </div>
     </div>` : '';
 
-  const colRows = d.columns.map(c => {
-    const badge = c.is_numeric
-      ? '<span class="eda-type-badge eda-type-num">numeric</span>'
-      : '<span class="eda-type-badge eda-type-cat">categorical</span>';
-    const pct = c.missing_pct;
-    const barColor = pct > 20 ? '#f87171' : pct > 5 ? '#fbbf24' : '#34d399';
-    const bar = `<div style="display:flex;align-items:center;gap:0.5rem">
-      <div style="flex:1;height:4px;background:var(--border2);border-radius:4px;overflow:hidden">
-        <div style="width:${Math.min(100,pct)}%;height:100%;background:${barColor};border-radius:4px"></div>
-      </div>
-      <span style="font-size:0.75rem;color:${pct > 0 ? barColor : 'var(--text3)'};min-width:36px;text-align:right">${pct}%</span>
-    </div>`;
-    return `<tr>
-      <td style="font-weight:600;color:var(--text)">${c.name}</td>
-      <td>${badge}</td>
-      <td style="font-size:0.78rem">${c.dtype}</td>
-      <td>${bar}</td>
-      <td style="text-align:right">${c.nunique}</td>
-    </tr>`;
-  }).join('');
-
   const colsHTML = `
     <div class="eda-section-card" id="eda-s-columns">
-      <div class="eda-section-title">🗂 Column Info</div>
-      <div style="overflow-x:auto">
-        <table class="eda-table">
-          <thead><tr><th>Column</th><th>Type</th><th>Dtype</th><th>Missing</th><th style="text-align:right">Unique</th></tr></thead>
-          <tbody>${colRows}</tbody>
-        </table>
+      <div class="eda-section-title">🗂 Columns
+        <span style="font-weight:400;color:var(--text3);font-size:0.7rem">${d.columns.length} total · missing %</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:0.5rem">
+        ${d.columns.map(c => {
+          const pct = c.missing_pct;
+          const barColor = pct > 20 ? '#f87171' : pct > 5 ? '#fbbf24' : pct > 0 ? '#38bdf8' : '#34d399';
+          const typeColor = c.is_numeric ? '#818cf8' : '#34d399';
+          return `
+          <div>
+            <div style="display:grid;grid-template-columns:180px 1fr 52px;align-items:center;gap:0.75rem">
+              <div style="display:flex;align-items:center;gap:0.35rem;overflow:hidden;justify-content:flex-end">
+                <span style="font-size:0.58rem;padding:0.1rem 0.35rem;border-radius:10px;background:${typeColor}22;color:${typeColor};font-weight:700;flex-shrink:0">${c.is_numeric ? 'num' : 'cat'}</span>
+                <span style="font-size:0.75rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${c.name}">${c.name}</span>
+              </div>
+              <div style="height:8px;border-radius:4px;background:var(--border2);overflow:hidden">
+                <div style="height:100%;width:${Math.min(100,pct)}%;background:${barColor};border-radius:4px;transition:width 0.5s ease"></div>
+              </div>
+              <span style="font-size:0.72rem;font-weight:700;color:${pct > 0 ? barColor : 'var(--text3)'};text-align:right;font-variant-numeric:tabular-nums">${pct}%</span>
+            </div>
+            <div style="display:grid;grid-template-columns:180px 1fr 52px;gap:0.75rem;margin-top:1px">
+              <span style="font-size:0.6rem;color:var(--text3);text-align:right">${c.dtype}</span>
+              <span style="font-size:0.6rem;color:var(--text3)">${pct === 0 ? 'complete' : `${c.missing} missing`}</span>
+              <span style="font-size:0.6rem;color:var(--text3);text-align:right">${c.nunique}u</span>
+            </div>
+          </div>`;
+        }).join('')}
       </div>
     </div>`;
 
   const numCols = Object.keys(d.stats);
+  const _statRows = d.overview.rows || 1;
+  const _outlierCols2 = numCols.filter(c => d.stats[c].outliers > 0).sort((a,b) => d.stats[b].outliers - d.stats[a].outliers);
+  const _skewCols2    = [...numCols].sort((a,b) => Math.abs(d.stats[b].skew) - Math.abs(d.stats[a].skew));
+  const _maxOutliers2 = _outlierCols2.length ? d.stats[_outlierCols2[0]].outliers : 1;
+  const _maxSkew2     = _skewCols2.length ? Math.abs(d.stats[_skewCols2[0]].skew) || 1 : 1;
+
+  const _barRow = (name, barPct, barColor, valStr) => `
+    <div style="display:grid;grid-template-columns:160px 1fr 56px;align-items:center;gap:0.75rem;padding:0.2rem 0">
+      <span style="font-size:0.75rem;font-weight:600;color:var(--text2);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${name}">${name}</span>
+      <div style="height:8px;border-radius:4px;background:var(--border2);overflow:hidden">
+        <div style="height:100%;width:${Math.min(100,barPct)}%;background:${barColor};border-radius:4px;transition:width 0.5s ease"></div>
+      </div>
+      <span style="font-size:0.72rem;font-weight:700;color:${barColor};text-align:right;font-variant-numeric:tabular-nums">${valStr}</span>
+    </div>`;
+
   const statsHTML = numCols.length ? `
     <div class="eda-section-card" id="eda-s-stats">
-      <div class="eda-section-title">📊 Descriptive Statistics</div>
+      <div class="eda-section-title">📊 Statistics</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-bottom:1.5rem">
+        <div>
+          <div style="font-size:0.68rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.6rem">Outliers (IQR)</div>
+          ${_outlierCols2.length
+            ? _outlierCols2.map(col => {
+                const pct = Math.round(d.stats[col].outliers / _statRows * 1000) / 10;
+                return _barRow(col, d.stats[col].outliers / _maxOutliers2 * 100, '#fbbf24', pct + '%');
+              }).join('')
+            : `<div style="font-size:0.75rem;color:var(--text3)">No outliers detected</div>`}
+        </div>
+        <div>
+          <div style="font-size:0.68rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.6rem">Skewness</div>
+          ${_skewCols2.map(col => {
+              const abs = Math.abs(d.stats[col].skew);
+              const sc = abs > 2 ? '#f87171' : abs > 1 ? '#fbbf24' : 'var(--active-accent)';
+              const sign = d.stats[col].skew >= 0 ? '+' : '';
+              return _barRow(col, abs / _maxSkew2 * 100, sc, sign + d.stats[col].skew);
+            }).join('')}
+        </div>
+      </div>
+      <div style="font-size:0.68rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.6rem">Full detail</div>
       <div style="overflow-x:auto">
         <table class="eda-table">
           <thead><tr>
