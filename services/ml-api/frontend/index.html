@@ -5453,13 +5453,22 @@ function _cleanFileSelected(input) {
 
 function _cleanReadFile(file) {
   _cleanCurrentFile = file;
+  _buildCleanOptions([], file.name);  // render panel immediately
   const reader = new FileReader();
   reader.onload = (e) => {
     const firstLine = (e.target.result || '').split('\n')[0];
     const cols = firstLine.split(',').map(c => c.trim().replace(/^"|"$/g, '')).filter(Boolean);
-    _buildCleanOptions(cols, file.name);
+    const listEl = document.getElementById('sc-coldrop-list');
+    if (!listEl || !cols.length) return;
+    const idHeuristic = /\b(id|index|key|uuid|guid|rownum|row_num|code)\b/i;
+    listEl.innerHTML = cols.map(c => `
+      <label style="display:flex;align-items:center;gap:0.3rem;padding:0.25rem 0.55rem;border-radius:20px;cursor:pointer;font-size:0.75rem;border:1px solid var(--border2);background:var(--bg-card);color:var(--text2)">
+        <input type="checkbox" class="sc-dropcol" value="${c}" ${idHeuristic.test(c) ? 'checked' : ''} style="accent-color:#f87171">
+        ${c}${idHeuristic.test(c) ? ' <span style="font-size:0.62rem;color:#f87171;margin-left:2px">ID?</span>' : ''}
+      </label>`).join('');
   };
-  reader.readAsText(file.slice(0, 8192));
+  reader.onerror = () => {};
+  try { reader.readAsText(file); } catch (_) {}
 }
 
 function _buildCleanOptions(cols, filename) {
