@@ -5542,8 +5542,8 @@ function _buildCleanOptions(d, filename) {
   const maxAbsSkew    = skewedCols.length  ? Math.abs(skewedCols[0].skew) : 1;
 
   const sectionTitle = (text, sub) => `
-    <div style="font-size:0.72rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem;display:flex;align-items:center;gap:0.5rem">
-      ${text}${sub ? `<span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3)">${sub}</span>` : ''}
+    <div style="font-size:0.68rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.6rem;display:flex;align-items:center;gap:0.5rem">
+      ${text}${sub ? `<span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3);opacity:0.7">${sub}</span>` : ''}
     </div>`;
 
   const colRow = (checkClass, accentColor, checked, name, barPct, isNeg, valStr) => {
@@ -5562,9 +5562,10 @@ function _buildCleanOptions(d, filename) {
   };
 
   optEl.innerHTML = `
-    <div class="eda-section-card eda-visible" style="margin-top:1.25rem">
-      <div class="eda-section-title">🧹 Clean &amp; Export
-        <span style="font-weight:400;color:var(--text3);font-size:0.75rem;text-transform:none;letter-spacing:0">${filename}</span>
+    <div class="eda-section-card eda-visible" style="margin-top:1.25rem;background:transparent;box-shadow:none">
+      <div class="shap-header" style="margin:-1.35rem -1.35rem 1.25rem;border-radius:16px 16px 0 0">
+        <span class="shap-title">🧹 Clean &amp; Export</span>
+        <span class="shap-subtitle">${filename}</span>
       </div>
       <div style="display:flex;flex-direction:column;gap:1.5rem">
 
