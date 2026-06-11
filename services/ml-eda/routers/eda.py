@@ -4,7 +4,7 @@ import pandas as pd
 from sklearn.decomposition import PCA
 from sklearn.metrics import mutual_info_score
 from sklearn.preprocessing import KBinsDiscretizer, StandardScaler
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, Form, HTTPException, UploadFile, File
 
 router = APIRouter()
 
@@ -400,4 +400,192 @@ async def exploratory_analysis(file: UploadFile = File(...)):
         "pca":              pca_result,
         "splom":            splom_result,
         "low_variance_cols": list(low_variance_cols),
+    }
+
+
+@router.post("/eda/clean")
+async def clean_dataset(file: UploadFile = File(...), config: str = Form(...)):
+    import json
+    import base64
+
+    # ── Parse config ─────────────────────────────────────────────
+    try:
+        cfg = json.loads(config)
+    except Exception as e:
+        raise HTTPException(400, f"Invalid config JSON: {e}")
+
+    try:
+        df = pd.read_csv(io.BytesIO(await file.read()))
+    except Exception as e:
+        raise HTTPException(400, f"Could not parse CSV: {e}")
+
+    rows_before = len(df)
+    cols_before = len(df.columns)
+    missing_before = int(df.isnull().sum().sum())
+
+    # ── 1. Dedup ─────────────────────────────────────────────────
+    if cfg.get("dedup", False):
+        df = df.drop_duplicates()
+
+    rows_after_dedup = len(df)
+    rows_removed_dedup = rows_before - rows_after_dedup
+
+    # ── 2. Drop ID cols ──────────────────────────────────────────
+    drop_id_cols = cfg.get("drop_id_cols") or []
+    cols_dropped = [c for c in drop_id_cols if c in df.columns]
+    if cols_dropped:
+        df = df.drop(columns=cols_dropped)
+
+    # ── 3. Imputation ────────────────────────────────────────────
+    imp_cfg = cfg.get("imputation") or {}
+    imp_method = imp_cfg.get("method", "none")
+    num_cols = df.select_dtypes(include="number").columns.tolist()
+
+    if imp_method == "mean":
+        from sklearn.impute import SimpleImputer
+        if num_cols:
+            imp = SimpleImputer(strategy="mean")
+            df[num_cols] = imp.fit_transform(df[num_cols])
+
+    elif imp_method == "median":
+        from sklearn.impute import SimpleImputer
+        if num_cols:
+            imp = SimpleImputer(strategy="median")
+            df[num_cols] = imp.fit_transform(df[num_cols])
+
+    elif imp_method == "mode":
+        from sklearn.impute import SimpleImputer
+        for col in df.columns:
+            imp = SimpleImputer(strategy="most_frequent")
+            df[[col]] = imp.fit_transform(df[[col]])
+
+    elif imp_method == "constant":
+        constant_value = imp_cfg.get("constant_value")
+        if constant_value is None:
+            constant_value = 0
+        df = df.fillna(constant_value)
+
+    elif imp_method == "knn":
+        from sklearn.impute import KNNImputer
+        knn_k = imp_cfg.get("knn_k", 5)
+        if num_cols:
+            imp = KNNImputer(n_neighbors=knn_k)
+            df[num_cols] = imp.fit_transform(df[num_cols])
+
+    elif imp_method == "mice":
+        from sklearn.experimental import enable_iterative_imputer  # noqa: F401
+        from sklearn.impute import IterativeImputer
+        if num_cols:
+            imp = IterativeImputer()
+            df[num_cols] = imp.fit_transform(df[num_cols])
+
+    elif imp_method == "ffill":
+        df = df.ffill()
+
+    elif imp_method == "bfill":
+        df = df.bfill()
+
+    elif imp_method == "interpolate":
+        if num_cols:
+            df[num_cols] = df[num_cols].interpolate()
+
+    elif imp_method == "miceforest":
+        try:
+            import miceforest as mf
+        except ImportError:
+            raise HTTPException(400, "miceforest not installed on this server")
+        kernel = mf.ImputationKernel(df, datasets=1, save_all_iterations=False)
+        kernel.mice(1)
+        df = kernel.complete_data(0)
+
+    elif imp_method == "fancyimpute":
+        try:
+            from fancyimpute import IterativeSVD
+        except ImportError:
+            raise HTTPException(400, "fancyimpute not installed on this server")
+        if num_cols:
+            df[num_cols] = IterativeSVD().fit_transform(df[num_cols])
+
+    # ── 4. Outlier removal ───────────────────────────────────────
+    outliers_cfg = cfg.get("outliers") or {}
+    outliers_removed = 0
+    rows_before_outliers = len(df)
+
+    if outliers_cfg.get("enabled", False):
+        out_method = outliers_cfg.get("method", "iqr")
+        threshold = outliers_cfg.get("threshold", 1.5)
+        num_cols_now = df.select_dtypes(include="number").columns.tolist()
+
+        if out_method == "iqr":
+            mask = pd.Series([True] * len(df), index=df.index)
+            for col in num_cols_now:
+                s = df[col].dropna()
+                if len(s) == 0:
+                    continue
+                q25 = float(s.quantile(0.25))
+                q75 = float(s.quantile(0.75))
+                iqr = q75 - q25
+                lower = q25 - threshold * iqr
+                upper = q75 + threshold * iqr
+                col_mask = df[col].between(lower, upper) | df[col].isnull()
+                mask = mask & col_mask
+            df = df[mask]
+
+        elif out_method == "zscore":
+            mask = pd.Series([True] * len(df), index=df.index)
+            for col in num_cols_now:
+                mean_val = df[col].mean()
+                std_val = df[col].std()
+                if std_val == 0 or pd.isna(std_val):
+                    continue
+                z = np.abs((df[col] - mean_val) / std_val)
+                col_mask = (z < threshold) | df[col].isnull()
+                mask = mask & col_mask
+            df = df[mask]
+
+        elif out_method == "winsorize":
+            limits = threshold / 100.0
+            for col in num_cols_now:
+                lower = df[col].quantile(limits)
+                upper = df[col].quantile(1.0 - limits)
+                df[col] = df[col].clip(lower, upper)
+
+        outliers_removed = rows_before_outliers - len(df)
+
+    # ── 5. Power transform ───────────────────────────────────────
+    if cfg.get("power_transform", False):
+        from sklearn.preprocessing import PowerTransformer
+        num_cols_final = df.select_dtypes(include="number").columns.tolist()
+        if num_cols_final:
+            pt = PowerTransformer(method="yeo-johnson")
+            df[num_cols_final] = pt.fit_transform(df[num_cols_final])
+
+    # ── Build summary ────────────────────────────────────────────
+    rows_after = len(df)
+    cols_after = len(df.columns)
+    missing_after = int(df.isnull().sum().sum())
+    rows_removed_total = rows_before - rows_after
+
+    summary = {
+        "rows_before":      rows_before,
+        "rows_after":       rows_after,
+        "rows_removed":     rows_removed_total,
+        "cols_before":      cols_before,
+        "cols_after":       cols_after,
+        "cols_dropped":     cols_dropped,
+        "missing_before":   missing_before,
+        "missing_after":    missing_after,
+        "outliers_removed": outliers_removed,
+    }
+
+    # ── Encode CSV ───────────────────────────────────────────────
+    csv_bytes = df.to_csv(index=False).encode("utf-8")
+    csv_b64 = base64.b64encode(csv_bytes).decode("utf-8")
+    original_name = file.filename or "data.csv"
+    cleaned_filename = f"cleaned_{original_name}"
+
+    return {
+        "summary":  summary,
+        "csv":      csv_b64,
+        "filename": cleaned_filename,
     }

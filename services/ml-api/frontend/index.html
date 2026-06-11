@@ -5403,6 +5403,123 @@ async function _runEDA(file) {
   }
 }
 
+function _edaImpute_onChange() {
+  const method = document.getElementById('eda-clean-impute').value;
+  const knnOpts = document.getElementById('eda-clean-knn-opts');
+  const constOpts = document.getElementById('eda-clean-const-opts');
+  const slowWarn = document.getElementById('eda-clean-slow-warn');
+  if (knnOpts) knnOpts.style.display = method === 'knn' ? 'flex' : 'none';
+  if (constOpts) constOpts.style.display = method === 'constant' ? 'flex' : 'none';
+  const slowMethods = ['knn', 'mice', 'miceforest', 'fancyimpute'];
+  if (slowWarn) slowWarn.style.display = slowMethods.includes(method) ? 'block' : 'none';
+}
+
+function _edaOutlier_onChange() {
+  const enabled = document.getElementById('eda-clean-outlier-enabled')?.checked;
+  const optsEl = document.getElementById('eda-clean-outlier-opts');
+  if (optsEl) optsEl.style.display = enabled ? 'flex' : 'none';
+  // Update threshold defaults based on method
+  const method = document.getElementById('eda-clean-outlier-method')?.value;
+  const threshEl = document.getElementById('eda-clean-outlier-thresh');
+  if (threshEl && method) {
+    const defaults = { iqr: '1.5', zscore: '3', winsorize: '5' };
+    threshEl.value = defaults[method] || '1.5';
+  }
+}
+
+function _edaAddDropCol() {
+  const sel = document.getElementById('eda-clean-addcol');
+  if (!sel || !sel.value) return;
+  const col = sel.value;
+  // Check if already in list
+  const existing = [...document.querySelectorAll('.eda-clean-idcol')].map(el => el.value);
+  if (existing.includes(col)) { sel.value = ''; return; }
+  // Add a new checkbox
+  const container = sel.closest('div').previousElementSibling;
+  if (container) {
+    const lbl = document.createElement('label');
+    lbl.style.cssText = 'display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem;cursor:pointer;font-size:0.8rem;color:var(--text2)';
+    lbl.innerHTML = `<input type="checkbox" class="eda-clean-idcol" value="${col}" checked style="accent-color:#f87171">${col} <span style="font-size:0.68rem;color:var(--text3)">(added)</span>`;
+    container.appendChild(lbl);
+  }
+  sel.value = '';
+}
+
+async function _runEDAClean() {
+  if (!_edaCurrentFile) return;
+  const btn = document.getElementById('eda-clean-btn');
+  const spinner = document.getElementById('eda-clean-spinner');
+  const errEl = document.getElementById('eda-clean-err');
+  const summaryEl = document.getElementById('eda-clean-summary');
+
+  btn.disabled = true;
+  spinner.style.display = 'inline';
+  errEl.style.display = 'none';
+  summaryEl.style.display = 'none';
+
+  const impMethod = document.getElementById('eda-clean-impute').value;
+  const knnK = parseInt(document.getElementById('eda-clean-knn-k')?.value || '5');
+  const constVal = document.getElementById('eda-clean-const-val')?.value ?? '0';
+  const outlierEnabled = document.getElementById('eda-clean-outlier-enabled').checked;
+  const outlierMethod = document.getElementById('eda-clean-outlier-method')?.value || 'iqr';
+  const outlierThresh = parseFloat(document.getElementById('eda-clean-outlier-thresh')?.value || '1.5');
+
+  const idColEls = document.querySelectorAll('.eda-clean-idcol:checked');
+  const dropIdCols = [...idColEls].map(el => el.value);
+
+  const config = {
+    dedup: document.getElementById('eda-clean-dedup').checked,
+    drop_id_cols: dropIdCols,
+    imputation: {
+      method: impMethod,
+      constant_value: impMethod === 'constant' ? (isNaN(Number(constVal)) ? constVal : Number(constVal)) : null,
+      knn_k: knnK,
+    },
+    outliers: { enabled: outlierEnabled, method: outlierMethod, threshold: outlierThresh },
+    power_transform: document.getElementById('eda-clean-power-transform').checked,
+  };
+
+  try {
+    const fd = new FormData();
+    fd.append('file', _edaCurrentFile);
+    fd.append('config', JSON.stringify(config));
+    const r = await fetch(`${EDA_API}/eda/clean`, { method: 'POST', body: fd });
+    if (!r.ok) {
+      const msg = await r.json().catch(() => ({ detail: 'Clean failed' }));
+      throw new Error(msg.detail || 'Clean failed');
+    }
+    const result = await r.json();
+    const s = result.summary;
+
+    // Show summary
+    summaryEl.style.display = 'block';
+    summaryEl.innerHTML = `
+      <div style="font-size:0.82rem;font-weight:700;color:#34d399;margin-bottom:0.6rem">Cleaning complete</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:0.5rem;font-size:0.78rem;color:var(--text2)">
+        <div>Rows: <strong>${s.rows_before.toLocaleString()} → ${s.rows_after.toLocaleString()}</strong>${s.rows_removed > 0 ? ` <span style="color:#34d399">(−${s.rows_removed})</span>` : ''}</div>
+        <div>Columns: <strong>${s.cols_before} → ${s.cols_after}</strong>${s.cols_dropped.length ? ` <span style="color:#f87171">(dropped: ${s.cols_dropped.join(', ')})</span>` : ''}</div>
+        <div>Missing: <strong>${s.missing_before.toLocaleString()} → ${s.missing_after.toLocaleString()}</strong></div>
+        ${s.outliers_removed > 0 ? `<div>Outliers removed: <strong style="color:#fbbf24">${s.outliers_removed.toLocaleString()}</strong></div>` : ''}
+      </div>`;
+
+    // Trigger CSV download
+    const bytes = atob(result.csv);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    const blob = new Blob([arr], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = result.filename; a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    spinner.style.display = 'none';
+  }
+}
+
 function _renderEDA(d, filename) {
   const missingColor = d.overview.missing_pct > 10 ? '#f87171' : d.overview.missing_pct > 0 ? '#fbbf24' : '#34d399';
   const qScore = d.quality_score ?? 100;
@@ -5510,6 +5627,7 @@ function _renderEDA(d, filename) {
     ...(d.pca ? [['eda-s-pca', 'PCA 3D']] : []),
     ...(d.splom ? [['eda-s-splom', 'SPLOM']] : []),
     ...(d.correlations && d.correlations.labels.length > 1 ? [['eda-s-correlations', 'Correlations']] : []),
+    ['eda-s-clean', 'Clean & Export'],
   ];
   const navHTML = `
     <nav class="eda-sticky-nav">
@@ -5683,7 +5801,124 @@ function _renderEDA(d, filename) {
       <div id="eda-corr-hm" class="eda-corr-plot"></div>
     </div>` : '';
 
-  return overviewHTML + narrativeHTML + readinessHTML + insightsHTML + navHTML + sampleHTML + colsHTML + statsHTML + distHTML + boxHTML + miHTML + pcaHTML + splomHTML + corrHTML;
+  // Detect ID cols from readiness data
+  const detectedIdCols = (d.readiness || [])
+    .filter(r => r.reason.includes('100% unique') || r.reason.includes('ID column'))
+    .map(r => r.name);
+  const allColNames = (d.columns || []).map(c => c.name);
+  const nonIdCols = allColNames.filter(c => !detectedIdCols.includes(c));
+
+  const cleanHTML = `
+    <div class="eda-section-card" id="eda-s-clean">
+      <div class="eda-section-title">🧹 Clean &amp; Export</div>
+      <div style="display:flex;flex-direction:column;gap:1.2rem">
+
+        <!-- Dedup -->
+        <div style="display:flex;align-items:center;gap:0.75rem">
+          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--text)">
+            <input type="checkbox" id="eda-clean-dedup" checked style="width:16px;height:16px;accent-color:var(--color-success)">
+            Remove duplicate rows
+          </label>
+          <span style="font-size:0.72rem;color:var(--text3)">${d.overview.duplicates} found</span>
+        </div>
+
+        <!-- Drop ID cols -->
+        <div>
+          <div style="font-size:0.82rem;font-weight:600;color:var(--text);margin-bottom:0.5rem">Drop identifier columns</div>
+          ${detectedIdCols.length === 0
+            ? `<span style="font-size:0.75rem;color:var(--text3)">No ID-like columns detected</span>`
+            : detectedIdCols.map(col => `
+              <label style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem;cursor:pointer;font-size:0.8rem;color:var(--text2)">
+                <input type="checkbox" class="eda-clean-idcol" value="${col}" checked style="accent-color:#f87171">
+                ${col}
+              </label>`).join('')
+          }
+          ${nonIdCols.length > 0 ? `
+          <div style="margin-top:0.5rem;display:flex;align-items:center;gap:0.5rem">
+            <select id="eda-clean-addcol" style="padding:0.3rem 0.5rem;border-radius:8px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text2);font-size:0.75rem;max-width:160px">
+              <option value="">+ Add column to drop</option>
+              ${nonIdCols.map(c => `<option value="${c}">${c}</option>`).join('')}
+            </select>
+            <button onclick="_edaAddDropCol()" style="padding:0.25rem 0.6rem;border-radius:8px;font-size:0.72rem;font-weight:600;cursor:pointer;background:rgba(248,113,113,0.12);color:#f87171;border:1px solid rgba(248,113,113,0.3)">Add</button>
+          </div>` : ''}
+        </div>
+
+        <!-- Imputation -->
+        <div>
+          <div style="font-size:0.82rem;font-weight:600;color:var(--text);margin-bottom:0.5rem">Missing value imputation</div>
+          <select id="eda-clean-impute" onchange="_edaImpute_onChange()" style="padding:0.4rem 0.6rem;border-radius:8px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text2);font-size:0.8rem;width:100%;max-width:280px">
+            <option value="none">None — leave missing values as-is</option>
+            <option value="mean">Mean (numeric columns)</option>
+            <option value="median">Median (numeric columns)</option>
+            <option value="mode">Mode / most frequent (all columns)</option>
+            <option value="constant">Constant value</option>
+            <option value="knn">KNN imputation (k=5, numeric only)</option>
+            <option value="mice">MICE / IterativeImputer (numeric only)</option>
+            <option value="ffill">Forward fill (time-series)</option>
+            <option value="bfill">Backward fill (time-series)</option>
+            <option value="interpolate">Interpolate (numeric, time-series)</option>
+            <option value="miceforest" disabled style="color:var(--text3)">miceforest — not available on this server</option>
+            <option value="fancyimpute" disabled style="color:var(--text3)">fancyimpute — not available on this server</option>
+          </select>
+          <div id="eda-clean-knn-opts" style="display:none;margin-top:0.5rem;display:flex;align-items:center;gap:0.5rem">
+            <label style="font-size:0.75rem;color:var(--text3)">k neighbours:</label>
+            <input type="number" id="eda-clean-knn-k" value="5" min="1" max="20" style="width:60px;padding:0.25rem;border-radius:6px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text);font-size:0.8rem">
+          </div>
+          <div id="eda-clean-const-opts" style="display:none;margin-top:0.5rem;display:flex;align-items:center;gap:0.5rem">
+            <label style="font-size:0.75rem;color:var(--text3)">Fill value:</label>
+            <input type="text" id="eda-clean-const-val" value="0" style="width:80px;padding:0.25rem;border-radius:6px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text);font-size:0.8rem">
+          </div>
+          <div id="eda-clean-slow-warn" style="display:none;margin-top:0.4rem;font-size:0.72rem;color:#fbbf24">&#9888; This method can be slow on large datasets. Processing time depends on dataset size and server load.</div>
+        </div>
+
+        <!-- Outlier removal -->
+        <div>
+          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;font-weight:600;color:var(--text);margin-bottom:0.5rem">
+            <input type="checkbox" id="eda-clean-outlier-enabled" onchange="_edaOutlier_onChange()" style="width:16px;height:16px;accent-color:#fbbf24">
+            Outlier removal
+          </label>
+          <div id="eda-clean-outlier-opts" style="display:none;padding-left:1.4rem;display:flex;flex-direction:column;gap:0.5rem">
+            <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
+              <label style="font-size:0.78rem;color:var(--text3)">Method:</label>
+              <select id="eda-clean-outlier-method" onchange="_edaOutlier_onChange()" style="padding:0.3rem 0.5rem;border-radius:8px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text2);font-size:0.78rem">
+                <option value="iqr">IQR (threshold = multiplier, default 1.5)</option>
+                <option value="zscore">Z-score (threshold = std deviations, default 3)</option>
+                <option value="winsorize">Winsorize (threshold = percentile%, default 5)</option>
+              </select>
+            </div>
+            <div style="display:flex;align-items:center;gap:0.5rem">
+              <label style="font-size:0.75rem;color:var(--text3)" id="eda-clean-outlier-thresh-label">Threshold:</label>
+              <input type="number" id="eda-clean-outlier-thresh" value="1.5" step="0.1" min="0" style="width:70px;padding:0.25rem;border-radius:6px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text);font-size:0.8rem">
+            </div>
+          </div>
+        </div>
+
+        <!-- Power transform -->
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;font-weight:600;color:var(--text)">
+          <input type="checkbox" id="eda-clean-power-transform" style="width:16px;height:16px;accent-color:#a78bfa">
+          Yeo-Johnson power transform (numeric columns)
+        </label>
+        <div style="font-size:0.72rem;color:var(--text3);margin-top:-0.7rem;padding-left:1.4rem">Normalises skewed distributions. Applied after imputation.</div>
+
+        <!-- Submit -->
+        <div style="margin-top:0.25rem">
+          <button onclick="_runEDAClean()" id="eda-clean-btn" style="padding:0.5rem 1.4rem;border-radius:20px;font-size:0.85rem;font-weight:700;cursor:pointer;background:rgba(52,211,153,0.15);color:#34d399;border:1px solid rgba(52,211,153,0.35);transition:all 0.2s">
+            Clean &amp; Download CSV
+          </button>
+          <span id="eda-clean-spinner" style="display:none;margin-left:0.75rem;font-size:0.78rem;color:var(--text3)">
+            <span class="spinner" style="border-color:var(--border2);border-top-color:var(--color-success);width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:middle"></span>
+            Processing…
+          </span>
+          <div id="eda-clean-err" style="display:none;margin-top:0.5rem;font-size:0.78rem;color:#f87171"></div>
+        </div>
+
+        <!-- Summary card (shown after clean) -->
+        <div id="eda-clean-summary" style="display:none;padding:1rem;border-radius:12px;background:rgba(52,211,153,0.07);border:1px solid rgba(52,211,153,0.2)"></div>
+
+      </div>
+    </div>`;
+
+  return overviewHTML + narrativeHTML + readinessHTML + insightsHTML + navHTML + sampleHTML + colsHTML + statsHTML + distHTML + boxHTML + miHTML + pcaHTML + splomHTML + corrHTML + cleanHTML;
 }
 
 function _renderEDAPlots(d) {
