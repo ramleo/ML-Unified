@@ -34,13 +34,17 @@ import pandas as pd
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    try:
-        _load()
-    except Exception as exc:
-        import traceback
-        print("ERROR: _load() failed:", exc, flush=True)
-        traceback.print_exc()
-    yield
+    import threading
+    def _bg():
+        try:
+            _load()
+            print(f"Models loaded: {list(MODELS.keys())}", flush=True)
+        except Exception as exc:
+            import traceback
+            print("ERROR: _load() failed:", exc, flush=True)
+            traceback.print_exc()
+    threading.Thread(target=_bg, daemon=True).start()
+    yield  # server binds and accepts requests immediately; models load in background
 
 app = FastAPI(title="ML API", lifespan=_lifespan)
 app.add_middleware(
