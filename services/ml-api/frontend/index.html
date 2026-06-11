@@ -5546,15 +5546,20 @@ function _buildCleanOptions(d, filename) {
       ${text}${sub ? `<span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text3)">${sub}</span>` : ''}
     </div>`;
 
-  const colRow = (checkClass, accentColor, checked, val, name, barPct, barColor, valStr) => `
-    <label style="display:grid;grid-template-columns:18px 130px 1fr 54px;align-items:center;gap:0.5rem;cursor:pointer;padding:0.3rem 0.4rem;border-radius:7px">
+  const colRow = (checkClass, accentColor, checked, name, barPct, isNeg, valStr) => {
+    const pct48 = Math.min(barPct / 100 * 48, 48);
+    const dir = isNeg ? 'neg' : 'pos';
+    return `
+    <label style="display:grid;grid-template-columns:18px 160px 1fr 56px;align-items:center;gap:0.75rem;cursor:pointer;padding:0.25rem 0">
       <input type="checkbox" class="${checkClass}" value="${name}" ${checked ? 'checked' : ''} style="accent-color:${accentColor};width:14px;height:14px;flex-shrink:0">
-      <span style="font-size:0.75rem;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${name}">${name}</span>
-      <div style="height:7px;border-radius:4px;background:var(--border2);overflow:hidden">
-        <div style="height:100%;width:${Math.min(barPct,100)}%;background:${barColor};border-radius:4px;transition:width 0.4s ease"></div>
+      <div class="shap-feat-name" style="text-align:left" title="${name}">${name}</div>
+      <div class="shap-bar-wrap">
+        <div class="shap-bar-center"></div>
+        <div class="shap-bar-fill ${dir}" data-pct="${pct48}" style="${isNeg ? 'right:50%' : 'left:50%'};width:0%;background:${accentColor}"></div>
       </div>
-      <span style="font-size:0.7rem;font-weight:700;color:${barColor};text-align:right;font-variant-numeric:tabular-nums">${valStr}</span>
+      <span class="shap-val" style="color:${accentColor}">${valStr}</span>
     </label>`;
+  };
 
   optEl.innerHTML = `
     <div class="eda-section-card eda-visible" style="margin-top:1.25rem">
@@ -5604,12 +5609,10 @@ function _buildCleanOptions(d, filename) {
           ${missingCols.length === 0
             ? `<div style="font-size:0.75rem;color:var(--text3)">No missing values detected</div>`
             : `<div style="display:flex;flex-direction:column;gap:0.15rem;margin-bottom:0.75rem">
-                ${missingCols.map(c => colRow(
-                  'sc-imputecol', '#38bdf8', c.missing_pct > 5,
-                  c.missing_pct, c.name, c.missing_pct,
-                  c.missing_pct > 20 ? '#f87171' : c.missing_pct > 5 ? '#fbbf24' : '#38bdf8',
-                  c.missing_pct + '%'
-                )).join('')}
+                ${missingCols.map(c => {
+                  const mc = c.missing_pct > 20 ? '#f87171' : c.missing_pct > 5 ? '#fbbf24' : '#38bdf8';
+                  return colRow('sc-imputecol', mc, c.missing_pct > 5, c.name, c.missing_pct, false, c.missing_pct + '%');
+                }).join('')}
               </div>
               <select id="sc-impute" onchange="_scImpute_onChange()" style="padding:0.4rem 0.6rem;border-radius:8px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text2);font-size:0.8rem;width:100%;max-width:280px">
                 <option value="none">None — leave as-is</option>
@@ -5641,11 +5644,7 @@ function _buildCleanOptions(d, filename) {
           ${outlierCols.length === 0
             ? `<div style="font-size:0.75rem;color:var(--text3)">No outliers detected</div>`
             : `<div style="display:flex;flex-direction:column;gap:0.15rem;margin-bottom:0.75rem">
-                ${outlierCols.map(c => colRow(
-                  'sc-outliercol', '#fbbf24', c.pct > 5,
-                  c.pct, c.name, c.pct / maxOutlierPct * 100,
-                  '#fbbf24', c.pct + '%'
-                )).join('')}
+                ${outlierCols.map(c => colRow('sc-outliercol', '#fbbf24', c.pct > 5, c.name, c.pct / maxOutlierPct * 100, false, c.pct + '%')).join('')}
               </div>
               <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">
                 <select id="sc-outlier-method" onchange="_scOutlier_onChange()" style="padding:0.3rem 0.5rem;border-radius:8px;border:1px solid var(--border2);background:var(--bg-card);color:var(--text2);font-size:0.78rem">
@@ -5670,7 +5669,7 @@ function _buildCleanOptions(d, filename) {
                 ${skewedCols.map(c => {
                   const abs = Math.abs(c.skew);
                   const col = abs > 2 ? '#f87171' : abs > 1 ? '#fbbf24' : '#a78bfa';
-                  return colRow('sc-skewtcol', '#a78bfa', abs > 1, abs, c.name, abs / maxAbsSkew * 100, col, (c.skew > 0 ? '+' : '') + c.skew);
+                  return colRow('sc-skewtcol', col, abs > 1, c.name, abs / maxAbsSkew * 100, c.skew < 0, (c.skew > 0 ? '+' : '') + c.skew);
                 }).join('')}
               </div>`
           }
@@ -5692,6 +5691,11 @@ function _buildCleanOptions(d, filename) {
 
       </div>
     </div>`;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    document.querySelectorAll('#cleanOptions .shap-bar-fill[data-pct]').forEach(bar => {
+      bar.style.width = bar.dataset.pct + '%';
+    });
+  }));
 }
 
 function _scImpute_onChange() {
@@ -6088,14 +6092,19 @@ function _renderEDA(d, filename) {
   const _maxOutliers2 = _outlierCols2.length ? d.stats[_outlierCols2[0]].outliers : 1;
   const _maxSkew2     = _skewCols2.length ? Math.abs(d.stats[_skewCols2[0]].skew) || 1 : 1;
 
-  const _barRow = (name, barPct, barColor, valStr) => `
-    <div style="display:grid;grid-template-columns:160px 1fr 56px;align-items:center;gap:0.75rem;padding:0.2rem 0">
-      <span style="font-size:0.75rem;font-weight:600;color:var(--text2);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${name}">${name}</span>
-      <div style="height:8px;border-radius:4px;background:var(--border2);overflow:hidden">
-        <div style="height:100%;width:${Math.min(100,barPct)}%;background:${barColor};border-radius:4px;transition:width 0.5s ease"></div>
+  const _barRow = (name, barPct, isNeg, accentColor, valStr) => {
+    const pct48 = Math.min(barPct / 100 * 48, 48);
+    const dir = isNeg ? 'neg' : 'pos';
+    return `
+    <div class="shap-row">
+      <div class="shap-feat-name" title="${name}">${name}</div>
+      <div class="shap-bar-wrap">
+        <div class="shap-bar-center"></div>
+        <div class="shap-bar-fill ${dir}" data-pct="${pct48}" style="${isNeg ? 'right:50%' : 'left:50%'};width:0%;background:${accentColor}"></div>
       </div>
-      <span style="font-size:0.72rem;font-weight:700;color:${barColor};text-align:right;font-variant-numeric:tabular-nums">${valStr}</span>
+      <span class="shap-val" style="color:${accentColor}">${valStr}</span>
     </div>`;
+  };
 
   const statsHTML = numCols.length ? `
     <div class="eda-section-card" id="eda-s-stats">
@@ -6106,17 +6115,18 @@ function _renderEDA(d, filename) {
           ${_outlierCols2.length
             ? _outlierCols2.map(col => {
                 const pct = Math.round(d.stats[col].outliers / _statRows * 1000) / 10;
-                return _barRow(col, d.stats[col].outliers / _maxOutliers2 * 100, '#fbbf24', pct + '%');
+                return _barRow(col, d.stats[col].outliers / _maxOutliers2 * 100, false, '#fbbf24', pct + '%');
               }).join('')
             : `<div style="font-size:0.75rem;color:var(--text3)">No outliers detected</div>`}
         </div>
         <div>
           <div style="font-size:0.68rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.6rem">Skewness</div>
           ${_skewCols2.map(col => {
-              const abs = Math.abs(d.stats[col].skew);
+              const s = d.stats[col];
+              const abs = Math.abs(s.skew);
               const sc = abs > 2 ? '#f87171' : abs > 1 ? '#fbbf24' : 'var(--active-accent)';
-              const sign = d.stats[col].skew >= 0 ? '+' : '';
-              return _barRow(col, abs / _maxSkew2 * 100, sc, sign + d.stats[col].skew);
+              const sign = s.skew >= 0 ? '+' : '';
+              return _barRow(col, abs / _maxSkew2 * 100, s.skew < 0, sc, sign + s.skew);
             }).join('')}
         </div>
       </div>
@@ -6505,6 +6515,11 @@ function _edaInitAnimations(d) {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
         entry.target.classList.add('eda-visible');
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          entry.target.querySelectorAll('.shap-bar-fill[data-pct]').forEach(bar => {
+            bar.style.width = bar.dataset.pct + '%';
+          });
+        }));
         io.unobserve(entry.target);
       }
     });
