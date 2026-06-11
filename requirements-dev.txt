@@ -1,3 +1,5 @@
 pytest==8.3.5
 httpx==0.28.1
 ruff==0.9.10
+playwright>=1.44
+pytest-playwright>=0.5
