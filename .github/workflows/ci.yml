@@ -55,6 +55,9 @@ jobs:
       - name: Test ml-eda
         run: pytest services/ml-eda/tests/ -v --tb=short
 
+      - name: Model quality gate
+        run: python scripts/check_model_quality.py
+
   deploy:
     needs: test
     runs-on: ubuntu-latest
