@@ -5462,15 +5462,46 @@ async function _cleanReadFile(file) {
     optEl.innerHTML = `<div class="eda-section-card eda-visible" style="margin-top:1.25rem;font-size:0.82rem;color:#f87171">EDA service not configured (ML_EDA_URL missing).</div>`;
     return;
   }
-  optEl.innerHTML = `<div style="padding:2rem;text-align:center;color:var(--text3)"><span class="spinner" style="border-color:var(--border2);border-top-color:#22d3ee;width:20px;height:20px;border-width:3px;display:inline-block"></span><div style="margin-top:0.75rem;font-size:0.85rem">Analysing columns…</div></div>`;
+  const steps = ['Parsing CSV', 'Profiling columns', 'Computing statistics', 'Detecting outliers', 'Generating insights'];
+  const stepPcts = [12, 35, 58, 78, 92];
+  let stepIdx = 0;
+  optEl.innerHTML = `
+    <div style="padding:2.5rem 2rem;max-width:380px;margin:0 auto">
+      <div style="font-size:0.78rem;font-weight:600;color:#22d3ee;margin-bottom:0.6rem;min-height:1.2em" id="_cp-label">${steps[0]}</div>
+      <div style="height:6px;border-radius:6px;background:var(--border2);overflow:hidden;position:relative">
+        <div id="_cp-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#0e7490,#22d3ee);border-radius:6px;transition:width 0.55s cubic-bezier(.4,0,.2,1)"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:0.4rem">
+        <span style="font-size:0.62rem;color:var(--text3)">${file.name}</span>
+        <span id="_cp-pct" style="font-size:0.62rem;color:var(--text3);font-variant-numeric:tabular-nums">0%</span>
+      </div>
+    </div>`;
+  const setProgress = (pct, label) => {
+    const bar = document.getElementById('_cp-bar');
+    const lbl = document.getElementById('_cp-label');
+    const pctEl = document.getElementById('_cp-pct');
+    if (bar) bar.style.width = pct + '%';
+    if (lbl && label) lbl.textContent = label;
+    if (pctEl) pctEl.textContent = pct + '%';
+  };
+  setProgress(stepPcts[0], steps[0]);
+  const iv = setInterval(() => {
+    stepIdx = Math.min(stepIdx + 1, steps.length - 1);
+    setProgress(stepPcts[stepIdx], steps[stepIdx]);
+    if (stepIdx === steps.length - 1) clearInterval(iv);
+  }, 900);
   try {
     const fd = new FormData();
     fd.append('file', file);
     const r = await fetch(`${EDA_API}/eda`, { method: 'POST', body: fd });
+    clearInterval(iv);
     if (!r.ok) throw new Error('Analysis failed');
+    setProgress(100, 'Done');
+    await new Promise(res => setTimeout(res, 280));
     const d = await r.json();
     _buildCleanOptions(d, file.name);
   } catch (e) {
+    clearInterval(iv);
     optEl.innerHTML = `<div class="eda-section-card eda-visible" style="margin-top:1.25rem;font-size:0.82rem;color:#f87171">Failed to analyse file: ${e.message}</div>`;
   }
 }
