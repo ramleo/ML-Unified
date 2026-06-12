@@ -1059,6 +1059,40 @@ body {
 .train-result-metric { font-size: 2rem; font-weight: 800; margin-bottom: 0.25rem; }
 .train-result-label  { font-size: 0.8rem; color: var(--text3); margin-bottom: 1.5rem; }
 
+/* ── AutoML Report ── */
+.aml-report { margin-top: 2rem; border-top: 1px solid var(--border2); padding-top: 1.75rem; }
+.aml-title  { font-size: 1.15rem; font-weight: 800; margin-bottom: 0.25rem; }
+.aml-subtitle { font-size: 0.78rem; color: var(--text3); margin-bottom: 1.1rem; }
+.aml-note   { font-size: 0.76rem; color: var(--text2); background: rgba(251,191,36,0.1);
+              border: 1px solid rgba(251,191,36,0.3); border-radius: 6px;
+              padding: 0.4rem 0.75rem; margin-bottom: 1rem; }
+.aml-grid   { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+@media (max-width: 600px) { .aml-grid { grid-template-columns: 1fr; } }
+.aml-card   { background: var(--card-bg); border: 1px solid var(--border2); border-radius: 12px;
+              padding: 1rem 1.1rem; }
+.aml-card-title  { font-size: 0.8rem; font-weight: 700; margin-bottom: 0.25rem; }
+.aml-metric-label { font-size: 0.7rem; color: var(--text3); margin-bottom: 0.75rem;
+                    text-transform: uppercase; letter-spacing: 0.05em; }
+.aml-bar-row     { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.55rem; }
+.aml-bar-label   { font-size: 0.75rem; width: 110px; flex-shrink: 0; white-space: nowrap;
+                   overflow: hidden; text-overflow: ellipsis; color: var(--text2); }
+.aml-bar-label.aml-winner { font-weight: 700; color: var(--text1); }
+.aml-bar-track   { flex: 1; height: 8px; background: var(--border2); border-radius: 4px; overflow: hidden; }
+.aml-bar-fill    { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+.aml-bar-val     { font-size: 0.72rem; font-variant-numeric: tabular-nums; color: var(--text2);
+                   width: 50px; text-align: right; flex-shrink: 0; }
+.aml-explanation-card { background: var(--card-bg); border: 1px solid var(--border2);
+                         border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: 1rem; }
+.aml-explanation-header { display: flex; align-items: center; justify-content: space-between;
+                           margin-bottom: 0.6rem; font-size: 0.82rem; font-weight: 700; }
+.aml-source-badge { font-size: 0.65rem; font-weight: 700; padding: 0.2rem 0.5rem;
+                    border-radius: 20px; background: var(--border2); color: var(--text3);
+                    letter-spacing: 0.04em; text-transform: uppercase; }
+.aml-source-badge.aml-ai { background: rgba(129,140,248,0.2); color: #818cf8; border: 1px solid rgba(129,140,248,0.4); }
+.aml-explanation-text { font-size: 0.83rem; color: var(--text2); line-height: 1.6; margin-bottom: 0.75rem; }
+.aml-key-row { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem;
+               padding-top: 0.75rem; border-top: 1px solid var(--border2); }
+
 /* ── Vision Panel ── */
 .vision-panel { padding: 0; max-width: 860px; }
 
@@ -3168,9 +3202,9 @@ function renderWizardStep2() {
 }
 
 function algorithmOptions(task) {
-  if (task === 'classification') return '<option>Random Forest</option><option>Gradient Boosting</option><option>XGBoost</option><option>LightGBM</option><option>CatBoost</option>';
+  if (task === 'classification') return '<option value="AutoML">AutoML: Model Selection</option><option disabled>──────────────</option><option>Random Forest</option><option>Gradient Boosting</option><option>XGBoost</option><option>LightGBM</option><option>CatBoost</option>';
   if (task === 'clustering')     return '<option>K-Means</option><option>DBSCAN</option><option>t-SNE</option><option>PCA</option>';
-  return '<option>Gradient Boosting</option><option>Random Forest</option><option>XGBoost</option><option>LightGBM</option><option>CatBoost</option>';
+  return '<option value="AutoML">AutoML: Model Selection</option><option disabled>──────────────</option><option>Gradient Boosting</option><option>Random Forest</option><option>XGBoost</option><option>LightGBM</option><option>CatBoost</option>';
 }
 
 function updateAlgorithms(task) {
@@ -3240,6 +3274,112 @@ function _updateProgressBar(fillId, msgId, pctId, pct, msg) {
   if (fill)  fill.style.width  = Math.max(4, pct) + '%';
   if (msgEl) msgEl.textContent = msg || '';
   if (pctEl) pctEl.textContent = pct + '%';
+}
+
+// ── AutoML report ─────────────────────────────────────────────
+let _currentAutoMLData = null;
+
+function _renderAutoMLReport(automl, accent) {
+  const { winner, selection_metric, cv_results, feature_importance,
+          explanation, explanation_source, can_upgrade, is_imbalanced, n_rows } = automl;
+  const isReg = selection_metric === 'MAE';
+
+  // Normalise bar widths
+  const scores = cv_results.map(r => r.score);
+  const maxS = Math.max(...scores);
+  const minS = Math.min(...scores);
+  const rangeS = maxS - minS || maxS || 1;
+
+  const cvBars = cv_results.map(r => {
+    const isWin = r.algorithm === winner;
+    const pct = isReg
+      ? (50 + 50 * (maxS - r.score) / rangeS).toFixed(1)
+      : (r.score / maxS * 100).toFixed(1);
+    const val = isReg ? r.score.toFixed(2) : (r.score * 100).toFixed(1) + '%';
+    return `<div class="aml-bar-row">
+      <span class="aml-bar-label${isWin ? ' aml-winner' : ''}">${r.algorithm}${isWin ? ' ✓' : ''}</span>
+      <div class="aml-bar-track"><div class="aml-bar-fill" style="width:${pct}%;background:${isWin ? accent : 'var(--text3)'}88"></div></div>
+      <span class="aml-bar-val">${val}</span>
+    </div>`;
+  }).join('');
+
+  const fiBars = (feature_importance || []).slice(0, 8).map(f =>
+    `<div class="aml-bar-row">
+      <span class="aml-bar-label">${f.feature}</span>
+      <div class="aml-bar-track"><div class="aml-bar-fill" style="width:${f.importance}%;background:${accent}66"></div></div>
+      <span class="aml-bar-val">${f.importance}%</span>
+    </div>`
+  ).join('');
+
+  const isAI = explanation_source === 'app_key' || explanation_source === 'user_key';
+  const srcBadge = `<span class="aml-source-badge${isAI ? ' aml-ai' : ''}">${isAI ? 'AI' : 'Auto'}</span>`;
+
+  const keyInput = can_upgrade ? `
+    <div class="aml-key-row" id="amlKeyRow">
+      <input type="password" id="amlApiKey" class="field-input"
+             placeholder="Anthropic API key for AI insights…"
+             style="flex:1;font-size:0.82rem;min-width:0">
+      <button class="btn btn-clear" onclick="getAIExplanation()"
+              style="white-space:nowrap;font-size:0.82rem;padding:0.45rem 0.9rem">
+        Get AI Explanation
+      </button>
+    </div>` : '';
+
+  const imbalNote = is_imbalanced
+    ? `<div class="aml-note">Imbalanced classes detected — F1-macro used for algorithm selection.</div>` : '';
+
+  const fiCard = fiBars ? `
+    <div class="aml-card">
+      <div class="aml-card-title">Feature Importance</div>
+      <div class="aml-metric-label">% contribution to predictions</div>
+      ${fiBars}
+    </div>` : '';
+
+  return `<div class="aml-report" id="amlReport">
+    <div class="aml-title">AutoML: Model Selection Report</div>
+    <div class="aml-subtitle">Tested Random Forest, XGBoost &amp; LightGBM with 3-fold cross-validation on ${(n_rows || 0).toLocaleString()} rows</div>
+    ${imbalNote}
+    <div class="aml-grid">
+      <div class="aml-card">
+        <div class="aml-card-title">Algorithm Comparison</div>
+        <div class="aml-metric-label">${selection_metric}${isReg ? ' (lower is better)' : ''}</div>
+        ${cvBars}
+      </div>
+      ${fiCard}
+    </div>
+    <div class="aml-explanation-card">
+      <div class="aml-explanation-header">
+        <span>Why ${winner} won</span>
+        ${srcBadge}
+      </div>
+      <div class="aml-explanation-text" id="amlExplanation">${explanation || ''}</div>
+      ${keyInput}
+    </div>
+  </div>`;
+}
+
+async function getAIExplanation() {
+  const key = (document.getElementById('amlApiKey')?.value || '').trim();
+  if (!key) return;
+  const btn = document.querySelector('#amlKeyRow button');
+  if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+  try {
+    const res = await fetch(API + '/explain', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ automl_data: _currentAutoMLData, user_api_key: key }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    const expEl = document.getElementById('amlExplanation');
+    if (expEl) expEl.textContent = data.explanation;
+    const badge = document.querySelector('.aml-source-badge');
+    if (badge) { badge.textContent = 'AI'; badge.classList.add('aml-ai'); }
+    const keyRow = document.getElementById('amlKeyRow');
+    if (keyRow) keyRow.remove();
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Failed — try again'; }
+  }
 }
 
 // ── Train ─────────────────────────────────────────────────────
@@ -3315,8 +3455,13 @@ async function runTrain() {
           ${extraRow}
           ${clusterPlot}
           <button class="btn btn-primary" onclick="selectModel('${result.id}')">Use Model \u2192</button>
+          ${result.automl ? _renderAutoMLReport(result.automl, result.accent) : ''}
         </div>
       </div>`;
+
+    if (result.automl) {
+      _currentAutoMLData = result.automl;
+    }
 
     if (result.plot_data && result.plot_data.length) {
       drawClusterPlot('clusterCanvas', result.plot_data, result.n_clusters, result.accent);

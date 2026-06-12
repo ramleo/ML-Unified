@@ -21,9 +21,9 @@ from sklearn.cluster import KMeans, DBSCAN
 # of shared-library memory at startup (critical on Render free tier 512 MB limit)
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import (accuracy_score, mean_absolute_error, silhouette_score,
-                             f1_score, roc_auc_score)
+from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold, KFold
+from sklearn.metrics import (accuracy_score, mean_absolute_error, mean_squared_error,
+                             silhouette_score, f1_score, roc_auc_score, r2_score)
 from typing import Any, Dict
 import io
 import joblib
@@ -508,6 +508,119 @@ async def run_unsupervised(
     )
 
 
+# ── AutoML helpers ────────────────────────────────────────────────────────────
+
+_AUTOML_MAX_CV_ROWS = 5000
+
+
+def _cv_sample(X: pd.DataFrame, y, max_rows: int = _AUTOML_MAX_CV_ROWS):
+    """Subsample for cross-validation on large datasets."""
+    if len(X) <= max_rows:
+        return X, y
+    import numpy as _np  # noqa: PLC0415
+    idx = _np.random.RandomState(42).choice(len(X), max_rows, replace=False)
+    if hasattr(y, "iloc"):
+        return X.iloc[idx].reset_index(drop=True), y.iloc[idx].reset_index(drop=True)
+    return X.iloc[idx].reset_index(drop=True), y[idx]
+
+
+def _extract_feature_importances(pipeline, num_cols: list, cat_cols: list) -> list:
+    model = pipeline.named_steps.get("model")
+    if model is None or not hasattr(model, "feature_importances_"):
+        return []
+    importances = model.feature_importances_
+    prep = pipeline.named_steps["prep"]
+
+    all_feats = list(num_cols)
+    if cat_cols:
+        try:
+            ohe = prep.named_transformers_["cat"].named_steps["enc"]
+            for i, col in enumerate(cat_cols):
+                n_cats = len(ohe.categories_[i])
+                all_feats.extend([col] * n_cats)
+        except (KeyError, AttributeError):
+            all_feats.extend(cat_cols)
+
+    imp_map: dict = {}
+    for i, feat in enumerate(all_feats):
+        if i >= len(importances):
+            break
+        imp_map[feat] = imp_map.get(feat, 0.0) + float(importances[i])
+
+    total = sum(imp_map.values()) or 1.0
+    return [
+        {"feature": k, "importance": round(v / total * 100, 1)}
+        for k, v in sorted(imp_map.items(), key=lambda x: -x[1])
+    ][:10]
+
+
+def _rule_explanation(winner: str, cv_results: list, task: str,
+                      selection_metric: str, is_imbalanced: bool,
+                      feature_importance: list, n_rows: int) -> str:
+    if task == "regression":
+        sorted_r = sorted(cv_results, key=lambda x: x["score"])
+        best_fmt = f"MAE of {sorted_r[0]['score']:.2f}"
+        others   = [f"{r['algorithm']} ({r['score']:.2f})" for r in sorted_r[1:]]
+    else:
+        sorted_r = sorted(cv_results, key=lambda x: -x["score"])
+        best_fmt = f"{selection_metric} of {sorted_r[0]['score'] * 100:.1f}%"
+        others   = [f"{r['algorithm']} ({r['score'] * 100:.1f}%)" for r in sorted_r[1:]]
+
+    text = f"{winner} achieved the best {best_fmt}"
+    if others:
+        text += f", outperforming {' and '.join(others)}"
+    text += "."
+    if is_imbalanced:
+        text += " F1-macro was used as the selection criterion because your dataset has class imbalance."
+    if feature_importance:
+        top3 = [f["feature"] for f in feature_importance[:3]]
+        text += f" The most influential features are: {', '.join(top3)}."
+    return text
+
+
+def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
+                     selection_metric: str, is_imbalanced: bool,
+                     feature_importance: list, n_rows: int):
+    try:
+        import anthropic  # noqa: PLC0415
+        client = anthropic.Anthropic(api_key=api_key)
+        if task == "regression":
+            results_text = "\n".join(
+                f"  {r['algorithm']}: MAE = {r['score']:.4f}" for r in cv_results
+            )
+        else:
+            results_text = "\n".join(
+                f"  {r['algorithm']}: {selection_metric} = {r['score'] * 100:.2f}%"
+                for r in cv_results
+            )
+        fi_text = "\n".join(
+            f"  {i + 1}. {f['feature']} ({f['importance']:.1f}%)"
+            for i, f in enumerate(feature_importance[:5])
+        ) if feature_importance else "  Not available"
+        imbalance_note = (
+            " The dataset has class imbalance, so F1-macro was used as the "
+            "selection metric instead of accuracy."
+        ) if is_imbalanced else ""
+        prompt = (
+            f"You are explaining AutoML model selection results to a data analyst.\n\n"
+            f"Dataset: {n_rows:,} rows, task: {task}{imbalance_note}\n"
+            f"3 algorithms tested with 3-fold cross-validation:\n{results_text}\n\n"
+            f"Winner: {winner}\n\n"
+            f"Top features by importance:\n{fi_text}\n\n"
+            f"Write 2–3 clear sentences explaining why {winner} was selected and what "
+            f"the top features suggest about what drives the predictions. Be concise "
+            f"and avoid jargon. No bullet points."
+        )
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return msg.content[0].text.strip()
+    except Exception:
+        return None
+
+
 @app.post("/train")
 async def train_model(
     file:       UploadFile = File(...),
@@ -579,11 +692,13 @@ async def train_model(
         from lightgbm import LGBMClassifier, LGBMRegressor        # noqa: PLC0415
         from catboost import CatBoostClassifier, CatBoostRegressor  # noqa: PLC0415
 
-        preprocessor = ColumnTransformer(transformers, remainder="drop")
-        le           = None
-        plot_data    = None
+        preprocessor         = ColumnTransformer(transformers, remainder="drop")
+        le                   = None
+        plot_data            = None
         metric = metric_label = ""
-        extra_metrics: list = []
+        extra_metrics: list  = []
+        automl_result        = None
+        _effective_algorithm = _algorithm
 
         p.update(5, "Preparing feature matrix…")
 
@@ -643,27 +758,93 @@ async def train_model(
             p.update(10, "Encoding labels…")
             le    = LabelEncoder()
             y_enc = le.fit_transform(_y.astype(str))
-            if _algorithm == "XGBoost":
-                estimator = XGBClassifier(n_estimators=100, random_state=42, eval_metric="logloss", verbosity=0)
-            elif _algorithm == "LightGBM":
-                estimator = LGBMClassifier(n_estimators=100, random_state=42, verbose=-1)
-            elif _algorithm == "CatBoost":
-                estimator = CatBoostClassifier(iterations=100, random_seed=42, verbose=0)
-            elif _algorithm == "Random Forest":
-                estimator = RandomForestClassifier(n_estimators=100, random_state=42)
+
+            if _algorithm == "AutoML":
+                try:
+                    # Detect class imbalance
+                    import numpy as _np  # noqa: PLC0415
+                    cls_counts = pd.Series(y_enc).value_counts()
+                    min_ratio  = float(cls_counts.min()) / len(y_enc)
+                    is_imbal   = min_ratio < 0.20
+                    sel_metric = "f1_macro" if is_imbal else "accuracy"
+                    sel_label  = "F1-macro" if is_imbal else "Accuracy"
+
+                    X_cv, y_cv = _cv_sample(X, y_enc)
+                    cv_split   = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
+
+                    p.update(15, "Testing Random Forest (3-fold CV)…")
+                    rf_pl  = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                       ("model", RandomForestClassifier(n_estimators=100, random_state=42))])
+                    rf_cv  = float(cross_val_score(rf_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric).mean())
+
+                    p.update(35, "Testing XGBoost (3-fold CV)…")
+                    xgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                       ("model", XGBClassifier(n_estimators=100, random_state=42,
+                                                               eval_metric="logloss", verbosity=0))])
+                    xgb_cv = float(cross_val_score(xgb_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric).mean())
+
+                    p.update(55, "Testing LightGBM (3-fold CV)…")
+                    lgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                       ("model", LGBMClassifier(n_estimators=100, random_state=42, verbose=-1))])
+                    lgb_cv = float(cross_val_score(lgb_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric).mean())
+
+                    cv_results = [
+                        {"algorithm": "Random Forest", "score": round(rf_cv,  4)},
+                        {"algorithm": "XGBoost",       "score": round(xgb_cv, 4)},
+                        {"algorithm": "LightGBM",      "score": round(lgb_cv, 4)},
+                    ]
+                    winner = max(cv_results, key=lambda r: r["score"])["algorithm"]
+                    _effective_algorithm = winner
+
+                    if winner == "XGBoost":
+                        estimator = XGBClassifier(n_estimators=100, random_state=42,
+                                                  eval_metric="logloss", verbosity=0)
+                    elif winner == "LightGBM":
+                        estimator = LGBMClassifier(n_estimators=100, random_state=42, verbose=-1)
+                    else:
+                        estimator = RandomForestClassifier(n_estimators=100, random_state=42)
+
+                    automl_result = {
+                        "winner":           winner,
+                        "selection_metric": sel_label,
+                        "is_imbalanced":    is_imbal,
+                        "n_rows":           len(X),
+                        "cv_results":       cv_results,
+                        "task":             "classification",
+                    }
+                    p.update(65, f"Winner: {winner}. Training on full dataset…")
+
+                except Exception as _exc:
+                    # CV failed — fall back to Random Forest
+                    print(f"AutoML CV failed, falling back to Random Forest: {_exc}", flush=True)
+                    estimator = RandomForestClassifier(n_estimators=100, random_state=42)
+                    _effective_algorithm = "Random Forest"
+
             else:
-                estimator = GradientBoostingClassifier(n_estimators=100, random_state=42)
+                if _algorithm == "XGBoost":
+                    estimator = XGBClassifier(n_estimators=100, random_state=42,
+                                              eval_metric="logloss", verbosity=0)
+                elif _algorithm == "LightGBM":
+                    estimator = LGBMClassifier(n_estimators=100, random_state=42, verbose=-1)
+                elif _algorithm == "CatBoost":
+                    estimator = CatBoostClassifier(iterations=100, random_seed=42, verbose=0)
+                elif _algorithm == "Random Forest":
+                    estimator = RandomForestClassifier(n_estimators=100, random_state=42)
+                else:
+                    estimator = GradientBoostingClassifier(n_estimators=100, random_state=42)
+
             pipeline = Pipeline([("prep", preprocessor), ("model", estimator)])
             split    = 0.2 if len(X) >= 10 else 0.1
             X_train, X_test, y_train, y_test = train_test_split(X, y_enc, test_size=split, random_state=42)
-            p.update(20, f"Training {_algorithm} classifier…")
+            train_pct = 68 if automl_result else 20
+            p.update(train_pct, f"Training {_effective_algorithm} classifier…")
             pipeline.fit(X_train, y_train)
             p.update(82, "Evaluating on test set…")
             y_pred       = pipeline.predict(X_test)
             score        = accuracy_score(y_test, y_pred)
             metric       = f"{score * 100:.1f}%"
             metric_label = "Accuracy"
-            extra_metrics: list = []
+            extra_metrics = []
             f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
             extra_metrics.append({"label": "F1 (weighted)", "value": f"{f1:.3f}"})
             try:
@@ -678,33 +859,142 @@ async def train_model(
             except Exception:
                 pass
 
+            if automl_result:
+                p.update(84, "Extracting feature importances…")
+                automl_result["feature_importance"] = _extract_feature_importances(
+                    pipeline, num_cols, cat_cols)
+                rule_exp = _rule_explanation(
+                    automl_result["winner"], automl_result["cv_results"], "classification",
+                    automl_result["selection_metric"], automl_result["is_imbalanced"],
+                    automl_result["feature_importance"], len(X),
+                )
+                app_key = os.environ.get("ANTHROPIC_API_KEY", "")
+                if app_key:
+                    p.update(86, "Generating AI explanation…")
+                    llm_exp = _llm_explanation(
+                        app_key, automl_result["winner"], automl_result["cv_results"],
+                        "classification", automl_result["selection_metric"],
+                        automl_result["is_imbalanced"], automl_result["feature_importance"],
+                        len(X),
+                    )
+                    automl_result["explanation"]        = llm_exp or rule_exp
+                    automl_result["explanation_source"] = "app_key" if llm_exp else "rule"
+                else:
+                    automl_result["explanation"]        = rule_exp
+                    automl_result["explanation_source"] = "rule"
+                automl_result["can_upgrade"] = automl_result["explanation_source"] == "rule"
+
         else:  # regression
             p.update(10, "Preparing regression target…")
             y_num = pd.to_numeric(_y, errors="coerce")
             y_enc = y_num.fillna(float(y_num.median()))
-            if _algorithm == "XGBoost":
-                estimator = XGBRegressor(n_estimators=100, random_state=42, verbosity=0)
-            elif _algorithm == "LightGBM":
-                estimator = LGBMRegressor(n_estimators=100, random_state=42, verbose=-1)
-            elif _algorithm == "CatBoost":
-                estimator = CatBoostRegressor(iterations=100, random_seed=42, verbose=0)
-            elif _algorithm == "Gradient Boosting":
-                estimator = GradientBoostingRegressor(n_estimators=100, random_state=42)
+
+            if _algorithm == "AutoML":
+                try:
+                    import numpy as _np  # noqa: PLC0415
+                    X_cv, y_cv = _cv_sample(X, y_enc)
+                    cv_split   = KFold(n_splits=3, shuffle=True, random_state=42)
+
+                    p.update(15, "Testing Random Forest (3-fold CV)…")
+                    rf_pl  = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                       ("model", RandomForestRegressor(n_estimators=100, random_state=42))])
+                    rf_cv  = -float(cross_val_score(rf_pl, X_cv, y_cv, cv=cv_split,
+                                                    scoring="neg_mean_absolute_error").mean())
+
+                    p.update(35, "Testing XGBoost (3-fold CV)…")
+                    xgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                       ("model", XGBRegressor(n_estimators=100, random_state=42, verbosity=0))])
+                    xgb_cv = -float(cross_val_score(xgb_pl, X_cv, y_cv, cv=cv_split,
+                                                    scoring="neg_mean_absolute_error").mean())
+
+                    p.update(55, "Testing LightGBM (3-fold CV)…")
+                    lgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                       ("model", LGBMRegressor(n_estimators=100, random_state=42, verbose=-1))])
+                    lgb_cv = -float(cross_val_score(lgb_pl, X_cv, y_cv, cv=cv_split,
+                                                    scoring="neg_mean_absolute_error").mean())
+
+                    cv_results = [
+                        {"algorithm": "Random Forest", "score": round(rf_cv,  4)},
+                        {"algorithm": "XGBoost",       "score": round(xgb_cv, 4)},
+                        {"algorithm": "LightGBM",      "score": round(lgb_cv, 4)},
+                    ]
+                    winner = min(cv_results, key=lambda r: r["score"])["algorithm"]
+                    _effective_algorithm = winner
+
+                    if winner == "XGBoost":
+                        estimator = XGBRegressor(n_estimators=100, random_state=42, verbosity=0)
+                    elif winner == "LightGBM":
+                        estimator = LGBMRegressor(n_estimators=100, random_state=42, verbose=-1)
+                    else:
+                        estimator = RandomForestRegressor(n_estimators=100, random_state=42)
+
+                    automl_result = {
+                        "winner":           winner,
+                        "selection_metric": "MAE",
+                        "is_imbalanced":    False,
+                        "n_rows":           len(X),
+                        "cv_results":       cv_results,
+                        "task":             "regression",
+                    }
+                    p.update(65, f"Winner: {winner}. Training on full dataset…")
+
+                except Exception as _exc:
+                    print(f"AutoML CV failed, falling back to Random Forest: {_exc}", flush=True)
+                    estimator = RandomForestRegressor(n_estimators=100, random_state=42)
+                    _effective_algorithm = "Random Forest"
+
             else:
-                estimator = RandomForestRegressor(n_estimators=100, random_state=42)
+                if _algorithm == "XGBoost":
+                    estimator = XGBRegressor(n_estimators=100, random_state=42, verbosity=0)
+                elif _algorithm == "LightGBM":
+                    estimator = LGBMRegressor(n_estimators=100, random_state=42, verbose=-1)
+                elif _algorithm == "CatBoost":
+                    estimator = CatBoostRegressor(iterations=100, random_seed=42, verbose=0)
+                elif _algorithm == "Gradient Boosting":
+                    estimator = GradientBoostingRegressor(n_estimators=100, random_state=42)
+                else:
+                    estimator = RandomForestRegressor(n_estimators=100, random_state=42)
+
             pipeline = Pipeline([("prep", preprocessor), ("model", estimator)])
             split    = 0.2 if len(X) >= 10 else 0.1
             X_train, X_test, y_train, y_test = train_test_split(X, y_enc, test_size=split, random_state=42)
-            p.update(20, f"Training {_algorithm} regressor…")
+            train_pct = 68 if automl_result else 20
+            p.update(train_pct, f"Training {_effective_algorithm} regressor…")
             pipeline.fit(X_train, y_train)
             p.update(82, "Evaluating on test set…")
+            import numpy as np  # noqa: PLC0415
             y_pred       = pipeline.predict(X_test)
             mae          = mean_absolute_error(y_test, y_pred)
             metric       = f"±{mae:.2f}"
             metric_label = "MAE"
-            import numpy as np  # noqa: PLC0415
-            rmse = float(np.sqrt(np.mean((y_test - y_pred) ** 2)))
+            rmse = float(np.sqrt(mean_squared_error(y_test, y_pred)))
+            r2   = r2_score(y_test, y_pred)
             extra_metrics = [{"label": "RMSE", "value": f"{rmse:.2f}"}]
+            if r2 >= 0.60:
+                extra_metrics.append({"label": "R²", "value": f"{r2:.3f}"})
+
+            if automl_result:
+                p.update(84, "Extracting feature importances…")
+                automl_result["feature_importance"] = _extract_feature_importances(
+                    pipeline, num_cols, cat_cols)
+                rule_exp = _rule_explanation(
+                    automl_result["winner"], automl_result["cv_results"], "regression",
+                    "MAE", False, automl_result["feature_importance"], len(X),
+                )
+                app_key = os.environ.get("ANTHROPIC_API_KEY", "")
+                if app_key:
+                    p.update(86, "Generating AI explanation…")
+                    llm_exp = _llm_explanation(
+                        app_key, automl_result["winner"], automl_result["cv_results"],
+                        "regression", "MAE", False,
+                        automl_result["feature_importance"], len(X),
+                    )
+                    automl_result["explanation"]        = llm_exp or rule_exp
+                    automl_result["explanation_source"] = "app_key" if llm_exp else "rule"
+                else:
+                    automl_result["explanation"]        = rule_exp
+                    automl_result["explanation_source"] = "rule"
+                automl_result["can_upgrade"] = automl_result["explanation_source"] == "rule"
 
         p.update(88, "Building schema…")
         feature_cols = X.columns.tolist()
@@ -740,10 +1030,10 @@ async def train_model(
         schema = {
             "id":          _model_id,
             "title":       _model_name,
-            "description": f"Auto-trained {_task} model using {_algorithm}.",
+            "description": f"Auto-trained {_task} model using {_effective_algorithm}.",
             "task":        _task,
             "accent":      _accent,
-            "model":       _algorithm,
+            "model":       _effective_algorithm,
             "metric":      metric,
             "metricLabel": metric_label,
             "id_cols":     [],
@@ -778,6 +1068,8 @@ async def train_model(
         if plot_data is not None:
             resp["plot_data"]  = plot_data
             resp["n_clusters"] = _n_clusters
+        if automl_result is not None:
+            resp["automl"] = automl_result
 
         p.finish(result=resp)
 
@@ -786,6 +1078,34 @@ async def train_model(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.post("/explain")
+async def explain_automl(request: Request):
+    """Generate an LLM explanation for an AutoML result using a user-supplied API key."""
+    body       = await request.json()
+    automl     = body.get("automl_data", {})
+    user_key   = (body.get("user_api_key") or "").strip()
+
+    if not user_key:
+        raise HTTPException(400, "user_api_key is required")
+
+    winner     = automl.get("winner", "")
+    cv_results = automl.get("cv_results", [])
+    task       = automl.get("task", "classification")
+    sel_metric = automl.get("selection_metric", "Accuracy")
+    is_imbal   = automl.get("is_imbalanced", False)
+    feat_imp   = automl.get("feature_importance", [])
+    n_rows     = automl.get("n_rows", 0)
+
+    llm_exp = _llm_explanation(user_key, winner, cv_results, task,
+                               sel_metric, is_imbal, feat_imp, n_rows)
+    if llm_exp:
+        return {"explanation": llm_exp, "source": "user_key"}
+
+    rule_exp = _rule_explanation(winner, cv_results, task, sel_metric,
+                                 is_imbal, feat_imp, n_rows)
+    return {"explanation": rule_exp, "source": "rule"}
 
 
 app.include_router(_shap_router.router)
