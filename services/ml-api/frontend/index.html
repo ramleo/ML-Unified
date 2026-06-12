@@ -3919,12 +3919,12 @@ function _renderAutoMLStep0() {
         <div style="margin-bottom:1rem">
           <label class="wizard-label">Dataset name <span style="font-weight:400;color:var(--text3)">(optional)</span></label>
           <input type="text" id="amlStep0Name" class="field-input" placeholder="e.g. Titanic survival data"
-                 value="${_automlDatasetName}" style="margin-top:0.35rem">
+                 value="${_automlDatasetName}" style="margin-top:0.35rem;background:transparent;border-color:var(--border2)">
         </div>
 
         <div style="margin-bottom:1.25rem">
           <label class="wizard-label">Target column</label>
-          <select id="amlStep0Target" class="field-select" style="margin-top:0.35rem">
+          <select id="amlStep0Target" class="field-select" style="margin-top:0.35rem;background:transparent;border-color:var(--border2)">
             <option value="">— select target column —</option>
             ${colOpts}
           </select>
