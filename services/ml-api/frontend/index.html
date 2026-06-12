@@ -4113,6 +4113,16 @@ function _renderAutoMLStep1b(preselectedTarget) {
             Apply Preprocessing
           </button>
         </div>
+        <div id="amlPrepProgress" style="display:none;margin-top:1rem">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.35rem">
+            <span style="font-size:0.75rem;color:var(--text2)" id="amlPrepProgLabel">Analyzing data…</span>
+            <span style="font-size:0.75rem;color:var(--text3)" id="amlPrepProgPct">0%</span>
+          </div>
+          <div style="height:5px;border-radius:9999px;background:var(--border);overflow:hidden">
+            <div id="amlPrepProgBar" style="height:100%;width:0%;border-radius:9999px;background:var(--active-accent,#818cf8);transition:width 0.5s ease"></div>
+          </div>
+          <div style="display:flex;gap:0.5rem;margin-top:0.6rem;flex-wrap:wrap" id="amlPrepStepDots"></div>
+        </div>
       </div>
 
       <div id="amlPrepResult" style="display:none"></div>
@@ -4189,12 +4199,57 @@ function _onFsMethodChange() {
 }
 
 async function _applyAutoMLPreprocessing() {
-  const btn    = document.getElementById('amlPrepApplyBtn');
-  const errEl  = document.getElementById('amlPrepErr');
-  const resEl  = document.getElementById('amlPrepResult');
+  const btn     = document.getElementById('amlPrepApplyBtn');
+  const errEl   = document.getElementById('amlPrepErr');
+  const resEl   = document.getElementById('amlPrepResult');
+  const progEl  = document.getElementById('amlPrepProgress');
+  const barEl   = document.getElementById('amlPrepProgBar');
+  const lblEl   = document.getElementById('amlPrepProgLabel');
+  const pctEl   = document.getElementById('amlPrepProgPct');
+  const dotsEl  = document.getElementById('amlPrepStepDots');
   errEl.style.display = 'none';
   btn.disabled = true;
-  btn.textContent = 'Preprocessing…';
+  btn.style.opacity = '0.5';
+
+  // Animate progress bar through preprocessing stages
+  const steps = [
+    { pct: 10, label: 'Analyzing data…' },
+    { pct: 30, label: 'Handling missing values…' },
+    { pct: 55, label: 'Encoding categorical columns…' },
+    { pct: 72, label: 'Treating outliers & skewness…' },
+    { pct: 85, label: 'Running feature selection…' },
+  ];
+  progEl.style.display = 'block';
+  const stepNames = ['Analyze', 'Impute', 'Encode', 'Outliers', 'Select'];
+  dotsEl.innerHTML = stepNames.map((s, i) =>
+    `<span id="amlPrepDot${i}" style="font-size:0.68rem;padding:0.2rem 0.55rem;border-radius:9999px;
+     background:var(--border);color:var(--text3);transition:all 0.3s">${s}</span>`
+  ).join('');
+
+  let stepIdx = 0;
+  function advanceStep() {
+    if (stepIdx >= steps.length) return;
+    const s = steps[stepIdx];
+    barEl.style.transition = 'none';
+    void barEl.offsetWidth;
+    barEl.style.transition = 'width 0.5s ease';
+    barEl.style.width = s.pct + '%';
+    lblEl.textContent = s.label;
+    pctEl.textContent = s.pct + '%';
+    const dot = document.getElementById('amlPrepDot' + stepIdx);
+    if (dot) {
+      dot.style.background = 'var(--active-accent,#818cf8)';
+      dot.style.color = '#fff';
+    }
+    stepIdx++;
+  }
+  advanceStep();
+  const timers = [
+    setTimeout(advanceStep, 600),
+    setTimeout(advanceStep, 1300),
+    setTimeout(advanceStep, 2100),
+    setTimeout(advanceStep, 3000),
+  ];
 
   // Use preselected target from Step 0, fall back to analysis suggestion
   const target = _automlTargetCol || automlAnalysis.suggested_target;
@@ -4239,6 +4294,20 @@ async function _applyAutoMLPreprocessing() {
     if (!res.ok) { const t = await res.text(); throw new Error(t); }
     const result = await res.json();
 
+    // Complete progress bar
+    timers.forEach(clearTimeout);
+    barEl.style.background = '#34d399';
+    barEl.style.width = '100%';
+    lblEl.textContent = 'Done!';
+    lblEl.style.color = '#34d399';
+    pctEl.textContent = '100%';
+    stepNames.forEach((_, i) => {
+      const d = document.getElementById('amlPrepDot' + i);
+      if (d) { d.style.background = '#34d399'; d.style.color = '#fff'; }
+    });
+    setTimeout(() => { progEl.style.display = 'none'; }, 1200);
+    btn.style.opacity = '1';
+
     // Update global state
     const csvBytes = atob(result.csv_b64);
     const arr = new Uint8Array(csvBytes.length);
@@ -4270,10 +4339,17 @@ async function _applyAutoMLPreprocessing() {
         <button class="btn btn-primary" onclick="_renderAutoMLStep2()">Yes, Configure AutoML →</button>
       </div>`;
   } catch(e) {
+    timers.forEach(clearTimeout);
+    barEl.style.background = '#f87171';
+    barEl.style.width = '100%';
+    lblEl.textContent = 'Failed';
+    lblEl.style.color = '#f87171';
+    pctEl.textContent = '';
+    setTimeout(() => { progEl.style.display = 'none'; }, 2000);
     errEl.textContent = e.message;
     errEl.style.display = 'block';
     btn.disabled = false;
-    btn.textContent = 'Apply Preprocessing';
+    btn.style.opacity = '1';
   }
 }
 

@@ -1169,8 +1169,8 @@ async def train_model(
                     cls_counts = pd.Series(y_enc).value_counts()
                     min_ratio  = float(cls_counts.min()) / len(y_enc)
                     is_imbal   = min_ratio < 0.20
-                    sel_metric = "f1_macro" if is_imbal else "accuracy"
-                    sel_label  = "F1-macro" if is_imbal else "Accuracy"
+                    sel_metric = "f1_macro" if is_imbal else "f1_weighted"
+                    sel_label  = "F1-macro" if is_imbal else "F1 (weighted)"
 
                     X_cv, y_cv = _cv_sample(X, y_enc)
                     cv_split   = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
