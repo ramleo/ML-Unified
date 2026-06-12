@@ -393,6 +393,11 @@ async def automl_preprocess(request: Request):
     except Exception as e:
         raise HTTPException(400, f"Could not parse CSV: {e}")
 
+    # Cast boolean columns to int8 to avoid SimpleImputer dtype error
+    bool_cols = df.select_dtypes(include="bool").columns.tolist()
+    if bool_cols:
+        df[bool_cols] = df[bool_cols].astype(_np.int8)
+
     rows_before = len(df)
     cols_before = len(df.columns)
 
@@ -411,6 +416,30 @@ async def automl_preprocess(request: Request):
         df_feat = df_feat.dropna()
         if target_series is not None:
             target_series = target_series.loc[df_feat.index]
+    elif mv == "ffill":
+        df_feat = df_feat.ffill()
+    elif mv == "bfill":
+        df_feat = df_feat.bfill()
+    elif mv == "constant":
+        df_feat[num_cols] = df_feat[num_cols].fillna(0)
+        df_feat[cat_cols] = df_feat[cat_cols].fillna("Unknown")
+    elif mv == "knn":
+        from sklearn.impute import KNNImputer  # noqa: PLC0415
+        if num_cols:
+            knn_imp = KNNImputer(n_neighbors=5)
+            df_feat[num_cols] = knn_imp.fit_transform(df_feat[num_cols])
+        if cat_cols:
+            cat_imp = SimpleImputer(strategy="most_frequent")
+            df_feat[cat_cols] = cat_imp.fit_transform(df_feat[cat_cols])
+    elif mv == "mice":
+        from sklearn.experimental import enable_iterative_imputer  # noqa: PLC0415, F401
+        from sklearn.impute import IterativeImputer  # noqa: PLC0415
+        if num_cols:
+            mice_imp = IterativeImputer(max_iter=10, random_state=42)
+            df_feat[num_cols] = mice_imp.fit_transform(df_feat[num_cols])
+        if cat_cols:
+            cat_imp = SimpleImputer(strategy="most_frequent")
+            df_feat[cat_cols] = cat_imp.fit_transform(df_feat[cat_cols])
     elif mv in ("mean", "median", "mode"):
         strategy = "most_frequent" if mv == "mode" else mv
         if num_cols:
@@ -1041,6 +1070,12 @@ async def train_model(
     id_like = [c for c in X.columns if X[c].dtype == object and X[c].nunique() == len(X)]
     if id_like:
         X = X.drop(columns=id_like)
+
+    # Cast boolean columns to int8 to avoid SimpleImputer dtype error
+    _bool_cols = X.select_dtypes(include="bool").columns.tolist()
+    if _bool_cols:
+        X = X.copy()
+        X[_bool_cols] = X[_bool_cols].astype("int8")
 
     num_cols = X.select_dtypes(include="number").columns.tolist()
     cat_cols = X.select_dtypes(exclude="number").columns.tolist()
