@@ -762,7 +762,6 @@ async def train_model(
             if _algorithm == "AutoML":
                 try:
                     # Detect class imbalance
-                    import numpy as _np  # noqa: PLC0415
                     cls_counts = pd.Series(y_enc).value_counts()
                     min_ratio  = float(cls_counts.min()) / len(y_enc)
                     is_imbal   = min_ratio < 0.20
