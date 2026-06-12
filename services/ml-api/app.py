@@ -37,6 +37,7 @@ async def _lifespan(app: FastAPI):
     import threading
     def _bg():
         try:
+            _fetch_hf_models()
             _load()
             print(f"Models loaded: {list(MODELS.keys())}", flush=True)
         except Exception as exc:
@@ -124,6 +125,46 @@ ACCENT_PALETTE = [
 
 def slugify(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+_HF_SPACE_ID = "wram1708/ml-unified"
+_HF_PKL_FILES = [
+    "models/diabetes_pipeline.pkl",
+    "models/diabetes_labels.pkl",
+    "models/iris_pipeline.pkl",
+    "models/iris_labels.pkl",
+    "models/titanic_pipeline.pkl",
+    "models/titanic_labels.pkl",
+    "models/insurance_pipeline.pkl",
+]
+
+def _fetch_hf_models():
+    """Download pkl files from HF Space XET storage if running on HuggingFace."""
+    if not os.environ.get("SPACE_ID"):
+        return  # only run inside HF Spaces
+    try:
+        from huggingface_hub import hf_hub_download
+        import shutil
+    except ImportError:
+        print("huggingface_hub not available — skipping model download", flush=True)
+        return
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    token = os.environ.get("HF_TOKEN")
+    for fpath in _HF_PKL_FILES:
+        local = os.path.join(HERE, fpath)
+        if os.path.exists(local):
+            continue
+        try:
+            print(f"HF: downloading {fpath} ...", flush=True)
+            cached = hf_hub_download(
+                repo_id=_HF_SPACE_ID,
+                repo_type="space",
+                filename=fpath,
+                token=token,
+            )
+            shutil.copy2(cached, local)
+            print(f"HF: {fpath} ready", flush=True)
+        except Exception as exc:
+            print(f"HF: could not download {fpath}: {exc}", flush=True)
 
 def _load():
     for fname in sorted(os.listdir(SCHEMA_DIR)):
