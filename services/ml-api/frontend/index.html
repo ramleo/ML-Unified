@@ -1070,39 +1070,76 @@ body {
 .train-result-metric { font-size: 2rem; font-weight: 800; margin-bottom: 0.25rem; }
 .train-result-label  { font-size: 0.8rem; color: var(--text3); margin-bottom: 1.5rem; }
 
-/* ── AutoML Report ── */
-.aml-report { margin-top: 2rem; border-top: 1px solid var(--border2); padding-top: 1.75rem; }
-.aml-title  { font-size: 1.15rem; font-weight: 800; margin-bottom: 0.25rem; }
-.aml-subtitle { font-size: 0.78rem; color: var(--text3); margin-bottom: 1.1rem; }
-.aml-note   { font-size: 0.76rem; color: var(--text2); background: rgba(251,191,36,0.1);
-              border: 1px solid rgba(251,191,36,0.3); border-radius: 6px;
-              padding: 0.4rem 0.75rem; margin-bottom: 1rem; }
-.aml-grid   { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
-@media (max-width: 600px) { .aml-grid { grid-template-columns: 1fr; } }
-.aml-card   { background: var(--card-bg); border: 1px solid var(--border2); border-radius: 12px;
-              padding: 1rem 1.1rem; }
-.aml-card-title  { font-size: 0.8rem; font-weight: 700; margin-bottom: 0.25rem; }
-.aml-metric-label { font-size: 0.7rem; color: var(--text3); margin-bottom: 0.75rem;
-                    text-transform: uppercase; letter-spacing: 0.05em; }
-.aml-bar-row     { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.55rem; }
-.aml-bar-label   { font-size: 0.75rem; width: 110px; flex-shrink: 0; white-space: nowrap;
-                   overflow: hidden; text-overflow: ellipsis; color: var(--text2); }
-.aml-bar-label.aml-winner { font-weight: 700; color: var(--text1); }
-.aml-bar-track   { flex: 1; height: 8px; background: var(--border2); border-radius: 4px; overflow: hidden; }
-.aml-bar-fill    { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
-.aml-bar-val     { font-size: 0.72rem; font-variant-numeric: tabular-nums; color: var(--text2);
-                   width: 50px; text-align: right; flex-shrink: 0; }
-.aml-explanation-card { background: var(--card-bg); border: 1px solid var(--border2);
-                         border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: 1rem; }
-.aml-explanation-header { display: flex; align-items: center; justify-content: space-between;
-                           margin-bottom: 0.6rem; font-size: 0.82rem; font-weight: 700; }
-.aml-source-badge { font-size: 0.65rem; font-weight: 700; padding: 0.2rem 0.5rem;
+/* ── AutoML Dashboard ── */
+.aml-note     { font-size: 0.74rem; color: var(--text2); background: rgba(251,191,36,0.1);
+                border: 1px solid rgba(251,191,36,0.3); border-radius: 6px;
+                padding: 0.4rem 0.75rem; margin-bottom: 1rem; }
+.aml-hero     { display: flex; align-items: center; gap: 1.25rem; border-radius: 16px;
+                padding: 1.4rem 1.6rem; margin-bottom: 1.1rem; border: 1px solid transparent; }
+.aml-hero-main    { flex: 1; min-width: 0; }
+.aml-hero-label   { font-size: 0.65rem; font-weight: 800; text-transform: uppercase;
+                    letter-spacing: 0.12em; margin-bottom: 0.2rem; }
+.aml-hero-name    { font-size: 1.55rem; font-weight: 900; color: var(--text1); line-height: 1.1;
+                    margin-bottom: 0.25rem; }
+.aml-hero-sub     { font-size: 0.75rem; color: var(--text3); }
+.aml-hero-score   { text-align: right; flex-shrink: 0; }
+.aml-hero-score-val   { font-size: 2.1rem; font-weight: 900; line-height: 1; }
+.aml-hero-score-lbl   { font-size: 0.63rem; color: var(--text3); text-transform: uppercase;
+                        letter-spacing: 0.08em; margin-top: 0.2rem; }
+.aml-stats    { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1.1rem; }
+.aml-stat     { background: var(--card-bg); border: 1px solid var(--border2); border-radius: 12px;
+                padding: 0.85rem 1rem; }
+.aml-stat-lbl { font-size: 0.63rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+                color: var(--text3); margin-bottom: 0.3rem; }
+.aml-stat-val { font-size: 1.1rem; font-weight: 800; color: var(--text1); line-height: 1.2; }
+.aml-stat-sub { font-size: 0.68rem; color: var(--text3); margin-top: 0.15rem; }
+.aml-charts   { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+@media (max-width: 600px) { .aml-charts { grid-template-columns: 1fr; } }
+.aml-chart-card   { background: var(--card-bg); border: 1px solid var(--border2); border-radius: 14px;
+                    padding: 1.1rem 1.15rem; }
+.aml-chart-title  { font-size: 0.82rem; font-weight: 700; margin-bottom: 0.2rem; }
+.aml-chart-sub    { font-size: 0.67rem; color: var(--text3); text-transform: uppercase;
+                    letter-spacing: 0.05em; margin-bottom: 1rem; }
+.aml-algo-row     { margin-bottom: 0.85rem; }
+.aml-algo-header  { display: flex; align-items: center; justify-content: space-between;
+                    margin-bottom: 0.3rem; }
+.aml-algo-name    { font-size: 0.78rem; font-weight: 600; color: var(--text2); }
+.aml-algo-name.aml-win { font-weight: 800; color: var(--text1); }
+.aml-algo-right   { display: flex; align-items: center; gap: 0.45rem; }
+.aml-algo-val     { font-size: 0.76rem; font-variant-numeric: tabular-nums; color: var(--text2); }
+.aml-winner-pill  { font-size: 0.58rem; font-weight: 800; text-transform: uppercase;
+                    letter-spacing: 0.08em; padding: 0.15rem 0.5rem; border-radius: 9999px;
+                    border: 1px solid transparent; }
+.aml-algo-track   { height: 32px; background: var(--bg-input,var(--border2)); border-radius: 8px;
+                    overflow: hidden; }
+.aml-algo-fill    { height: 100%; border-radius: 8px; width: 0%;
+                    transition: width 0.75s cubic-bezier(0.4,0,0.2,1); }
+.aml-feat-row     { display: flex; align-items: center; gap: 0.55rem; margin-bottom: 0.55rem; }
+.aml-feat-rank    { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center;
+                    justify-content: center; font-size: 0.6rem; font-weight: 800; flex-shrink: 0;
+                    background: var(--border2); color: var(--text3); }
+.aml-feat-name    { font-size: 0.73rem; width: 82px; flex-shrink: 0; overflow: hidden;
+                    text-overflow: ellipsis; white-space: nowrap; color: var(--text2); }
+.aml-feat-track   { flex: 1; height: 22px; background: var(--bg-input,var(--border2));
+                    border-radius: 6px; overflow: hidden; }
+.aml-feat-fill    { height: 100%; border-radius: 6px; width: 0%;
+                    transition: width 0.65s cubic-bezier(0.4,0,0.2,1); }
+.aml-feat-pct     { font-size: 0.7rem; font-variant-numeric: tabular-nums; color: var(--text2);
+                    width: 36px; text-align: right; flex-shrink: 0; }
+.aml-exp-card     { background: var(--card-bg); border: 1px solid var(--border2);
+                    border-radius: 14px; padding: 1.1rem 1.2rem; }
+.aml-exp-header   { display: flex; align-items: center; justify-content: space-between;
+                    margin-bottom: 0.65rem; }
+.aml-exp-title-row { display: flex; align-items: center; gap: 0.45rem; }
+.aml-exp-title    { font-size: 0.84rem; font-weight: 700; }
+.aml-source-badge { font-size: 0.62rem; font-weight: 800; padding: 0.18rem 0.55rem;
                     border-radius: 20px; background: var(--border2); color: var(--text3);
-                    letter-spacing: 0.04em; text-transform: uppercase; }
-.aml-source-badge.aml-ai { background: rgba(129,140,248,0.2); color: #818cf8; border: 1px solid rgba(129,140,248,0.4); }
-.aml-explanation-text { font-size: 0.83rem; color: var(--text2); line-height: 1.6; margin-bottom: 0.75rem; }
-.aml-key-row { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem;
-               padding-top: 0.75rem; border-top: 1px solid var(--border2); }
+                    letter-spacing: 0.05em; text-transform: uppercase; }
+.aml-source-badge.aml-ai { background: rgba(129,140,248,0.2); color: #818cf8;
+                            border: 1px solid rgba(129,140,248,0.4); }
+.aml-exp-text     { font-size: 0.82rem; color: var(--text2); line-height: 1.65; margin-bottom: 0.75rem; }
+.aml-key-row      { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem;
+                    padding-top: 0.75rem; border-top: 1px solid var(--border2); }
 
 /* ── Vision Panel ── */
 .vision-panel { padding: 0; max-width: 860px; }
@@ -3301,39 +3338,54 @@ function _renderAutoMLReport(automl, accent) {
           explanation, explanation_source, can_upgrade, is_imbalanced, n_rows } = automl;
   const isReg = selection_metric === 'MAE';
 
-  const scores = cv_results.map(r => r.score);
-  const maxS = Math.max(...scores);
-  const rangeS = (Math.max(...scores) - Math.min(...scores)) || maxS || 1;
+  const scores  = cv_results.map(r => r.score);
+  const maxS    = Math.max(...scores);
+  const minS    = Math.min(...scores);
+  const rangeS  = (maxS - minS) || maxS || 1;
+  const winRow  = cv_results.find(r => r.algorithm === winner);
+  const bestVal = winRow ? winRow.score : 0;
+  const bestDisplay = isReg ? bestVal.toFixed(2) : (bestVal * 100).toFixed(1) + '%';
+  const taskLabel   = isReg ? 'Regression' : 'Classification';
 
-  // Bars start at 0 and animate via _animateAutoMLBars()
-  const cvBars = cv_results.map((r, i) => {
-    const isWin = r.algorithm === winner;
-    const targetPct = isReg
+  const algoBars = cv_results.map((r, i) => {
+    const isWin      = r.algorithm === winner;
+    const targetPct  = isReg
       ? (50 + 50 * (maxS - r.score) / rangeS).toFixed(1)
       : (r.score / maxS * 100).toFixed(1);
-    const val = isReg ? r.score.toFixed(2) : (r.score * 100).toFixed(1) + '%';
-    return `<div class="aml-bar-row">
-      <span class="aml-bar-label${isWin ? ' aml-winner' : ''}">${r.algorithm}${isWin ? ' &#10003;' : ''}</span>
-      <div class="aml-bar-track">
-        <div class="aml-bar-fill" data-target="${targetPct}" data-delay="${i * 120}"
-             style="width:0%;background:${isWin ? accent : 'var(--text3)'}88"></div>
+    const val        = isReg ? r.score.toFixed(2) : (r.score * 100).toFixed(1) + '%';
+    const fillStyle  = isWin
+      ? `background:linear-gradient(90deg,${accent},${accent}bb)`
+      : `background:var(--border2);filter:brightness(1.5)`;
+    const pill = isWin
+      ? `<span class="aml-winner-pill" style="background:${accent}20;color:${accent};border-color:${accent}50">WINNER</span>`
+      : '';
+    return `<div class="aml-algo-row">
+      <div class="aml-algo-header">
+        <span class="aml-algo-name${isWin ? ' aml-win' : ''}">${r.algorithm}</span>
+        <div class="aml-algo-right">${pill}<span class="aml-algo-val">${val}</span></div>
       </div>
-      <span class="aml-bar-val">${val}</span>
+      <div class="aml-algo-track">
+        <div class="aml-algo-fill" data-target="${targetPct}" data-delay="${i * 150}"
+             style="width:0%;${fillStyle}"></div>
+      </div>
     </div>`;
   }).join('');
 
-  const fiBars = (feature_importance || []).slice(0, 8).map((f, i) =>
-    `<div class="aml-bar-row">
-      <span class="aml-bar-label">${f.feature}</span>
-      <div class="aml-bar-track">
-        <div class="aml-bar-fill" data-target="${f.importance}" data-delay="${i * 80 + 400}"
-             style="width:0%;background:${accent}66"></div>
+  const fiBars = (feature_importance || []).slice(0, 8).map((f, i) => {
+    const isTop = i < 3;
+    const rankStyle = isTop ? `background:${accent}22;color:${accent}` : '';
+    return `<div class="aml-feat-row">
+      <div class="aml-feat-rank" style="${rankStyle}">${i + 1}</div>
+      <span class="aml-feat-name">${f.feature}</span>
+      <div class="aml-feat-track">
+        <div class="aml-feat-fill" data-target="${f.importance}" data-delay="${i * 80 + 500}"
+             style="width:0%;background:linear-gradient(90deg,${accent},${accent}77)"></div>
       </div>
-      <span class="aml-bar-val">${f.importance}%</span>
-    </div>`
-  ).join('');
+      <span class="aml-feat-pct">${f.importance}%</span>
+    </div>`;
+  }).join('');
 
-  const isAI = explanation_source === 'app_key' || explanation_source === 'user_key';
+  const isAI    = explanation_source === 'app_key' || explanation_source === 'user_key';
   const srcBadge = `<span class="aml-source-badge${isAI ? ' aml-ai' : ''}">${isAI ? 'AI' : 'Auto'}</span>`;
 
   const keyInput = can_upgrade ? `
@@ -3353,31 +3405,77 @@ function _renderAutoMLReport(automl, accent) {
   const imbalNote = is_imbalanced
     ? `<div class="aml-note">Imbalanced classes detected — F1-macro used for algorithm selection.</div>` : '';
 
-  const fiCard = fiBars ? `
-    <div class="aml-card">
-      <div class="aml-card-title">Feature Importance</div>
-      <div class="aml-metric-label">% contribution to predictions</div>
+  const fiSection = fiBars ? `
+    <div class="aml-chart-card">
+      <div class="aml-chart-title">Feature Importance</div>
+      <div class="aml-chart-sub">% contribution to predictions</div>
       ${fiBars}
     </div>` : '';
 
-  return `<div class="aml-report" id="amlReport">
-    <div class="aml-title">AutoML: Model Selection Report</div>
-    <div class="aml-subtitle">Tested Random Forest, XGBoost &amp; LightGBM — 3-fold CV on ${(n_rows || 0).toLocaleString()} rows</div>
+  const trophySvg = `<svg width="34" height="34" viewBox="0 0 24 24" fill="none"
+    stroke="${accent}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+    <path d="M4 22h16"/>
+    <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+    <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+  </svg>`;
+
+  const brainSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+    <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.46 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/>
+    <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.46 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/>
+  </svg>`;
+
+  return `<div class="aml-dashboard" id="amlReport">
     ${imbalNote}
-    <div class="aml-grid">
-      <div class="aml-card">
-        <div class="aml-card-title">Algorithm Comparison</div>
-        <div class="aml-metric-label">${selection_metric}${isReg ? ' — lower is better' : ''}</div>
-        ${cvBars}
+    <div class="aml-hero" style="background:linear-gradient(135deg,${accent}14,${accent}05);border-color:${accent}35">
+      <div style="opacity:0.85;flex-shrink:0">${trophySvg}</div>
+      <div class="aml-hero-main">
+        <div class="aml-hero-label" style="color:${accent}">Best Algorithm</div>
+        <div class="aml-hero-name">${winner}</div>
+        <div class="aml-hero-sub">Outperformed XGBoost &amp; LightGBM on 3-fold CV &middot; ${taskLabel}</div>
       </div>
-      ${fiCard}
+      <div class="aml-hero-score">
+        <div class="aml-hero-score-val" style="color:${accent}">${bestDisplay}</div>
+        <div class="aml-hero-score-lbl">${selection_metric}${isReg ? ' · lower better' : ''}</div>
+      </div>
     </div>
-    <div class="aml-explanation-card">
-      <div class="aml-explanation-header">
-        <span>Why ${winner} won</span>
+
+    <div class="aml-stats">
+      <div class="aml-stat">
+        <div class="aml-stat-lbl">Winner</div>
+        <div class="aml-stat-val" style="color:${accent}">${winner}</div>
+        <div class="aml-stat-sub">${taskLabel}</div>
+      </div>
+      <div class="aml-stat">
+        <div class="aml-stat-lbl">Dataset</div>
+        <div class="aml-stat-val">${(n_rows || 0).toLocaleString()}</div>
+        <div class="aml-stat-sub">rows · 3-fold CV</div>
+      </div>
+      <div class="aml-stat">
+        <div class="aml-stat-lbl">Models Tested</div>
+        <div class="aml-stat-val">3</div>
+        <div class="aml-stat-sub">RF · XGB · LGB</div>
+      </div>
+    </div>
+
+    <div class="aml-charts">
+      <div class="aml-chart-card">
+        <div class="aml-chart-title">Algorithm Comparison</div>
+        <div class="aml-chart-sub">${selection_metric}${isReg ? ' — lower is better' : ''}</div>
+        ${algoBars}
+      </div>
+      ${fiSection}
+    </div>
+
+    <div class="aml-exp-card">
+      <div class="aml-exp-header">
+        <div class="aml-exp-title-row">${brainSvg}<span class="aml-exp-title">Why ${winner} won</span></div>
         ${srcBadge}
       </div>
-      <div class="aml-explanation-text" id="amlExplanation">${explanation || ''}</div>
+      <div class="aml-exp-text" id="amlExplanation">${explanation || ''}</div>
       ${keyInput}
     </div>
   </div>`;
@@ -3385,7 +3483,7 @@ function _renderAutoMLReport(automl, accent) {
 
 function _animateAutoMLBars() {
   requestAnimationFrame(() => requestAnimationFrame(() => {
-    document.querySelectorAll('#amlReport .aml-bar-fill[data-target]').forEach(bar => {
+    document.querySelectorAll('#amlReport [data-target]').forEach(bar => {
       const delay  = parseInt(bar.dataset.delay || '0');
       const target = bar.dataset.target + '%';
       setTimeout(() => { bar.style.width = target; }, delay);
