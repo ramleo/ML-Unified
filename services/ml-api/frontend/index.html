@@ -1162,6 +1162,18 @@ body {
 .aml-key-row      { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem;
                     padding-top: 0.75rem; border-top: 1px solid var(--border2); }
 
+/* ── AutoML Analysis Tabs ── */
+.aml-tabs-strip { display:flex; gap:0.5rem; margin-top:1.5rem; padding-top:1.25rem; border-top:1px solid var(--border2); }
+.aml-tab { padding:0.38rem 1rem; border-radius:9999px; border:1px solid var(--border2);
+           background:transparent; color:var(--text2); font-size:0.75rem; font-weight:600;
+           cursor:pointer; transition:all 0.2s; }
+.aml-tab:hover { border-color:color-mix(in srgb,var(--active-accent,var(--accent-from)) 50%,transparent);
+                 color:var(--text); }
+.aml-tab.active { background:color-mix(in srgb,var(--active-accent,var(--accent-from)) 12%,transparent);
+                  border-color:var(--active-accent,var(--accent-from));
+                  color:var(--active-accent,var(--accent-from)); }
+.aml-tab-body { margin-top:1rem; }
+
 /* ── Vision Panel ── */
 .vision-panel { padding: 0; max-width: 860px; }
 
@@ -3525,6 +3537,121 @@ function _animateAutoMLBars() {
   }));
 }
 
+// ── AutoML Analysis Tabs ──────────────────────────────────────
+async function _amlShowTab(tab, btn) {
+  document.querySelectorAll('.aml-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  if (tab === 'shap')   await _amlRenderShap();
+  else if (tab === 'whatif') _amlRenderWhatif();
+}
+
+async function _amlRenderShap() {
+  if (!activeModel) return;
+  const body = document.getElementById('amlTabBody');
+  if (!body) return;
+  body.innerHTML = `<div style="padding:1rem 0">${_progressBarHTML('amlSFill','amlSMsg','amlSPct')}</div>`;
+  const sample = activeModel.schema.sample || {};
+  try {
+    const res = await fetch(`${API}/shap/${activeModel.id}`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(sample),
+    });
+    if (!res.ok) throw new Error(res.status);
+    let shap = null;
+    for await (const ev of _sseStream(res)) {
+      if (ev.pct !== undefined) _updateProgressBar('amlSFill','amlSMsg','amlSPct', ev.pct, ev.msg);
+      if (ev.result) shap = ev.result;
+    }
+    if (!shap) throw new Error('No result');
+    const maxAbs = Math.max(...shap.features.map(f => Math.abs(f.shap)), 0.001);
+    body.innerHTML = `
+      <div class="shap-body">
+        ${shap.features.map(f => {
+          const isPos = f.shap >= 0;
+          const pct = Math.min((Math.abs(f.shap) / maxAbs) * 48, 48);
+          return `<div class="shap-row">
+            <div class="shap-feat-name" title="${f.label}">${f.label}</div>
+            <div class="shap-bar-wrap">
+              <div class="shap-bar-center"></div>
+              <div class="shap-bar-fill ${isPos?'pos':'neg'}" data-pct="${pct}"
+                   style="${isPos?'left:50%;width:0%':'right:50%;width:0%'}"></div>
+            </div>
+            <div class="shap-val ${isPos?'pos':'neg'}">${isPos?'+':''}${f.shap.toFixed(3)}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="shap-base">Base value (avg prediction): <strong>${shap.base_value.toFixed(3)}</strong></div>`;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      document.querySelectorAll('#amlTabBody .shap-bar-fill[data-pct]').forEach(b => {
+        b.style.width = b.dataset.pct + '%';
+      });
+    }));
+  } catch(e) {
+    body.innerHTML = `<div style="padding:1rem;color:var(--text3)">SHAP unavailable: ${e.message}</div>`;
+  }
+}
+
+function _amlRenderWhatif() {
+  if (!activeModel) return;
+  const body = document.getElementById('amlTabBody');
+  if (!body) return;
+  const fields = (activeModel.schema.fields || []).filter(f => f.type !== 'hidden' && f.name);
+  if (!fields.length) { body.innerHTML = '<div style="padding:1rem;color:var(--text3)">No fields available.</div>'; return; }
+  const def = fields[0];
+  body.innerHTML = `
+    <div style="padding:1rem 0 0">
+      <div class="whatif-desc">Hold all other inputs at sample values — see how changing one feature shifts the prediction.</div>
+      <div class="whatif-chips" id="amlWhatifChips">
+        ${fields.map(f => `<button class="whatif-chip${f.name===def.name?' active':''}"
+          onclick="selectAmlWhatifFeature(this,'${f.name}')">${f.label||f.name}</button>`).join('')}
+      </div>
+      <div class="train-card" id="amlWhatifChart"></div>
+    </div>`;
+  runAmlWhatifSweep(def.name);
+}
+
+function selectAmlWhatifFeature(btn, fieldName) {
+  document.querySelectorAll('#amlWhatifChips .whatif-chip').forEach(c => c.classList.toggle('active', c === btn));
+  runAmlWhatifSweep(fieldName);
+}
+
+async function runAmlWhatifSweep(fieldName) {
+  const chartEl = document.getElementById('amlWhatifChart');
+  if (!chartEl || !activeModel) return;
+  chartEl.innerHTML = `<div class="pipe-loading"><span class="spinner"></span> Computing…</div>`;
+  const m = activeModel, schema = m.schema;
+  const field = schema.fields.find(f => f.name === fieldName);
+  if (!field) return;
+  const sample = schema.sample || {};
+  const base = {};
+  schema.fields.forEach(f => { base[f.name] = sample[f.name] ?? null; });
+  const sweepVals = field.type === 'select'
+    ? field.options.map(o => o.value)
+    : (() => {
+        const mn = field.min ?? 0, mx = field.max ?? 1, n = 20;
+        const vals = Array.from({length: n}, (_, i) => mn + (mx - mn) * i / (n - 1));
+        const dec = field.step ? (field.step.toString().split('.')[1] || '').length : 2;
+        return vals.map(v => parseFloat(v.toFixed(dec)));
+      })();
+  try {
+    const predictions = await Promise.all(sweepVals.map(async val => {
+      const res = await fetch(`${API}/predict/${m.id}`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({...base, [fieldName]: val}),
+      });
+      if (!res.ok) throw new Error(res.status);
+      const data = await res.json();
+      let y = schema.task === 'classification'
+        ? (data.probabilities?.length === 2 ? data.probabilities[1] : Math.max(...(data.probabilities||[0])))
+        : data.prediction;
+      return {x: val, y};
+    }));
+    chartEl.innerHTML = drawWhatifChart(predictions, field, schema);
+  } catch {
+    chartEl.innerHTML = `<div class="train-no-data">Sweep failed — try another feature.</div>`;
+  }
+}
+
 async function getAIExplanation() {
   const key = (document.getElementById('amlApiKey')?.value || '').trim();
   const errEl = document.getElementById('amlKeyErr');
@@ -3772,10 +3899,19 @@ function _renderAutoMLResultsPage(result) {
           <button class="btn btn-clear" onclick="_startFreshAutoML()">New Analysis</button>
         </div>
         ${result.automl ? _renderAutoMLReport(result.automl, result.accent) : ''}
+        ${result.automl ? `
+        <div class="aml-tabs-strip">
+          <button class="aml-tab active" onclick="_amlShowTab('shap',this)">SHAP Analysis</button>
+          <button class="aml-tab" onclick="_amlShowTab('whatif',this)">What-If</button>
+        </div>
+        <div class="aml-tab-body" id="amlTabBody"></div>` : ''}
       </div>
     </div>`;
 
-  if (result.automl) _animateAutoMLBars();
+  if (result.automl) {
+    _animateAutoMLBars();
+    setTimeout(() => _amlRenderShap(), 400);
+  }
 }
 
 async function runAutoML() {
@@ -3827,6 +3963,14 @@ async function runAutoML() {
     const mr = await fetch(API + '/models');
     allModels = await mr.json();
     renderSidebar();
+
+    // Pre-load activeModel so SHAP/What-If tabs work without navigating away
+    const schemaRes = await fetch(`${API}/schemas/${result.id}`).then(r => r.json()).catch(() => null);
+    const foundModel = allModels.find(m => m.id === result.id);
+    if (foundModel && schemaRes) {
+      activeModel = { ...foundModel, schema: schemaRes };
+      document.documentElement.style.setProperty('--active-accent', foundModel.accent);
+    }
 
     _lastAutoMLResult = result;
     if (result.automl) _currentAutoMLData = result.automl;
