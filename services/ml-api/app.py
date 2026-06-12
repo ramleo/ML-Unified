@@ -520,10 +520,84 @@ async def automl_preprocess(request: Request):
         scaler = StandardScaler()
         df_feat[final_num_cols] = scaler.fit_transform(df_feat[final_num_cols])
 
+    # 7. Feature selection
+    fs = options.get("feature_selection", {})
+    fs_method = (fs.get("method") or "none").lower()
+    top_k = int(fs.get("top_k") or 10)
+
+    features_before = len(df_feat.columns)
+
+    if fs_method != "none" and target_series is not None:
+        X = df_feat
+        y = target_series.reindex(df_feat.index)
+
+        if fs_method == "variance":
+            from sklearn.feature_selection import VarianceThreshold  # noqa: PLC0415
+            num_X = X.select_dtypes(include="number")
+            if len(num_X.columns) > 0:
+                sel = VarianceThreshold()
+                sel.fit(num_X)
+                variances = pd.Series(sel.variances_, index=num_X.columns)
+                keep = variances.nlargest(min(top_k, len(variances))).index.tolist()
+                non_num = X.select_dtypes(exclude="number").columns.tolist()
+                df_feat = df_feat[keep + non_num]
+
+        elif fs_method == "correlation":
+            num_X = X.select_dtypes(include="number")
+            if len(num_X.columns) > 1:
+                corr = num_X.corr().abs()
+                upper = corr.where(_np.triu(_np.ones(corr.shape), k=1).astype(bool))
+                to_drop = [c for c in upper.columns if any(upper[c] > 0.90)]
+                df_feat = df_feat.drop(columns=to_drop, errors="ignore")
+                remaining_num = df_feat.select_dtypes(include="number")
+                if len(remaining_num.columns) > top_k:
+                    keep = remaining_num.var().nlargest(top_k).index.tolist()
+                    non_num = df_feat.select_dtypes(exclude="number").columns.tolist()
+                    df_feat = df_feat[keep + non_num]
+
+        elif fs_method == "rfe":
+            from sklearn.feature_selection import RFE  # noqa: PLC0415
+            from sklearn.ensemble import RandomForestClassifier as _RFC, RandomForestRegressor as _RFR  # noqa: PLC0415
+            num_X = X.select_dtypes(include="number").fillna(0)
+            if len(num_X.columns) > 0:
+                is_clf = y.dtype == object or y.nunique() < 20
+                estimator = _RFC(n_estimators=50, random_state=42) if is_clf else _RFR(n_estimators=50, random_state=42)
+                k = min(top_k, num_X.shape[1])
+                rfe = RFE(estimator, n_features_to_select=k)
+                if is_clf:
+                    from sklearn.preprocessing import LabelEncoder as _LE  # noqa: PLC0415
+                    rfe.fit(num_X, _LE().fit_transform(y.astype(str)))
+                else:
+                    rfe.fit(num_X, pd.to_numeric(y, errors="coerce").fillna(0))
+                selected = num_X.columns[rfe.support_].tolist()
+                non_num = X.select_dtypes(exclude="number").columns.tolist()
+                df_feat = df_feat[selected + non_num]
+
+        elif fs_method == "kbest":
+            from sklearn.feature_selection import SelectKBest, mutual_info_classif, mutual_info_regression  # noqa: PLC0415
+            num_X = X.select_dtypes(include="number").fillna(0)
+            if len(num_X.columns) > 0:
+                is_clf = y.dtype == object or y.nunique() < 20
+                score_fn = mutual_info_classif if is_clf else mutual_info_regression
+                k = min(top_k, num_X.shape[1])
+                sel = SelectKBest(score_fn, k=k)
+                if is_clf:
+                    from sklearn.preprocessing import LabelEncoder as _LE2  # noqa: PLC0415
+                    y_enc = _LE2().fit_transform(y.astype(str))
+                else:
+                    y_enc = pd.to_numeric(y, errors="coerce").fillna(0)
+                sel.fit(num_X, y_enc)
+                selected = num_X.columns[sel.get_support()].tolist()
+                non_num = X.select_dtypes(exclude="number").columns.tolist()
+                df_feat = df_feat[selected + non_num]
+
+    features_after = len(df_feat.columns)
+
     # Recombine with target
     if target_series is not None:
         df_out = df_feat.copy()
-        df_out[target_column] = target_series.values if len(target_series) == len(df_feat) else target_series.reindex(df_feat.index).values
+        target_aligned = target_series.reindex(df_feat.index)
+        df_out[target_column] = target_aligned.values
     else:
         df_out = df_feat.copy()
 
@@ -582,6 +656,8 @@ async def automl_preprocess(request: Request):
         "rows_after":            rows_after,
         "cols_before":           cols_before,
         "cols_after":            cols_after,
+        "features_before":       features_before,
+        "features_after":        features_after,
         # analysis fields (same structure as /analyze)
         "columns":               columns_out,
         "suggested_target":      suggested_target,

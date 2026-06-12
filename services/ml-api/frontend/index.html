@@ -3775,6 +3775,8 @@ let automlFile        = null;
 let automlAnalysis    = null;
 let _lastAutoMLResult = null;  // persists across navigation
 let _lastCleanedFile  = null;  // set by Clean & Export for direct AutoML handoff
+let _automlDatasetName = '';
+let _automlTargetCol   = null;
 
 function _automlStepsHTML(active, allDone) {
   const steps = ['Upload', 'Configure', 'Results'];
@@ -3801,6 +3803,8 @@ function showAutoMLWizard() {
 function _startFreshAutoML() {
   automlFile = null;
   automlAnalysis = null;
+  _automlDatasetName = '';
+  _automlTargetCol   = null;
   _renderAutoMLStep1();
   document.getElementById('main').scrollTop = 0;
 }
@@ -3810,6 +3814,8 @@ async function _launchAutoMLFromClean() {
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   _lastAutoMLResult = null;
   automlAnalysis = null;
+  _automlDatasetName = '';
+  _automlTargetCol   = null;
   automlFile = _lastCleanedFile;
   document.getElementById('main').scrollTop = 0;
   await _analyzeAutoMLCSV();
@@ -3882,7 +3888,7 @@ async function _analyzeAutoMLCSV() {
     const res = await fetch(API + '/analyze', { method: 'POST', body: form });
     if (!res.ok) { const t = await res.text(); throw new Error(t); }
     automlAnalysis = await res.json();
-    _renderAutoMLStep1b();
+    _renderAutoMLStep0();
   } catch(e) {
     document.getElementById('main').innerHTML = `
       <div class="wizard" style="text-align:center;padding:3rem 1rem">
@@ -3895,8 +3901,68 @@ async function _analyzeAutoMLCSV() {
   }
 }
 
+// ── Step 0: Dataset name + Target column upfront ──────────────
+function _renderAutoMLStep0() {
+  const a = automlAnalysis;
+  const colOpts = a.columns.map(c => {
+    const suffix = c.is_numeric ? ' (numeric)' : ' (categorical)';
+    const sel = _automlTargetCol && _automlTargetCol === c.name ? ' selected' : '';
+    return `<option value="${c.name}"${sel}>${c.name}${suffix}</option>`;
+  }).join('');
+
+  document.getElementById('main').innerHTML = `
+    <div class="wizard">
+      ${_automlStepsHTML(1, false)}
+      <div class="eda-section-card" style="animation:none;margin-bottom:1.5rem">
+        <div class="eda-section-title" style="margin-bottom:1rem">Before we begin</div>
+
+        <div style="margin-bottom:1rem">
+          <label class="wizard-label">Dataset name <span style="font-weight:400;color:var(--text3)">(optional)</span></label>
+          <input type="text" id="amlStep0Name" class="field-input" placeholder="e.g. Titanic survival data"
+                 value="${_automlDatasetName}" style="margin-top:0.35rem">
+        </div>
+
+        <div style="margin-bottom:1.25rem">
+          <label class="wizard-label">Target column</label>
+          <select id="amlStep0Target" class="field-select" style="margin-top:0.35rem">
+            <option value="">— select target column —</option>
+            ${colOpts}
+          </select>
+          <div id="amlStep0Err" style="display:none;font-size:0.78rem;color:#f87171;margin-top:0.4rem">
+            Please select a target column.
+          </div>
+        </div>
+
+        <div class="action-row" style="margin-top:0">
+          <button class="btn btn-sample" onclick="_amlStep0Skip()" style="font-size:0.82rem">Skip</button>
+          <button class="btn btn-primary" onclick="_amlStep0Continue()" style="font-size:0.85rem">Continue →</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function _amlStep0Continue() {
+  const nameEl   = document.getElementById('amlStep0Name');
+  const targetEl = document.getElementById('amlStep0Target');
+  const errEl    = document.getElementById('amlStep0Err');
+  if (!targetEl.value) {
+    errEl.style.display = 'block';
+    return;
+  }
+  errEl.style.display = 'none';
+  _automlDatasetName = nameEl.value.trim();
+  _automlTargetCol   = targetEl.value;
+  _renderAutoMLStep1b(_automlTargetCol);
+}
+
+function _amlStep0Skip() {
+  _automlDatasetName = '';
+  _automlTargetCol   = null;
+  _renderAutoMLStep1b(null);
+}
+
 // ── Step 1.5: Data Quality & Preprocessing ────────────────────
-function _renderAutoMLStep1b() {
+function _renderAutoMLStep1b(preselectedTarget) {
   const a = automlAnalysis;
   const catCols = a.columns.filter(c => !c.is_numeric).map(c => c.name);
   const numCols = a.columns.filter(c => c.is_numeric).map(c => c.name);
@@ -3957,7 +4023,7 @@ function _renderAutoMLStep1b() {
         <div style="display:flex;flex-direction:column;gap:0.6rem;margin-bottom:1.2rem">
 
           <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
-            <input type="checkbox" id="amlPrepMissing" ${hasMissing ? 'checked' : ''} style="accent-color:#818cf8;margin-top:2px">
+            <input type="checkbox" id="amlPrepMissing" ${hasMissing ? 'checked' : ''} style="accent-color:var(--active-accent,var(--accent));margin-top:2px">
             <span>
               Handle missing values
               <select id="amlPrepMissingMethod" class="field-select" style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:auto">
@@ -3988,26 +4054,49 @@ function _renderAutoMLStep1b() {
           </div>
 
           <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
-            <input type="checkbox" id="amlPrepOutliers" ${hasOutliers ? 'checked' : ''} style="accent-color:#818cf8">
+            <input type="checkbox" id="amlPrepOutliers" ${hasOutliers ? 'checked' : ''} style="accent-color:var(--active-accent,var(--accent))">
             Remove outliers (IQR method)
           </label>
 
           <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
-            <input type="checkbox" id="amlPrepSkew" ${hasSkewness ? 'checked' : ''} style="accent-color:#818cf8">
+            <input type="checkbox" id="amlPrepSkew" ${hasSkewness ? 'checked' : ''} style="accent-color:var(--active-accent,var(--accent))">
             Fix skewness (log1p transform on positive columns)
           </label>
 
           <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
-            <input type="checkbox" id="amlPrepScale" style="accent-color:#818cf8">
+            <input type="checkbox" id="amlPrepScale" style="accent-color:var(--active-accent,var(--accent))">
             Standardize numeric features (StandardScaler)
           </label>
 
         </div>
 
+        <!-- Feature Selection section -->
+        <div style="border-top:1px solid var(--border2);padding-top:1rem;margin-bottom:1rem">
+          <div class="eda-section-title" style="margin-bottom:0.75rem">Feature Selection</div>
+          <div style="display:flex;flex-direction:column;gap:0.6rem">
+            <label style="font-size:0.82rem;color:var(--text1);display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+              Method:
+              <select id="amlFsMethod" class="field-select" style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:auto" onchange="_onFsMethodChange()">
+                <option value="none">None — skip feature selection</option>
+                <option value="variance">Variance Threshold — drop near-zero variance features</option>
+                <option value="correlation">Correlation Filter — remove highly correlated features</option>
+                <option value="rfe">RFE (Random Forest) — recursive feature elimination</option>
+                <option value="kbest">SelectKBest (Mutual Info) — rank by mutual information with target</option>
+              </select>
+            </label>
+            <div id="amlFsHint" style="font-size:0.75rem;color:var(--text3);margin-left:1.5rem;display:none"></div>
+            <div id="amlFsTopKRow" style="display:none;align-items:center;gap:0.5rem;font-size:0.82rem;color:var(--text1);flex-wrap:wrap">
+              Keep top K features:
+              <input type="number" id="amlFsTopK" class="field-input" value="10" min="1" max="200"
+                     style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:80px">
+            </div>
+          </div>
+        </div>
+
         <div id="amlPrepErr" style="display:none;font-size:0.8rem;color:#f87171;margin-bottom:0.75rem"></div>
 
         <div class="action-row" style="margin-top:0">
-          <button class="btn btn-clear" onclick="_renderAutoMLStep1()">← Back</button>
+          <button class="btn btn-clear" onclick="_renderAutoMLStep0()">← Back</button>
           <button class="btn btn-primary" id="amlPrepApplyBtn" onclick="_applyAutoMLPreprocessing()" style="font-size:0.85rem">
             Apply Preprocessing
           </button>
@@ -4018,7 +4107,7 @@ function _renderAutoMLStep1b() {
 
       <div id="amlPrepSkipRow" style="display:none">
         <div class="action-row" style="margin-top:0.5rem">
-          <button class="btn btn-clear" onclick="_renderAutoMLStep1()">← Back</button>
+          <button class="btn btn-clear" onclick="_renderAutoMLStep0()">← Back</button>
         </div>
       </div>
     </div>`;
@@ -4055,6 +4144,30 @@ function _onEncMethodChange() {
   ordEl.style.display = method === 'ordinal' ? 'block' : 'none';
 }
 
+function _onFsMethodChange() {
+  const method  = document.getElementById('amlFsMethod')?.value || 'none';
+  const hintEl  = document.getElementById('amlFsHint');
+  const topKRow = document.getElementById('amlFsTopKRow');
+  if (!hintEl || !topKRow) return;
+
+  const hints = {
+    none:        '',
+    variance:    'Removes features with variance < threshold. No target needed.',
+    correlation: 'Drops one of each pair of features with correlation > 0.90.',
+    rfe:         'Uses Random Forest to recursively eliminate weak features. Slower on large datasets.',
+    kbest:       'Ranks features by mutual information score with the target column.',
+  };
+
+  const txt = hints[method] || '';
+  if (txt) {
+    hintEl.textContent   = txt;
+    hintEl.style.display = 'block';
+  } else {
+    hintEl.style.display = 'none';
+  }
+  topKRow.style.display = method !== 'none' ? 'flex' : 'none';
+}
+
 async function _applyAutoMLPreprocessing() {
   const btn    = document.getElementById('amlPrepApplyBtn');
   const errEl  = document.getElementById('amlPrepErr');
@@ -4063,11 +4176,15 @@ async function _applyAutoMLPreprocessing() {
   btn.disabled = true;
   btn.textContent = 'Preprocessing…';
 
-  const target = automlAnalysis.suggested_target;
+  // Use preselected target from Step 0, fall back to analysis suggestion
+  const target = _automlTargetCol || automlAnalysis.suggested_target;
   const encMethod   = document.getElementById('amlPrepEncMethod')?.value || 'none';
   const ordinalCols = encMethod === 'ordinal'
     ? [...document.querySelectorAll('.aml-ordinal-col:checked')].map(el => el.value)
     : [];
+
+  const fsMethod = document.getElementById('amlFsMethod')?.value || 'none';
+  const fsTopK   = parseInt(document.getElementById('amlFsTopK')?.value || '10', 10);
 
   const options = {
     missing_values:  document.getElementById('amlPrepMissing').checked
@@ -4077,6 +4194,7 @@ async function _applyAutoMLPreprocessing() {
     remove_outliers: document.getElementById('amlPrepOutliers').checked,
     fix_skewness:    document.getElementById('amlPrepSkew').checked,
     standardize:     document.getElementById('amlPrepScale').checked,
+    feature_selection: { method: fsMethod, top_k: fsTopK },
   };
 
   try {
@@ -4112,6 +4230,10 @@ async function _applyAutoMLPreprocessing() {
     // Hide options, show result summary
     document.getElementById('amlPrepOptions').style.display = 'none';
     resEl.style.display = 'block';
+    const fsBefore = result.features_before != null ? result.features_before : (result.cols_before - 1);
+    const fsAfter  = result.features_after  != null ? result.features_after  : (result.cols_after  - 1);
+    const fsLine = (fsMethod !== 'none')
+      ? `<div>Features: <strong>${fsBefore} → ${fsAfter} selected</strong></div>` : '';
     resEl.innerHTML = `
       <div style="padding:0.85rem 1rem;border:1px solid #34d399;border-radius:8px;background:var(--bg-input);margin-bottom:1.2rem">
         <div style="font-size:0.82rem;font-weight:700;color:#34d399;margin-bottom:0.5rem">Preprocessing complete</div>
@@ -4119,11 +4241,12 @@ async function _applyAutoMLPreprocessing() {
           <div>Rows: <strong>${result.rows_before.toLocaleString()} → ${result.rows_after.toLocaleString()}</strong></div>
           <div>Columns: <strong>${result.cols_before} → ${result.cols_after}</strong></div>
           <div>Missing: <strong>${result.total_missing}</strong> remaining</div>
+          ${fsLine}
         </div>
       </div>
       <div style="font-size:0.85rem;font-weight:600;color:var(--text1);margin-bottom:0.75rem">Proceed to AutoML training?</div>
       <div class="action-row" style="margin-top:0">
-        <button class="btn btn-clear" onclick="_renderAutoMLStep1b()">← Revert</button>
+        <button class="btn btn-clear" onclick="_renderAutoMLStep1b(_automlTargetCol)">← Revert</button>
         <button class="btn btn-primary" onclick="_renderAutoMLStep2()">Yes, Configure AutoML →</button>
       </div>`;
   } catch(e) {
@@ -4137,14 +4260,18 @@ async function _applyAutoMLPreprocessing() {
 function _renderAutoMLStep2() {
   const a       = automlAnalysis;
   const palette = a.accent_palette || ACCENT_PALETTE_DEFAULT;
+  // Prefer target from Step 0, then analysis suggestion
+  const effectiveTarget = _automlTargetCol || a.suggested_target;
   const colOpts = a.columns
-    .filter(c => c.name !== a.suggested_target)
+    .filter(c => c.name !== effectiveTarget)
     .map(c => `<option value="${c.name}">${c.name}</option>`)
     .join('');
   const targetOpts = a.columns.map(c =>
-    `<option value="${c.name}"${c.name === a.suggested_target ? ' selected' : ''}>${c.name}</option>`
+    `<option value="${c.name}"${c.name === effectiveTarget ? ' selected' : ''}>${c.name}</option>`
   ).join('');
   const isClass = a.suggested_task === 'classification';
+  // Pre-fill model name with dataset name from Step 0 if provided
+  const modelNameDefault = _automlDatasetName ? _automlDatasetName : '';
 
   document.getElementById('main').innerHTML = `
     <div class="wizard">
@@ -4156,7 +4283,7 @@ function _renderAutoMLStep2() {
       </p>
       <label class="wizard-label">Model Name</label>
       <input type="text" class="field-input" id="amlModelName" placeholder="e.g. My Classifier"
-             style="margin-bottom:1.1rem">
+             value="${modelNameDefault.replace(/"/g, '&quot;')}" style="margin-bottom:1.1rem">
 
       <label class="wizard-label">Target Column</label>
       <select class="field-select" id="amlTarget" onchange="_amlSuggestTask()" style="margin-bottom:1.1rem">
@@ -4184,7 +4311,7 @@ function _renderAutoMLStep2() {
 
       <div id="amlWizardErr"></div>
       <div class="action-row">
-        <button class="btn btn-clear" onclick="_renderAutoMLStep1()">← Back</button>
+        <button class="btn btn-clear" onclick="_renderAutoMLStep1b(_automlTargetCol)">← Back</button>
         <button class="btn btn-primary" onclick="runAutoML()"
                 style="background:linear-gradient(135deg,#818cf8,#6366f1)">
           Run AutoML →
