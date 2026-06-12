@@ -1071,9 +1071,11 @@ body {
 .train-result-label  { font-size: 0.8rem; color: var(--text3); margin-bottom: 1.5rem; }
 
 /* ── AutoML Dashboard ── */
-.aml-note     { font-size: 0.74rem; color: var(--text2); background: rgba(251,191,36,0.1);
-                border: 1px solid rgba(251,191,36,0.3); border-radius: 6px;
-                padding: 0.4rem 0.75rem; margin-bottom: 1rem; }
+.aml-imbal-tag { display: inline-block; font-size: 0.62rem; font-weight: 700;
+                 text-transform: uppercase; letter-spacing: 0.07em;
+                 background: rgba(251,191,36,0.12); color: #fbbf24;
+                 border: 1px solid rgba(251,191,36,0.3); border-radius: 9999px;
+                 padding: 0.15rem 0.55rem; margin-left: 0.4rem; vertical-align: middle; }
 .aml-hero     { display: flex; align-items: center; gap: 1.25rem; border-radius: 16px;
                 padding: 1.4rem 1.6rem; margin-bottom: 1.1rem; border: 1px solid transparent; }
 .aml-hero-main    { flex: 1; min-width: 0; }
@@ -3402,8 +3404,8 @@ function _renderAutoMLReport(automl, accent) {
       Please enter your Anthropic API key first.
     </div>` : '';
 
-  const imbalNote = is_imbalanced
-    ? `<div class="aml-note">Imbalanced classes detected — F1-macro used for algorithm selection.</div>` : '';
+  const imbalTag = is_imbalanced
+    ? `<span class="aml-imbal-tag">Imbalanced &middot; F1-macro</span>` : '';
 
   const fiSection = fiBars ? `
     <div class="aml-chart-card">
@@ -3429,13 +3431,12 @@ function _renderAutoMLReport(automl, accent) {
   </svg>`;
 
   return `<div class="aml-dashboard" id="amlReport">
-    ${imbalNote}
     <div class="aml-hero" style="background:linear-gradient(135deg,${accent}14,${accent}05);border-color:${accent}35">
       <div style="opacity:0.85;flex-shrink:0">${trophySvg}</div>
       <div class="aml-hero-main">
         <div class="aml-hero-label" style="color:${accent}">Best Algorithm</div>
         <div class="aml-hero-name">${winner}</div>
-        <div class="aml-hero-sub">Outperformed XGBoost &amp; LightGBM on 3-fold CV &middot; ${taskLabel}</div>
+        <div class="aml-hero-sub">Outperformed XGBoost &amp; LightGBM on 3-fold CV &middot; ${taskLabel}${imbalTag}</div>
       </div>
       <div class="aml-hero-score">
         <div class="aml-hero-score-val" style="color:${accent}">${bestDisplay}</div>
