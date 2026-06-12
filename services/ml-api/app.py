@@ -630,12 +630,21 @@ def _build_prompt(winner, cv_results, task, selection_metric, is_imbalanced, fea
     fi_text = "\n".join(f"  {i+1}. {f['feature']} ({f['importance']:.1f}%)" for i, f in enumerate(feature_importance[:5])) if feature_importance else "  Not available"
     imbalance_note = " The dataset has class imbalance, so F1-macro was used as the selection metric instead of accuracy." if is_imbalanced else ""
     return (
-        f"You are explaining AutoML model selection results to a data analyst.\n\n"
-        f"Dataset: {n_rows:,} rows, task: {task}{imbalance_note}\n"
-        f"3 algorithms tested with 3-fold cross-validation:\n{results_text}\n\n"
+        f"You are an expert ML engineer explaining AutoML results to a data analyst.\n\n"
+        f"Dataset: {n_rows:,} rows | Task: {task}{imbalance_note}\n"
+        f"Algorithms tested (3-fold cross-validation):\n{results_text}\n\n"
         f"Winner: {winner}\n\nTop features by importance:\n{fi_text}\n\n"
-        f"Write 2–3 clear sentences explaining why {winner} was selected and what "
-        f"the top features suggest about what drives the predictions. Be concise and avoid jargon. No bullet points."
+        f"Write a structured analysis with exactly these four sections. Use the section headers as shown:\n\n"
+        f"**Why {winner} Won**\n"
+        f"2-3 sentences on why this algorithm outperformed the others given the dataset characteristics.\n\n"
+        f"**What the Scores Tell Us**\n"
+        f"2-3 sentences interpreting the cross-validation scores — how close the competition was, "
+        f"what the margin means in practice, and whether the result is reliable.\n\n"
+        f"**Key Drivers**\n"
+        f"2-3 sentences on what the top features reveal about what drives the predictions and any notable patterns.\n\n"
+        f"**Recommendations**\n"
+        f"2-3 actionable next steps: data collection, feature engineering, or deployment considerations.\n\n"
+        f"Be specific to the numbers provided. No generic filler. Avoid jargon."
     )
 
 
@@ -649,7 +658,7 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
             client = openai.OpenAI(api_key=api_key)
             resp = client.chat.completions.create(
                 model="gpt-4o-mini",
-                max_tokens=300,
+                max_tokens=800,
                 messages=[{"role": "user", "content": prompt}],
             )
             return resp.choices[0].message.content.strip()
@@ -664,7 +673,7 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
             client = anthropic.Anthropic(api_key=api_key)
             msg = client.messages.create(
                 model="claude-haiku-4-5-20251001",
-                max_tokens=300,
+                max_tokens=800,
                 messages=[{"role": "user", "content": prompt}],
             )
             return msg.content[0].text.strip()

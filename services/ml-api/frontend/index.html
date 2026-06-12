@@ -3703,7 +3703,10 @@ async function getAIExplanation() {
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
     const expEl = document.getElementById('amlExplanation');
-    if (expEl) expEl.textContent = data.explanation;
+    if (expEl) expEl.innerHTML = (data.explanation || '').replace(
+      /\*\*(.+?)\*\*/g,
+      '<div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3);margin:1rem 0 0.35rem">$1</div>'
+    ).replace(/\n\n/g, '</p><p style="margin:0 0 0.25rem">').replace(/\n/g, '<br>').replace(/^/, '<p style="margin:0 0 0.25rem">').replace(/$/, '</p>');
     const badge = document.querySelector('.aml-source-badge');
     if (badge) { badge.textContent = 'AI'; badge.classList.add('aml-ai'); }
     const keyRow = document.getElementById('amlKeyRow');
