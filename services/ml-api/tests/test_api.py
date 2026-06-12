@@ -251,8 +251,8 @@ def test_train_classification():
     assert r.status_code == 200
     data = _sse_result(r)
     assert data["id"] == "ci-test-classifier"
-    assert "%" in data["metric"]
-    assert data["metricLabel"] == "Accuracy"
+    assert float(data["metric"]) >= 0.0  # F1 score, decimal format
+    assert data["metricLabel"] in ("F1 (weighted)", "F1-macro", "Accuracy")
 
     ids = [m["id"] for m in client.get("/models").json()]
     assert "ci-test-classifier" in ids
