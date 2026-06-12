@@ -202,11 +202,7 @@ body {
 }
 
 /* ── Gradient top bar ── */
-.gradient-top-bar {
-  height: 3px;
-  background: linear-gradient(in oklch to right, var(--accent-from), var(--accent-via), var(--accent-to));
-  flex-shrink: 0;
-}
+.gradient-top-bar { display: none; }
 
 /* ── Gradient text ── */
 .gradient-text {
@@ -1583,7 +1579,7 @@ body {
       </svg>
     </div>
     <div>
-      <div class="nav-title gradient-text" id="nav-title-el">ML Unified</div>
+      <div class="nav-title" id="nav-title-el">ML Unified</div>
       <div class="nav-sub" id="nav-sub-el">Multi-Model Predictor</div>
     </div>
   </a>
