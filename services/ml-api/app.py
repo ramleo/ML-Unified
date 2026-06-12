@@ -325,8 +325,6 @@ async def analyze_csv(file: UploadFile = File(...)):
     if len(df.columns) < 2:
         raise HTTPException(400, "CSV must have at least 2 columns")
 
-    import numpy as _np  # noqa: PLC0415
-
     columns = []
     for col in df.columns:
         is_num = bool(pd.api.types.is_numeric_dtype(df[col]))
@@ -375,7 +373,7 @@ async def analyze_csv(file: UploadFile = File(...)):
 async def automl_preprocess(request: Request):
     """Preprocess an uploaded AutoML CSV in-memory and return the result."""
     import numpy as _np  # noqa: PLC0415
-    import tempfile, base64  # noqa: PLC0415
+    import base64  # noqa: PLC0415
 
     body = await request.json()
     filename      = body.get("filename", "")
@@ -640,7 +638,6 @@ async def automl_preprocess(request: Request):
     csv_b64_out = base64.b64encode(csv_str.encode()).decode()
 
     # Build analysis of preprocessed file (same shape as /analyze response)
-    import numpy as _np2  # noqa: PLC0415
     columns_out = []
     for col in df_out.columns:
         is_num = bool(pd.api.types.is_numeric_dtype(df_out[col]))
