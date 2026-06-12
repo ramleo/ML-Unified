@@ -302,14 +302,14 @@ body {
 /* ── Sidebar ── */
 .sidebar {
   border-right: 1px solid var(--border);
-  padding: 1.25rem 0.75rem;
-  display: flex; flex-direction: column; gap: 0.4rem;
+  padding: 1.5rem 0.75rem 1.5rem;
+  display: flex; flex-direction: column; gap: 0.55rem;
   overflow-y: auto;
 }
 .sidebar-label {
   font-size: 0.6rem; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.1em; color: var(--text3);
-  padding: 0 0.75rem; margin-bottom: 0.25rem;
+  padding: 0 0.75rem; margin-bottom: 0.3rem; margin-top: 0.5rem;
 }
 .model-btn {
   display: flex; align-items: center; gap: 0.75rem;
@@ -1164,13 +1164,13 @@ body {
 .aml-key-row      { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem;
                     padding-top: 0.75rem; border-top: 1px solid var(--border2); }
 
-/* ── AutoML Results Three-Column Layout ── */
+/* ── AutoML Results Two-Column Layout ── */
 .aml-results-page { width: 100%; }
 .aml-results-grid {
-  display: grid; grid-template-columns: 260px 1fr 280px;
-  gap: 1.25rem; align-items: start; margin-top: 1.5rem;
+  display: grid; grid-template-columns: 260px 1fr;
+  gap: 1.5rem; align-items: start; margin-top: 1.5rem;
 }
-.aml-results-left { position: sticky; top: 0; }
+.aml-results-left { position: sticky; top: 1.5rem; }
 .aml-results-summary {
   background: var(--card-bg); border: 1px solid var(--border2);
   border-radius: 18px; padding: 2rem 1.5rem; text-align: center;
@@ -1178,38 +1178,9 @@ body {
 .aml-results-right .aml-dashboard {
   margin-top: 0; padding-top: 0; border-top: none;
 }
-.aml-analysis-panel {
-  position: sticky; top: 0;
-  background: var(--card-bg); border: 1px solid var(--border2);
-  border-radius: 18px; overflow: hidden;
-}
-.aml-analysis-panel-header {
-  display: flex; border-bottom: 1px solid var(--border2);
-}
-.aml-analysis-panel-tab {
-  flex: 1; padding: 0.65rem 0.5rem; font-size: 0.73rem; font-weight: 600;
-  background: transparent; border: none; color: var(--text2);
-  cursor: pointer; transition: all 0.18s; border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-}
-.aml-analysis-panel-tab:hover { color: var(--text); }
-.aml-analysis-panel-tab.active {
-  color: var(--active-accent, var(--accent-from));
-  border-bottom-color: var(--active-accent, var(--accent-from));
-  background: color-mix(in srgb, var(--active-accent, var(--accent-from)) 6%, transparent);
-}
-.aml-analysis-panel-body { padding: 0.75rem 0.75rem 0; min-height: 200px; }
-.aml-analysis-panel-body .shap-body { padding: 0; gap: 0.45rem; }
-.aml-analysis-panel-body .shap-row  { grid-template-columns: 72px 1fr 44px; gap: 0.4rem; }
-.aml-analysis-panel-body .shap-feat-name { font-size: 0.7rem; }
-.aml-analysis-panel-body .shap-val  { font-size: 0.68rem; }
-.aml-analysis-panel-body .shap-base { padding: 0.6rem 0; font-size: 0.68rem; margin-top: 0.5rem; }
-.aml-analysis-panel-body .whatif-desc { font-size: 0.75rem; margin-bottom: 0.75rem; }
-.aml-analysis-panel-body .whatif-chips { gap: 0.3rem; margin-bottom: 0.75rem; }
-.aml-analysis-panel-body .whatif-chip { font-size: 0.68rem; padding: 0.2rem 0.55rem; }
-@media (max-width: 900px) {
+@media (max-width: 700px) {
   .aml-results-grid { grid-template-columns: 1fr; }
-  .aml-results-left, .aml-analysis-panel { position: static; }
+  .aml-results-left { position: static; }
 }
 
 /* ── AutoML Analysis Tabs ── */
@@ -3589,7 +3560,7 @@ function _animateAutoMLBars() {
 
 // ── AutoML Analysis Tabs ──────────────────────────────────────
 async function _amlShowTab(tab, btn) {
-  document.querySelectorAll('.aml-analysis-panel-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.aml-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   if (tab === 'shap')        await _amlRenderShap();
   else if (tab === 'whatif') _amlRenderWhatif();
@@ -3986,19 +3957,16 @@ function _renderAutoMLResultsPage(result) {
           </div>
         </div>
 
-        <!-- MIDDLE: dashboard -->
+        <!-- RIGHT: dashboard + tabs -->
         <div class="aml-results-right">
           ${aml ? _renderAutoMLReport(aml, result.accent) : ''}
-        </div>
-
-        <!-- RIGHT: SHAP + What-If panel -->
-        ${aml ? `<div class="aml-analysis-panel">
-          <div class="aml-analysis-panel-header">
-            <button class="aml-analysis-panel-tab active" onclick="_amlShowTab('shap',this)">SHAP Analysis</button>
-            <button class="aml-analysis-panel-tab" onclick="_amlShowTab('whatif',this)">What-If</button>
+          ${aml ? `
+          <div class="aml-tabs-strip">
+            <button class="aml-tab active" onclick="_amlShowTab('shap',this)">SHAP Analysis</button>
+            <button class="aml-tab" onclick="_amlShowTab('whatif',this)">What-If</button>
           </div>
-          <div class="aml-analysis-panel-body" id="amlTabBody"></div>
-        </div>` : ''}
+          <div class="aml-tab-body" id="amlTabBody"></div>` : ''}
+        </div>
 
       </div>
     </div>`;

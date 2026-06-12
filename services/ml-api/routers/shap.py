@@ -91,7 +91,13 @@ def _compute(model, X_prep: np.ndarray, task: str, pred_class: int | None):
         except Exception as exc:
             raise ValueError(f"No suitable SHAP explainer for {type(model).__name__}: {exc}") from exc
 
-    sv = explainer.shap_values(X_prep, check_additivity=False)
+    try:
+        sv = explainer.shap_values(X_prep, check_additivity=False)
+    except Exception:
+        # Interventional perturbation avoids the additivity issue for tree ensembles (e.g. RF)
+        explainer = shap.TreeExplainer(model, feature_perturbation="interventional",
+                                       data=X_prep)
+        sv = explainer.shap_values(X_prep, check_additivity=False)
     ev = explainer.expected_value
 
     if task == "classification":
