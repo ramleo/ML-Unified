@@ -480,10 +480,13 @@ body {
 /* Regression result */
 .result-reg-main {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding: 1rem 0 0.5rem; gap: 0.4rem; text-align: center;
+  padding: 1.75rem 1.5rem 1.5rem; gap: 0.35rem; text-align: center;
+  background: color-mix(in srgb, var(--active-accent, var(--accent-from)) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--active-accent, var(--accent-from)) 18%, transparent);
+  border-radius: 16px; margin-bottom: 0.1rem;
 }
-.result-reg-label { font-size: 0.7rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
-.result-reg-value { font-size: 2.5rem; font-weight: 800; line-height: 1; }
+.result-reg-label { font-size: 0.68rem; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; }
+.result-reg-value { font-size: 3rem; font-weight: 800; line-height: 1.05; }
 .result-reg-unit  { font-size: 0.85rem; color: var(--text2); }
 .result-cluster-main { display:flex; justify-content:center; padding:1rem 0; }
 .result-cluster-badge { display:flex; flex-direction:column; align-items:center; gap:0.35rem; padding:1.75rem 2.5rem; border-radius:18px; border:1.5px solid; }
@@ -667,15 +670,23 @@ body {
 .drift-empty { text-align: center; padding: 3rem 1rem; color: var(--text3); font-size: 0.85rem; }
 .drift-note { font-size: 0.68rem; color: var(--text3); margin-top: 1rem; }
 .drift-mode-bar {
-  display: flex; gap: 0.35rem; margin-bottom: 1.25rem;
-  background: var(--border); border-radius: 10px; padding: 0.25rem;
+  display: flex; gap: 0.5rem; margin-bottom: 1.25rem;
 }
 .drift-mode-btn {
   flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.45rem;
-  padding: 0.45rem 0.75rem; border-radius: 8px; border: none; background: transparent;
+  padding: 0.45rem 0.75rem; border-radius: 9999px;
+  border: 1px solid var(--border2); background: transparent;
   color: var(--text3); font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.15s;
 }
-.drift-mode-btn.active { background: var(--bg-card); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
+.drift-mode-btn:hover:not(.active) {
+  border-color: color-mix(in srgb, var(--active-accent, var(--accent-from)) 35%, transparent);
+  color: var(--active-accent, var(--accent-from));
+}
+.drift-mode-btn.active {
+  background: color-mix(in srgb, var(--active-accent, var(--accent-from)) 12%, transparent);
+  border-color: color-mix(in srgb, var(--active-accent, var(--accent-from)) 45%, transparent);
+  color: var(--active-accent, var(--accent-from)); box-shadow: none;
+}
 .drift-upload-zone {
   border: 1.5px dashed var(--border2); border-radius: 14px;
   padding: 2.5rem 1.5rem; text-align: center; cursor: pointer;
@@ -3290,29 +3301,34 @@ function _renderAutoMLReport(automl, accent) {
           explanation, explanation_source, can_upgrade, is_imbalanced, n_rows } = automl;
   const isReg = selection_metric === 'MAE';
 
-  // Normalise bar widths
   const scores = cv_results.map(r => r.score);
   const maxS = Math.max(...scores);
-  const minS = Math.min(...scores);
-  const rangeS = maxS - minS || maxS || 1;
+  const rangeS = (Math.max(...scores) - Math.min(...scores)) || maxS || 1;
 
-  const cvBars = cv_results.map(r => {
+  // Bars start at 0 and animate via _animateAutoMLBars()
+  const cvBars = cv_results.map((r, i) => {
     const isWin = r.algorithm === winner;
-    const pct = isReg
+    const targetPct = isReg
       ? (50 + 50 * (maxS - r.score) / rangeS).toFixed(1)
       : (r.score / maxS * 100).toFixed(1);
     const val = isReg ? r.score.toFixed(2) : (r.score * 100).toFixed(1) + '%';
     return `<div class="aml-bar-row">
-      <span class="aml-bar-label${isWin ? ' aml-winner' : ''}">${r.algorithm}${isWin ? ' ✓' : ''}</span>
-      <div class="aml-bar-track"><div class="aml-bar-fill" style="width:${pct}%;background:${isWin ? accent : 'var(--text3)'}88"></div></div>
+      <span class="aml-bar-label${isWin ? ' aml-winner' : ''}">${r.algorithm}${isWin ? ' &#10003;' : ''}</span>
+      <div class="aml-bar-track">
+        <div class="aml-bar-fill" data-target="${targetPct}" data-delay="${i * 120}"
+             style="width:0%;background:${isWin ? accent : 'var(--text3)'}88"></div>
+      </div>
       <span class="aml-bar-val">${val}</span>
     </div>`;
   }).join('');
 
-  const fiBars = (feature_importance || []).slice(0, 8).map(f =>
+  const fiBars = (feature_importance || []).slice(0, 8).map((f, i) =>
     `<div class="aml-bar-row">
       <span class="aml-bar-label">${f.feature}</span>
-      <div class="aml-bar-track"><div class="aml-bar-fill" style="width:${f.importance}%;background:${accent}66"></div></div>
+      <div class="aml-bar-track">
+        <div class="aml-bar-fill" data-target="${f.importance}" data-delay="${i * 80 + 400}"
+             style="width:0%;background:${accent}66"></div>
+      </div>
       <span class="aml-bar-val">${f.importance}%</span>
     </div>`
   ).join('');
@@ -3329,6 +3345,9 @@ function _renderAutoMLReport(automl, accent) {
               style="white-space:nowrap;font-size:0.82rem;padding:0.45rem 0.9rem">
         Get AI Explanation
       </button>
+    </div>
+    <div id="amlKeyErr" style="font-size:0.75rem;color:#f87171;margin-top:0.35rem;display:none">
+      Please enter your Anthropic API key first.
     </div>` : '';
 
   const imbalNote = is_imbalanced
@@ -3343,12 +3362,12 @@ function _renderAutoMLReport(automl, accent) {
 
   return `<div class="aml-report" id="amlReport">
     <div class="aml-title">AutoML: Model Selection Report</div>
-    <div class="aml-subtitle">Tested Random Forest, XGBoost &amp; LightGBM with 3-fold cross-validation on ${(n_rows || 0).toLocaleString()} rows</div>
+    <div class="aml-subtitle">Tested Random Forest, XGBoost &amp; LightGBM — 3-fold CV on ${(n_rows || 0).toLocaleString()} rows</div>
     ${imbalNote}
     <div class="aml-grid">
       <div class="aml-card">
         <div class="aml-card-title">Algorithm Comparison</div>
-        <div class="aml-metric-label">${selection_metric}${isReg ? ' (lower is better)' : ''}</div>
+        <div class="aml-metric-label">${selection_metric}${isReg ? ' — lower is better' : ''}</div>
         ${cvBars}
       </div>
       ${fiCard}
@@ -3364,9 +3383,24 @@ function _renderAutoMLReport(automl, accent) {
   </div>`;
 }
 
+function _animateAutoMLBars() {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    document.querySelectorAll('#amlReport .aml-bar-fill[data-target]').forEach(bar => {
+      const delay  = parseInt(bar.dataset.delay || '0');
+      const target = bar.dataset.target + '%';
+      setTimeout(() => { bar.style.width = target; }, delay);
+    });
+  }));
+}
+
 async function getAIExplanation() {
   const key = (document.getElementById('amlApiKey')?.value || '').trim();
-  if (!key) return;
+  const errEl = document.getElementById('amlKeyErr');
+  if (!key) {
+    if (errEl) errEl.style.display = 'block';
+    return;
+  }
+  if (errEl) errEl.style.display = 'none';
   const btn = document.querySelector('#amlKeyRow button');
   if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
   try {
@@ -3383,14 +3417,17 @@ async function getAIExplanation() {
     if (badge) { badge.textContent = 'AI'; badge.classList.add('aml-ai'); }
     const keyRow = document.getElementById('amlKeyRow');
     if (keyRow) keyRow.remove();
+    if (errEl) errEl.remove();
   } catch(e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Failed — try again'; }
+    if (errEl) { errEl.textContent = 'Request failed — check your key and try again.'; errEl.style.display = 'block'; }
   }
 }
 
 // ── AutoML Wizard ─────────────────────────────────────────────
-let automlFile     = null;
-let automlAnalysis = null;
+let automlFile       = null;
+let automlAnalysis   = null;
+let _lastAutoMLResult = null;  // persists across navigation
 
 function _automlStepsHTML(active, allDone) {
   const steps = ['Upload', 'Configure', 'Results'];
@@ -3405,9 +3442,17 @@ function _automlStepsHTML(active, allDone) {
 }
 
 function showAutoMLWizard() {
+  document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+  if (_lastAutoMLResult) {
+    _renderAutoMLResultsPage(_lastAutoMLResult);
+  } else {
+    _startFreshAutoML();
+  }
+}
+
+function _startFreshAutoML() {
   automlFile = null;
   automlAnalysis = null;
-  document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   _renderAutoMLStep1();
 }
 
@@ -3459,7 +3504,7 @@ function _setAutoMLFile(f) {
   automlFile = f;
   const info = document.getElementById('automlFileInfo');
   info.style.display = 'block';
-  info.textContent = '📄 ' + f.name + '  (' + (f.size / 1024).toFixed(1) + ' KB)';
+  info.textContent = f.name + '  (' + (f.size / 1024).toFixed(1) + ' KB)';
   const btn = document.getElementById('automlAnalyzeBtn');
   btn.disabled = false; btn.style.opacity = '1';
 }
@@ -3557,6 +3602,50 @@ function _amlSuggestTask() {
   document.querySelector(`input[name="amlTask"][value="${isClass ? 'classification' : 'regression'}"]`).checked = true;
 }
 
+function _renderAutoMLResultsPage(result) {
+  if (result.automl) _currentAutoMLData = result.automl;
+  const extraChips = (result.extraMetrics || []).map(m =>
+    `<div style="display:inline-flex;flex-direction:column;align-items:center;gap:0.15rem;
+                 background:rgba(255,255,255,0.04);border:1px solid var(--border2);
+                 border-radius:10px;padding:0.45rem 0.9rem;min-width:90px">
+       <span style="font-size:1rem;font-weight:800;color:${result.accent}">${m.value}</span>
+       <span style="font-size:0.68rem;color:var(--text3);letter-spacing:0.03em">${m.label}</span>
+     </div>`
+  ).join('');
+  const extraRow = extraChips
+    ? `<div style="display:flex;gap:0.6rem;justify-content:center;flex-wrap:wrap;margin:0.9rem 0 0.2rem">${extraChips}</div>`
+    : '';
+
+  document.getElementById('main').innerHTML = `
+    <div class="wizard">
+      ${_automlStepsHTML(3, true)}
+      <div class="train-result">
+        <div style="width:40px;height:40px;border-radius:50%;background:rgba(52,211,153,0.15);
+                    border:1.5px solid rgba(52,211,153,0.4);display:flex;align-items:center;
+                    justify-content:center;margin:0 auto 0.75rem">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#34d399"
+               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 10l4.5 4.5L16 6"/>
+          </svg>
+        </div>
+        <div style="font-size:1.1rem;font-weight:800;margin-bottom:0.35rem">${result.title}</div>
+        <div style="font-size:0.78rem;color:var(--text3);margin-bottom:0.5rem">
+          Winner: <strong style="color:${result.accent}">${result.automl ? result.automl.winner : ''}</strong>
+        </div>
+        <div class="train-result-metric" style="color:${result.accent}">${result.metric}</div>
+        <div class="train-result-label">${result.metricLabel}</div>
+        ${extraRow}
+        <div style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;margin-top:1rem">
+          <button class="btn btn-primary" onclick="selectModel('${result.id}')">Use Model &rarr;</button>
+          <button class="btn btn-clear" onclick="_startFreshAutoML()">New Analysis</button>
+        </div>
+        ${result.automl ? _renderAutoMLReport(result.automl, result.accent) : ''}
+      </div>
+    </div>`;
+
+  if (result.automl) _animateAutoMLBars();
+}
+
 async function runAutoML() {
   const modelName = document.getElementById('amlModelName').value.trim();
   const targetCol = document.getElementById('amlTarget').value;
@@ -3607,38 +3696,9 @@ async function runAutoML() {
     allModels = await mr.json();
     renderSidebar();
 
+    _lastAutoMLResult = result;
     if (result.automl) _currentAutoMLData = result.automl;
-
-    const extraChips = (result.extraMetrics || []).map(m =>
-      `<div style="display:inline-flex;flex-direction:column;align-items:center;gap:0.15rem;
-                   background:rgba(255,255,255,0.04);border:1px solid var(--border2);
-                   border-radius:10px;padding:0.45rem 0.9rem;min-width:90px">
-         <span style="font-size:1rem;font-weight:800;color:${result.accent}">${m.value}</span>
-         <span style="font-size:0.68rem;color:var(--text3);letter-spacing:0.03em">${m.label}</span>
-       </div>`
-    ).join('');
-    const extraRow = extraChips
-      ? `<div style="display:flex;gap:0.6rem;justify-content:center;flex-wrap:wrap;margin:0.9rem 0 0.2rem">${extraChips}</div>`
-      : '';
-
-    document.getElementById('main').innerHTML = `
-      <div class="wizard">
-        ${_automlStepsHTML(3, true)}
-        <div class="train-result">
-          <div style="font-size:3rem;margin-bottom:0.75rem">&#x2705;</div>
-          <div style="font-size:1.1rem;font-weight:800;margin-bottom:0.35rem">${result.title}</div>
-          <div style="font-size:0.78rem;color:var(--text3);margin-bottom:0.5rem">
-            Winner: <strong style="color:${result.accent}">${result.automl ? result.automl.winner : ''}</strong>
-          </div>
-          <div class="train-result-metric" style="color:${result.accent}">${result.metric}</div>
-          <div class="train-result-label">${result.metricLabel}</div>
-          ${extraRow}
-          <button class="btn btn-primary" onclick="selectModel('${result.id}')" style="margin-bottom:0">
-            Use Model →
-          </button>
-          ${result.automl ? _renderAutoMLReport(result.automl, result.accent) : ''}
-        </div>
-      </div>`;
+    _renderAutoMLResultsPage(result);
 
   } catch(e) {
     document.getElementById('main').innerHTML = `
