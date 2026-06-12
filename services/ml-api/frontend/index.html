@@ -1198,7 +1198,15 @@ body {
   border-bottom-color: var(--active-accent, var(--accent-from));
   background: color-mix(in srgb, var(--active-accent, var(--accent-from)) 6%, transparent);
 }
-.aml-analysis-panel-body { padding: 1rem; min-height: 200px; }
+.aml-analysis-panel-body { padding: 0.75rem 0.75rem 0; min-height: 200px; }
+.aml-analysis-panel-body .shap-body { padding: 0; gap: 0.45rem; }
+.aml-analysis-panel-body .shap-row  { grid-template-columns: 72px 1fr 44px; gap: 0.4rem; }
+.aml-analysis-panel-body .shap-feat-name { font-size: 0.7rem; }
+.aml-analysis-panel-body .shap-val  { font-size: 0.68rem; }
+.aml-analysis-panel-body .shap-base { padding: 0.6rem 0; font-size: 0.68rem; margin-top: 0.5rem; }
+.aml-analysis-panel-body .whatif-desc { font-size: 0.75rem; margin-bottom: 0.75rem; }
+.aml-analysis-panel-body .whatif-chips { gap: 0.3rem; margin-bottom: 0.75rem; }
+.aml-analysis-panel-body .whatif-chip { font-size: 0.68rem; padding: 0.2rem 0.55rem; }
 @media (max-width: 900px) {
   .aml-results-grid { grid-template-columns: 1fr; }
   .aml-results-left, .aml-analysis-panel { position: static; }
