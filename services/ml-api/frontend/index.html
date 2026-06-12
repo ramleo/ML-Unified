@@ -3471,7 +3471,8 @@ function _renderAutoMLReport(automl, accent) {
       </select>
       <input type="password" id="amlApiKey" class="field-input"
              placeholder="Anthropic API key…"
-             style="flex:1;font-size:0.82rem;min-width:0">
+             style="flex:1;font-size:0.82rem;min-width:0"
+             onkeydown="if(event.key==='Enter')getAIExplanation()">
       <button class="btn btn-clear" onclick="getAIExplanation()"
               style="white-space:nowrap;font-size:0.82rem;padding:0.45rem 0.9rem">
         Get AI Explanation
