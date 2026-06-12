@@ -1162,6 +1162,25 @@ body {
 .aml-key-row      { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem;
                     padding-top: 0.75rem; border-top: 1px solid var(--border2); }
 
+/* ── AutoML Results Two-Column Layout ── */
+.aml-results-page { width: 100%; }
+.aml-results-grid {
+  display: grid; grid-template-columns: 280px 1fr;
+  gap: 1.5rem; align-items: start; margin-top: 1.5rem;
+}
+.aml-results-left { position: sticky; top: 76px; }
+.aml-results-summary {
+  background: var(--card-bg); border: 1px solid var(--border2);
+  border-radius: 18px; padding: 2rem 1.5rem; text-align: center;
+}
+.aml-results-right .aml-dashboard {
+  margin-top: 0; padding-top: 0; border-top: none;
+}
+@media (max-width: 700px) {
+  .aml-results-grid { grid-template-columns: 1fr; }
+  .aml-results-left { position: static; }
+}
+
 /* ── AutoML Analysis Tabs ── */
 .aml-tabs-strip { display:flex; gap:0.5rem; margin-top:1.5rem; padding-top:1.25rem; border-top:1px solid var(--border2); }
 .aml-tab { padding:0.38rem 1rem; border-radius:9999px; border:1px solid var(--border2);
@@ -3876,35 +3895,48 @@ function _renderAutoMLResultsPage(result) {
     : '';
 
   document.getElementById('main').innerHTML = `
-    <div class="wizard">
-      ${_automlStepsHTML(3, true)}
-      <div class="train-result">
-        <div style="width:40px;height:40px;border-radius:50%;background:rgba(52,211,153,0.15);
-                    border:1.5px solid rgba(52,211,153,0.4);display:flex;align-items:center;
-                    justify-content:center;margin:0 auto 0.75rem">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#34d399"
-               stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 10l4.5 4.5L16 6"/>
-          </svg>
+    <div class="aml-results-page">
+      <div class="wizard" style="max-width:540px;margin:0 auto 0">
+        ${_automlStepsHTML(3, true)}
+      </div>
+      <div class="aml-results-grid">
+
+        <!-- LEFT: summary card -->
+        <div class="aml-results-left">
+          <div class="aml-results-summary">
+            <div style="width:40px;height:40px;border-radius:50%;background:rgba(52,211,153,0.15);
+                        border:1.5px solid rgba(52,211,153,0.4);display:flex;align-items:center;
+                        justify-content:center;margin:0 auto 0.85rem">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#34d399"
+                   stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 10l4.5 4.5L16 6"/>
+              </svg>
+            </div>
+            <div style="font-size:1.15rem;font-weight:800;margin-bottom:0.35rem">${result.title}</div>
+            <div style="font-size:0.78rem;color:var(--text3);margin-bottom:0.75rem">
+              Winner: <strong style="color:${result.accent}">${result.automl ? result.automl.winner : ''}</strong>
+            </div>
+            <div class="train-result-metric" style="color:${result.accent}">${result.metric}</div>
+            <div class="train-result-label">${result.metricLabel}</div>
+            ${extraRow}
+            <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:1.25rem">
+              <button class="btn btn-primary" onclick="selectModel('${result.id}')">Use Model &rarr;</button>
+              <button class="btn btn-clear" onclick="_startFreshAutoML()">New Analysis</button>
+            </div>
+          </div>
         </div>
-        <div style="font-size:1.1rem;font-weight:800;margin-bottom:0.35rem">${result.title}</div>
-        <div style="font-size:0.78rem;color:var(--text3);margin-bottom:0.5rem">
-          Winner: <strong style="color:${result.accent}">${result.automl ? result.automl.winner : ''}</strong>
+
+        <!-- RIGHT: dashboard + tabs -->
+        <div class="aml-results-right">
+          ${result.automl ? _renderAutoMLReport(result.automl, result.accent) : ''}
+          ${result.automl ? `
+          <div class="aml-tabs-strip">
+            <button class="aml-tab active" onclick="_amlShowTab('shap',this)">SHAP Analysis</button>
+            <button class="aml-tab" onclick="_amlShowTab('whatif',this)">What-If</button>
+          </div>
+          <div class="aml-tab-body" id="amlTabBody"></div>` : ''}
         </div>
-        <div class="train-result-metric" style="color:${result.accent}">${result.metric}</div>
-        <div class="train-result-label">${result.metricLabel}</div>
-        ${extraRow}
-        <div style="display:flex;gap:0.5rem;justify-content:center;flex-wrap:wrap;margin-top:1rem">
-          <button class="btn btn-primary" onclick="selectModel('${result.id}')">Use Model &rarr;</button>
-          <button class="btn btn-clear" onclick="_startFreshAutoML()">New Analysis</button>
-        </div>
-        ${result.automl ? _renderAutoMLReport(result.automl, result.accent) : ''}
-        ${result.automl ? `
-        <div class="aml-tabs-strip">
-          <button class="aml-tab active" onclick="_amlShowTab('shap',this)">SHAP Analysis</button>
-          <button class="aml-tab" onclick="_amlShowTab('whatif',this)">What-If</button>
-        </div>
-        <div class="aml-tab-body" id="amlTabBody"></div>` : ''}
+
       </div>
     </div>`;
 
