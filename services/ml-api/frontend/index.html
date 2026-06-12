@@ -3479,6 +3479,15 @@ function _renderAutoMLReport(automl, accent) {
     </div>
     <div id="amlKeyErr" style="font-size:0.75rem;color:#f87171;margin-top:0.35rem;display:none">
       Please enter your API key first.
+    </div>
+    <div id="amlKeyProg" style="display:none;margin-top:0.6rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.3rem">
+        <span style="font-size:0.72rem;color:var(--text3)" id="amlProgLabel">Generating explanation…</span>
+        <span style="font-size:0.72rem;color:var(--text3)" id="amlProgPct">0%</span>
+      </div>
+      <div style="height:4px;border-radius:9999px;background:var(--border);overflow:hidden">
+        <div id="amlProgBar" style="height:100%;width:0%;border-radius:9999px;background:var(--active-accent,#818cf8);transition:width 0.4s ease"></div>
+      </div>
     </div>` : '';
 
   const imbalTag = is_imbalanced
@@ -3694,7 +3703,21 @@ async function getAIExplanation() {
   }
   if (errEl) errEl.style.display = 'none';
   const btn = document.querySelector('#amlKeyRow button');
-  if (btn) { btn.disabled = true; btn.textContent = 'Loading…'; }
+  const progEl  = document.getElementById('amlKeyProg');
+  const progBar = document.getElementById('amlProgBar');
+  const progPct = document.getElementById('amlProgPct');
+  const progLbl = document.getElementById('amlProgLabel');
+  if (btn) { btn.disabled = true; btn.textContent = 'Get AI Explanation'; }
+  if (progEl) progEl.style.display = 'block';
+  let _pct = 0;
+  const _labels = ['Sending context…', 'Model is thinking…', 'Generating explanation…', 'Almost done…'];
+  const _progTimer = setInterval(() => {
+    const step = _pct < 30 ? 8 : _pct < 60 ? 5 : _pct < 80 ? 2 : 0.5;
+    _pct = Math.min(_pct + step, 85);
+    if (progBar) progBar.style.width = _pct + '%';
+    if (progPct) progPct.textContent = Math.round(_pct) + '%';
+    if (progLbl) progLbl.textContent = _labels[_pct < 25 ? 0 : _pct < 55 ? 1 : _pct < 75 ? 2 : 3];
+  }, 400);
   try {
     const res = await fetch(API + '/explain', {
       method: 'POST',
@@ -3717,12 +3740,23 @@ async function getAIExplanation() {
     }
     const badge = document.querySelector('.aml-source-badge');
     if (badge && isAI) { badge.textContent = 'AI'; badge.classList.add('aml-ai'); }
+    clearInterval(_progTimer);
+    if (progBar) progBar.style.width = '100%';
+    if (progPct) progPct.textContent = '100%';
+    if (progLbl) progLbl.textContent = isAI ? 'Done!' : 'Completed';
+    setTimeout(() => { if (progEl) progEl.style.display = 'none'; }, 1200);
     if (!isAI && errEl) {
       errEl.textContent = 'AI call failed — check your API key. Showing auto-generated summary.';
       errEl.style.display = 'block';
     }
     if (btn) { btn.disabled = false; btn.textContent = isAI ? 'Regenerate' : 'Try Again'; }
   } catch(e) {
+    clearInterval(_progTimer);
+    if (progBar) progBar.style.width = '100%';
+    if (progBar) progBar.style.background = '#f87171';
+    if (progPct) progPct.textContent = 'Error';
+    if (progLbl) progLbl.textContent = 'Request failed';
+    setTimeout(() => { if (progEl) progEl.style.display = 'none'; }, 2000);
     if (btn) { btn.disabled = false; btn.textContent = 'Try Again'; }
     if (errEl) { errEl.textContent = 'Request failed — check your key and try again.'; errEl.style.display = 'block'; }
   }
