@@ -891,7 +891,6 @@ async def train_model(
 
             if _algorithm == "AutoML":
                 try:
-                    import numpy as _np  # noqa: PLC0415
                     X_cv, y_cv = _cv_sample(X, y_enc)
                     cv_split   = KFold(n_splits=3, shuffle=True, random_state=42)
 
