@@ -3702,18 +3702,27 @@ async function getAIExplanation() {
     });
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
+    const isAI = data.source === 'user_key';
     const expEl = document.getElementById('amlExplanation');
-    if (expEl) expEl.innerHTML = (data.explanation || '').replace(
-      /\*\*(.+?)\*\*/g,
-      '<div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3);margin:1rem 0 0.35rem">$1</div>'
-    ).replace(/\n\n/g, '</p><p style="margin:0 0 0.25rem">').replace(/\n/g, '<br>').replace(/^/, '<p style="margin:0 0 0.25rem">').replace(/$/, '</p>');
+    if (expEl) {
+      if (isAI) {
+        expEl.innerHTML = (data.explanation || '').replace(
+          /\*\*(.+?)\*\*/g,
+          '<div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3);margin:1rem 0 0.35rem">$1</div>'
+        ).replace(/\n\n/g, '</p><p style="margin:0 0 0.25rem">').replace(/\n/g, '<br>').replace(/^/, '<p style="margin:0 0 0.25rem">').replace(/$/, '</p>');
+      } else {
+        expEl.textContent = data.explanation || '';
+      }
+    }
     const badge = document.querySelector('.aml-source-badge');
-    if (badge) { badge.textContent = 'AI'; badge.classList.add('aml-ai'); }
-    const keyRow = document.getElementById('amlKeyRow');
-    if (keyRow) keyRow.remove();
-    if (errEl) errEl.remove();
+    if (badge && isAI) { badge.textContent = 'AI'; badge.classList.add('aml-ai'); }
+    if (!isAI && errEl) {
+      errEl.textContent = 'AI call failed — check your API key. Showing auto-generated summary.';
+      errEl.style.display = 'block';
+    }
+    if (btn) { btn.disabled = false; btn.textContent = isAI ? 'Regenerate' : 'Try Again'; }
   } catch(e) {
-    if (btn) { btn.disabled = false; btn.textContent = 'Failed — try again'; }
+    if (btn) { btn.disabled = false; btn.textContent = 'Try Again'; }
     if (errEl) { errEl.textContent = 'Request failed — check your key and try again.'; errEl.style.display = 'block'; }
   }
 }
