@@ -3459,8 +3459,17 @@ function _renderAutoMLReport(automl, accent) {
 
   const keyInput = can_upgrade ? `
     <div class="aml-key-row" id="amlKeyRow">
+      <select id="amlProvider" class="field-input"
+              style="font-size:0.82rem;width:120px;flex-shrink:0;cursor:pointer"
+              onchange="document.getElementById('amlApiKey').placeholder=
+                this.value==='openai'?'OpenAI API key…':
+                this.value==='gemini'?'Gemini API key…':'Anthropic API key…'">
+        <option value="anthropic">Anthropic</option>
+        <option value="openai">OpenAI</option>
+        <option value="gemini">Gemini</option>
+      </select>
       <input type="password" id="amlApiKey" class="field-input"
-             placeholder="Anthropic API key for AI insights…"
+             placeholder="Anthropic API key…"
              style="flex:1;font-size:0.82rem;min-width:0">
       <button class="btn btn-clear" onclick="getAIExplanation()"
               style="white-space:nowrap;font-size:0.82rem;padding:0.45rem 0.9rem">
@@ -3468,7 +3477,7 @@ function _renderAutoMLReport(automl, accent) {
       </button>
     </div>
     <div id="amlKeyErr" style="font-size:0.75rem;color:#f87171;margin-top:0.35rem;display:none">
-      Please enter your Anthropic API key first.
+      Please enter your API key first.
     </div>` : '';
 
   const imbalTag = is_imbalanced
@@ -3689,7 +3698,7 @@ async function getAIExplanation() {
     const res = await fetch(API + '/explain', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ automl_data: _currentAutoMLData, user_api_key: key }),
+      body: JSON.stringify({ automl_data: _currentAutoMLData, user_api_key: key, provider: document.getElementById('amlProvider')?.value || 'anthropic' }),
     });
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();

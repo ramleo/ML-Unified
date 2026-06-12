@@ -622,45 +622,52 @@ def _rule_explanation(winner: str, cv_results: list, task: str,
     return text
 
 
+def _build_prompt(winner, cv_results, task, selection_metric, is_imbalanced, feature_importance, n_rows):
+    if task == "regression":
+        results_text = "\n".join(f"  {r['algorithm']}: MAE = {r['score']:.4f}" for r in cv_results)
+    else:
+        results_text = "\n".join(f"  {r['algorithm']}: {selection_metric} = {r['score'] * 100:.2f}%" for r in cv_results)
+    fi_text = "\n".join(f"  {i+1}. {f['feature']} ({f['importance']:.1f}%)" for i, f in enumerate(feature_importance[:5])) if feature_importance else "  Not available"
+    imbalance_note = " The dataset has class imbalance, so F1-macro was used as the selection metric instead of accuracy." if is_imbalanced else ""
+    return (
+        f"You are explaining AutoML model selection results to a data analyst.\n\n"
+        f"Dataset: {n_rows:,} rows, task: {task}{imbalance_note}\n"
+        f"3 algorithms tested with 3-fold cross-validation:\n{results_text}\n\n"
+        f"Winner: {winner}\n\nTop features by importance:\n{fi_text}\n\n"
+        f"Write 2–3 clear sentences explaining why {winner} was selected and what "
+        f"the top features suggest about what drives the predictions. Be concise and avoid jargon. No bullet points."
+    )
+
+
 def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
                      selection_metric: str, is_imbalanced: bool,
-                     feature_importance: list, n_rows: int):
+                     feature_importance: list, n_rows: int, provider: str = "anthropic"):
+    prompt = _build_prompt(winner, cv_results, task, selection_metric, is_imbalanced, feature_importance, n_rows)
     try:
-        import anthropic  # noqa: PLC0415
-        client = anthropic.Anthropic(api_key=api_key)
-        if task == "regression":
-            results_text = "\n".join(
-                f"  {r['algorithm']}: MAE = {r['score']:.4f}" for r in cv_results
+        if provider == "openai":
+            import openai  # noqa: PLC0415
+            client = openai.OpenAI(api_key=api_key)
+            resp = client.chat.completions.create(
+                model="gpt-4o-mini",
+                max_tokens=300,
+                messages=[{"role": "user", "content": prompt}],
             )
+            return resp.choices[0].message.content.strip()
+        elif provider == "gemini":
+            import google.generativeai as genai  # noqa: PLC0415
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            resp = model.generate_content(prompt)
+            return resp.text.strip()
         else:
-            results_text = "\n".join(
-                f"  {r['algorithm']}: {selection_metric} = {r['score'] * 100:.2f}%"
-                for r in cv_results
+            import anthropic  # noqa: PLC0415
+            client = anthropic.Anthropic(api_key=api_key)
+            msg = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=300,
+                messages=[{"role": "user", "content": prompt}],
             )
-        fi_text = "\n".join(
-            f"  {i + 1}. {f['feature']} ({f['importance']:.1f}%)"
-            for i, f in enumerate(feature_importance[:5])
-        ) if feature_importance else "  Not available"
-        imbalance_note = (
-            " The dataset has class imbalance, so F1-macro was used as the "
-            "selection metric instead of accuracy."
-        ) if is_imbalanced else ""
-        prompt = (
-            f"You are explaining AutoML model selection results to a data analyst.\n\n"
-            f"Dataset: {n_rows:,} rows, task: {task}{imbalance_note}\n"
-            f"3 algorithms tested with 3-fold cross-validation:\n{results_text}\n\n"
-            f"Winner: {winner}\n\n"
-            f"Top features by importance:\n{fi_text}\n\n"
-            f"Write 2–3 clear sentences explaining why {winner} was selected and what "
-            f"the top features suggest about what drives the predictions. Be concise "
-            f"and avoid jargon. No bullet points."
-        )
-        msg = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=300,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return msg.content[0].text.strip()
+            return msg.content[0].text.strip()
     except Exception:
         return None
 
@@ -1128,6 +1135,7 @@ async def explain_automl(request: Request):
     body       = await request.json()
     automl     = body.get("automl_data", {})
     user_key   = (body.get("user_api_key") or "").strip()
+    provider   = (body.get("provider") or "anthropic").strip().lower()
 
     if not user_key:
         raise HTTPException(400, "user_api_key is required")
@@ -1141,7 +1149,7 @@ async def explain_automl(request: Request):
     n_rows     = automl.get("n_rows", 0)
 
     llm_exp = _llm_explanation(user_key, winner, cv_results, task,
-                               sel_metric, is_imbal, feat_imp, n_rows)
+                               sel_metric, is_imbal, feat_imp, n_rows, provider)
     if llm_exp:
         return {"explanation": llm_exp, "source": "user_key"}
 
