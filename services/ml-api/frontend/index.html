@@ -4018,27 +4018,33 @@ function _renderAutoMLStep1b(preselectedTarget) {
       </div>
 
       <div id="amlPrepOptions" style="display:none">
-        <div style="font-size:0.82rem;font-weight:700;color:var(--text1);margin-bottom:0.75rem">Select preprocessing options:</div>
+        <div style="font-size:0.72rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem">Select Preprocessing Options</div>
 
-        <div style="display:flex;flex-direction:column;gap:0.6rem;margin-bottom:1.2rem">
+        <div style="display:flex;flex-direction:column;gap:0.6rem;margin-bottom:1.2rem;padding:0.75rem;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
 
           <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
             <input type="checkbox" id="amlPrepMissing" ${hasMissing ? 'checked' : ''} style="accent-color:var(--active-accent,var(--accent));margin-top:2px">
             <span>
               Handle missing values
-              <select id="amlPrepMissingMethod" class="field-select" style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:auto">
-                <option value="mean">Mean imputation</option>
-                <option value="median">Median imputation</option>
-                <option value="mode">Mode imputation</option>
-                <option value="drop">Drop rows</option>
+              <select id="amlPrepMissingMethod" class="field-select" style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:auto;background:transparent;border-color:var(--border2)" onchange="_onMissingMethodChange()">
+                <option value="median" selected>Median (recommended)</option>
+                <option value="mean">Mean</option>
+                <option value="mode">Mode (most frequent)</option>
+                <option value="knn">KNN imputation (k=5)</option>
+                <option value="mice">MICE / Iterative imputation</option>
+                <option value="ffill">Forward fill</option>
+                <option value="bfill">Backward fill</option>
+                <option value="constant">Constant value (0 / "Unknown")</option>
+                <option value="drop">Drop rows with missing values</option>
               </select>
+              <div id="amlMissingSlowWarn" style="display:none;font-size:0.73rem;color:#f59e0b;margin-top:0.3rem">&#9888; Slower on large datasets.</div>
             </span>
           </label>
 
           <div>
             <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;color:var(--text1);margin-bottom:0.4rem">
               Categorical encoding method:
-              <select id="amlPrepEncMethod" class="field-select" style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:auto" onchange="_onEncMethodChange()">
+              <select id="amlPrepEncMethod" class="field-select" style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:auto;background:transparent;border-color:var(--border2)" onchange="_onEncMethodChange()">
                 <option value="none">None</option>
                 <option value="onehot" ${hasCat ? 'selected' : ''}>One-hot encode (nominal)</option>
                 <option value="ordinal">Ordinal encode</option>
@@ -4072,11 +4078,11 @@ function _renderAutoMLStep1b(preselectedTarget) {
 
         <!-- Feature Selection section -->
         <div style="border-top:1px solid var(--border2);padding-top:1rem;margin-bottom:1rem">
-          <div class="eda-section-title" style="margin-bottom:0.75rem">Feature Selection</div>
+          <div style="font-size:0.72rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem">Feature Selection</div>
           <div style="display:flex;flex-direction:column;gap:0.6rem">
             <label style="font-size:0.82rem;color:var(--text1);display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
               Method:
-              <select id="amlFsMethod" class="field-select" style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:auto" onchange="_onFsMethodChange()">
+              <select id="amlFsMethod" class="field-select" style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:auto;background:transparent;border-color:var(--border2)" onchange="_onFsMethodChange()">
                 <option value="none">None — skip feature selection</option>
                 <option value="variance">Variance Threshold — drop near-zero variance features</option>
                 <option value="correlation">Correlation Filter — remove highly correlated features</option>
@@ -4088,7 +4094,7 @@ function _renderAutoMLStep1b(preselectedTarget) {
             <div id="amlFsTopKRow" style="display:none;align-items:center;gap:0.5rem;font-size:0.82rem;color:var(--text1);flex-wrap:wrap">
               Keep top K features:
               <input type="number" id="amlFsTopK" class="field-input" value="10" min="1" max="200"
-                     style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:80px">
+                     style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:80px;background:transparent;border-color:var(--border2)">
             </div>
           </div>
         </div>
@@ -4117,6 +4123,14 @@ function _showAutoMLPrepOptions() {
   document.getElementById('amlPrepYesNo').style.display    = 'none';
   document.getElementById('amlPrepOptions').style.display  = 'block';
   _onEncMethodChange();
+  _onMissingMethodChange();
+}
+
+function _onMissingMethodChange() {
+  const mv      = document.getElementById('amlPrepMissingMethod')?.value || 'median';
+  const warnEl  = document.getElementById('amlMissingSlowWarn');
+  if (!warnEl) return;
+  warnEl.style.display = (mv === 'knn' || mv === 'mice') ? 'block' : 'none';
 }
 
 function _onEncMethodChange() {
