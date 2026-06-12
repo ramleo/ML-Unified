@@ -131,7 +131,10 @@ def _load():
             continue
         mid    = fname[:-5]
         schema = json.load(open(os.path.join(SCHEMA_DIR, fname)))
-        pipeline = joblib.load(os.path.join(MODEL_DIR, f"{mid}_pipeline.pkl"))
+        pkl_path = os.path.join(MODEL_DIR, f"{mid}_pipeline.pkl")
+        if not os.path.exists(pkl_path):
+            continue
+        pipeline = joblib.load(pkl_path)
         le_path  = os.path.join(MODEL_DIR, f"{mid}_labels.pkl")
         le       = joblib.load(le_path) if os.path.exists(le_path) else None
         MODELS[mid] = {
