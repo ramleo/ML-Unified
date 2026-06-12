@@ -3970,8 +3970,14 @@ function _amlStep0Skip() {
 // ── Step 1.5: Data Quality & Preprocessing ────────────────────
 function _renderAutoMLStep1b(preselectedTarget) {
   const a = automlAnalysis;
-  const catCols = a.columns.filter(c => !c.is_numeric).map(c => c.name);
-  const numCols = a.columns.filter(c => c.is_numeric).map(c => c.name);
+  const effectiveTarget = preselectedTarget || a.suggested_target;
+  const catCols = a.columns.filter(c => !c.is_numeric && c.name !== effectiveTarget).map(c => c.name);
+  const numCols = a.columns.filter(c => c.is_numeric && c.name !== effectiveTarget).map(c => c.name);
+
+  // High-cardinality columns (>20 unique values, non-target) — likely IDs, names, codes
+  const highCardCols = a.columns.filter(c =>
+    c.name !== effectiveTarget && (c.nunique || 0) > 20
+  );
 
   // Detect issues
   const hasMissing   = (a.total_missing || 0) > 0 || a.columns.some(c => (c.missing || 0) > 0);
@@ -4024,6 +4030,27 @@ function _renderAutoMLStep1b(preselectedTarget) {
       </div>
 
       <div id="amlPrepOptions" style="display:none">
+
+        ${highCardCols.length ? `
+        <div style="padding:0.85rem 1rem;border:1px solid rgba(251,191,36,0.3);border-radius:12px;background:rgba(251,191,36,0.05);margin-bottom:1.2rem">
+          <div style="font-size:0.8rem;font-weight:700;color:#fbbf24;margin-bottom:0.35rem">
+            ⚠ High-uniqueness columns detected
+          </div>
+          <div style="font-size:0.75rem;color:var(--text2);margin-bottom:0.75rem;line-height:1.5">
+            These columns have many unique values — they may be IDs, names, or codes that add noise.
+            Check the ones you want to <strong style="color:#f87171">drop</strong>:
+          </div>
+          <div style="display:flex;flex-direction:column;gap:0.4rem">
+            ${highCardCols.map(c => `
+            <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;cursor:pointer;padding:0.35rem 0.5rem;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
+              <input type="checkbox" class="aml-drop-col" value="${c.name}" checked
+                     style="accent-color:#f87171;flex-shrink:0">
+              <span style="color:var(--text1);font-weight:500">${c.name}</span>
+              <span style="margin-left:auto;font-size:0.7rem;color:var(--text3)">${c.nunique} unique values</span>
+            </label>`).join('')}
+          </div>
+        </div>` : ''}
+
         <div style="font-size:0.72rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem">Select Preprocessing Options</div>
 
         <div style="display:flex;flex-direction:column;gap:0.6rem;margin-bottom:1.2rem;padding:0.75rem;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
@@ -4261,7 +4288,10 @@ async function _applyAutoMLPreprocessing() {
   const fsMethod = document.getElementById('amlFsMethod')?.value || 'none';
   const fsTopK   = parseInt(document.getElementById('amlFsTopK')?.value || '10', 10);
 
+  const dropCols = [...document.querySelectorAll('.aml-drop-col:checked')].map(el => el.value);
+
   const options = {
+    drop_columns:    dropCols,
     missing_values:  document.getElementById('amlPrepMissing').checked
                        ? document.getElementById('amlPrepMissingMethod').value : null,
     encode_method:   encMethod,

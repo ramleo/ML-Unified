@@ -405,6 +405,11 @@ async def automl_preprocess(request: Request):
 
     df_feat = df[feature_cols].copy()
 
+    # 0. Drop user-selected high-cardinality / ID columns
+    drop_cols = [c for c in (options.get("drop_columns") or []) if c in df_feat.columns]
+    if drop_cols:
+        df_feat = df_feat.drop(columns=drop_cols)
+
     num_cols = df_feat.select_dtypes(include="number").columns.tolist()
     cat_cols = df_feat.select_dtypes(exclude="number").columns.tolist()
 
@@ -475,7 +480,7 @@ async def automl_preprocess(request: Request):
                     pass
 
     # 4. Categorical encoding
-    # Resolve encode_method (new) with backward-compat fallback to legacy booleans
+    # Resolve encode_method with backward-compat fallback to legacy booleans
     encode_method = options.get("encode_method")
     if encode_method is None:
         if options.get("encode_nominal"):
@@ -547,25 +552,21 @@ async def automl_preprocess(request: Request):
         scaler = StandardScaler()
         df_feat[final_num_cols] = scaler.fit_transform(df_feat[final_num_cols])
 
-    # 7. Feature selection
+    # 7. Feature selection — after encoding so top_k trims the fully-encoded feature set
+    features_before = len(df_feat.columns)
     fs = options.get("feature_selection", {})
     fs_method = (fs.get("method") or "none").lower()
     top_k = max(1, int(fs.get("top_k") or 10))
-
-    features_before = len(df_feat.columns)
 
     if fs_method != "none":
         try:
             num_X = df_feat.select_dtypes(include="number").fillna(0)
             non_num_cols = df_feat.select_dtypes(exclude="number").columns.tolist()
-            y = target_series.reindex(df_feat.index) if target_series is not None else None
+            k = min(top_k, len(num_X.columns))
+            y_fs = target_series.reindex(df_feat.index) if target_series is not None else None
 
-            if fs_method == "variance" and len(num_X.columns) > top_k:
-                from sklearn.feature_selection import VarianceThreshold  # noqa: PLC0415
-                sel = VarianceThreshold()
-                sel.fit(num_X)
-                variances = pd.Series(sel.variances_, index=num_X.columns)
-                keep = variances.nlargest(min(top_k, len(variances))).index.tolist()
+            if fs_method == "variance" and len(num_X.columns) > k:
+                keep = num_X.var().nlargest(k).index.tolist()
                 df_feat = df_feat[keep + non_num_cols]
 
             elif fs_method == "correlation" and len(num_X.columns) > 1:
@@ -573,38 +574,34 @@ async def automl_preprocess(request: Request):
                 upper = corr.where(_np.triu(_np.ones(corr.shape), k=1).astype(bool))
                 to_drop = [c for c in upper.columns if any(upper[c] > 0.90)]
                 df_feat = df_feat.drop(columns=to_drop, errors="ignore")
-                # Always enforce top_k after dropping correlated pairs
                 remaining_num = df_feat.select_dtypes(include="number")
-                keep = remaining_num.var().nlargest(min(top_k, len(remaining_num.columns))).index.tolist()
-                remaining_non_num = df_feat.select_dtypes(exclude="number").columns.tolist()
-                df_feat = df_feat[keep + remaining_non_num]
+                if len(remaining_num.columns) > k:
+                    keep = remaining_num.var().nlargest(k).index.tolist()
+                    remaining_non_num = df_feat.select_dtypes(exclude="number").columns.tolist()
+                    df_feat = df_feat[keep + remaining_non_num]
 
-            elif fs_method == "rfe" and y is not None and len(num_X.columns) > top_k:
+            elif fs_method == "rfe" and y_fs is not None and len(num_X.columns) > k:
                 from sklearn.feature_selection import RFE  # noqa: PLC0415
                 from sklearn.ensemble import RandomForestClassifier as _RFC, RandomForestRegressor as _RFR  # noqa: PLC0415
-                from sklearn.preprocessing import LabelEncoder as _LE  # noqa: PLC0415
-                is_clf = y.dtype == object or y.nunique() < 20
+                is_clf = y_fs.dtype == object or y_fs.nunique() < 20
                 estimator = _RFC(n_estimators=50, random_state=42) if is_clf else _RFR(n_estimators=50, random_state=42)
-                k = min(top_k, num_X.shape[1])
+                y_fit = LabelEncoder().fit_transform(y_fs.astype(str)) if is_clf else pd.to_numeric(y_fs, errors="coerce").fillna(0)
                 rfe = RFE(estimator, n_features_to_select=k)
-                y_fit = _LE().fit_transform(y.astype(str)) if is_clf else pd.to_numeric(y, errors="coerce").fillna(0)
                 rfe.fit(num_X, y_fit)
                 keep = num_X.columns[rfe.support_].tolist()
                 df_feat = df_feat[keep + non_num_cols]
 
-            elif fs_method == "kbest" and y is not None and len(num_X.columns) > top_k:
+            elif fs_method == "kbest" and y_fs is not None and len(num_X.columns) > k:
                 from sklearn.feature_selection import SelectKBest, mutual_info_classif, mutual_info_regression  # noqa: PLC0415
-                from sklearn.preprocessing import LabelEncoder as _LE3  # noqa: PLC0415
-                is_clf = y.dtype == object or y.nunique() < 20
+                is_clf = y_fs.dtype == object or y_fs.nunique() < 20
                 score_fn = mutual_info_classif if is_clf else mutual_info_regression
-                k = min(top_k, num_X.shape[1])
-                y_fit = _LE3().fit_transform(y.astype(str)) if is_clf else pd.to_numeric(y, errors="coerce").fillna(0)
+                y_fit = LabelEncoder().fit_transform(y_fs.astype(str)) if is_clf else pd.to_numeric(y_fs, errors="coerce").fillna(0)
                 sel = SelectKBest(score_fn, k=k)
                 sel.fit(num_X, y_fit)
                 keep = num_X.columns[sel.get_support()].tolist()
                 df_feat = df_feat[keep + non_num_cols]
         except Exception:
-            pass  # leave df_feat unchanged if feature selection fails
+            pass
 
     features_after = len(df_feat.columns)
 
