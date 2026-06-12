@@ -3531,6 +3531,12 @@ function _renderAutoMLReport(automl, accent) {
       </div>
     </div>
 
+    ${is_imbalanced ? `
+    <div style="display:flex;align-items:flex-start;gap:0.6rem;padding:0.75rem 1rem;border-radius:12px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.25);margin-bottom:0.75rem;font-size:0.8rem;color:#fbbf24;line-height:1.5">
+      <span style="font-size:1rem;flex-shrink:0">⚠</span>
+      <span><strong>Imbalanced dataset detected</strong> — accuracy is not a reliable metric here. The headline score uses <strong>F1-macro</strong> instead. Accuracy is still shown as a secondary metric for reference.</span>
+    </div>` : ''}
+
     <div class="aml-stats">
       <div class="aml-stat">
         <div class="aml-stat-lbl">Winner</div>

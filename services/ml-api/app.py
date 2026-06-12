@@ -1259,12 +1259,21 @@ async def train_model(
             pipeline.fit(X_train, y_train)
             p.update(82, "Evaluating on test set…")
             y_pred       = pipeline.predict(X_test)
-            score        = accuracy_score(y_test, y_pred)
-            metric       = f"{score * 100:.1f}%"
-            metric_label = "Accuracy"
+            is_imbal_result = automl_result.get("is_imbalanced", False) if automl_result else False
+            f1_w = f1_score(y_test, y_pred, average="weighted", zero_division=0)
+            f1_m = f1_score(y_test, y_pred, average="macro",    zero_division=0)
+            acc  = accuracy_score(y_test, y_pred)
+            if is_imbal_result:
+                score        = f1_m
+                metric       = f"{score:.3f}"
+                metric_label = "F1-macro"
+            else:
+                score        = acc
+                metric       = f"{score * 100:.1f}%"
+                metric_label = "Accuracy"
             extra_metrics = []
-            f1 = f1_score(y_test, y_pred, average="weighted", zero_division=0)
-            extra_metrics.append({"label": "F1 (weighted)", "value": f"{f1:.3f}"})
+            extra_metrics.append({"label": "F1 (weighted)", "value": f"{f1_w:.3f}"})
+            extra_metrics.append({"label": "Accuracy",      "value": f"{acc * 100:.1f}%"})
             try:
                 n_cls = len(set(y_enc))
                 if n_cls == 2:
