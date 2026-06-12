@@ -196,7 +196,8 @@ body {
   font-family: 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: var(--bg);
   color: var(--text);
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -295,6 +296,7 @@ body {
   display: grid;
   grid-template-columns: 260px 1fr;
   min-height: 0;
+  overflow: hidden;
 }
 
 /* ── Sidebar ── */
@@ -352,7 +354,7 @@ body {
 .main {
   padding: 2rem 2rem 3rem;
   overflow-y: auto;
-  max-width: 820px;
+  min-width: 0;
 }
 
 .model-header {
@@ -1162,13 +1164,13 @@ body {
 .aml-key-row      { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem;
                     padding-top: 0.75rem; border-top: 1px solid var(--border2); }
 
-/* ── AutoML Results Two-Column Layout ── */
+/* ── AutoML Results Three-Column Layout ── */
 .aml-results-page { width: 100%; }
 .aml-results-grid {
-  display: grid; grid-template-columns: 280px 1fr;
-  gap: 1.5rem; align-items: start; margin-top: 1.5rem;
+  display: grid; grid-template-columns: 260px 1fr 280px;
+  gap: 1.25rem; align-items: start; margin-top: 1.5rem;
 }
-.aml-results-left { position: sticky; top: 76px; }
+.aml-results-left { position: sticky; top: 0; }
 .aml-results-summary {
   background: var(--card-bg); border: 1px solid var(--border2);
   border-radius: 18px; padding: 2rem 1.5rem; text-align: center;
@@ -1176,9 +1178,30 @@ body {
 .aml-results-right .aml-dashboard {
   margin-top: 0; padding-top: 0; border-top: none;
 }
-@media (max-width: 700px) {
+.aml-analysis-panel {
+  position: sticky; top: 0;
+  background: var(--card-bg); border: 1px solid var(--border2);
+  border-radius: 18px; overflow: hidden;
+}
+.aml-analysis-panel-header {
+  display: flex; border-bottom: 1px solid var(--border2);
+}
+.aml-analysis-panel-tab {
+  flex: 1; padding: 0.65rem 0.5rem; font-size: 0.73rem; font-weight: 600;
+  background: transparent; border: none; color: var(--text2);
+  cursor: pointer; transition: all 0.18s; border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.aml-analysis-panel-tab:hover { color: var(--text); }
+.aml-analysis-panel-tab.active {
+  color: var(--active-accent, var(--accent-from));
+  border-bottom-color: var(--active-accent, var(--accent-from));
+  background: color-mix(in srgb, var(--active-accent, var(--accent-from)) 6%, transparent);
+}
+.aml-analysis-panel-body { padding: 1rem; min-height: 200px; }
+@media (max-width: 900px) {
   .aml-results-grid { grid-template-columns: 1fr; }
-  .aml-results-left { position: static; }
+  .aml-results-left, .aml-analysis-panel { position: static; }
 }
 
 /* ── AutoML Analysis Tabs ── */
@@ -3558,9 +3581,9 @@ function _animateAutoMLBars() {
 
 // ── AutoML Analysis Tabs ──────────────────────────────────────
 async function _amlShowTab(tab, btn) {
-  document.querySelectorAll('.aml-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.aml-analysis-panel-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
-  if (tab === 'shap')   await _amlRenderShap();
+  if (tab === 'shap')        await _amlRenderShap();
   else if (tab === 'whatif') _amlRenderWhatif();
 }
 
@@ -3578,6 +3601,7 @@ async function _amlRenderShap() {
     if (!res.ok) throw new Error(res.status);
     let shap = null;
     for await (const ev of _sseStream(res)) {
+      if (ev.error) throw new Error(ev.error);
       if (ev.pct !== undefined) _updateProgressBar('amlSFill','amlSMsg','amlSPct', ev.pct, ev.msg);
       if (ev.result) shap = ev.result;
     }
@@ -3733,7 +3757,7 @@ function _startFreshAutoML() {
   automlFile = null;
   automlAnalysis = null;
   _renderAutoMLStep1();
-  requestAnimationFrame(() => { document.getElementById('main').scrollTop = 0; });
+  document.getElementById('main').scrollTop = 0;
 }
 
 function _renderAutoMLStep1() {
@@ -3954,16 +3978,19 @@ function _renderAutoMLResultsPage(result) {
           </div>
         </div>
 
-        <!-- RIGHT: dashboard + tabs -->
+        <!-- MIDDLE: dashboard -->
         <div class="aml-results-right">
           ${aml ? _renderAutoMLReport(aml, result.accent) : ''}
-          ${aml ? `
-          <div class="aml-tabs-strip">
-            <button class="aml-tab active" onclick="_amlShowTab('shap',this)">SHAP Analysis</button>
-            <button class="aml-tab" onclick="_amlShowTab('whatif',this)">What-If</button>
-          </div>
-          <div class="aml-tab-body" id="amlTabBody"></div>` : ''}
         </div>
+
+        <!-- RIGHT: SHAP + What-If panel -->
+        ${aml ? `<div class="aml-analysis-panel">
+          <div class="aml-analysis-panel-header">
+            <button class="aml-analysis-panel-tab active" onclick="_amlShowTab('shap',this)">SHAP Analysis</button>
+            <button class="aml-analysis-panel-tab" onclick="_amlShowTab('whatif',this)">What-If</button>
+          </div>
+          <div class="aml-analysis-panel-body" id="amlTabBody"></div>
+        </div>` : ''}
 
       </div>
     </div>`;
