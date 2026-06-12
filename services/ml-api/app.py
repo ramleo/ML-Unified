@@ -656,7 +656,7 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
         elif provider == "gemini":
             import google.generativeai as genai  # noqa: PLC0415
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            model = genai.GenerativeModel("gemini-2.0-flash")
             resp = model.generate_content(prompt)
             return resp.text.strip()
         else:
