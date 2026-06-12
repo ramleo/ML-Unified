@@ -657,15 +657,23 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
             import openai  # noqa: PLC0415
             client = openai.OpenAI(api_key=api_key)
             resp = client.chat.completions.create(
-                model="gpt-4o-mini",
-                max_tokens=800,
+                model="gpt-4o-mini", max_tokens=800,
                 messages=[{"role": "user", "content": prompt}],
             )
             return resp.choices[0].message.content.strip()
-        elif provider == "gemini":
+        elif provider == "groq":
+            import openai  # noqa: PLC0415
+            client = openai.OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+            resp = client.chat.completions.create(
+                model="llama-3.3-70b-versatile", max_tokens=800,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return resp.choices[0].message.content.strip()
+        elif provider in ("gemini-3.5", "gemini-2.5"):
             import google.generativeai as genai  # noqa: PLC0415
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel("gemini-3.5-flash")
+            model_name = "gemini-3.5-flash" if provider == "gemini-3.5" else "gemini-2.5-flash"
+            model = genai.GenerativeModel(model_name)
             resp = model.generate_content(prompt)
             return resp.text.strip()
         else:
