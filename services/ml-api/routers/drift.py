@@ -365,6 +365,23 @@ def _process_categorical(
     if not opts:
         return {}
 
+    # High-cardinality columns (IDs, ticket numbers, etc.) — skip per-value bars
+    if n_opts > 20:
+        vals = [str(r[name]) for r in rows if name in r and r[name] is not None]
+        return {
+            "name":             name,
+            "label":            field.get("label", name),
+            "type":             "categorical",
+            "high_cardinality": True,
+            "n_opts":           n_opts,
+            "n_unique_recent":  len(set(vals)),
+            "drift_score":      0.0,
+            "drift_level":      "low",
+            "psi":              0.0,
+            "psi_level":        "low",
+            "null_rate":        0.0,
+        }
+
     # Reference distribution — actual training frequencies preferred
     cat_freq = field.get("cat_freq")
     if cat_freq:

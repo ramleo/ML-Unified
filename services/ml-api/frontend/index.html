@@ -2410,6 +2410,14 @@ function renderDriftHTML(data) {
         ${histHTML}
         ${ksLine}
       </div>`;
+    } else if (f.high_cardinality) {
+      return `<div class="drift-feature">
+        ${topRow}
+        <div class="drift-cat-note" style="margin-top:0.6rem;font-style:normal;color:var(--text2)">
+          High-cardinality column — <strong>${f.n_opts}</strong> unique values in training,
+          <strong>${f.n_unique_recent}</strong> in recent data. Per-value drift not shown.
+        </div>
+      </div>`;
     } else {
       const bars = f.options.map(opt => {
         const refPct    = Math.round((f.ref_dist[opt]    || 0) * 100);
