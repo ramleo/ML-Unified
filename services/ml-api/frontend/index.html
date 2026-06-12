@@ -3969,18 +3969,22 @@ function _renderAutoMLStep1b() {
             </span>
           </label>
 
-          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
-            <input type="checkbox" id="amlPrepEncNominal" ${hasCat ? 'checked' : ''} style="accent-color:#818cf8">
-            One-hot encode nominal categoricals
-          </label>
-
           <div>
-            <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
-              <input type="checkbox" id="amlPrepEncOrdinal" style="accent-color:#818cf8">
-              Ordinal encode ordinal categoricals
+            <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;color:var(--text1);margin-bottom:0.4rem">
+              Categorical encoding method:
+              <select id="amlPrepEncMethod" class="field-select" style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:auto" onchange="_onEncMethodChange()">
+                <option value="none">None</option>
+                <option value="onehot" ${hasCat ? 'selected' : ''}>One-hot encode (nominal)</option>
+                <option value="ordinal">Ordinal encode</option>
+                <option value="frequency">Frequency encode</option>
+                <option value="target">Target encode</option>
+              </select>
             </label>
-            ${catCols.length ? `<div style="margin-left:1.5rem;margin-top:0.4rem;font-size:0.75rem;color:var(--text3);margin-bottom:0.3rem">Mark which columns are ordinal:</div>
-            <div style="margin-left:1.5rem;display:flex;flex-wrap:wrap;gap:0.4rem 1rem">${ordColsHTML}</div>` : ''}
+            <div id="amlEncHint" style="margin-left:1.5rem;font-size:0.75rem;margin-bottom:0.3rem;display:none"></div>
+            <div id="amlOrdinalCols" style="display:none">
+              ${catCols.length ? `<div style="margin-left:1.5rem;margin-top:0.4rem;font-size:0.75rem;color:var(--text3);margin-bottom:0.3rem">Mark which columns are ordinal:</div>
+              <div style="margin-left:1.5rem;display:flex;flex-wrap:wrap;gap:0.4rem 1rem">${ordColsHTML}</div>` : ''}
+            </div>
           </div>
 
           <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
@@ -4023,6 +4027,32 @@ function _renderAutoMLStep1b() {
 function _showAutoMLPrepOptions() {
   document.getElementById('amlPrepYesNo').style.display    = 'none';
   document.getElementById('amlPrepOptions').style.display  = 'block';
+  _onEncMethodChange();
+}
+
+function _onEncMethodChange() {
+  const method   = document.getElementById('amlPrepEncMethod')?.value || 'none';
+  const hintEl   = document.getElementById('amlEncHint');
+  const ordEl    = document.getElementById('amlOrdinalCols');
+  if (!hintEl || !ordEl) return;
+
+  const hints = {
+    none:      { text: '', color: 'var(--text3)' },
+    onehot:    { text: 'Creates one binary column per category value. Can expand wide datasets.', color: 'var(--text3)' },
+    ordinal:   { text: 'Assigns integer codes to categories. Mark ordinal columns below.', color: 'var(--text3)' },
+    frequency: { text: 'Good for high-cardinality columns. Works well with tree models.', color: 'var(--text3)' },
+    target:    { text: '⚠ Uses cross-fold smoothing to reduce leakage. Requires a numeric target.', color: 'var(--color-warning)' },
+  };
+
+  const h = hints[method] || hints.none;
+  if (h.text) {
+    hintEl.textContent   = h.text;
+    hintEl.style.color   = h.color;
+    hintEl.style.display = 'block';
+  } else {
+    hintEl.style.display = 'none';
+  }
+  ordEl.style.display = method === 'ordinal' ? 'block' : 'none';
 }
 
 async function _applyAutoMLPreprocessing() {
@@ -4034,13 +4064,15 @@ async function _applyAutoMLPreprocessing() {
   btn.textContent = 'Preprocessing…';
 
   const target = automlAnalysis.suggested_target;
-  const ordinalCols = [...document.querySelectorAll('.aml-ordinal-col:checked')].map(el => el.value);
+  const encMethod   = document.getElementById('amlPrepEncMethod')?.value || 'none';
+  const ordinalCols = encMethod === 'ordinal'
+    ? [...document.querySelectorAll('.aml-ordinal-col:checked')].map(el => el.value)
+    : [];
 
   const options = {
     missing_values:  document.getElementById('amlPrepMissing').checked
                        ? document.getElementById('amlPrepMissingMethod').value : null,
-    encode_nominal:  document.getElementById('amlPrepEncNominal').checked,
-    encode_ordinal:  document.getElementById('amlPrepEncOrdinal').checked,
+    encode_method:   encMethod,
     ordinal_columns: ordinalCols,
     remove_outliers: document.getElementById('amlPrepOutliers').checked,
     fix_skewness:    document.getElementById('amlPrepSkew').checked,

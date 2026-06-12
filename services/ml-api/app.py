@@ -447,17 +447,72 @@ async def automl_preprocess(request: Request):
                 except Exception:
                     pass
 
-    # 4. One-hot encode nominal categoricals
+    # 4. Categorical encoding
+    # Resolve encode_method (new) with backward-compat fallback to legacy booleans
+    encode_method = options.get("encode_method")
+    if encode_method is None:
+        if options.get("encode_nominal"):
+            encode_method = "onehot"
+        elif options.get("encode_ordinal"):
+            encode_method = "ordinal"
+        else:
+            encode_method = "none"
+
     ordinal_cols = options.get("ordinal_columns", [])
     nominal_cols = [c for c in cat_cols if c not in ordinal_cols]
-    if options.get("encode_nominal") and nominal_cols:
+
+    if encode_method == "onehot" and nominal_cols:
         df_feat = pd.get_dummies(df_feat, columns=nominal_cols, drop_first=False)
 
-    # 5. Ordinal encode ordinal categoricals
-    if options.get("encode_ordinal") and ordinal_cols:
-        for c in ordinal_cols:
+    elif encode_method == "ordinal":
+        cols_to_encode = ordinal_cols if ordinal_cols else cat_cols
+        for c in cols_to_encode:
             if c in df_feat.columns:
                 df_feat[c] = LabelEncoder().fit_transform(df_feat[c].astype(str))
+
+    elif encode_method == "frequency" and cat_cols:
+        for c in cat_cols:
+            freq_map = df_feat[c].value_counts().to_dict()
+            df_feat[c] = df_feat[c].map(freq_map)
+
+    elif encode_method == "target" and cat_cols and target_series is not None:
+        from sklearn.model_selection import KFold  # noqa: PLC0415
+        # Convert target to numeric if needed (classification uses string labels)
+        tgt = target_series.reindex(df_feat.index)
+        if not pd.api.types.is_numeric_dtype(tgt):
+            tgt = tgt.map({v: i for i, v in enumerate(tgt.unique())}).astype(float)
+        else:
+            tgt = tgt.astype(float)
+
+        global_mean = float(tgt.mean())
+        k_smooth    = 10  # smoothing factor
+
+        for c in cat_cols:
+            if c not in df_feat.columns:
+                continue
+            encoded = _np.zeros(len(df_feat), dtype=float)
+            idx_arr = df_feat.index.to_numpy()
+
+            kf = KFold(n_splits=5, shuffle=True, random_state=42)
+            pos_arr = _np.arange(len(df_feat))
+            for train_pos, val_pos in kf.split(pos_arr):
+                train_idx = idx_arr[train_pos]
+                val_idx   = idx_arr[val_pos]
+                fold_tgt  = tgt.loc[train_idx]
+                fold_col  = df_feat[c].loc[train_idx]
+                stats = fold_col.groupby(fold_col).apply(
+                    lambda g: (len(g), float(fold_tgt.loc[g.index].mean()))
+                )
+                for val_i in val_idx:
+                    cat_val = df_feat[c].loc[val_i]
+                    if cat_val in stats.index:
+                        cnt, mean_ = stats[cat_val]
+                        smoothed = (cnt * mean_ + k_smooth * global_mean) / (cnt + k_smooth)
+                    else:
+                        smoothed = global_mean
+                    pos = int(_np.where(idx_arr == val_i)[0][0])
+                    encoded[pos] = smoothed
+            df_feat[c] = encoded
 
     # 6. Standardize numeric features
     final_num_cols = df_feat.select_dtypes(include="number").columns.tolist()
