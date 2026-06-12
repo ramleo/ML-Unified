@@ -3919,7 +3919,7 @@ function _renderAutoMLStep0() {
   document.getElementById('main').innerHTML = `
     <div class="wizard">
       ${_automlStepsHTML(1, false)}
-      <div class="eda-section-card eda-visible" style="margin-bottom:1.5rem">
+      <div class="eda-section-card eda-visible" style="margin-bottom:1.5rem;background:var(--bg-glass)">
         <div class="eda-section-title" style="margin-bottom:1rem">Before we begin</div>
 
         <div style="margin-bottom:1rem">
@@ -4012,7 +4012,7 @@ function _renderAutoMLStep1b(preselectedTarget) {
         <strong>${a.columns.length} columns</strong>
       </p>
 
-      <div style="padding:0.85rem 1rem;border:1px solid var(--border2);border-radius:8px;background:var(--bg-input);margin-bottom:1.5rem">
+      <div style="padding:0.85rem 1rem;border:1px solid var(--border2);border-radius:8px;background:transparent;margin-bottom:1.5rem">
         <div style="font-size:0.8rem;font-weight:700;color:var(--text1);margin-bottom:0.25rem">Data Quality Summary</div>
         ${qualityHTML}
       </div>
@@ -4255,7 +4255,7 @@ async function _applyAutoMLPreprocessing() {
     const fsLine = (fsMethod !== 'none')
       ? `<div>Features: <strong>${fsBefore} → ${fsAfter} selected</strong></div>` : '';
     resEl.innerHTML = `
-      <div style="padding:0.85rem 1rem;border:1px solid #34d399;border-radius:8px;background:var(--bg-input);margin-bottom:1.2rem">
+      <div style="padding:0.85rem 1rem;border:1px solid #34d399;border-radius:8px;background:transparent;margin-bottom:1.2rem">
         <div style="font-size:0.82rem;font-weight:700;color:#34d399;margin-bottom:0.5rem">Preprocessing complete</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:0.4rem;font-size:0.78rem;color:var(--text2)">
           <div>Rows: <strong>${result.rows_before.toLocaleString()} → ${result.rows_after.toLocaleString()}</strong></div>
