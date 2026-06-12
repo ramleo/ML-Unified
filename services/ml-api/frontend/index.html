@@ -302,21 +302,19 @@ body {
 /* ── Sidebar ── */
 .sidebar {
   border-right: 1px solid var(--border);
-  padding: 1.25rem 0.75rem 2rem;
-  display: flex; flex-direction: column; gap: 0.65rem;
+  padding: 1.25rem 0.75rem;
+  display: flex; flex-direction: column; gap: 0.4rem;
   overflow-y: auto;
 }
 .sidebar-label {
-  font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+  font-size: 0.6rem; font-weight: 600; text-transform: uppercase;
   letter-spacing: 0.1em; color: var(--text3);
-  padding: 0.5rem 0.75rem 0.4rem;
-  border-top: 1px solid var(--border);
-  margin-top: 0.75rem;
+  padding: 0 0.75rem; margin-bottom: 0.25rem; margin-top: 0.5rem;
 }
-.sidebar-label:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+.sidebar-label:first-child { margin-top: 0; }
 .model-btn {
   display: flex; align-items: center; gap: 0.75rem;
-  padding: 0.85rem 0.75rem 0.85rem 1rem; border-radius: 12px;
+  padding: 0.7rem 0.75rem 0.7rem 1rem; border-radius: 12px;
   cursor: pointer; border: 1px solid transparent; background: transparent;
   color: var(--text2); text-align: left; width: 100%;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -2037,8 +2035,7 @@ function renderSidebar() {
     : '';
 
   const trainBtn = showML
-    ? `<div style="height:1px;background:var(--border);margin:1rem 0 0.5rem"></div>
-       <button class="sidebar-upload-btn" onclick="showUploadWizard()" style="margin-top:0">
+    ? `<button class="sidebar-upload-btn" onclick="showUploadWizard()"
          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
            <path d="M8 2v9M4 6l4-4 4 4"/><path d="M2 13h12"/>
          </svg>
