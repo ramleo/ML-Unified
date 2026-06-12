@@ -3726,12 +3726,14 @@ function showAutoMLWizard() {
   } else {
     _startFreshAutoML();
   }
+  document.getElementById('main').scrollTop = 0;
 }
 
 function _startFreshAutoML() {
   automlFile = null;
   automlAnalysis = null;
   _renderAutoMLStep1();
+  requestAnimationFrame(() => { document.getElementById('main').scrollTop = 0; });
 }
 
 function _renderAutoMLStep1() {
@@ -3882,6 +3884,8 @@ function _amlSuggestTask() {
 
 function _renderAutoMLResultsPage(result) {
   if (result.automl) _currentAutoMLData = result.automl;
+  const aml = result.automl;
+
   const extraChips = (result.extraMetrics || []).map(m =>
     `<div style="display:inline-flex;flex-direction:column;align-items:center;gap:0.15rem;
                  background:rgba(255,255,255,0.04);border:1px solid var(--border2);
@@ -3894,9 +3898,32 @@ function _renderAutoMLResultsPage(result) {
     ? `<div style="display:flex;gap:0.6rem;justify-content:center;flex-wrap:wrap;margin:0.9rem 0 0.2rem">${extraChips}</div>`
     : '';
 
+  const trainingDetails = aml ? (() => {
+    const nFeat    = (aml.feature_importance || []).length;
+    const taskLbl  = aml.selection_metric === 'MAE' ? 'Regression' : 'Classification';
+    const rows = [
+      ['Rows',          (aml.n_rows || 0).toLocaleString()],
+      ['Features',      nFeat || '—'],
+      ['Task',          taskLbl],
+      ['Validation',    '3-fold CV'],
+      ['Models tested', 'RF · XGB · LGB'],
+    ];
+    return `<div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border2)">
+      <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;
+                  color:var(--text3);font-weight:700;margin-bottom:0.65rem">Training Info</div>
+      <div style="display:flex;flex-direction:column;gap:0.5rem">
+        ${rows.map(([lbl, val]) =>
+          `<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem">
+            <span style="color:var(--text3)">${lbl}</span>
+            <span style="color:var(--text2);font-weight:600">${val}</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  })() : '';
+
   document.getElementById('main').innerHTML = `
     <div class="aml-results-page">
-      <div class="wizard" style="max-width:540px;margin:0 auto 0">
+      <div style="display:flex;align-items:center;justify-content:center;margin-bottom:1.5rem">
         ${_automlStepsHTML(3, true)}
       </div>
       <div class="aml-results-grid">
@@ -3914,7 +3941,7 @@ function _renderAutoMLResultsPage(result) {
             </div>
             <div style="font-size:1.15rem;font-weight:800;margin-bottom:0.35rem">${result.title}</div>
             <div style="font-size:0.78rem;color:var(--text3);margin-bottom:0.75rem">
-              Winner: <strong style="color:${result.accent}">${result.automl ? result.automl.winner : ''}</strong>
+              Winner: <strong style="color:${result.accent}">${aml ? aml.winner : ''}</strong>
             </div>
             <div class="train-result-metric" style="color:${result.accent}">${result.metric}</div>
             <div class="train-result-label">${result.metricLabel}</div>
@@ -3923,13 +3950,14 @@ function _renderAutoMLResultsPage(result) {
               <button class="btn btn-primary" onclick="selectModel('${result.id}')">Use Model &rarr;</button>
               <button class="btn btn-clear" onclick="_startFreshAutoML()">New Analysis</button>
             </div>
+            ${trainingDetails}
           </div>
         </div>
 
         <!-- RIGHT: dashboard + tabs -->
         <div class="aml-results-right">
-          ${result.automl ? _renderAutoMLReport(result.automl, result.accent) : ''}
-          ${result.automl ? `
+          ${aml ? _renderAutoMLReport(aml, result.accent) : ''}
+          ${aml ? `
           <div class="aml-tabs-strip">
             <button class="aml-tab active" onclick="_amlShowTab('shap',this)">SHAP Analysis</button>
             <button class="aml-tab" onclick="_amlShowTab('whatif',this)">What-If</button>
