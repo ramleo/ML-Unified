@@ -3750,11 +3750,13 @@ async function getAIExplanation() {
     if (progBar) progBar.style.width = '100%';
     if (progPct) progPct.textContent = '100%';
     if (progLbl) progLbl.textContent = isAI ? 'Done!' : 'Completed';
-    setTimeout(() => { if (progEl) progEl.style.display = 'none'; }, 1200);
-    if (!isAI && errEl) {
-      errEl.textContent = 'AI call failed — check your API key. Showing auto-generated summary.';
-      errEl.style.display = 'block';
-    }
+    setTimeout(() => {
+      if (progEl) progEl.style.display = 'none';
+      if (!isAI && errEl) {
+        errEl.textContent = 'AI call failed — check your API key. Showing auto-generated summary.';
+        errEl.style.display = 'block';
+      }
+    }, 1200);
     if (btn) { btn.disabled = false; btn.textContent = isAI ? 'Regenerate' : 'Try Again'; }
   } catch(e) {
     clearInterval(_progTimer);
