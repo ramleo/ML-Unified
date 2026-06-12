@@ -3708,6 +3708,11 @@ async function getAIExplanation() {
   const progPct = document.getElementById('amlProgPct');
   const progLbl = document.getElementById('amlProgLabel');
   if (btn) { btn.disabled = true; btn.textContent = 'Get AI Explanation'; }
+  if (progEl) progEl.style.display = 'none';
+  if (progBar) { progBar.style.transition = 'none'; progBar.style.width = '0%'; progBar.style.background = 'var(--active-accent,#818cf8)'; }
+  if (progPct) progPct.textContent = '0%';
+  void progBar?.offsetWidth;
+  if (progBar) progBar.style.transition = 'width 0.4s ease';
   if (progEl) progEl.style.display = 'block';
   let _pct = 0;
   const _labels = ['Sending context…', 'Model is thinking…', 'Generating explanation…', 'Almost done…'];
