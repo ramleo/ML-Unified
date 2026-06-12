@@ -302,21 +302,21 @@ body {
 /* ── Sidebar ── */
 .sidebar {
   border-right: 1px solid var(--border);
-  padding: 1.25rem 0.75rem 2rem;
-  display: flex; flex-direction: column; gap: 0.25rem;
+  padding: 1rem 0.75rem 2rem;
+  display: flex; flex-direction: column; gap: 0.15rem;
   overflow-y: auto;
 }
 .sidebar-label {
-  font-size: 0.6rem; font-weight: 600; text-transform: uppercase;
+  font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.1em; color: var(--text3);
-  padding: 0.6rem 0.75rem 0.3rem;
-  border-top: 1px solid var(--border);
-  margin-top: 0.5rem;
+  padding: 1rem 0.75rem 0.35rem;
+  margin-top: 0;
 }
-.sidebar-label:first-child { border-top: none; margin-top: 0; }
+.sidebar-label:first-child { padding-top: 0.25rem; }
+.sidebar-label + .model-btn { margin-top: 0; }
 .model-btn {
   display: flex; align-items: center; gap: 0.75rem;
-  padding: 0.8rem 0.75rem 0.8rem 1rem; border-radius: 12px;
+  padding: 0.7rem 0.75rem 0.7rem 1rem; border-radius: 12px;
   cursor: pointer; border: 1px solid transparent; background: transparent;
   color: var(--text2); text-align: left; width: 100%;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -1976,7 +1976,7 @@ function renderSidebar() {
         <div class="model-badge">${m.metric}</div>
       </button>
     `).join('') +
-    '<div class="sidebar-label" style="margin-top:1rem">Unsupervised Analysis</div>' +
+    '<div class="sidebar-label">Unsupervised Analysis</div>' +
     UNSUPERVISED.map(a => `
       <button class="model-btn" id="ubtn-${a.id}" onclick="selectUnsupervised('${a.id}','${a.label}','${a.accent}')">
         <div class="model-dot" style="background:${a.accent}"></div>
@@ -1988,7 +1988,7 @@ function renderSidebar() {
     `).join('');
 
   const visionSection =
-    `<div class="sidebar-label" style="margin-top:${showML ? '1rem' : '0'}">Vision</div>
+    `<div class="sidebar-label">Vision</div>
     <button class="model-btn" id="vbtn-classifier" onclick="selectVision()">
       <div class="model-dot" style="background:#e879f9"></div>
       <div class="model-btn-info">
@@ -2019,7 +2019,7 @@ function renderSidebar() {
     </button>`;
 
   const edaSection = showEDA
-    ? `<div class="sidebar-label" style="margin-top:${showML || showVision ? '1rem' : '0'}">Data Tools</div>
+    ? `<div class="sidebar-label">Data Tools</div>
        <button class="model-btn" id="ebtn-eda" onclick="selectEDA()">
          <div class="model-dot" style="background:#34d399"></div>
          <div class="model-btn-info">
@@ -2037,7 +2037,8 @@ function renderSidebar() {
     : '';
 
   const trainBtn = showML
-    ? `<button class="sidebar-upload-btn" onclick="showUploadWizard()">
+    ? `<div style="height:1px;background:var(--border);margin:1rem 0 0.5rem"></div>
+       <button class="sidebar-upload-btn" onclick="showUploadWizard()" style="margin-top:0">
          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
            <path d="M8 2v9M4 6l4-4 4 4"/><path d="M2 13h12"/>
          </svg>
