@@ -325,15 +325,31 @@ async def analyze_csv(file: UploadFile = File(...)):
     if len(df.columns) < 2:
         raise HTTPException(400, "CSV must have at least 2 columns")
 
-    columns = [
-        {
+    import numpy as _np  # noqa: PLC0415
+
+    columns = []
+    for col in df.columns:
+        is_num = bool(pd.api.types.is_numeric_dtype(df[col]))
+        col_info = {
             "name":       col,
             "dtype":      str(df[col].dtype),
             "nunique":    int(df[col].nunique()),
-            "is_numeric": bool(pd.api.types.is_numeric_dtype(df[col])),
+            "is_numeric": is_num,
+            "missing":    int(df[col].isna().sum()),
         }
-        for col in df.columns
-    ]
+        if is_num:
+            vals = df[col].dropna()
+            if len(vals) > 1:
+                col_info["std"]  = float(vals.std())
+                col_info["mean"] = float(vals.mean())
+                col_info["min"]  = float(vals.min())
+                col_info["max"]  = float(vals.max())
+                # skewness
+                try:
+                    col_info["skew"] = float(vals.skew())
+                except Exception:
+                    col_info["skew"] = 0.0
+        columns.append(col_info)
 
     suggested_target = df.columns[-1]
     t = df[suggested_target]
@@ -343,12 +359,181 @@ async def analyze_csv(file: UploadFile = File(...)):
         else "regression"
     )
 
+    total_missing = int(df.isna().sum().sum())
+
     return {
         "columns":          columns,
         "suggested_target": suggested_target,
         "suggested_task":   suggested_task,
         "rows":             len(df),
         "accent_palette":   ACCENT_PALETTE,
+        "total_missing":    total_missing,
+    }
+
+
+@app.post("/automl/preprocess")
+async def automl_preprocess(request: Request):
+    """Preprocess an uploaded AutoML CSV in-memory and return the result."""
+    import numpy as _np  # noqa: PLC0415
+    import tempfile, base64  # noqa: PLC0415
+
+    body = await request.json()
+    filename      = body.get("filename", "")
+    options       = body.get("options", {})
+    target_column = body.get("target_column", "")
+
+    # The frontend sends the CSV as base64 under "csv_b64"
+    csv_b64 = body.get("csv_b64", "")
+    if not csv_b64:
+        raise HTTPException(400, "csv_b64 is required")
+
+    try:
+        csv_bytes = base64.b64decode(csv_b64)
+        df = pd.read_csv(io.BytesIO(csv_bytes))
+    except Exception as e:
+        raise HTTPException(400, f"Could not parse CSV: {e}")
+
+    rows_before = len(df)
+    cols_before = len(df.columns)
+
+    # Separate target from features
+    feature_cols = [c for c in df.columns if c != target_column]
+    target_series = df[target_column] if target_column and target_column in df.columns else None
+
+    df_feat = df[feature_cols].copy()
+
+    num_cols = df_feat.select_dtypes(include="number").columns.tolist()
+    cat_cols = df_feat.select_dtypes(exclude="number").columns.tolist()
+
+    # 1. Handle missing values
+    mv = options.get("missing_values")
+    if mv == "drop":
+        df_feat = df_feat.dropna()
+        if target_series is not None:
+            target_series = target_series.loc[df_feat.index]
+    elif mv in ("mean", "median", "mode"):
+        strategy = "most_frequent" if mv == "mode" else mv
+        if num_cols:
+            num_imp = SimpleImputer(strategy=strategy if mv != "mode" else "most_frequent")
+            df_feat[num_cols] = num_imp.fit_transform(df_feat[num_cols])
+        if cat_cols:
+            cat_imp = SimpleImputer(strategy="most_frequent")
+            df_feat[cat_cols] = cat_imp.fit_transform(df_feat[cat_cols])
+
+    # 2. Remove outliers (IQR)
+    if options.get("remove_outliers") and num_cols:
+        mask = pd.Series([True] * len(df_feat), index=df_feat.index)
+        for c in num_cols:
+            q1 = df_feat[c].quantile(0.25)
+            q3 = df_feat[c].quantile(0.75)
+            iqr = q3 - q1
+            mask &= (df_feat[c] >= q1 - 1.5 * iqr) & (df_feat[c] <= q3 + 1.5 * iqr)
+        df_feat = df_feat[mask]
+        if target_series is not None:
+            target_series = target_series.loc[df_feat.index]
+
+    # Re-derive num/cat after possible row drops
+    num_cols = df_feat.select_dtypes(include="number").columns.tolist()
+    cat_cols = df_feat.select_dtypes(exclude="number").columns.tolist()
+
+    # 3. Fix skewness (log1p on positive numeric columns)
+    if options.get("fix_skewness") and num_cols:
+        for c in num_cols:
+            if df_feat[c].min() >= 0:
+                try:
+                    skew = float(df_feat[c].skew())
+                    if abs(skew) > 0.75:
+                        df_feat[c] = _np.log1p(df_feat[c])
+                except Exception:
+                    pass
+
+    # 4. One-hot encode nominal categoricals
+    ordinal_cols = options.get("ordinal_columns", [])
+    nominal_cols = [c for c in cat_cols if c not in ordinal_cols]
+    if options.get("encode_nominal") and nominal_cols:
+        df_feat = pd.get_dummies(df_feat, columns=nominal_cols, drop_first=False)
+
+    # 5. Ordinal encode ordinal categoricals
+    if options.get("encode_ordinal") and ordinal_cols:
+        for c in ordinal_cols:
+            if c in df_feat.columns:
+                df_feat[c] = LabelEncoder().fit_transform(df_feat[c].astype(str))
+
+    # 6. Standardize numeric features
+    final_num_cols = df_feat.select_dtypes(include="number").columns.tolist()
+    if options.get("standardize") and final_num_cols:
+        scaler = StandardScaler()
+        df_feat[final_num_cols] = scaler.fit_transform(df_feat[final_num_cols])
+
+    # Recombine with target
+    if target_series is not None:
+        df_out = df_feat.copy()
+        df_out[target_column] = target_series.values if len(target_series) == len(df_feat) else target_series.reindex(df_feat.index).values
+    else:
+        df_out = df_feat.copy()
+
+    rows_after = len(df_out)
+    cols_after = len(df_out.columns)
+
+    # Serialize to base64 CSV
+    csv_buf = io.StringIO()
+    df_out.to_csv(csv_buf, index=False)
+    csv_str = csv_buf.getvalue()
+    csv_b64_out = base64.b64encode(csv_str.encode()).decode()
+
+    # Build analysis of preprocessed file (same shape as /analyze response)
+    import numpy as _np2  # noqa: PLC0415
+    columns_out = []
+    for col in df_out.columns:
+        is_num = bool(pd.api.types.is_numeric_dtype(df_out[col]))
+        col_info = {
+            "name":       col,
+            "dtype":      str(df_out[col].dtype),
+            "nunique":    int(df_out[col].nunique()),
+            "is_numeric": is_num,
+            "missing":    int(df_out[col].isna().sum()),
+        }
+        if is_num:
+            vals = df_out[col].dropna()
+            if len(vals) > 1:
+                col_info["std"]  = float(vals.std())
+                col_info["mean"] = float(vals.mean())
+                col_info["min"]  = float(vals.min())
+                col_info["max"]  = float(vals.max())
+                try:
+                    col_info["skew"] = float(vals.skew())
+                except Exception:
+                    col_info["skew"] = 0.0
+        columns_out.append(col_info)
+
+    # Suggest target/task from preprocessed data
+    suggested_target = target_column if target_column and target_column in df_out.columns else df_out.columns[-1]
+    t2 = df_out[suggested_target]
+    suggested_task = (
+        "classification"
+        if (not pd.api.types.is_numeric_dtype(t2) or t2.nunique() <= 10)
+        else "regression"
+    )
+
+    preprocessed_filename = (
+        filename.rsplit(".", 1)[0] + "_preprocessed.csv"
+        if "." in filename else filename + "_preprocessed.csv"
+    )
+
+    return {
+        "csv_b64":               csv_b64_out,
+        "preprocessed_filename": preprocessed_filename,
+        "rows_before":           rows_before,
+        "rows_after":            rows_after,
+        "cols_before":           cols_before,
+        "cols_after":            cols_after,
+        # analysis fields (same structure as /analyze)
+        "columns":               columns_out,
+        "suggested_target":      suggested_target,
+        "suggested_task":        suggested_task,
+        "rows":                  rows_after,
+        "accent_palette":        ACCENT_PALETTE,
+        "total_missing":         int(df_out.isna().sum().sum()),
     }
 
 

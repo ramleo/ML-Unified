@@ -3882,7 +3882,7 @@ async function _analyzeAutoMLCSV() {
     const res = await fetch(API + '/analyze', { method: 'POST', body: form });
     if (!res.ok) { const t = await res.text(); throw new Error(t); }
     automlAnalysis = await res.json();
-    _renderAutoMLStep2();
+    _renderAutoMLStep1b();
   } catch(e) {
     document.getElementById('main').innerHTML = `
       <div class="wizard" style="text-align:center;padding:3rem 1rem">
@@ -3892,6 +3892,213 @@ async function _analyzeAutoMLCSV() {
         <div style="font-size:0.82rem;color:var(--text3);margin-bottom:1.5rem">${e.message}</div>
         <button class="btn btn-clear" onclick="_renderAutoMLStep1()">← Try again</button>
       </div>`;
+  }
+}
+
+// ── Step 1.5: Data Quality & Preprocessing ────────────────────
+function _renderAutoMLStep1b() {
+  const a = automlAnalysis;
+  const catCols = a.columns.filter(c => !c.is_numeric).map(c => c.name);
+  const numCols = a.columns.filter(c => c.is_numeric).map(c => c.name);
+
+  // Detect issues
+  const hasMissing   = (a.total_missing || 0) > 0 || a.columns.some(c => (c.missing || 0) > 0);
+  const hasCat       = catCols.length > 0;
+  const hasOutliers  = numCols.some(c => {
+    const col = a.columns.find(x => x.name === c);
+    if (!col || col.std == null) return false;
+    const range = (col.max || 0) - (col.min || 0);
+    return col.std > 0 && range / col.std > 6;
+  });
+  const hasSkewness  = numCols.some(c => {
+    const col = a.columns.find(x => x.name === c);
+    return col && col.skew != null && Math.abs(col.skew) > 0.75;
+  });
+
+  const issues = [];
+  if (hasMissing)  issues.push(`<span style="color:#fbbf24">${a.total_missing || '?'} missing value(s)</span>`);
+  if (hasCat)      issues.push(`<span style="color:#818cf8">${catCols.length} categorical column(s)</span>`);
+  if (hasOutliers) issues.push(`<span style="color:#f87171">potential outliers detected</span>`);
+  if (hasSkewness) issues.push(`<span style="color:#34d399">skewed numeric column(s)</span>`);
+
+  const qualityHTML = issues.length
+    ? `<div style="display:flex;flex-wrap:wrap;gap:0.5rem;font-size:0.78rem;margin-top:0.5rem">${issues.map(i => `<span style="padding:0.2rem 0.55rem;border-radius:4px;background:var(--bg-input);border:1px solid var(--border2)">${i}</span>`).join('')}</div>`
+    : `<div style="font-size:0.78rem;color:#34d399;margin-top:0.5rem">No major issues detected.</div>`;
+
+  const ordColsHTML = catCols.length ? catCols.map(c =>
+    `<label style="display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;cursor:pointer;color:var(--text2)">
+      <input type="checkbox" class="aml-ordinal-col" value="${c}" style="accent-color:#818cf8"> ${c}
+    </label>`
+  ).join('') : '<span style="font-size:0.75rem;color:var(--text3)">None</span>';
+
+  document.getElementById('main').innerHTML = `
+    <div class="wizard">
+      ${_automlStepsHTML(1, false)}
+      <h2 style="font-size:1.3rem;font-weight:800;margin-bottom:0.4rem">Data Quality &amp; Preprocessing</h2>
+      <p style="font-size:0.85rem;color:var(--text2);margin-bottom:1rem">
+        Analysed <strong>${(a.rows || 0).toLocaleString()} rows</strong> &middot;
+        <strong>${a.columns.length} columns</strong>
+      </p>
+
+      <div style="padding:0.85rem 1rem;border:1px solid var(--border2);border-radius:8px;background:var(--bg-input);margin-bottom:1.5rem">
+        <div style="font-size:0.8rem;font-weight:700;color:var(--text1);margin-bottom:0.25rem">Data Quality Summary</div>
+        ${qualityHTML}
+      </div>
+
+      <div style="font-size:0.85rem;font-weight:600;color:var(--text1);margin-bottom:0.75rem">Would you like to preprocess the data before training?</div>
+      <div id="amlPrepYesNo" style="display:flex;gap:0.6rem;margin-bottom:1.5rem">
+        <button class="btn btn-primary" onclick="_showAutoMLPrepOptions()" style="font-size:0.82rem">Yes, preprocess</button>
+        <button class="btn btn-clear" onclick="_renderAutoMLStep2()" style="font-size:0.82rem">No, skip</button>
+      </div>
+
+      <div id="amlPrepOptions" style="display:none">
+        <div style="font-size:0.82rem;font-weight:700;color:var(--text1);margin-bottom:0.75rem">Select preprocessing options:</div>
+
+        <div style="display:flex;flex-direction:column;gap:0.6rem;margin-bottom:1.2rem">
+
+          <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
+            <input type="checkbox" id="amlPrepMissing" ${hasMissing ? 'checked' : ''} style="accent-color:#818cf8;margin-top:2px">
+            <span>
+              Handle missing values
+              <select id="amlPrepMissingMethod" class="field-select" style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:auto">
+                <option value="mean">Mean imputation</option>
+                <option value="median">Median imputation</option>
+                <option value="mode">Mode imputation</option>
+                <option value="drop">Drop rows</option>
+              </select>
+            </span>
+          </label>
+
+          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
+            <input type="checkbox" id="amlPrepEncNominal" ${hasCat ? 'checked' : ''} style="accent-color:#818cf8">
+            One-hot encode nominal categoricals
+          </label>
+
+          <div>
+            <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
+              <input type="checkbox" id="amlPrepEncOrdinal" style="accent-color:#818cf8">
+              Ordinal encode ordinal categoricals
+            </label>
+            ${catCols.length ? `<div style="margin-left:1.5rem;margin-top:0.4rem;font-size:0.75rem;color:var(--text3);margin-bottom:0.3rem">Mark which columns are ordinal:</div>
+            <div style="margin-left:1.5rem;display:flex;flex-wrap:wrap;gap:0.4rem 1rem">${ordColsHTML}</div>` : ''}
+          </div>
+
+          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
+            <input type="checkbox" id="amlPrepOutliers" ${hasOutliers ? 'checked' : ''} style="accent-color:#818cf8">
+            Remove outliers (IQR method)
+          </label>
+
+          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
+            <input type="checkbox" id="amlPrepSkew" ${hasSkewness ? 'checked' : ''} style="accent-color:#818cf8">
+            Fix skewness (log1p transform on positive columns)
+          </label>
+
+          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
+            <input type="checkbox" id="amlPrepScale" style="accent-color:#818cf8">
+            Standardize numeric features (StandardScaler)
+          </label>
+
+        </div>
+
+        <div id="amlPrepErr" style="display:none;font-size:0.8rem;color:#f87171;margin-bottom:0.75rem"></div>
+
+        <div class="action-row" style="margin-top:0">
+          <button class="btn btn-clear" onclick="_renderAutoMLStep1()">← Back</button>
+          <button class="btn btn-primary" id="amlPrepApplyBtn" onclick="_applyAutoMLPreprocessing()" style="font-size:0.85rem">
+            Apply Preprocessing
+          </button>
+        </div>
+      </div>
+
+      <div id="amlPrepResult" style="display:none"></div>
+
+      <div id="amlPrepSkipRow" style="display:none">
+        <div class="action-row" style="margin-top:0.5rem">
+          <button class="btn btn-clear" onclick="_renderAutoMLStep1()">← Back</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function _showAutoMLPrepOptions() {
+  document.getElementById('amlPrepYesNo').style.display    = 'none';
+  document.getElementById('amlPrepOptions').style.display  = 'block';
+}
+
+async function _applyAutoMLPreprocessing() {
+  const btn    = document.getElementById('amlPrepApplyBtn');
+  const errEl  = document.getElementById('amlPrepErr');
+  const resEl  = document.getElementById('amlPrepResult');
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Preprocessing…';
+
+  const target = automlAnalysis.suggested_target;
+  const ordinalCols = [...document.querySelectorAll('.aml-ordinal-col:checked')].map(el => el.value);
+
+  const options = {
+    missing_values:  document.getElementById('amlPrepMissing').checked
+                       ? document.getElementById('amlPrepMissingMethod').value : null,
+    encode_nominal:  document.getElementById('amlPrepEncNominal').checked,
+    encode_ordinal:  document.getElementById('amlPrepEncOrdinal').checked,
+    ordinal_columns: ordinalCols,
+    remove_outliers: document.getElementById('amlPrepOutliers').checked,
+    fix_skewness:    document.getElementById('amlPrepSkew').checked,
+    standardize:     document.getElementById('amlPrepScale').checked,
+  };
+
+  try {
+    // Read file as base64
+    const csvB64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = e => resolve(btoa(e.target.result));
+      reader.onerror = () => reject(new Error('Could not read file'));
+      reader.readAsBinaryString(automlFile);
+    });
+
+    const res = await fetch(API + '/automl/preprocess', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename:      automlFile.name,
+        options,
+        target_column: target,
+        csv_b64:       csvB64,
+      }),
+    });
+    if (!res.ok) { const t = await res.text(); throw new Error(t); }
+    const result = await res.json();
+
+    // Update global state
+    const csvBytes = atob(result.csv_b64);
+    const arr = new Uint8Array(csvBytes.length);
+    for (let i = 0; i < csvBytes.length; i++) arr[i] = csvBytes.charCodeAt(i);
+    const blob = new Blob([arr], { type: 'text/csv' });
+    automlFile     = new File([blob], result.preprocessed_filename, { type: 'text/csv' });
+    automlAnalysis = result;  // contains same fields as /analyze response
+
+    // Hide options, show result summary
+    document.getElementById('amlPrepOptions').style.display = 'none';
+    resEl.style.display = 'block';
+    resEl.innerHTML = `
+      <div style="padding:0.85rem 1rem;border:1px solid #34d399;border-radius:8px;background:var(--bg-input);margin-bottom:1.2rem">
+        <div style="font-size:0.82rem;font-weight:700;color:#34d399;margin-bottom:0.5rem">Preprocessing complete</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:0.4rem;font-size:0.78rem;color:var(--text2)">
+          <div>Rows: <strong>${result.rows_before.toLocaleString()} → ${result.rows_after.toLocaleString()}</strong></div>
+          <div>Columns: <strong>${result.cols_before} → ${result.cols_after}</strong></div>
+          <div>Missing: <strong>${result.total_missing}</strong> remaining</div>
+        </div>
+      </div>
+      <div style="font-size:0.85rem;font-weight:600;color:var(--text1);margin-bottom:0.75rem">Proceed to AutoML training?</div>
+      <div class="action-row" style="margin-top:0">
+        <button class="btn btn-clear" onclick="_renderAutoMLStep1b()">← Revert</button>
+        <button class="btn btn-primary" onclick="_renderAutoMLStep2()">Yes, Configure AutoML →</button>
+      </div>`;
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Apply Preprocessing';
   }
 }
 
@@ -6782,11 +6989,12 @@ async function _submitClean() {
     a.href = url; a.download = result.filename; a.click();
     URL.revokeObjectURL(url);
     summaryEl.innerHTML += `
-      <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border2);display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="_launchAutoMLFromClean()" style="font-size:0.82rem;padding:0.45rem 1.1rem">
-          Train with AutoML &rarr;
-        </button>
-        <span style="font-size:0.75rem;color:var(--text3)">Uses the cleaned CSV — no re-upload needed</span>
+      <div id="cleanAutoMLPrompt" style="margin-top:1rem;padding:0.85rem 1rem;border:1px solid var(--border2);border-radius:8px;background:var(--bg-input)">
+        <div style="font-size:0.82rem;font-weight:600;color:var(--text1);margin-bottom:0.65rem">Would you like to train a model with this cleaned data using AutoML?</div>
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="_launchAutoMLFromClean()" style="font-size:0.82rem;padding:0.45rem 1.1rem">Yes, Train with AutoML</button>
+          <button class="btn btn-clear" onclick="document.getElementById('cleanAutoMLPrompt').remove()" style="font-size:0.82rem;padding:0.45rem 1.1rem">No, Stay Here</button>
+        </div>
       </div>`;
     await new Promise(res => setTimeout(res, 800));
   } catch (e) {
@@ -6909,11 +7117,12 @@ async function _runEDAClean() {
     a.href = url; a.download = result.filename; a.click();
     URL.revokeObjectURL(url);
     summaryEl.innerHTML += `
-      <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border2);display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="_launchAutoMLFromClean()" style="font-size:0.82rem;padding:0.45rem 1.1rem">
-          Train with AutoML &rarr;
-        </button>
-        <span style="font-size:0.75rem;color:var(--text3)">Uses the cleaned CSV — no re-upload needed</span>
+      <div id="cleanAutoMLPrompt" style="margin-top:1rem;padding:0.85rem 1rem;border:1px solid var(--border2);border-radius:8px;background:var(--bg-input)">
+        <div style="font-size:0.82rem;font-weight:600;color:var(--text1);margin-bottom:0.65rem">Would you like to train a model with this cleaned data using AutoML?</div>
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="_launchAutoMLFromClean()" style="font-size:0.82rem;padding:0.45rem 1.1rem">Yes, Train with AutoML</button>
+          <button class="btn btn-clear" onclick="document.getElementById('cleanAutoMLPrompt').remove()" style="font-size:0.82rem;padding:0.45rem 1.1rem">No, Stay Here</button>
+        </div>
       </div>`;
   } catch (e) {
     errEl.textContent = e.message;
