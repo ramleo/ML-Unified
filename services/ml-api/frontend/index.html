@@ -3789,7 +3789,7 @@ function _automlStepsHTML(active, allDone) {
   return '<div class="wizard-steps">' +
     steps.map((s, i) => {
       const n   = i + 1;
-      const cls = n < active ? 'done' : n === active ? 'active' : '';
+      const cls = allDone ? 'done' : n < active ? 'done' : n === active ? 'active' : '';
       const num = (n < active || allDone) ? '✓' : String(n);
       return (n > 1 ? '<div class="wizard-sep"></div>' : '') +
         `<div class="wizard-step ${cls}"><div class="wizard-step-num">${num}</div>${s}</div>`;
