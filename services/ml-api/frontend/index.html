@@ -4626,6 +4626,7 @@ async function _applyAutoMLPreprocessing() {
     // Update stepper: Upload ✓ Configure ✓ → Results active
     const stepperEl = document.getElementById('amlWizardStepper');
     if (stepperEl) stepperEl.innerHTML = _automlStepsHTML(3, false);
+    const acc = document.documentElement.style.getPropertyValue('--active-accent') || '#818cf8';
     const rowDiff = result.rows_before - result.rows_after;
     const statCards = [
       { label: 'ROWS',     value: `${result.rows_after.toLocaleString()}`, sub: rowDiff > 0 ? `−${rowDiff.toLocaleString()} removed` : 'no rows removed', color: 'var(--active-accent,#818cf8)' },
@@ -4634,10 +4635,10 @@ async function _applyAutoMLPreprocessing() {
       ...(fsMethod !== 'none' ? [{ label: 'FEATURES', value: `${fsAfter}`, sub: `selected from ${fsBefore}`, color: '#f59e0b' }] : []),
     ];
     resEl.innerHTML = `
-      <div style="padding:1rem 1.1rem 0.75rem;border:1px solid rgba(52,211,153,0.4);border-radius:12px;background:rgba(52,211,153,0.04);margin-bottom:1.4rem">
+      <div style="padding:1rem 1.1rem 0.75rem;border:1px solid ${acc}66;border-radius:12px;background:${acc}0a;margin-bottom:1.4rem">
         <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem">
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="9" stroke="#34d399" stroke-width="1.5"/><path d="M6 10l3 3 5-5" stroke="#34d399" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span style="font-size:0.78rem;font-weight:700;color:#34d399;letter-spacing:0.06em;text-transform:uppercase">Preprocessing Complete</span>
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="9" stroke="${acc}" stroke-width="1.5"/><path d="M6 10l3 3 5-5" stroke="${acc}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span style="font-size:0.78rem;font-weight:700;color:${acc};letter-spacing:0.06em;text-transform:uppercase">Preprocessing Complete</span>
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:0.6rem">
           ${statCards.map(s => `
