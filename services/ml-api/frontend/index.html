@@ -3455,37 +3455,38 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
 
   const hasFI = feature_importance && feature_importance.length > 0;
 
-  // CV score bars — same CSS pattern as Algorithm Comparison (works without any library)
+  // CV score bars — static width (no animation dependency)
+  const _cvScores = (cv_results || []).map(x => x.score);
+  const _cvMaxS   = Math.max(...(_cvScores.length ? _cvScores : [1])) || 1;
   const cvBars = (cv_results || []).map((r, i) => {
-    const isWin   = r.algorithm === winner;
-    const scores  = (cv_results || []).map(x => x.score);
-    const maxS    = Math.max(...scores) || 1;
-    const pct     = isReg ? (50 + 50 * (maxS - r.score) / (maxS || 1)).toFixed(1)
-                           : (r.score / maxS * 100).toFixed(1);
-    const val     = isReg ? r.score.toFixed(4) : (r.score * 100).toFixed(1) + '%';
-    const fill    = isWin ? `background:linear-gradient(90deg,${accent},${accent}bb)`
-                           : `background:var(--border2);filter:brightness(1.8)`;
-    const pill    = isWin ? `<span style="font-size:0.6rem;font-weight:800;padding:0.1rem 0.4rem;border-radius:20px;background:${accent}20;color:${accent};border:1px solid ${accent}50;letter-spacing:0.04em">WINNER</span>` : '';
+    const isWin = r.algorithm === winner;
+    const pct   = isReg ? (50 + 50 * (_cvMaxS - r.score) / _cvMaxS).toFixed(1)
+                        : (r.score / _cvMaxS * 100).toFixed(1);
+    const val   = isReg ? r.score.toFixed(4) : (r.score * 100).toFixed(1) + '%';
+    const fill  = isWin ? `background:linear-gradient(90deg,${accent},${accent}bb)`
+                        : `background:var(--border2);filter:brightness(1.8)`;
+    const pill  = isWin ? `<span style="font-size:0.6rem;font-weight:800;padding:0.1rem 0.4rem;border-radius:20px;background:${accent}20;color:${accent};border:1px solid ${accent}50;letter-spacing:0.04em">WINNER</span>` : '';
     return `<div class="aml-algo-row">
       <div class="aml-algo-header">
         <span class="aml-algo-name${isWin ? ' aml-win' : ''}" style="${isWin ? 'color:'+accent : ''}">${r.algorithm.replace('Random Forest','RF')}</span>
         <div class="aml-algo-right">${pill}<span class="aml-algo-val">${val}</span></div>
       </div>
       <div class="aml-algo-track">
-        <div class="aml-algo-fill" data-target="${pct}" data-delay="${i * 120}" style="width:0%;${fill}"></div>
+        <div class="aml-algo-fill" style="width:${pct}%;${fill}"></div>
       </div>
     </div>`;
   }).join('');
 
-  // Feature importance bars — same pattern as existing FI bars
+  // Feature importance bars — static width
+  const _fiMax = hasFI ? Math.max(...(feature_importance || []).map(f => f.importance)) || 1 : 1;
   const fiBarsExp = hasFI ? (feature_importance || []).slice(0, 10).map((f, i) => {
     const isTop = i < 3;
+    const pct   = (f.importance / _fiMax * 100).toFixed(1);
     return `<div class="aml-feat-row">
       <div class="aml-feat-rank" style="${isTop ? `background:${accent}22;color:${accent}` : ''}">${i + 1}</div>
       <span class="aml-feat-name">${f.feature}</span>
       <div class="aml-feat-track">
-        <div class="aml-feat-fill" data-target="${f.importance}" data-delay="${i * 70 + 300}"
-             style="width:0%;background:linear-gradient(90deg,${accent},${accent}77)"></div>
+        <div class="aml-feat-fill" style="width:${pct}%;background:linear-gradient(90deg,${accent},${accent}77)"></div>
       </div>
       <span class="aml-feat-pct">${f.importance}%</span>
     </div>`;
