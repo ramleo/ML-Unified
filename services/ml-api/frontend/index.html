@@ -3451,7 +3451,7 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
     const n    = cm.length;
     const show = Math.min(n, 5);
     const names = (classNames || []).slice(0, show);
-    const W = 260, pad = 44, cell = (W - pad) / show;
+    const W = 320, pad = 50, cell = (W - pad) / show;
     const maxVal = Math.max(...cm.flat());
     const rows = cm.slice(0, show).map((row, i) =>
       row.slice(0, show).map((v, j) => {
@@ -3467,15 +3467,15 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
       }).join('')
     ).join('');
     const xLabels = names.map((nm, j) =>
-      `<text x="${pad + j*cell + cell/2 - 1}" y="${pad - 6}" font-size="8" fill="var(--text3)" text-anchor="middle">${String(nm).slice(0,8)}</text>`
+      `<text x="${pad + j*cell + cell/2 - 1}" y="${pad - 7}" font-size="9" fill="var(--text3)" text-anchor="middle">${String(nm).slice(0,8)}</text>`
     ).join('');
     const yLabels = names.map((nm, i) =>
-      `<text x="${pad - 5}" y="${pad + i*cell + cell/2}" font-size="8" fill="var(--text3)" text-anchor="end" dominant-baseline="middle">${String(nm).slice(0,8)}</text>`
+      `<text x="${pad - 5}" y="${pad + i*cell + cell/2}" font-size="9" fill="var(--text3)" text-anchor="end" dominant-baseline="middle">${String(nm).slice(0,8)}</text>`
     ).join('');
     const H = pad + show * cell + 8;
-    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:180px">
-      <text x="2" y="${pad + show*cell/2}" font-size="8" fill="var(--text3)" text-anchor="middle" dominant-baseline="middle" transform="rotate(-90,8,${pad+show*cell/2})">Actual</text>
-      <text x="${pad + show*cell/2}" y="${H}" font-size="8" fill="var(--text3)" text-anchor="middle">Predicted</text>
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%">
+      <text x="2" y="${pad + show*cell/2}" font-size="9" fill="var(--text3)" text-anchor="middle" dominant-baseline="middle" transform="rotate(-90,10,${pad+show*cell/2})">Actual</text>
+      <text x="${pad + show*cell/2}" y="${H}" font-size="9" fill="var(--text3)" text-anchor="middle">Predicted</text>
       ${xLabels}${yLabels}${rows}
     </svg>`;
   }
@@ -3483,7 +3483,7 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
   // ── Predicted vs Actual scatter (regression) ──────────────────
   function _scatterSVG(actual, predicted, ac) {
     if (!actual || !actual.length) return '<div style="font-size:0.74rem;color:var(--text3)">Run a new analysis to see scatter plot</div>';
-    const W = 260, H = 180, pad = 36;
+    const W = 320, H = 240, pad = 40;
     const cW = W - pad - 8, cH = H - pad - 14;
     const allV  = [...actual, ...predicted];
     const vMin  = Math.min(...allV), vMax = Math.max(...allV), vRng = (vMax - vMin) || 1;
@@ -3508,7 +3508,7 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
       return `<text x="${xOf(v).toFixed(1)}" y="${pad+cH+11}" font-size="8" fill="var(--text3)" text-anchor="middle">${lbl}</text>
               <text x="${pad-4}" y="${yOf(v).toFixed(1)}" font-size="8" fill="var(--text3)" text-anchor="end" dominant-baseline="middle">${lbl}</text>`;
     }).join('');
-    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:180px">
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%">
       <path d="${bandPath}" fill="${ac}" opacity="0.08"/>
       <path d="${diagLine}" stroke="${ac}" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.5"/>
       <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${pad+cH}" stroke="var(--border2)" stroke-width="1"/>
@@ -3522,7 +3522,7 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
   // ── Learning curve ────────────────────────────────────────────
   function _learningCurveSVG(lc, ac, reg) {
     if (!lc || !lc.train_sizes || !lc.train_sizes.length) return '<div style="font-size:0.74rem;color:var(--text3)">Run a new analysis to see learning curve</div>';
-    const W = 260, H = 130, padL = 36, padR = 8, padT = 10, padB = 22;
+    const W = 320, H = 200, padL = 40, padR = 8, padT = 12, padB = 26;
     const cW = W - padL - padR, cH = H - padT - padB;
     const allV = [...lc.train_scores, ...lc.val_scores];
     const yMin = Math.min(...allV) * 0.97, yMax = Math.max(...allV) * 1.02, yRng = (yMax - yMin) || 1;
@@ -3542,7 +3542,7 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
     const xLabels = lc.train_sizes.map((s, i) =>
       `<text x="${xOf(i).toFixed(1)}" y="${padT+cH+13}" font-size="8" fill="var(--text3)" text-anchor="middle">${s}</text>`
     ).join('');
-    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:130px">
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%">
       ${yTicks}
       <path d="${fillPath}" fill="${ac}" opacity="0.07"/>
       <path d="${trainPath}" fill="none" stroke="${ac}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
