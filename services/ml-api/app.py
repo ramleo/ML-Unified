@@ -973,16 +973,13 @@ def _build_prompt(winner, cv_results, task, selection_metric, is_imbalanced, fea
         f"Dataset: {n_rows:,} rows | Task: {task}{imbalance_note}\n"
         f"Algorithms tested (3-fold cross-validation):\n{results_text}\n\n"
         f"Winner: {winner}\n\nTop features by importance:\n{fi_text}\n\n"
-        f"Write a structured analysis with exactly these four sections. Use the section headers as shown:\n\n"
-        f"**Why {winner} Won**\n"
-        f"2-3 sentences on why this algorithm outperformed the others given the dataset characteristics.\n\n"
-        f"**What the Scores Tell Us**\n"
-        f"2-3 sentences interpreting the cross-validation scores — how close the competition was, "
-        f"what the margin means in practice, and whether the result is reliable.\n\n"
-        f"**Key Drivers**\n"
-        f"2-3 sentences on what the top features reveal about what drives the predictions and any notable patterns.\n\n"
-        f"**Recommendations**\n"
-        f"2-3 actionable next steps: data collection, feature engineering, or deployment considerations.\n\n"
+        f"Return ONLY a valid JSON object with exactly these 4 fields. No markdown, no code fences, no extra text — just the raw JSON:\n\n"
+        f"{{\n"
+        f'  "why_won": "2-3 sentences on why {winner} outperformed the others given the dataset characteristics.",\n'
+        f'  "score_analysis": "2-3 sentences interpreting the cross-validation scores — how close the competition was, what the margin means in practice, and whether the result is reliable.",\n'
+        f'  "key_drivers": "2-3 sentences on what the top features reveal about what drives the predictions and any notable patterns.",\n'
+        f'  "recommendations": ["Actionable next step 1.", "Actionable next step 2.", "Actionable next step 3."]\n'
+        f"}}\n\n"
         f"Be specific to the numbers provided. No generic filler. Avoid jargon."
     )
 
@@ -990,7 +987,9 @@ def _build_prompt(winner, cv_results, task, selection_metric, is_imbalanced, fea
 def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
                      selection_metric: str, is_imbalanced: bool,
                      feature_importance: list, n_rows: int, provider: str = "anthropic"):
+    import json as _json  # noqa: PLC0415
     prompt = _build_prompt(winner, cv_results, task, selection_metric, is_imbalanced, feature_importance, n_rows)
+    raw_text = None
     try:
         if provider == "openai":
             import openai  # noqa: PLC0415
@@ -999,7 +998,7 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
                 model="gpt-4o-mini", max_tokens=800,
                 messages=[{"role": "user", "content": prompt}],
             )
-            return resp.choices[0].message.content.strip()
+            raw_text = resp.choices[0].message.content.strip()
         elif provider == "groq":
             import openai  # noqa: PLC0415
             client = openai.OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
@@ -1007,14 +1006,14 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
                 model="llama-3.3-70b-versatile", max_tokens=800,
                 messages=[{"role": "user", "content": prompt}],
             )
-            return resp.choices[0].message.content.strip()
+            raw_text = resp.choices[0].message.content.strip()
         elif provider in ("gemini-3.5", "gemini-2.5"):
             import google.generativeai as genai  # noqa: PLC0415
             genai.configure(api_key=api_key)
             model_name = "gemini-3.5-flash" if provider == "gemini-3.5" else "gemini-2.5-flash"
             model = genai.GenerativeModel(model_name)
             resp = model.generate_content(prompt)
-            return resp.text.strip()
+            raw_text = resp.text.strip()
         else:
             import anthropic  # noqa: PLC0415
             client = anthropic.Anthropic(api_key=api_key)
@@ -1023,9 +1022,27 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
                 max_tokens=800,
                 messages=[{"role": "user", "content": prompt}],
             )
-            return msg.content[0].text.strip()
+            raw_text = msg.content[0].text.strip()
     except Exception:
         return None
+    if raw_text is None:
+        return None
+    # Strip markdown code fences if the model wrapped the JSON anyway
+    cleaned = raw_text
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("```", 2)[-1] if cleaned.count("```") >= 2 else cleaned
+        cleaned = cleaned.lstrip("json").strip().rstrip("```").strip()
+    try:
+        parsed = _json.loads(cleaned)
+        # Ensure all expected keys exist
+        return {
+            "why_won":         str(parsed.get("why_won", "")),
+            "score_analysis":  str(parsed.get("score_analysis", "")),
+            "key_drivers":     str(parsed.get("key_drivers", "")),
+            "recommendations": parsed.get("recommendations", []),
+        }
+    except (_json.JSONDecodeError, Exception):
+        return {"why_won": raw_text, "score_analysis": "", "key_drivers": "", "recommendations": []}
 
 
 @app.post("/train")
@@ -1307,10 +1324,10 @@ async def train_model(
                         automl_result["is_imbalanced"], automl_result["feature_importance"],
                         len(X),
                     )
-                    automl_result["explanation"]        = llm_exp or rule_exp
+                    automl_result["explanation"]        = llm_exp or {"why_won": rule_exp, "score_analysis": "", "key_drivers": "", "recommendations": []}
                     automl_result["explanation_source"] = "app_key" if llm_exp else "rule"
                 else:
-                    automl_result["explanation"]        = rule_exp
+                    automl_result["explanation"]        = {"why_won": rule_exp, "score_analysis": "", "key_drivers": "", "recommendations": []}
                     automl_result["explanation_source"] = "rule"
                 automl_result["can_upgrade"] = automl_result["explanation_source"] == "rule"
 
@@ -1427,10 +1444,10 @@ async def train_model(
                         "regression", "MAE", False,
                         automl_result["feature_importance"], len(X),
                     )
-                    automl_result["explanation"]        = llm_exp or rule_exp
+                    automl_result["explanation"]        = llm_exp or {"why_won": rule_exp, "score_analysis": "", "key_drivers": "", "recommendations": []}
                     automl_result["explanation_source"] = "app_key" if llm_exp else "rule"
                 else:
-                    automl_result["explanation"]        = rule_exp
+                    automl_result["explanation"]        = {"why_won": rule_exp, "score_analysis": "", "key_drivers": "", "recommendations": []}
                     automl_result["explanation_source"] = "rule"
                 automl_result["can_upgrade"] = automl_result["explanation_source"] == "rule"
 
@@ -1544,7 +1561,7 @@ async def explain_automl(request: Request):
 
     rule_exp = _rule_explanation(winner, cv_results, task, sel_metric,
                                  is_imbal, feat_imp, n_rows)
-    return {"explanation": rule_exp, "source": "rule"}
+    return {"explanation": {"why_won": rule_exp, "score_analysis": "", "key_drivers": "", "recommendations": []}, "source": "rule"}
 
 
 app.include_router(_shap_router.router)

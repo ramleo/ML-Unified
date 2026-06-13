@@ -1165,6 +1165,29 @@ body {
 .aml-key-row      { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.75rem;
                     padding-top: 0.75rem; border-top: 1px solid var(--border2); }
 
+/* ── Explanation Two-Column Dashboard ── */
+.aml-exp-dashboard { display: flex; gap: 1.25rem; align-items: flex-start; margin-bottom: 0.5rem; }
+.aml-exp-left      { flex: 0 0 45%; display: flex; flex-direction: column; gap: 0.75rem; }
+.aml-exp-right     { flex: 0 0 calc(55% - 1.25rem); display: flex; flex-direction: column; gap: 0.75rem; }
+.aml-exp-panel     { background: rgba(255,255,255,0.035); border: 1px solid var(--border2);
+                     border-radius: 10px; padding: 0.85rem 1rem; }
+.aml-exp-panel-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+                       letter-spacing: 0.07em; color: var(--text3); margin-bottom: 0.45rem; }
+.aml-exp-panel-body  { font-size: 0.82rem; color: var(--text2); line-height: 1.6; }
+.aml-exp-recs        { margin: 0; padding-left: 1.1rem; }
+.aml-exp-recs li     { margin-bottom: 0.35rem; }
+.aml-exp-recs li:last-child { margin-bottom: 0; }
+.aml-exp-nodata      { font-size: 0.8rem; color: var(--text3); padding: 0.75rem 0; text-align: center; }
+.aml-exp-win-margin  { display: flex; align-items: center; gap: 1rem; padding: 0.7rem 1rem; }
+.aml-exp-stat        { display: flex; flex-direction: column; }
+.aml-exp-stat-val    { font-size: 1.4rem; font-weight: 800; line-height: 1.1; }
+.aml-exp-stat-lbl    { font-size: 0.75rem; color: var(--text3); margin-top: 0.1rem; }
+.aml-exp-stat-caption { font-size: 0.72rem; color: var(--text3); margin-left: auto; }
+@media (max-width: 640px) {
+  .aml-exp-dashboard { flex-direction: column; }
+  .aml-exp-left, .aml-exp-right { flex: unset; width: 100%; }
+}
+
 /* ── AutoML Results Two-Column Layout ── */
 .aml-results-page { width: 100%; }
 .aml-results-grid {
@@ -3402,6 +3425,151 @@ function _updateProgressBar(fillId, msgId, pctId, pct, msg) {
 // ── AutoML report ─────────────────────────────────────────────
 let _currentAutoMLData = null;
 
+function _renderExplanationDashboard(explanation, cv_results, feature_importance, accent, winner, can_upgrade, isReg, selection_metric) {
+  // Normalize: explanation may be a plain string (legacy) or a structured dict
+  let exp;
+  if (typeof explanation === 'string') {
+    exp = { why_won: explanation, score_analysis: '', key_drivers: '', recommendations: [] };
+  } else if (explanation && typeof explanation === 'object') {
+    exp = explanation;
+  } else {
+    exp = { why_won: '', score_analysis: '', key_drivers: '', recommendations: [] };
+  }
+
+  const recs = Array.isArray(exp.recommendations) ? exp.recommendations : (exp.recommendations ? [String(exp.recommendations)] : []);
+
+  // Win margin indicator from cv_results sorted by score
+  let winMarginHTML = '';
+  if (cv_results && cv_results.length >= 2) {
+    const sorted = [...cv_results].sort((a, b) => isReg ? a.score - b.score : b.score - a.score);
+    const first = sorted[0];
+    const second = sorted[1];
+    const diff = isReg ? second.score - first.score : (first.score - second.score) * 100;
+    const sign = diff >= 0 ? '+' : '';
+    const diffStr = isReg ? sign + diff.toFixed(3) + ' MAE' : sign + diff.toFixed(1) + '%';
+    winMarginHTML = `<div class="aml-exp-stat">
+      <div class="aml-exp-stat-val" style="color:${accent}">${diffStr}</div>
+      <div class="aml-exp-stat-lbl">over ${second.algorithm}</div>
+    </div>`;
+  }
+
+  // CV Scores chart canvas ID
+  const cvCanvasId = 'amlExpCvChart_' + Date.now();
+  const fiCanvasId = 'amlExpFiChart_' + Date.now();
+  const hasFI = feature_importance && feature_importance.length > 0;
+
+  const leftCol = `
+    <div class="aml-exp-left">
+      ${exp.why_won ? `<div class="aml-exp-panel">
+        <div class="aml-exp-panel-title">Why It Won</div>
+        <div class="aml-exp-panel-body">${exp.why_won}</div>
+      </div>` : ''}
+      ${exp.score_analysis ? `<div class="aml-exp-panel">
+        <div class="aml-exp-panel-title">Score Analysis</div>
+        <div class="aml-exp-panel-body">${exp.score_analysis}</div>
+      </div>` : ''}
+      ${exp.key_drivers ? `<div class="aml-exp-panel">
+        <div class="aml-exp-panel-title">Key Drivers</div>
+        <div class="aml-exp-panel-body">${exp.key_drivers}</div>
+      </div>` : ''}
+      ${recs.length > 0 ? `<div class="aml-exp-panel">
+        <div class="aml-exp-panel-title">Recommendations</div>
+        <div class="aml-exp-panel-body"><ul class="aml-exp-recs">${recs.map(r => `<li>${r}</li>`).join('')}</ul></div>
+      </div>` : ''}
+    </div>`;
+
+  const rightCol = `
+    <div class="aml-exp-right">
+      ${winMarginHTML ? `<div class="aml-exp-panel aml-exp-win-margin">${winMarginHTML}<div class="aml-exp-stat-caption">Win margin · ${selection_metric}</div></div>` : ''}
+      <div class="aml-exp-panel">
+        <div class="aml-exp-panel-title">Model CV Scores</div>
+        <div style="position:relative;height:${Math.max(cv_results.length * 36 + 20, 100)}px">
+          <canvas id="${cvCanvasId}"></canvas>
+        </div>
+      </div>
+      <div class="aml-exp-panel">
+        <div class="aml-exp-panel-title">Feature Importance</div>
+        ${hasFI
+          ? `<div style="position:relative;height:${Math.max(Math.min(feature_importance.length, 10) * 32 + 20, 100)}px"><canvas id="${fiCanvasId}"></canvas></div>`
+          : `<div class="aml-exp-nodata">Feature importance not available</div>`}
+      </div>
+    </div>`;
+
+  // Schedule chart rendering after DOM insertion
+  setTimeout(() => {
+    // CV Scores chart
+    const cvEl = document.getElementById(cvCanvasId);
+    if (cvEl && cv_results && cv_results.length > 0) {
+      const sorted = [...cv_results].sort((a, b) => isReg ? b.score - a.score : a.score - b.score);
+      new Chart(cvEl, {
+        type: 'bar',
+        data: {
+          labels: sorted.map(r => r.algorithm),
+          datasets: [{
+            data: sorted.map(r => isReg ? r.score : parseFloat((r.score * 100).toFixed(2))),
+            backgroundColor: sorted.map(r => r.algorithm === winner ? accent + 'cc' : accent + '44'),
+            borderColor: sorted.map(r => r.algorithm === winner ? accent : accent + '88'),
+            borderWidth: 1,
+            borderRadius: 4,
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: ctx => isReg ? ' MAE: ' + ctx.raw.toFixed(3) : ' ' + ctx.raw.toFixed(1) + '%' } }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(255,255,255,0.06)' },
+              ticks: { color: '#9ca3af', font: { size: 11 }, callback: v => isReg ? v.toFixed(2) : v + '%' }
+            },
+            y: { grid: { display: false }, ticks: { color: '#9ca3af', font: { size: 11 } } }
+          }
+        }
+      });
+    }
+    // Feature Importance chart
+    const fiEl = document.getElementById(fiCanvasId);
+    if (fiEl && hasFI) {
+      const top10 = [...feature_importance].sort((a, b) => b.importance - a.importance).slice(0, 10);
+      new Chart(fiEl, {
+        type: 'bar',
+        data: {
+          labels: top10.map(f => f.feature),
+          datasets: [{
+            data: top10.map(f => f.importance),
+            backgroundColor: accent + '77',
+            borderColor: accent + 'bb',
+            borderWidth: 1,
+            borderRadius: 4,
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: ctx => ' ' + ctx.raw.toFixed(1) + '%' } }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(255,255,255,0.06)' },
+              ticks: { color: '#9ca3af', font: { size: 11 }, callback: v => v + '%' }
+            },
+            y: { grid: { display: false }, ticks: { color: '#9ca3af', font: { size: 11 } } }
+          }
+        }
+      });
+    }
+  }, 80);
+
+  return `<div class="aml-exp-dashboard">${leftCol}${rightCol}</div>`;
+}
+
 function _renderAutoMLReport(automl, accent) {
   const { winner, selection_metric, cv_results, feature_importance,
           explanation, explanation_source, can_upgrade, is_imbalanced, n_rows } = automl;
@@ -3566,10 +3734,10 @@ function _renderAutoMLReport(automl, accent) {
 
     <div class="aml-exp-card">
       <div class="aml-exp-header">
-        <div class="aml-exp-title-row">${brainSvg}<span class="aml-exp-title">Why ${winner} won</span></div>
+        <div class="aml-exp-title-row">${brainSvg}<span class="aml-exp-title">AI Explanation</span></div>
         ${srcBadge}
       </div>
-      <div class="aml-exp-text" id="amlExplanation">${explanation || ''}</div>
+      <div id="amlExplanation">${_renderExplanationDashboard(explanation, cv_results, feature_importance, accent, winner, can_upgrade, isReg, selection_metric)}</div>
       ${keyInput}
     </div>
   </div>`;
@@ -3740,15 +3908,11 @@ async function getAIExplanation() {
     const data = await res.json();
     const isAI = data.source === 'user_key';
     const expEl = document.getElementById('amlExplanation');
-    if (expEl) {
-      if (isAI) {
-        expEl.innerHTML = (data.explanation || '').replace(
-          /\*\*(.+?)\*\*/g,
-          '<div style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3);margin:1rem 0 0.35rem">$1</div>'
-        ).replace(/\n\n/g, '</p><p style="margin:0 0 0.25rem">').replace(/\n/g, '<br>').replace(/^/, '<p style="margin:0 0 0.25rem">').replace(/$/, '</p>');
-      } else {
-        expEl.textContent = data.explanation || '';
-      }
+    if (expEl && _currentAutoMLData) {
+      const { cv_results, feature_importance, winner, selection_metric } = _currentAutoMLData;
+      const isReg = selection_metric === 'MAE';
+      const accent = document.documentElement.style.getPropertyValue('--active-accent') || '#818cf8';
+      expEl.innerHTML = _renderExplanationDashboard(data.explanation, cv_results, feature_importance, accent, winner, false, isReg, selection_metric);
     }
     const badge = document.querySelector('.aml-source-badge');
     if (badge && isAI) { badge.textContent = 'AI'; badge.classList.add('aml-ai'); }
