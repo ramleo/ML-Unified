@@ -3453,10 +3453,12 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
     </div>`;
   }
 
-  // CV Scores chart canvas ID
-  const cvCanvasId = 'amlExpCvChart_' + Date.now();
-  const fiCanvasId = 'amlExpFiChart_' + Date.now();
-  const hasFI = feature_importance && feature_importance.length > 0;
+  const hasFI    = feature_importance && feature_importance.length > 0;
+  const cvChartH = Math.max((cv_results || []).length * 40 + 30, 120);
+  const fiChartH = hasFI ? Math.max(Math.min((feature_importance || []).length, 10) * 36 + 30, 120) : 0;
+
+  // Store chart params for explicit post-render call via _drawExpCharts()
+  window._expChartParams = { cv_results, feature_importance, hasFI, isReg, accent, winner, selection_metric, cvChartH, fiChartH };
 
   const leftCol = `
     <div class="aml-exp-left">
@@ -3478,76 +3480,71 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
       </div>` : ''}
     </div>`;
 
-  const cvChartH  = Math.max((cv_results || []).length * 40 + 30, 120);
-  const fiChartH  = hasFI ? Math.max(Math.min((feature_importance || []).length, 10) * 36 + 30, 120) : 0;
-
   const rightCol = `
     <div class="aml-exp-right">
       ${winMarginHTML ? `<div class="aml-exp-panel aml-exp-win-margin">${winMarginHTML}<div class="aml-exp-stat-caption">Win margin · ${selection_metric}</div></div>` : ''}
       <div class="aml-exp-panel">
         <div class="aml-exp-panel-title">Model CV Scores</div>
-        <div id="${cvCanvasId}" style="height:${cvChartH}px;width:100%"></div>
+        <div id="amlExpCvChart" style="height:${cvChartH}px;width:100%"></div>
       </div>
       <div class="aml-exp-panel">
         <div class="aml-exp-panel-title">Feature Importance</div>
         ${hasFI
-          ? `<div id="${fiCanvasId}" style="height:${fiChartH}px;width:100%"></div>`
+          ? `<div id="amlExpFiChart" style="height:${fiChartH}px;width:100%"></div>`
           : `<div class="aml-exp-nodata">Feature importance not available</div>`}
       </div>
     </div>`;
 
-  // Render Plotly charts after DOM insertion
-  setTimeout(() => {
-    if (typeof Plotly === 'undefined') return;
-    const gc  = 'rgba(255,255,255,0.07)';
-    const cfg = { displayModeBar: false, responsive: true };
-
-    // CV Scores chart
-    const cvEl = document.getElementById(cvCanvasId);
-    if (cvEl && cv_results && cv_results.length > 0) {
-      const sorted = [...cv_results].sort((a, b) => a.score - b.score);
-      const vals   = sorted.map(r => isReg ? parseFloat(r.score.toFixed(4)) : parseFloat((r.score * 100).toFixed(2)));
-      const colors = sorted.map(r => r.algorithm === winner ? accent : accent + '55');
-      Plotly.newPlot(cvEl, [{
-        type: 'bar', orientation: 'h',
-        x: vals,
-        y: sorted.map(r => r.algorithm.replace('Random Forest', 'RF')),
-        marker: { color: colors },
-        hovertemplate: isReg ? '%{y}: %{x:.4f}<extra></extra>' : '%{y}: %{x:.1f}%<extra></extra>',
-      }], {
-        height: cvChartH,
-        margin: { l: 90, r: 10, t: 8, b: 30 },
-        paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
-        font: { color: '#9ca3af', size: 11 },
-        xaxis: { gridcolor: gc, tickfont: { size: 10 }, title: { text: isReg ? 'MAE' : selection_metric + ' (%)', font: { size: 10, color: '#6b7280' } } },
-        yaxis: { gridcolor: 'rgba(0,0,0,0)', tickfont: { size: 10 } },
-        showlegend: false,
-      }, cfg);
-    }
-
-    // Feature Importance chart
-    const fiEl = document.getElementById(fiCanvasId);
-    if (fiEl && hasFI) {
-      const top10 = [...feature_importance].sort((a, b) => b.importance - a.importance).slice(0, 10);
-      Plotly.newPlot(fiEl, [{
-        type: 'bar', orientation: 'h',
-        x: top10.map(f => f.importance),
-        y: top10.map(f => f.feature),
-        marker: { color: accent + '99' },
-        hovertemplate: '%{y}: %{x:.1f}%<extra></extra>',
-      }], {
-        height: fiChartH,
-        margin: { l: 110, r: 10, t: 8, b: 30 },
-        paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
-        font: { color: '#9ca3af', size: 11 },
-        xaxis: { gridcolor: gc, tickfont: { size: 10 }, title: { text: 'Importance (%)', font: { size: 10, color: '#6b7280' } } },
-        yaxis: { gridcolor: 'rgba(0,0,0,0)', tickfont: { size: 10 } },
-        showlegend: false,
-      }, cfg);
-    }
-  }, 150);
-
   return `<div class="aml-exp-dashboard">${leftCol}${rightCol}</div>`;
+}
+
+function _drawExpCharts() {
+  const p = window._expChartParams;
+  if (!p || typeof Plotly === 'undefined') return;
+  const gc  = 'rgba(255,255,255,0.07)';
+  const cfg = { displayModeBar: false, responsive: true };
+
+  const cvEl = document.getElementById('amlExpCvChart');
+  if (cvEl && p.cv_results && p.cv_results.length > 0) {
+    const sorted = [...p.cv_results].sort((a, b) => a.score - b.score);
+    const vals   = sorted.map(r => p.isReg ? parseFloat(r.score.toFixed(4)) : parseFloat((r.score * 100).toFixed(2)));
+    const colors = sorted.map(r => r.algorithm === p.winner ? p.accent : p.accent + '55');
+    Plotly.newPlot(cvEl, [{
+      type: 'bar', orientation: 'h',
+      x: vals,
+      y: sorted.map(r => r.algorithm.replace('Random Forest', 'RF')),
+      marker: { color: colors },
+      hovertemplate: p.isReg ? '%{y}: %{x:.4f}<extra></extra>' : '%{y}: %{x:.1f}%<extra></extra>',
+    }], {
+      height: p.cvChartH,
+      margin: { l: 90, r: 10, t: 8, b: 30 },
+      paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+      font: { color: '#9ca3af', size: 11 },
+      xaxis: { gridcolor: gc, tickfont: { size: 10 }, title: { text: p.isReg ? 'MAE' : p.selection_metric + ' (%)', font: { size: 10, color: '#6b7280' } } },
+      yaxis: { gridcolor: 'rgba(0,0,0,0)', tickfont: { size: 10 } },
+      showlegend: false,
+    }, cfg);
+  }
+
+  const fiEl = document.getElementById('amlExpFiChart');
+  if (fiEl && p.hasFI) {
+    const top10 = [...p.feature_importance].sort((a, b) => b.importance - a.importance).slice(0, 10);
+    Plotly.newPlot(fiEl, [{
+      type: 'bar', orientation: 'h',
+      x: top10.map(f => f.importance),
+      y: top10.map(f => f.feature),
+      marker: { color: p.accent + '99' },
+      hovertemplate: '%{y}: %{x:.1f}%<extra></extra>',
+    }], {
+      height: p.fiChartH,
+      margin: { l: 110, r: 10, t: 8, b: 30 },
+      paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+      font: { color: '#9ca3af', size: 11 },
+      xaxis: { gridcolor: gc, tickfont: { size: 10 }, title: { text: 'Importance (%)', font: { size: 10, color: '#6b7280' } } },
+      yaxis: { gridcolor: 'rgba(0,0,0,0)', tickfont: { size: 10 } },
+      showlegend: false,
+    }, cfg);
+  }
 }
 
 function _renderAutoMLReport(automl, accent) {
@@ -3893,6 +3890,7 @@ async function getAIExplanation() {
       const isReg = selection_metric === 'MAE';
       const accent = document.documentElement.style.getPropertyValue('--active-accent') || '#818cf8';
       expEl.innerHTML = _renderExplanationDashboard(data.explanation, cv_results, feature_importance, accent, winner, false, isReg, selection_metric);
+      _drawExpCharts();
     }
     const badge = document.querySelector('.aml-source-badge');
     if (badge && isAI) { badge.textContent = 'AI'; badge.classList.add('aml-ai'); }
@@ -4685,6 +4683,7 @@ function _renderAutoMLResultsPage(result) {
 
   if (result.automl) {
     _animateAutoMLBars();
+    _drawExpCharts();
     setTimeout(() => _amlRenderShap(), 400);
   }
 }
