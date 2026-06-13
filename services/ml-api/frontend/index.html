@@ -3431,72 +3431,78 @@ function _updateProgressBar(fillId, msgId, pctId, pct, msg) {
 // ── AutoML report ─────────────────────────────────────────────
 let _currentAutoMLData = null;
 
-function _renderExplanationDashboard(explanation, cv_results, feature_importance, accent, winner, can_upgrade, isReg, selection_metric) {
-  // Normalize: explanation may be a plain string (legacy) or a structured dict
+function _renderExplanationDashboard(explanation, cv_results, feature_importance, accent, winner, can_upgrade, isReg, selection_metric, winner_metrics) {
   let exp;
   if (typeof explanation === 'string') {
-    exp = { why_won: explanation, score_analysis: '', key_drivers: '', recommendations: [] };
+    exp = { why_won: explanation, score_analysis: '', key_drivers: '', recommendations: [], actionable_insights: [] };
   } else if (explanation && typeof explanation === 'object') {
     exp = explanation;
   } else {
-    exp = { why_won: '', score_analysis: '', key_drivers: '', recommendations: [] };
+    exp = { why_won: '', score_analysis: '', key_drivers: '', recommendations: [], actionable_insights: [] };
   }
 
-  const recs = Array.isArray(exp.recommendations) ? exp.recommendations : (exp.recommendations ? [String(exp.recommendations)] : []);
+  const recs     = Array.isArray(exp.recommendations)      ? exp.recommendations      : [];
+  const insights = Array.isArray(exp.actionable_insights)  ? exp.actionable_insights  : [];
+  const wm       = winner_metrics || {};
 
-  // Win margin indicator from cv_results sorted by score
-  let winMarginHTML = '';
-  if (cv_results && cv_results.length >= 2) {
-    const sorted = [...cv_results].sort((a, b) => isReg ? a.score - b.score : b.score - a.score);
-    const first = sorted[0];
-    const second = sorted[1];
-    const diff = isReg ? second.score - first.score : (first.score - second.score) * 100;
-    const sign = diff >= 0 ? '+' : '';
-    const diffStr = isReg ? sign + diff.toFixed(3) + ' MAE' : sign + diff.toFixed(1) + '%';
-    winMarginHTML = `<div class="aml-exp-stat">
-      <div class="aml-exp-stat-val" style="color:${accent}">${diffStr}</div>
-      <div class="aml-exp-stat-lbl">over ${second.algorithm}</div>
-    </div>`;
-  }
+  // ── CV Fold Stability for winner ──────────────────────────────
+  const winnerResult = (cv_results || []).find(r => r.algorithm === winner);
+  const foldScores   = winnerResult?.fold_scores || [];
+  const foldAvg      = foldScores.length ? foldScores.reduce((a, b) => a + b, 0) / foldScores.length : 0;
+  const foldMax      = foldScores.length ? Math.max(...foldScores) : 1;
+  const foldMin      = foldScores.length ? Math.min(...foldScores) : 0;
+  const foldStd      = foldScores.length > 1
+    ? Math.sqrt(foldScores.reduce((s, x) => s + (x - foldAvg) ** 2, 0) / foldScores.length)
+    : 0;
 
-  const hasFI = feature_importance && feature_importance.length > 0;
-
-  // CV score bars — pure inline styles, no CSS class transitions
-  const _cvScores = (cv_results || []).map(x => x.score);
-  const _cvMaxS   = Math.max(...(_cvScores.length ? _cvScores : [1])) || 1;
-  const cvBars = (cv_results || []).map((r, i) => {
-    const isWin = r.algorithm === winner;
-    const pct   = isReg ? (50 + 50 * (_cvMaxS - r.score) / _cvMaxS).toFixed(1)
-                        : (r.score / _cvMaxS * 100).toFixed(1);
-    const val   = isReg ? r.score.toFixed(4) : (r.score * 100).toFixed(1) + '%';
-    const fillBg = isWin ? `linear-gradient(90deg,${accent},${accent}bb)` : `rgba(255,255,255,0.12)`;
-    const pill  = isWin ? `<span style="font-size:0.6rem;font-weight:800;padding:0.1rem 0.4rem;border-radius:20px;background:${accent}20;color:${accent};border:1px solid ${accent}50;letter-spacing:0.04em">WINNER</span>` : '';
-    return `<div style="margin-bottom:0.7rem">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:0.78rem;font-weight:${isWin ? '800' : '600'};color:${isWin ? accent : 'var(--text2)'}">${r.algorithm.replace('Random Forest','RF')}</span>
-        <div style="display:flex;align-items:center;gap:0.4rem">${pill}<span style="font-size:0.76rem;color:var(--text2)">${val}</span></div>
+  const foldBars = foldScores.length > 0 ? foldScores.map((s, i) => {
+    const isAbove = s >= foldAvg;
+    const pct = isReg
+      ? foldMax > foldMin ? (100 - (s - foldMin) / (foldMax - foldMin) * 80).toFixed(1) : '60'
+      : (foldMax > 0 ? s / foldMax * 100 : 50).toFixed(1);
+    const color  = isAbove ? accent : 'rgba(255,255,255,0.18)';
+    const valStr = isReg ? s.toFixed(3) : (s * 100).toFixed(1) + '%';
+    return `<div style="margin-bottom:0.45rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+        <span style="font-size:0.68rem;color:var(--text3)">Fold ${i + 1}</span>
+        <span style="font-size:0.68rem;font-weight:600;color:${isAbove ? accent : 'var(--text3)'}">${valStr}</span>
       </div>
-      <div style="height:28px;background:rgba(255,255,255,0.08);border-radius:6px;overflow:hidden">
-        <div style="height:100%;width:${pct}%;background:${fillBg};border-radius:6px"></div>
+      <div style="height:7px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${color};border-radius:4px"></div>
       </div>
     </div>`;
-  }).join('');
+  }).join('') : '<div style="font-size:0.74rem;color:var(--text3)">Run a new analysis to see fold data</div>';
 
-  // Feature importance bars — pure inline styles
-  const _fiMax = hasFI ? Math.max(...(feature_importance || []).map(f => f.importance)) || 1 : 1;
-  const fiBarsExp = hasFI ? (feature_importance || []).slice(0, 10).map((f, i) => {
-    const isTop = i < 3;
-    const pct   = (f.importance / _fiMax * 100).toFixed(1);
-    return `<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
-      <div style="width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:800;flex-shrink:0;background:${isTop ? accent+'22' : 'rgba(255,255,255,0.08)'};color:${isTop ? accent : 'var(--text3)'}">${i + 1}</div>
-      <span style="font-size:0.73rem;width:80px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text2)">${f.feature}</span>
-      <div style="flex:1;height:20px;background:rgba(255,255,255,0.08);border-radius:5px;overflow:hidden">
-        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,${accent},${accent}77);border-radius:5px"></div>
-      </div>
-      <span style="font-size:0.7rem;color:var(--text2);width:34px;text-align:right;flex-shrink:0">${f.importance}%</span>
-    </div>`;
-  }).join('') : '';
+  const foldFooter = foldScores.length > 1 ? `
+    <div style="display:flex;gap:1rem;margin-top:0.5rem;padding-top:0.45rem;border-top:1px solid var(--border2)">
+      <div><div style="font-size:0.58rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3)">Std Dev</div>
+           <div style="font-size:0.78rem;font-weight:700;color:var(--text1)">${isReg ? foldStd.toFixed(4) : (foldStd * 100).toFixed(2) + '%'}</div></div>
+      <div><div style="font-size:0.58rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3)">Range</div>
+           <div style="font-size:0.78rem;font-weight:700;color:var(--text1)">${isReg ? (foldMax - foldMin).toFixed(4) : ((foldMax - foldMin) * 100).toFixed(2) + '%'}</div></div>
+      <div><div style="font-size:0.58rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3)">Stability</div>
+           <div style="font-size:0.78rem;font-weight:700;color:${foldStd < 0.02 ? '#34d399' : foldStd < 0.05 ? '#fbbf24' : '#f87171'}">${foldStd < 0.02 ? 'High' : foldStd < 0.05 ? 'Medium' : 'Low'}</div></div>
+    </div>` : '';
 
+  // ── Key Metrics grid ──────────────────────────────────────────
+  const metricEntries = isReg ? [
+    ['MAE',  wm.mae  != null ? String(wm.mae.toFixed(3))  : '—'],
+    ['RMSE', wm.rmse != null ? String(wm.rmse.toFixed(3)) : '—'],
+    ['R²',   wm.r2   != null ? String(wm.r2.toFixed(3))  : '—'],
+  ] : [
+    ['Accuracy',  wm.accuracy    != null ? (wm.accuracy    * 100).toFixed(1) + '%' : '—'],
+    ['F1 Score',  wm.f1_weighted != null ? (wm.f1_weighted * 100).toFixed(1) + '%' : '—'],
+    ['Precision', wm.precision   != null ? (wm.precision   * 100).toFixed(1) + '%' : '—'],
+    ['Recall',    wm.recall      != null ? (wm.recall      * 100).toFixed(1) + '%' : '—'],
+    ...(wm.roc_auc != null ? [['ROC-AUC', wm.roc_auc.toFixed(3)]] : []),
+  ];
+  const metricsGrid = metricEntries.map(([lbl, val]) =>
+    `<div style="padding:0.45rem 0.55rem;border-radius:7px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
+      <div style="font-size:0.56rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text3)">${lbl}</div>
+      <div style="font-size:0.9rem;font-weight:800;color:${accent};margin-top:0.12rem">${val}</div>
+    </div>`
+  ).join('');
+
+  // ── Left column ───────────────────────────────────────────────
   const leftCol = `
     <div class="aml-exp-left">
       ${exp.why_won ? `<div class="aml-exp-panel">
@@ -3517,26 +3523,44 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
       </div>` : ''}
     </div>`;
 
+  // ── Right column ──────────────────────────────────────────────
   const rightCol = `
     <div class="aml-exp-right">
-      <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:0.1rem">Training Results</div>
-      ${winMarginHTML ? `<div class="aml-exp-panel aml-exp-win-margin">${winMarginHTML}<div class="aml-exp-stat-caption">Win margin · ${selection_metric}</div></div>` : ''}
       <div class="aml-exp-panel">
-        <div class="aml-exp-panel-title">Model CV Scores</div>
-        ${cvBars || '<div class="aml-exp-nodata">No scores available</div>'}
+        <div class="aml-exp-panel-title">CV Fold Stability · ${(winner || '').replace('Random Forest', 'RF')}</div>
+        <div style="font-size:0.67rem;color:var(--text3);margin-bottom:0.55rem">${isReg ? 'Lower MAE per fold = better · bars show relative performance' : 'Per-fold ' + selection_metric + ' · above-avg folds highlighted'}</div>
+        ${foldBars}
+        ${foldFooter}
       </div>
-      ${hasFI ? `<div class="aml-exp-panel">
-        <div class="aml-exp-panel-title">Feature Importance</div>
-        ${fiBarsExp}
-      </div>` : ''}
+      <div class="aml-exp-panel">
+        <div class="aml-exp-panel-title">Winner Model Metrics</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;margin-top:0.3rem">
+          ${metricsGrid || '<div style="font-size:0.74rem;color:var(--text3)">Run a new analysis to see metrics</div>'}
+        </div>
+      </div>
     </div>`;
 
-  return `<div class="aml-exp-dashboard">${leftCol}${rightCol}</div>`;
+  // ── Actionable Insights (below, full-width) ───────────────────
+  const insightIcons = ['💡', '🎯', '⚡', '🔍'];
+  const insightsHTML = insights.length > 0 ? `
+    <div style="margin-top:1rem;padding-top:0.85rem;border-top:1px solid var(--border2)">
+      <div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:0.65rem">Actionable Insights</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:0.65rem">
+        ${insights.map((ins, i) => `
+        <div style="padding:0.75rem 0.8rem;border-radius:10px;background:rgba(255,255,255,0.025);border:1px solid var(--border2)">
+          <div style="font-size:0.74rem;font-weight:700;color:${accent};margin-bottom:0.3rem">${insightIcons[i % 4]} ${ins.title || ''}</div>
+          <div style="font-size:0.72rem;color:var(--text2);line-height:1.55">${ins.detail || ''}</div>
+        </div>`).join('')}
+      </div>
+    </div>` : '';
+
+  return `<div class="aml-exp-dashboard">${leftCol}${rightCol}</div>${insightsHTML}`;
 }
 
 function _renderAutoMLReport(automl, accent) {
   const { winner, selection_metric, cv_results, feature_importance,
-          explanation, explanation_source, can_upgrade, is_imbalanced, n_rows } = automl;
+          explanation, explanation_source, can_upgrade, is_imbalanced, n_rows,
+          winner_metrics } = automl;
   const isReg = selection_metric === 'MAE';
 
   const scores  = cv_results.map(r => r.score);
@@ -3702,7 +3726,7 @@ function _renderAutoMLReport(automl, accent) {
         ${srcBadge}
       </div>
       <div id="amlExplanation">${isAI
-        ? _renderExplanationDashboard(explanation, cv_results, feature_importance, accent, winner, can_upgrade, isReg, selection_metric)
+        ? _renderExplanationDashboard(explanation, cv_results, feature_importance, accent, winner, can_upgrade, isReg, selection_metric, winner_metrics)
         : `<p class="aml-exp-text">${typeof explanation === 'string' ? explanation : (explanation?.why_won || '')}</p>`
       }</div>
       ${keyInput}
@@ -3876,10 +3900,10 @@ async function getAIExplanation() {
     const isAI = data.source === 'user_key';
     const expEl = document.getElementById('amlExplanation');
     if (expEl && _currentAutoMLData) {
-      const { cv_results, feature_importance, winner, selection_metric } = _currentAutoMLData;
+      const { cv_results, feature_importance, winner, selection_metric, winner_metrics } = _currentAutoMLData;
       const isReg = selection_metric === 'MAE';
       const accent = document.documentElement.style.getPropertyValue('--active-accent') || '#818cf8';
-      expEl.innerHTML = _renderExplanationDashboard(data.explanation, cv_results, feature_importance, accent, winner, false, isReg, selection_metric);
+      expEl.innerHTML = _renderExplanationDashboard(data.explanation, cv_results, feature_importance, accent, winner, false, isReg, selection_metric, winner_metrics);
       _animateAutoMLBars();
     }
     const badge = document.querySelector('.aml-source-badge');
