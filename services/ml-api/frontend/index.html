@@ -562,13 +562,13 @@ body {
   transition: width 0.55s cubic-bezier(0.4,0,0.2,1), left 0.55s ease;
 }
 .shap-bar-fill.pos { background: var(--active-accent, var(--accent-from)); left: 50%; }
-.shap-bar-fill.neg { background: color-mix(in srgb, var(--color-danger) 80%, transparent); right: 50%; }
+.shap-bar-fill.neg { background: color-mix(in srgb, var(--active-accent, var(--accent-from)) 55%, transparent); right: 50%; }
 .shap-val {
   font-size: 0.72rem; font-weight: 700;
   text-align: right; font-variant-numeric: tabular-nums;
 }
 .shap-val.pos { color: var(--active-accent, var(--accent-from)); }
-.shap-val.neg { color: var(--color-danger); }
+.shap-val.neg { color: var(--active-accent, var(--accent-from)); }
 .shap-base {
   padding: 0.7rem 1.5rem;
   border-top: 1px solid var(--border);
@@ -2615,7 +2615,7 @@ async function runWhatifSweep(fieldName) {
 }
 
 function drawWhatifChart(points, field, schema) {
-  const accent = activeModel?.accent || 'var(--accent-from)';
+  const accent = document.documentElement.style.getPropertyValue('--active-accent') || activeModel?.accent || 'var(--accent-from)';
   const isCat  = field.type === 'select';
   const isClf  = schema.task === 'classification';
   const W = 400, H = 130, padL = 46, padR = 12, padT = 16, padB = 34;
@@ -4628,9 +4628,9 @@ async function _applyAutoMLPreprocessing() {
     if (stepperEl) stepperEl.innerHTML = _automlStepsHTML(3, false);
     const rowDiff = result.rows_before - result.rows_after;
     const statCards = [
-      { label: 'ROWS',     value: `${result.rows_after.toLocaleString()}`, sub: rowDiff > 0 ? `−${rowDiff.toLocaleString()} removed` : 'no rows removed', color: '#34d399' },
+      { label: 'ROWS',     value: `${result.rows_after.toLocaleString()}`, sub: rowDiff > 0 ? `−${rowDiff.toLocaleString()} removed` : 'no rows removed', color: 'var(--active-accent,#818cf8)' },
       { label: 'COLUMNS',  value: `${result.cols_after}`, sub: [result.user_cols_dropped ? `−${result.user_cols_dropped} dropped` : '', result.ohe_cols_added ? `+${result.ohe_cols_added} OHE` : ''].filter(Boolean).join(', ') || `from ${result.cols_before}`, color: 'var(--active-accent,#818cf8)' },
-      { label: 'MISSING',  value: `${result.total_missing}`, sub: result.total_missing === 0 ? 'all resolved' : 'remaining', color: result.total_missing === 0 ? '#34d399' : '#fbbf24' },
+      { label: 'MISSING',  value: `${result.total_missing}`, sub: result.total_missing === 0 ? 'all resolved' : 'remaining', color: result.total_missing === 0 ? 'var(--active-accent,#818cf8)' : '#fbbf24' },
       ...(fsMethod !== 'none' ? [{ label: 'FEATURES', value: `${fsAfter}`, sub: `selected from ${fsBefore}`, color: '#f59e0b' }] : []),
     ];
     resEl.innerHTML = `
