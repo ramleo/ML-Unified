@@ -1028,10 +1028,10 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
     if raw_text is None:
         return None
     # Strip markdown code fences if the model wrapped the JSON anyway
-    cleaned = raw_text
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("```", 2)[-1] if cleaned.count("```") >= 2 else cleaned
-        cleaned = cleaned.lstrip("json").strip().rstrip("```").strip()
+    import re as _re
+    cleaned = raw_text.strip()
+    cleaned = _re.sub(r'^```[a-z]*\n?', '', cleaned)
+    cleaned = _re.sub(r'\n?```$', '', cleaned).strip()
     try:
         parsed = _json.loads(cleaned)
         # Ensure all expected keys exist
