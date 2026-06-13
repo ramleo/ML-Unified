@@ -3498,21 +3498,14 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
 
   // Render Plotly charts after DOM insertion
   setTimeout(() => {
-    const plotLayout = (xTitle) => ({
-      margin: { l: 110, r: 10, t: 10, b: 30 },
-      paper_bgcolor: 'rgba(0,0,0,0)',
-      plot_bgcolor:  'rgba(0,0,0,0)',
-      font: { color: '#9ca3af', size: 11 },
-      xaxis: { gridcolor: 'rgba(255,255,255,0.06)', title: { text: xTitle, font: { size: 10 } }, tickfont: { size: 10 } },
-      yaxis: { gridcolor: 'rgba(0,0,0,0)', tickfont: { size: 10 } },
-      showlegend: false,
-    });
-    const plotConfig = { displayModeBar: false, responsive: true };
+    if (typeof Plotly === 'undefined') return;
+    const gc  = 'rgba(255,255,255,0.07)';
+    const cfg = { displayModeBar: false, responsive: true };
 
     // CV Scores chart
     const cvEl = document.getElementById(cvCanvasId);
     if (cvEl && cv_results && cv_results.length > 0) {
-      const sorted = [...cv_results].sort((a, b) => isReg ? a.score - b.score : a.score - b.score);
+      const sorted = [...cv_results].sort((a, b) => a.score - b.score);
       const vals   = sorted.map(r => isReg ? parseFloat(r.score.toFixed(4)) : parseFloat((r.score * 100).toFixed(2)));
       const colors = sorted.map(r => r.algorithm === winner ? accent : accent + '55');
       Plotly.newPlot(cvEl, [{
@@ -3521,7 +3514,15 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
         y: sorted.map(r => r.algorithm.replace('Random Forest', 'RF')),
         marker: { color: colors },
         hovertemplate: isReg ? '%{y}: %{x:.4f}<extra></extra>' : '%{y}: %{x:.1f}%<extra></extra>',
-      }], plotLayout(isReg ? 'MAE' : selection_metric + ' (%)'), plotConfig);
+      }], {
+        height: cvChartH,
+        margin: { l: 90, r: 10, t: 8, b: 30 },
+        paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+        font: { color: '#9ca3af', size: 11 },
+        xaxis: { gridcolor: gc, tickfont: { size: 10 }, title: { text: isReg ? 'MAE' : selection_metric + ' (%)', font: { size: 10, color: '#6b7280' } } },
+        yaxis: { gridcolor: 'rgba(0,0,0,0)', tickfont: { size: 10 } },
+        showlegend: false,
+      }, cfg);
     }
 
     // Feature Importance chart
@@ -3534,9 +3535,17 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
         y: top10.map(f => f.feature),
         marker: { color: accent + '99' },
         hovertemplate: '%{y}: %{x:.1f}%<extra></extra>',
-      }], plotLayout('Importance (%)'), plotConfig);
+      }], {
+        height: fiChartH,
+        margin: { l: 110, r: 10, t: 8, b: 30 },
+        paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+        font: { color: '#9ca3af', size: 11 },
+        xaxis: { gridcolor: gc, tickfont: { size: 10 }, title: { text: 'Importance (%)', font: { size: 10, color: '#6b7280' } } },
+        yaxis: { gridcolor: 'rgba(0,0,0,0)', tickfont: { size: 10 } },
+        showlegend: false,
+      }, cfg);
     }
-  }, 80);
+  }, 150);
 
   return `<div class="aml-exp-dashboard">${leftCol}${rightCol}</div>`;
 }
