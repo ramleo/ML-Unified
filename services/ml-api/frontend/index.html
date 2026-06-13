@@ -4105,10 +4105,14 @@ function _renderAutoMLStep1b(preselectedTarget) {
   const highCardCols = a.columns.filter(c =>
     c.name !== effectiveTarget && !c.is_numeric && (c.nunique || 0) > 20
   );
-  // Likely numeric ID columns — nearly all unique values (>90% of rows)
-  const likelyIdCols = a.columns.filter(c =>
-    c.name !== effectiveTarget && c.is_numeric && (c.nunique || 0) / (a.rows || 1) >= 0.9
-  );
+  // Likely numeric ID columns — nearly all unique values (>90% of rows) OR "id" in name
+  const likelyIdCols = a.columns.filter(c => {
+    if (c.name === effectiveTarget) return false;
+    const nm = c.name.toLowerCase();
+    const nameHasId = nm === 'id' || nm.endsWith('id') || nm.includes('_id') || nm.startsWith('id_');
+    if (nameHasId) return true;
+    return c.is_numeric && (c.nunique || 0) / (a.rows || 1) >= 0.9;
+  });
 
   // Detect issues
   const hasMissing   = (a.total_missing || 0) > 0 || a.columns.some(c => (c.missing || 0) > 0);
@@ -4142,7 +4146,7 @@ function _renderAutoMLStep1b(preselectedTarget) {
 
   document.getElementById('main').innerHTML = `
     <div class="wizard">
-      ${_automlStepsHTML(1, false)}
+      <div id="amlWizardStepper">${_automlStepsHTML(1, false)}</div>
       <h2 style="font-size:1.3rem;font-weight:800;margin-bottom:0.4rem">Data Quality &amp; Preprocessing</h2>
       <p style="font-size:0.85rem;color:var(--text2);margin-bottom:1rem">
         Analysed <strong>${(a.rows || 0).toLocaleString()} rows</strong> &middot;
@@ -4162,21 +4166,26 @@ function _renderAutoMLStep1b(preselectedTarget) {
 
       <div id="amlPrepOptions" style="display:none">
 
-        ${(highCardCols.length || likelyIdCols.length) ? `
+        ${(() => {
+          const autoDetected = new Set([...likelyIdCols, ...highCardCols].map(c => c.name));
+          const manualCols   = a.columns
+            .filter(c => c.name !== effectiveTarget && !autoDetected.has(c.name))
+            .map(c => c.name);
+          return `
         <div style="padding:0.85rem 1rem;border:1px solid rgba(251,191,36,0.3);border-radius:12px;background:rgba(251,191,36,0.05);margin-bottom:1.2rem">
           <div style="font-size:0.8rem;font-weight:700;color:#fbbf24;margin-bottom:0.35rem">
             ⚠ Columns to consider dropping
           </div>
           <div style="font-size:0.75rem;color:var(--text2);margin-bottom:0.75rem;line-height:1.5">
-            These columns are likely IDs, names, or codes that add noise. Check the ones you want to <strong style="color:#f87171">drop</strong>:
+            Auto-detected ID/name/code columns. Check to <strong style="color:#f87171">drop</strong>, or add more below:
           </div>
-          <div style="display:flex;flex-direction:column;gap:0.4rem">
+          <div id="amlDropColList" style="display:flex;flex-direction:column;gap:0.4rem">
             ${likelyIdCols.map(c => `
             <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;cursor:pointer;padding:0.35rem 0.5rem;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
               <input type="checkbox" class="aml-drop-col" value="${c.name}" checked
                      style="accent-color:#f87171;flex-shrink:0">
               <span style="color:var(--text1);font-weight:500">${c.name}</span>
-              <span style="margin-left:auto;font-size:0.7rem;color:#f59e0b">numeric ID · ${c.nunique} unique</span>
+              <span style="margin-left:auto;font-size:0.7rem;color:#f59e0b">ID column · ${c.nunique} unique</span>
             </label>`).join('')}
             ${highCardCols.map(c => `
             <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;cursor:pointer;padding:0.35rem 0.5rem;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
@@ -4186,7 +4195,15 @@ function _renderAutoMLStep1b(preselectedTarget) {
               <span style="margin-left:auto;font-size:0.7rem;color:var(--text3)">text · ${c.nunique} unique</span>
             </label>`).join('')}
           </div>
-        </div>` : ''}
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.6rem">
+            <select id="amlDropExtraSelect" class="field-select" style="flex:1;padding:0.2rem 0.5rem;font-size:0.78rem;background:transparent;border-color:var(--border2)">
+              <option value="">+ add column to drop…</option>
+              ${manualCols.map(n => `<option value="${n}">${n}</option>`).join('')}
+            </select>
+            <button class="btn btn-clear" style="padding:0.25rem 0.7rem;font-size:0.75rem;white-space:nowrap" onclick="_amlAddDropCol()">Add</button>
+          </div>
+        </div>`;
+        })()}
 
         <div style="font-size:0.72rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem">Select Preprocessing Options</div>
 
@@ -4313,8 +4330,27 @@ function _renderAutoMLStep1b(preselectedTarget) {
 function _showAutoMLPrepOptions() {
   document.getElementById('amlPrepYesNo').style.display    = 'none';
   document.getElementById('amlPrepOptions').style.display  = 'block';
+  const stepperEl = document.getElementById('amlWizardStepper');
+  if (stepperEl) stepperEl.innerHTML = _automlStepsHTML(2, false);
   _onEncMethodChange();
   _onMissingMethodChange();
+}
+
+function _amlAddDropCol() {
+  const sel = document.getElementById('amlDropExtraSelect');
+  const col = sel?.value;
+  if (!col) return;
+  const list = document.getElementById('amlDropColList');
+  if (!list) return;
+  const row = document.createElement('label');
+  row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;cursor:pointer;padding:0.35rem 0.5rem;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid var(--border)';
+  row.innerHTML = `<input type="checkbox" class="aml-drop-col" value="${col}" checked style="accent-color:#f87171;flex-shrink:0">
+    <span style="color:var(--text1);font-weight:500">${col}</span>
+    <span style="margin-left:auto;font-size:0.7rem;color:var(--text3)">added</span>`;
+  list.appendChild(row);
+  const opt = sel.querySelector(`option[value="${col}"]`);
+  if (opt) opt.remove();
+  sel.value = '';
 }
 
 function _onMissingMethodChange() {
@@ -4512,9 +4548,9 @@ async function _applyAutoMLPreprocessing() {
       if (result.ohe_cols_added)    parts.push(`+${result.ohe_cols_added} OHE`);
       return parts.length ? ` <span style="color:var(--text3);font-weight:400">(${parts.join(', ')})</span>` : '';
     })();
-    // Update stepper to show Configure as done
-    const stepsEl = document.querySelector('.wizard-steps');
-    if (stepsEl) stepsEl.outerHTML = _automlStepsHTML(3, false);
+    // Update stepper: Upload ✓ Configure ✓ → Results active
+    const stepperEl = document.getElementById('amlWizardStepper');
+    if (stepperEl) stepperEl.innerHTML = _automlStepsHTML(3, false);
     resEl.innerHTML = `
       <div style="padding:0.85rem 1rem;border:1px solid #34d399;border-radius:8px;background:transparent;margin-bottom:1.2rem">
         <div style="font-size:0.82rem;font-weight:700;color:#34d399;margin-bottom:0.5rem">Preprocessing complete</div>
