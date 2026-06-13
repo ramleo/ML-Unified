@@ -413,44 +413,63 @@ async def automl_preprocess(request: Request):
     num_cols = df_feat.select_dtypes(include="number").columns.tolist()
     cat_cols = df_feat.select_dtypes(exclude="number").columns.tolist()
 
-    # 1. Handle missing values
-    mv = options.get("missing_values")
-    if mv == "drop":
-        df_feat = df_feat.dropna()
-        if target_series is not None:
-            target_series = target_series.loc[df_feat.index]
-    elif mv == "ffill":
-        df_feat = df_feat.ffill()
-    elif mv == "bfill":
-        df_feat = df_feat.bfill()
-    elif mv == "constant":
-        df_feat[num_cols] = df_feat[num_cols].fillna(0)
-        df_feat[cat_cols] = df_feat[cat_cols].fillna("Unknown")
-    elif mv == "knn":
-        from sklearn.impute import KNNImputer  # noqa: PLC0415
-        if num_cols:
-            knn_imp = KNNImputer(n_neighbors=5)
-            df_feat[num_cols] = knn_imp.fit_transform(df_feat[num_cols])
-        if cat_cols:
-            cat_imp = SimpleImputer(strategy="most_frequent")
-            df_feat[cat_cols] = cat_imp.fit_transform(df_feat[cat_cols])
-    elif mv == "mice":
-        from sklearn.experimental import enable_iterative_imputer  # noqa: PLC0415, F401
-        from sklearn.impute import IterativeImputer  # noqa: PLC0415
-        if num_cols:
-            mice_imp = IterativeImputer(max_iter=10, random_state=42)
-            df_feat[num_cols] = mice_imp.fit_transform(df_feat[num_cols])
-        if cat_cols:
-            cat_imp = SimpleImputer(strategy="most_frequent")
-            df_feat[cat_cols] = cat_imp.fit_transform(df_feat[cat_cols])
-    elif mv in ("mean", "median", "mode"):
-        strategy = "most_frequent" if mv == "mode" else mv
-        if num_cols:
-            num_imp = SimpleImputer(strategy=strategy if mv != "mode" else "most_frequent")
-            df_feat[num_cols] = num_imp.fit_transform(df_feat[num_cols])
-        if cat_cols:
-            cat_imp = SimpleImputer(strategy="most_frequent")
-            df_feat[cat_cols] = cat_imp.fit_transform(df_feat[cat_cols])
+    # 1. Handle missing values — separate strategies for numeric and categorical
+    # Supports mv_num / mv_cat (new) or missing_values (legacy, maps to both)
+    old_mv = options.get("missing_values")
+    mv_num = options.get("mv_num") or old_mv
+    mv_cat = options.get("mv_cat") or (
+        "most_frequent" if old_mv in ("mean", "median", "knn", "mice") else old_mv
+    )
+
+    def _impute_num(cols):
+        if not cols:
+            return
+        if mv_num == "drop":
+            nonlocal df_feat, target_series
+            mask = df_feat[cols].notna().all(axis=1)
+            df_feat = df_feat[mask]
+            if target_series is not None:
+                target_series = target_series.loc[df_feat.index]
+        elif mv_num == "ffill":
+            df_feat[cols] = df_feat[cols].ffill()
+        elif mv_num == "bfill":
+            df_feat[cols] = df_feat[cols].bfill()
+        elif mv_num == "constant":
+            df_feat[cols] = df_feat[cols].fillna(0)
+        elif mv_num == "knn":
+            from sklearn.impute import KNNImputer  # noqa: PLC0415
+            df_feat[cols] = KNNImputer(n_neighbors=5).fit_transform(df_feat[cols])
+        elif mv_num == "mice":
+            from sklearn.experimental import enable_iterative_imputer  # noqa: PLC0415, F401
+            from sklearn.impute import IterativeImputer  # noqa: PLC0415
+            df_feat[cols] = IterativeImputer(max_iter=10, random_state=42).fit_transform(df_feat[cols])
+        elif mv_num in ("mean", "median", "mode"):
+            strategy = "most_frequent" if mv_num == "mode" else mv_num
+            df_feat[cols] = SimpleImputer(strategy=strategy).fit_transform(df_feat[cols])
+
+    def _impute_cat(cols):
+        if not cols:
+            return
+        if mv_cat == "drop":
+            nonlocal df_feat, target_series
+            mask = df_feat[cols].notna().all(axis=1)
+            df_feat = df_feat[mask]
+            if target_series is not None:
+                target_series = target_series.loc[df_feat.index]
+        elif mv_cat == "ffill":
+            df_feat[cols] = df_feat[cols].ffill()
+        elif mv_cat == "bfill":
+            df_feat[cols] = df_feat[cols].bfill()
+        elif mv_cat == "constant":
+            df_feat[cols] = df_feat[cols].fillna("Unknown")
+        elif mv_cat in ("most_frequent", "mode"):
+            df_feat[cols] = SimpleImputer(strategy="most_frequent").fit_transform(df_feat[cols])
+
+    if mv_num or mv_cat:
+        _impute_num(num_cols)
+        # Re-derive cat_cols after possible row drops from numeric drop
+        cat_cols = df_feat.select_dtypes(exclude="number").columns.tolist()
+        _impute_cat(cat_cols)
 
     # 2. Remove outliers (IQR)
     if options.get("remove_outliers") and num_cols:

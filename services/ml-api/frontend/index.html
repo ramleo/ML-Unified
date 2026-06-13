@@ -4180,20 +4180,31 @@ function _renderAutoMLStep1b(preselectedTarget) {
 
           <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
             <input type="checkbox" id="amlPrepMissing" ${hasMissing ? 'checked' : ''} style="accent-color:var(--active-accent,var(--accent));margin-top:2px">
-            <span>
+            <span style="flex:1">
               Handle missing values
-              <select id="amlPrepMissingMethod" class="field-select" style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:auto;background:transparent;border-color:var(--border2)" onchange="_onMissingMethodChange()">
-                <option value="median" selected>Median (recommended)</option>
-                <option value="mean">Mean</option>
-                <option value="mode">Mode (most frequent)</option>
-                <option value="knn">KNN imputation (k=5)</option>
-                <option value="mice">MICE / Iterative imputation</option>
-                <option value="ffill">Forward fill</option>
-                <option value="bfill">Backward fill</option>
-                <option value="constant">Constant value (0 / "Unknown")</option>
-                <option value="drop">Drop rows with missing values</option>
-              </select>
-              <div id="amlMissingSlowWarn" style="display:none;font-size:0.73rem;color:#f59e0b;margin-top:0.3rem">&#9888; Slower on large datasets.</div>
+              <div id="amlMissingOpts" style="display:grid;grid-template-columns:auto 1fr;gap:0.3rem 0.5rem;align-items:center;margin-top:0.45rem">
+                <span style="font-size:0.75rem;color:var(--text3)">Numeric</span>
+                <select id="amlPrepMissingNum" class="field-select" style="padding:0.2rem 0.5rem;font-size:0.78rem;background:transparent;border-color:var(--border2)" onchange="_onMissingMethodChange()">
+                  <option value="median" selected>Median (recommended)</option>
+                  <option value="mean">Mean</option>
+                  <option value="mode">Mode</option>
+                  <option value="knn">KNN (k=5)</option>
+                  <option value="mice">MICE / Iterative</option>
+                  <option value="ffill">Forward fill</option>
+                  <option value="bfill">Backward fill</option>
+                  <option value="constant">Constant (0)</option>
+                  <option value="drop">Drop rows</option>
+                </select>
+                <span style="font-size:0.75rem;color:var(--text3)">Categorical</span>
+                <select id="amlPrepMissingCat" class="field-select" style="padding:0.2rem 0.5rem;font-size:0.78rem;background:transparent;border-color:var(--border2)">
+                  <option value="most_frequent" selected>Most frequent (recommended)</option>
+                  <option value="constant">Constant ("Unknown")</option>
+                  <option value="ffill">Forward fill</option>
+                  <option value="bfill">Backward fill</option>
+                  <option value="drop">Drop rows</option>
+                </select>
+              </div>
+              <div id="amlMissingSlowWarn" style="display:none;font-size:0.73rem;color:#f59e0b;margin-top:0.3rem">&#9888; KNN / MICE are slower on large datasets.</div>
             </span>
           </label>
 
@@ -4293,10 +4304,13 @@ function _showAutoMLPrepOptions() {
 }
 
 function _onMissingMethodChange() {
-  const mv      = document.getElementById('amlPrepMissingMethod')?.value || 'median';
+  const mv_num  = document.getElementById('amlPrepMissingNum')?.value || 'median';
   const warnEl  = document.getElementById('amlMissingSlowWarn');
+  const optsEl  = document.getElementById('amlMissingOpts');
+  const checked = document.getElementById('amlPrepMissing')?.checked;
+  if (optsEl) optsEl.style.display = checked ? 'grid' : 'none';
   if (!warnEl) return;
-  warnEl.style.display = (mv === 'knn' || mv === 'mice') ? 'block' : 'none';
+  warnEl.style.display = (mv_num === 'knn' || mv_num === 'mice') ? 'block' : 'none';
 }
 
 function _onEncMethodChange() {
@@ -4415,8 +4429,10 @@ async function _applyAutoMLPreprocessing() {
 
   const options = {
     drop_columns:    dropCols,
-    missing_values:  document.getElementById('amlPrepMissing').checked
-                       ? document.getElementById('amlPrepMissingMethod').value : null,
+    mv_num: document.getElementById('amlPrepMissing').checked
+              ? (document.getElementById('amlPrepMissingNum')?.value || 'median') : null,
+    mv_cat: document.getElementById('amlPrepMissing').checked
+              ? (document.getElementById('amlPrepMissingCat')?.value || 'most_frequent') : null,
     encode_method:   encMethod,
     ordinal_columns: ordinalCols,
     remove_outliers: document.getElementById('amlPrepOutliers').checked,
@@ -4540,7 +4556,7 @@ function _renderAutoMLStep2() {
       </select>
 
       <label class="wizard-label">Task Type</label>
-      <div style="display:flex;gap:1rem;margin-bottom:1.1rem">
+      <div style="display:flex;gap:1rem;margin-bottom:0.35rem">
         <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.85rem;cursor:pointer">
           <input type="radio" name="amlTask" value="classification" ${isClass ? 'checked' : ''}> Classification
         </label>
@@ -4548,6 +4564,7 @@ function _renderAutoMLStep2() {
           <input type="radio" name="amlTask" value="regression" ${!isClass ? 'checked' : ''}> Regression
         </label>
       </div>
+      <div id="amlTaskHint" style="font-size:0.73rem;color:var(--text3);margin-bottom:1.1rem"></div>
 
       <label class="wizard-label">Accent Colour</label>
       <div style="display:flex;gap:0.45rem;flex-wrap:wrap;margin-bottom:1.5rem">
@@ -4567,13 +4584,33 @@ function _renderAutoMLStep2() {
         </button>
       </div>
     </div>`;
+  requestAnimationFrame(() => { _amlSuggestTask(); _onMissingMethodChange(); });
 }
 
 function _amlSuggestTask() {
   const col = automlAnalysis.columns.find(c => c.name === document.getElementById('amlTarget').value);
   if (!col) return;
-  const isClass = !col.is_numeric || col.nunique <= 10;
+
+  let isClass, hint;
+  if (!col.is_numeric) {
+    isClass = true;
+    hint = `Text column · ${col.nunique} unique values → Classification`;
+  } else if (col.dtype && (col.dtype.startsWith('int') || col.dtype === 'bool')) {
+    isClass = col.nunique <= 20;
+    hint = isClass
+      ? `Integer column · ${col.nunique} unique values → Classification`
+      : `Integer column · ${col.nunique} unique values → Regression`;
+  } else {
+    // float column
+    isClass = col.nunique <= 2;
+    hint = isClass
+      ? `Float column · ${col.nunique} unique values → Classification (binary)`
+      : `Continuous float · ${col.nunique} unique values → Regression`;
+  }
+
   document.querySelector(`input[name="amlTask"][value="${isClass ? 'classification' : 'regression'}"]`).checked = true;
+  const hintEl = document.getElementById('amlTaskHint');
+  if (hintEl) hintEl.textContent = `Auto-detected: ${hint}`;
 }
 
 function _renderAutoMLResultsPage(result) {
