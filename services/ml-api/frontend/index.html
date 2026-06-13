@@ -4042,6 +4042,7 @@ async function _analyzeAutoMLCSV() {
 // ── Step 0: Dataset name + Target column upfront ──────────────
 function _renderAutoMLStep0() {
   const a = automlAnalysis;
+  const palette = a.accent_palette || ACCENT_PALETTE_DEFAULT;
   const colOpts = a.columns.map(c => {
     const suffix = c.is_numeric ? ' (numeric)' : ' (categorical)';
     const sel = _automlTargetCol && _automlTargetCol === c.name ? ' selected' : '';
@@ -4069,6 +4070,17 @@ function _renderAutoMLStep0() {
           <div id="amlStep0Err" style="display:none;font-size:0.78rem;color:#f87171;margin-top:0.4rem">
             Please select a target column.
           </div>
+        </div>
+
+        <div style="margin-bottom:1.5rem">
+          <label class="wizard-label">Accent Colour</label>
+          <div style="display:flex;gap:0.45rem;flex-wrap:wrap;margin-top:0.35rem">
+            ${palette.map((c, i) =>
+              `<div class="accent-swatch${i === 0 ? ' selected' : ''}" data-color="${c}"
+                    style="background:${c}" onclick="selectAccent(this)"></div>`
+            ).join('')}
+          </div>
+          <input type="hidden" id="amlAccent" value="${palette[0]}">
         </div>
 
         <div class="action-row" style="margin-top:0">
@@ -4149,190 +4161,218 @@ function _renderAutoMLStep1b(preselectedTarget) {
     </label>`
   ).join('') : '<span style="font-size:0.75rem;color:var(--text3)">None</span>';
 
+  const autoDetected = new Set([...likelyIdCols, ...highCardCols].map(c => c.name));
+  const manualCols   = a.columns
+    .filter(c => c.name !== effectiveTarget && !autoDetected.has(c.name))
+    .map(c => c.name);
+
   document.getElementById('main').innerHTML = `
-    <div class="wizard">
+    <div class="aml-results-page">
       <div id="amlWizardStepper">${_automlStepsHTML(1, false)}</div>
-      <h2 style="font-size:1.3rem;font-weight:800;margin-bottom:0.4rem">Data Quality &amp; Preprocessing</h2>
-      <p style="font-size:0.85rem;color:var(--text2);margin-bottom:1rem">
-        Analysed <strong>${(a.rows || 0).toLocaleString()} rows</strong> &middot;
-        <strong>${a.columns.length} columns</strong>
+      <h2 style="font-size:1.3rem;font-weight:800;margin:1rem 0 0.25rem">Data Quality &amp; Preprocessing</h2>
+      <p style="font-size:0.85rem;color:var(--text2);margin-bottom:0.75rem">
+        Analysed <strong>${(a.rows || 0).toLocaleString()} rows</strong> &middot; <strong>${a.columns.length} columns</strong>
       </p>
 
-      <div style="padding:0.85rem 1rem;border:1px solid var(--border2);border-radius:8px;background:transparent;margin-bottom:1.5rem">
-        <div style="font-size:0.8rem;font-weight:700;color:var(--text1);margin-bottom:0.25rem">Data Quality Summary</div>
-        ${qualityHTML}
-      </div>
+      <div class="aml-results-grid">
 
-      <div style="font-size:0.85rem;font-weight:600;color:var(--text1);margin-bottom:0.75rem">Would you like to preprocess the data before training?</div>
-      <div id="amlPrepYesNo" style="display:flex;gap:0.6rem;margin-bottom:1.5rem">
-        <button class="btn btn-primary" onclick="_showAutoMLPrepOptions()" style="font-size:0.82rem">Yes, preprocess</button>
-        <button class="btn btn-clear" onclick="_renderAutoMLStep2()" style="font-size:0.82rem">No, skip</button>
-      </div>
+        <!-- LEFT: Dataset summary card -->
+        <div class="aml-results-left">
+          <div class="aml-results-summary" style="text-align:left;padding:1.4rem 1.25rem">
 
-      <div id="amlPrepOptions" style="display:none">
-
-        ${(() => {
-          const autoDetected = new Set([...likelyIdCols, ...highCardCols].map(c => c.name));
-          const manualCols   = a.columns
-            .filter(c => c.name !== effectiveTarget && !autoDetected.has(c.name))
-            .map(c => c.name);
-          return `
-        <div style="padding:0.85rem 1rem;border:1px solid rgba(251,191,36,0.3);border-radius:12px;background:rgba(251,191,36,0.05);margin-bottom:1.2rem">
-          <div style="font-size:0.8rem;font-weight:700;color:#fbbf24;margin-bottom:0.35rem">
-            ⚠ Columns to consider dropping
-          </div>
-          <div style="font-size:0.75rem;color:var(--text2);margin-bottom:0.75rem;line-height:1.5">
-            Auto-detected ID/name/code columns. Check to <strong style="color:#f87171">drop</strong>, or add more below:
-          </div>
-          <div id="amlDropColList" style="display:flex;flex-direction:column;gap:0.4rem">
-            ${likelyIdCols.map(c => `
-            <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;cursor:pointer;padding:0.35rem 0.5rem;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
-              <input type="checkbox" class="aml-drop-col" value="${c.name}" checked
-                     style="accent-color:#f87171;flex-shrink:0">
-              <span style="color:var(--text1);font-weight:500">${c.name}</span>
-              <span style="margin-left:auto;font-size:0.7rem;color:#f59e0b">ID column · ${c.nunique} unique</span>
-            </label>`).join('')}
-            ${highCardCols.map(c => `
-            <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;cursor:pointer;padding:0.35rem 0.5rem;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
-              <input type="checkbox" class="aml-drop-col" value="${c.name}" checked
-                     style="accent-color:#f87171;flex-shrink:0">
-              <span style="color:var(--text1);font-weight:500">${c.name}</span>
-              <span style="margin-left:auto;font-size:0.7rem;color:var(--text3)">text · ${c.nunique} unique</span>
-            </label>`).join('')}
-          </div>
-          <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.6rem">
-            <select id="amlDropExtraSelect" class="field-select" style="flex:1;padding:0.2rem 0.5rem;font-size:0.78rem;background:transparent;border-color:var(--border2)">
-              <option value="">+ add column to drop…</option>
-              ${manualCols.map(n => `<option value="${n}">${n}</option>`).join('')}
-            </select>
-            <button class="btn btn-clear" style="padding:0.25rem 0.7rem;font-size:0.75rem;white-space:nowrap" onclick="_amlAddDropCol()">Add</button>
-          </div>
-        </div>`;
-        })()}
-
-        <div style="font-size:0.72rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem">Select Preprocessing Options</div>
-
-        <div style="display:flex;flex-direction:column;gap:0.6rem;margin-bottom:1.2rem;padding:0.75rem;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
-
-          <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
-            <input type="checkbox" id="amlPrepMissing" ${hasMissing ? 'checked' : ''} style="accent-color:var(--active-accent,var(--accent));margin-top:2px">
-            <span style="flex:1">
-              Handle missing values
-              <div id="amlMissingOpts" style="display:grid;grid-template-columns:auto 1fr;gap:0.3rem 0.5rem;align-items:center;margin-top:0.45rem">
-                <span style="font-size:0.75rem;color:var(--text3)">Numeric</span>
-                <select id="amlPrepMissingNum" class="field-select" style="padding:0.2rem 0.5rem;font-size:0.78rem;background:transparent;border-color:var(--border2)" onchange="_onMissingMethodChange()">
-                  <option value="median" selected>Median (recommended)</option>
-                  <option value="mean">Mean</option>
-                  <option value="mode">Mode</option>
-                  <option value="knn">KNN (k=5)</option>
-                  <option value="mice">MICE / Iterative</option>
-                  <option value="ffill">Forward fill</option>
-                  <option value="bfill">Backward fill</option>
-                  <option value="constant">Constant (0)</option>
-                  <option value="drop">Drop rows</option>
-                </select>
-                <span style="font-size:0.75rem;color:var(--text3)">Categorical</span>
-                <select id="amlPrepMissingCat" class="field-select" style="padding:0.2rem 0.5rem;font-size:0.78rem;background:transparent;border-color:var(--border2)">
-                  <option value="most_frequent" selected>Most frequent (recommended)</option>
-                  <option value="constant">Constant ("Unknown")</option>
-                  <option value="ffill">Forward fill</option>
-                  <option value="bfill">Backward fill</option>
-                  <option value="drop">Drop rows</option>
-                </select>
+            <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1.25rem">
+              <div style="width:36px;height:36px;border-radius:50%;background:rgba(129,140,248,0.12);border:1.5px solid rgba(129,140,248,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
+                  <rect x="2" y="4" width="16" height="13" rx="2" stroke="var(--active-accent,#818cf8)" stroke-width="1.6"/>
+                  <line x1="2" y1="8" x2="18" y2="8" stroke="var(--active-accent,#818cf8)" stroke-width="1.2"/>
+                  <line x1="7" y1="8" x2="7" y2="17" stroke="var(--active-accent,#818cf8)" stroke-width="1.2"/>
+                </svg>
               </div>
-              <div id="amlMissingSlowWarn" style="display:none;font-size:0.73rem;color:#f59e0b;margin-top:0.3rem">&#9888; KNN / MICE are slower on large datasets.</div>
-            </span>
-          </label>
-
-          <div>
-            <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;color:var(--text1);margin-bottom:0.4rem">
-              Categorical encoding method:
-              <select id="amlPrepEncMethod" class="field-select" style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:auto;background:transparent;border-color:var(--border2)" onchange="_onEncMethodChange()">
-                <option value="none">None</option>
-                <option value="onehot" ${hasCat ? 'selected' : ''}>One-hot encode (nominal)</option>
-                <option value="ordinal">Ordinal encode</option>
-                <option value="frequency">Frequency encode</option>
-                <option value="target">Target encode</option>
-              </select>
-            </label>
-            <div id="amlEncHint" style="margin-left:1.5rem;font-size:0.75rem;margin-bottom:0.3rem;display:none"></div>
-            <div id="amlOrdinalCols" style="display:none">
-              ${catCols.length ? `<div style="margin-left:1.5rem;margin-top:0.4rem;font-size:0.75rem;color:var(--text3);margin-bottom:0.3rem">Mark which columns are ordinal:</div>
-              <div style="margin-left:1.5rem;display:flex;flex-wrap:wrap;gap:0.4rem 1rem">${ordColsHTML}</div>` : ''}
+              <div>
+                <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3)">Dataset</div>
+                <div style="font-size:0.88rem;font-weight:700;color:var(--text1)">${_automlDatasetName || 'Untitled'}</div>
+              </div>
             </div>
-          </div>
 
-          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
-            <input type="checkbox" id="amlPrepDupes" style="accent-color:var(--active-accent,var(--accent))">
-            Remove duplicate rows
-          </label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.5rem">
+              <div style="padding:0.55rem 0.65rem;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
+                <div style="font-size:0.58rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text3)">Rows</div>
+                <div style="font-size:1.1rem;font-weight:800;color:var(--text1)">${(a.rows||0).toLocaleString()}</div>
+              </div>
+              <div style="padding:0.55rem 0.65rem;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
+                <div style="font-size:0.58rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text3)">Columns</div>
+                <div style="font-size:1.1rem;font-weight:800;color:var(--text1)">${a.columns.length}</div>
+              </div>
+            </div>
+            <div style="padding:0.55rem 0.65rem;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border);margin-bottom:1.1rem">
+              <div style="font-size:0.58rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text3);margin-bottom:0.15rem">Target Column</div>
+              <div style="font-size:0.88rem;font-weight:700;color:var(--active-accent,#818cf8)">${effectiveTarget || '—'}</div>
+            </div>
 
-          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
-            <input type="checkbox" id="amlPrepOutliers" ${hasOutliers ? 'checked' : ''} style="accent-color:var(--active-accent,var(--accent))">
-            Remove outliers (IQR method)
-          </label>
+            <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:0.45rem">Data Quality</div>
+            <div style="display:flex;flex-direction:column;gap:0.35rem;margin-bottom:1.25rem">
+              ${issues.length
+                ? issues.map(i => `<div style="font-size:0.75rem;padding:0.28rem 0.5rem;border-radius:6px;background:var(--bg-input);border:1px solid var(--border2)">${i}</div>`).join('')
+                : '<div style="font-size:0.75rem;color:#34d399;padding:0.28rem 0">✓ No major issues detected</div>'}
+            </div>
 
-          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
-            <input type="checkbox" id="amlPrepSkew" ${hasSkewness ? 'checked' : ''} style="accent-color:var(--active-accent,var(--accent))">
-            Fix skewness (log1p transform on positive columns)
-          </label>
-
-          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
-            <input type="checkbox" id="amlPrepScale" style="accent-color:var(--active-accent,var(--accent))">
-            Standardize numeric features (StandardScaler)
-          </label>
-
-        </div>
-
-        <!-- Feature Selection section -->
-        <div style="border-top:1px solid var(--border2);padding-top:1rem;margin-bottom:1rem">
-          <div style="font-size:0.72rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem">Feature Selection</div>
-          <div style="display:flex;flex-direction:column;gap:0.6rem">
-            <label style="font-size:0.82rem;color:var(--text1);display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
-              Method:
-              <select id="amlFsMethod" class="field-select" style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:auto;background:transparent;border-color:var(--border2)" onchange="_onFsMethodChange()">
-                <option value="none">None — skip feature selection</option>
-                <option value="variance">Variance Threshold — drop near-zero variance features</option>
-                <option value="correlation">Correlation Filter — remove highly correlated features</option>
-                <option value="rfe">RFE (Random Forest) — recursive feature elimination</option>
-                <option value="kbest">SelectKBest (Mutual Info) — rank by mutual information with target</option>
-              </select>
-            </label>
-            <div id="amlFsHint" style="font-size:0.75rem;color:var(--text3);margin-left:1.5rem;display:none"></div>
-            <div id="amlFsTopKRow" style="display:none;align-items:center;gap:0.5rem;font-size:0.82rem;color:var(--text1);flex-wrap:wrap">
-              Keep top K features:
-              <input type="number" id="amlFsTopK" class="field-input" value="10" min="1" max="200"
-                     style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:80px;background:transparent;border-color:var(--border2)">
+            <div style="font-size:0.82rem;font-weight:600;color:var(--text1);margin-bottom:0.6rem">Preprocess before training?</div>
+            <div id="amlPrepYesNo" style="display:flex;flex-direction:column;gap:0.45rem">
+              <button class="btn btn-primary" onclick="_showAutoMLPrepOptions()" style="font-size:0.82rem">Yes, preprocess</button>
+              <button class="btn btn-clear" onclick="_renderAutoMLStep2()" style="font-size:0.82rem">No, skip →</button>
             </div>
           </div>
         </div>
 
-        <div id="amlPrepErr" style="display:none;font-size:0.8rem;color:#f87171;margin-bottom:0.75rem"></div>
+        <!-- RIGHT: Preprocessing options -->
+        <div class="aml-results-right">
+          <div id="amlPrepOptions" style="display:none">
 
-        <div class="action-row" style="margin-top:0">
-          <button class="btn btn-clear" onclick="_renderAutoMLStep0()">← Back</button>
-          <button class="btn btn-primary" id="amlPrepApplyBtn" onclick="_applyAutoMLPreprocessing()" style="font-size:0.85rem">
-            Apply Preprocessing
-          </button>
-        </div>
-        <div id="amlPrepProgress" style="display:none;margin-top:1rem">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.35rem">
-            <span style="font-size:0.75rem;color:var(--text2)" id="amlPrepProgLabel">Analyzing data…</span>
-            <span style="font-size:0.75rem;color:var(--text3)" id="amlPrepProgPct">0%</span>
+            <div style="padding:0.85rem 1rem;border:1px solid rgba(251,191,36,0.3);border-radius:12px;background:rgba(251,191,36,0.05);margin-bottom:1.2rem">
+              <div style="font-size:0.8rem;font-weight:700;color:#fbbf24;margin-bottom:0.35rem">⚠ Columns to consider dropping</div>
+              <div style="font-size:0.75rem;color:var(--text2);margin-bottom:0.75rem;line-height:1.5">
+                Auto-detected ID/name/code columns. Check to <strong style="color:#f87171">drop</strong>, or add more below:
+              </div>
+              <div id="amlDropColList" style="display:flex;flex-direction:column;gap:0.4rem">
+                ${likelyIdCols.map(c => `
+                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;cursor:pointer;padding:0.35rem 0.5rem;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
+                  <input type="checkbox" class="aml-drop-col" value="${c.name}" checked style="accent-color:#f87171;flex-shrink:0">
+                  <span style="color:var(--text1);font-weight:500">${c.name}</span>
+                  <span style="margin-left:auto;font-size:0.7rem;color:#f59e0b">ID column · ${c.nunique} unique</span>
+                </label>`).join('')}
+                ${highCardCols.map(c => `
+                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;cursor:pointer;padding:0.35rem 0.5rem;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
+                  <input type="checkbox" class="aml-drop-col" value="${c.name}" checked style="accent-color:#f87171;flex-shrink:0">
+                  <span style="color:var(--text1);font-weight:500">${c.name}</span>
+                  <span style="margin-left:auto;font-size:0.7rem;color:var(--text3)">text · ${c.nunique} unique</span>
+                </label>`).join('')}
+              </div>
+              <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.6rem">
+                <select id="amlDropExtraSelect" class="field-select" style="flex:1;padding:0.2rem 0.5rem;font-size:0.78rem;background:transparent;border-color:var(--border2)">
+                  <option value="">+ add column to drop…</option>
+                  ${manualCols.map(n => `<option value="${n}">${n}</option>`).join('')}
+                </select>
+                <button class="btn btn-clear" style="padding:0.25rem 0.7rem;font-size:0.75rem;white-space:nowrap" onclick="_amlAddDropCol()">Add</button>
+              </div>
+            </div>
+
+            <div style="font-size:0.72rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem">Select Preprocessing Options</div>
+            <div style="display:flex;flex-direction:column;gap:0.6rem;margin-bottom:1.2rem;padding:0.75rem;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
+
+              <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
+                <input type="checkbox" id="amlPrepMissing" ${hasMissing ? 'checked' : ''} style="accent-color:var(--active-accent,var(--accent));margin-top:2px">
+                <span style="flex:1">
+                  Handle missing values
+                  <div id="amlMissingOpts" style="display:grid;grid-template-columns:auto 1fr;gap:0.3rem 0.5rem;align-items:center;margin-top:0.45rem">
+                    <span style="font-size:0.75rem;color:var(--text3)">Numeric</span>
+                    <select id="amlPrepMissingNum" class="field-select" style="padding:0.2rem 0.5rem;font-size:0.78rem;background:transparent;border-color:var(--border2)" onchange="_onMissingMethodChange()">
+                      <option value="median" selected>Median (recommended)</option>
+                      <option value="mean">Mean</option>
+                      <option value="mode">Mode</option>
+                      <option value="knn">KNN (k=5)</option>
+                      <option value="mice">MICE / Iterative</option>
+                      <option value="ffill">Forward fill</option>
+                      <option value="bfill">Backward fill</option>
+                      <option value="constant">Constant (0)</option>
+                      <option value="drop">Drop rows</option>
+                    </select>
+                    <span style="font-size:0.75rem;color:var(--text3)">Categorical</span>
+                    <select id="amlPrepMissingCat" class="field-select" style="padding:0.2rem 0.5rem;font-size:0.78rem;background:transparent;border-color:var(--border2)">
+                      <option value="most_frequent" selected>Most frequent (recommended)</option>
+                      <option value="constant">Constant ("Unknown")</option>
+                      <option value="ffill">Forward fill</option>
+                      <option value="bfill">Backward fill</option>
+                      <option value="drop">Drop rows</option>
+                    </select>
+                  </div>
+                  <div id="amlMissingSlowWarn" style="display:none;font-size:0.73rem;color:#f59e0b;margin-top:0.3rem">&#9888; KNN / MICE are slower on large datasets.</div>
+                </span>
+              </label>
+
+              <div>
+                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;color:var(--text1);margin-bottom:0.4rem">
+                  Categorical encoding:
+                  <select id="amlPrepEncMethod" class="field-select" style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:auto;background:transparent;border-color:var(--border2)" onchange="_onEncMethodChange()">
+                    <option value="none">None</option>
+                    <option value="onehot" ${hasCat ? 'selected' : ''}>One-hot encode (nominal)</option>
+                    <option value="ordinal">Ordinal encode</option>
+                    <option value="frequency">Frequency encode</option>
+                    <option value="target">Target encode</option>
+                  </select>
+                </label>
+                <div id="amlEncHint" style="margin-left:1.5rem;font-size:0.75rem;margin-bottom:0.3rem;display:none"></div>
+                <div id="amlOrdinalCols" style="display:none">
+                  ${catCols.length ? `<div style="margin-left:1.5rem;margin-top:0.4rem;font-size:0.75rem;color:var(--text3);margin-bottom:0.3rem">Mark which columns are ordinal:</div>
+                  <div style="margin-left:1.5rem;display:flex;flex-wrap:wrap;gap:0.4rem 1rem">${ordColsHTML}</div>` : ''}
+                </div>
+              </div>
+
+              <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
+                <input type="checkbox" id="amlPrepDupes" style="accent-color:var(--active-accent,var(--accent))">
+                Remove duplicate rows
+              </label>
+              <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
+                <input type="checkbox" id="amlPrepOutliers" ${hasOutliers ? 'checked' : ''} style="accent-color:var(--active-accent,var(--accent))">
+                Remove outliers (IQR method)
+              </label>
+              <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
+                <input type="checkbox" id="amlPrepSkew" ${hasSkewness ? 'checked' : ''} style="accent-color:var(--active-accent,var(--accent))">
+                Fix skewness (log1p transform on positive columns)
+              </label>
+              <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
+                <input type="checkbox" id="amlPrepScale" style="accent-color:var(--active-accent,var(--accent))">
+                Standardize numeric features (StandardScaler)
+              </label>
+            </div>
+
+            <div style="border-top:1px solid var(--border2);padding-top:1rem;margin-bottom:1rem">
+              <div style="font-size:0.72rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem">Feature Selection</div>
+              <div style="display:flex;flex-direction:column;gap:0.6rem">
+                <label style="font-size:0.82rem;color:var(--text1);display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+                  Method:
+                  <select id="amlFsMethod" class="field-select" style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:auto;background:transparent;border-color:var(--border2)" onchange="_onFsMethodChange()">
+                    <option value="none">None — skip feature selection</option>
+                    <option value="variance">Variance Threshold — drop near-zero variance features</option>
+                    <option value="correlation">Correlation Filter — remove highly correlated features</option>
+                    <option value="rfe">RFE (Random Forest) — recursive feature elimination</option>
+                    <option value="kbest">SelectKBest (Mutual Info) — rank by mutual information with target</option>
+                  </select>
+                </label>
+                <div id="amlFsHint" style="font-size:0.75rem;color:var(--text3);margin-left:1.5rem;display:none"></div>
+                <div id="amlFsTopKRow" style="display:none;align-items:center;gap:0.5rem;font-size:0.82rem;color:var(--text1);flex-wrap:wrap">
+                  Keep top K features:
+                  <input type="number" id="amlFsTopK" class="field-input" value="10" min="1" max="200"
+                         style="display:inline-block;margin-left:0.5rem;padding:0.2rem 0.5rem;font-size:0.78rem;width:80px;background:transparent;border-color:var(--border2)">
+                </div>
+              </div>
+            </div>
+
+            <div id="amlPrepErr" style="display:none;font-size:0.8rem;color:#f87171;margin-bottom:0.75rem"></div>
+            <div class="action-row" style="margin-top:0">
+              <button class="btn btn-clear" onclick="_renderAutoMLStep0()">← Back</button>
+              <button class="btn btn-primary" id="amlPrepApplyBtn" onclick="_applyAutoMLPreprocessing()" style="font-size:0.85rem">Apply Preprocessing</button>
+            </div>
+            <div id="amlPrepProgress" style="display:none;margin-top:1rem">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.35rem">
+                <span style="font-size:0.75rem;color:var(--text2)" id="amlPrepProgLabel">Analyzing data…</span>
+                <span style="font-size:0.75rem;color:var(--text3)" id="amlPrepProgPct">0%</span>
+              </div>
+              <div style="height:5px;border-radius:9999px;background:var(--border);overflow:hidden">
+                <div id="amlPrepProgBar" style="height:100%;width:0%;border-radius:9999px;background:var(--active-accent,#818cf8);transition:width 0.5s ease"></div>
+              </div>
+              <div style="display:flex;gap:0.5rem;margin-top:0.6rem;flex-wrap:wrap" id="amlPrepStepDots"></div>
+            </div>
           </div>
-          <div style="height:5px;border-radius:9999px;background:var(--border);overflow:hidden">
-            <div id="amlPrepProgBar" style="height:100%;width:0%;border-radius:9999px;background:var(--active-accent,#818cf8);transition:width 0.5s ease"></div>
+
+          <div id="amlPrepResult" style="display:none"></div>
+
+          <div id="amlPrepSkipRow" style="display:none">
+            <div class="action-row" style="margin-top:0.5rem">
+              <button class="btn btn-clear" onclick="_renderAutoMLStep0()">← Back</button>
+            </div>
           </div>
-          <div style="display:flex;gap:0.5rem;margin-top:0.6rem;flex-wrap:wrap" id="amlPrepStepDots"></div>
         </div>
-      </div>
 
-      <div id="amlPrepResult" style="display:none"></div>
-
-      <div id="amlPrepSkipRow" style="display:none">
-        <div class="action-row" style="margin-top:0.5rem">
-          <button class="btn btn-clear" onclick="_renderAutoMLStep0()">← Back</button>
-        </div>
       </div>
     </div>`;
 }
@@ -4648,15 +4688,6 @@ function _renderAutoMLStep2() {
       </div>
       <div id="amlTaskHint" style="font-size:0.73rem;color:var(--text3);margin-bottom:1.1rem"></div>
 
-      <label class="wizard-label">Accent Colour</label>
-      <div style="display:flex;gap:0.45rem;flex-wrap:wrap;margin-bottom:1.5rem">
-        ${palette.map((c, i) =>
-          `<div class="accent-swatch${i === 0 ? ' selected' : ''}" data-color="${c}"
-                style="background:${c}" onclick="selectAccent(this)"></div>`
-        ).join('')}
-      </div>
-      <input type="hidden" id="amlAccent" value="${palette[0]}">
-
       <div id="amlWizardErr"></div>
       <div class="action-row">
         <button class="btn btn-clear" onclick="_renderAutoMLStep1b(_automlTargetCol)">← Back</button>
@@ -4790,7 +4821,9 @@ async function runAutoML() {
   const modelName = document.getElementById('amlModelName').value.trim();
   const targetCol = document.getElementById('amlTarget').value;
   const taskEl    = document.querySelector('input[name="amlTask"]:checked');
-  const accent    = document.getElementById('amlAccent').value;
+  const accent    = document.documentElement.style.getPropertyValue('--active-accent')
+                  || document.getElementById('amlAccent')?.value
+                  || '#818cf8';
 
   if (!modelName) {
     document.getElementById('amlWizardErr').innerHTML =
