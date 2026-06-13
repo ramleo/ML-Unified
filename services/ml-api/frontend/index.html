@@ -3523,7 +3523,7 @@ function _renderAutoMLReport(automl, accent) {
       <div class="aml-hero-main">
         <div class="aml-hero-label" style="color:${accent}">Well Suited For Your Data</div>
         <div class="aml-hero-name">${winner}</div>
-        <div class="aml-hero-sub">Outperformed XGBoost &amp; LightGBM on 3-fold CV &middot; ${taskLabel}${imbalTag}</div>
+        <div class="aml-hero-sub">Outperformed other models on 5-fold CV &middot; ${taskLabel}${imbalTag}</div>
       </div>
       <div class="aml-hero-score">
         <div class="aml-hero-score-val" style="color:${accent}">${bestDisplay}</div>
@@ -3546,12 +3546,12 @@ function _renderAutoMLReport(automl, accent) {
       <div class="aml-stat">
         <div class="aml-stat-lbl">Dataset</div>
         <div class="aml-stat-val">${(n_rows || 0).toLocaleString()}</div>
-        <div class="aml-stat-sub">rows · 3-fold CV</div>
+        <div class="aml-stat-sub">rows · 5-fold CV</div>
       </div>
       <div class="aml-stat">
         <div class="aml-stat-lbl">Models Tested</div>
-        <div class="aml-stat-val">3</div>
-        <div class="aml-stat-sub">RF · XGB · LGB</div>
+        <div class="aml-stat-val">${(cv_results || []).length || 4}</div>
+        <div class="aml-stat-sub">${(cv_results || []).map(r => r.algorithm.replace('Random Forest','RF').replace('XGBoost','XGB').replace('LightGBM','LGB').replace('CatBoost','CAT')).join(' · ')}</div>
       </div>
     </div>
 
@@ -4476,8 +4476,8 @@ function _renderAutoMLResultsPage(result) {
       ['Rows',          (aml.n_rows || 0).toLocaleString()],
       ['Features',      nFeat || '—'],
       ['Task',          taskLbl],
-      ['Validation',    '3-fold CV'],
-      ['Models tested', 'RF · XGB · LGB'],
+      ['Validation',    '5-fold CV'],
+      ['Models tested', (aml.cv_results || []).map(r => r.algorithm.replace('Random Forest','RF').replace('XGBoost','XGB').replace('LightGBM','LGB').replace('CatBoost','CAT')).join(' · ') || 'RF · XGB · LGB · CAT'],
     ];
     return `<div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border2)">
       <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;
@@ -4566,7 +4566,7 @@ async function runAutoML() {
         Running AutoML&hellip;
       </div>
       <div style="font-size:0.8rem;color:var(--text3);margin-bottom:1.5rem">
-        Testing Random Forest, XGBoost &amp; LightGBM with 3-fold cross-validation
+        Testing Random Forest, XGBoost, LightGBM &amp; CatBoost with 5-fold cross-validation
       </div>
       ${_progressBarHTML('amlFill','amlMsg','amlPct')}
     </div>`;
