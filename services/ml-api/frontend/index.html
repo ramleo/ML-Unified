@@ -3514,6 +3514,7 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
 
   const rightCol = `
     <div class="aml-exp-right">
+      <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:0.1rem">Training Results</div>
       ${winMarginHTML ? `<div class="aml-exp-panel aml-exp-win-margin">${winMarginHTML}<div class="aml-exp-stat-caption">Win margin · ${selection_metric}</div></div>` : ''}
       <div class="aml-exp-panel">
         <div class="aml-exp-panel-title">Model CV Scores</div>
@@ -4097,9 +4098,13 @@ function _renderAutoMLStep1b(preselectedTarget) {
   const catCols = a.columns.filter(c => !c.is_numeric && c.name !== effectiveTarget).map(c => c.name);
   const numCols = a.columns.filter(c => c.is_numeric && c.name !== effectiveTarget).map(c => c.name);
 
-  // High-cardinality columns (>20 unique values, non-target) — likely IDs, names, codes
+  // High-cardinality text columns (non-numeric, >20 unique) — names, codes, free text
   const highCardCols = a.columns.filter(c =>
     c.name !== effectiveTarget && !c.is_numeric && (c.nunique || 0) > 20
+  );
+  // Likely numeric ID columns — nearly all unique values (>90% of rows)
+  const likelyIdCols = a.columns.filter(c =>
+    c.name !== effectiveTarget && c.is_numeric && (c.nunique || 0) / (a.rows || 1) >= 0.9
   );
 
   // Detect issues
@@ -4154,22 +4159,28 @@ function _renderAutoMLStep1b(preselectedTarget) {
 
       <div id="amlPrepOptions" style="display:none">
 
-        ${highCardCols.length ? `
+        ${(highCardCols.length || likelyIdCols.length) ? `
         <div style="padding:0.85rem 1rem;border:1px solid rgba(251,191,36,0.3);border-radius:12px;background:rgba(251,191,36,0.05);margin-bottom:1.2rem">
           <div style="font-size:0.8rem;font-weight:700;color:#fbbf24;margin-bottom:0.35rem">
-            ⚠ High-uniqueness columns detected
+            ⚠ Columns to consider dropping
           </div>
           <div style="font-size:0.75rem;color:var(--text2);margin-bottom:0.75rem;line-height:1.5">
-            These columns have many unique values — they may be IDs, names, or codes that add noise.
-            Check the ones you want to <strong style="color:#f87171">drop</strong>:
+            These columns are likely IDs, names, or codes that add noise. Check the ones you want to <strong style="color:#f87171">drop</strong>:
           </div>
           <div style="display:flex;flex-direction:column;gap:0.4rem">
+            ${likelyIdCols.map(c => `
+            <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;cursor:pointer;padding:0.35rem 0.5rem;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
+              <input type="checkbox" class="aml-drop-col" value="${c.name}" checked
+                     style="accent-color:#f87171;flex-shrink:0">
+              <span style="color:var(--text1);font-weight:500">${c.name}</span>
+              <span style="margin-left:auto;font-size:0.7rem;color:#f59e0b">numeric ID · ${c.nunique} unique</span>
+            </label>`).join('')}
             ${highCardCols.map(c => `
             <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;cursor:pointer;padding:0.35rem 0.5rem;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
               <input type="checkbox" class="aml-drop-col" value="${c.name}" checked
                      style="accent-color:#f87171;flex-shrink:0">
               <span style="color:var(--text1);font-weight:500">${c.name}</span>
-              <span style="margin-left:auto;font-size:0.7rem;color:var(--text3)">${c.nunique} unique values</span>
+              <span style="margin-left:auto;font-size:0.7rem;color:var(--text3)">text · ${c.nunique} unique</span>
             </label>`).join('')}
           </div>
         </div>` : ''}
@@ -4492,12 +4503,21 @@ async function _applyAutoMLPreprocessing() {
     const fsAfter  = result.features_after  != null ? result.features_after  : (result.cols_after  - 1);
     const fsLine = (fsMethod !== 'none')
       ? `<div>Features: <strong>${fsBefore} → ${fsAfter} selected</strong></div>` : '';
+    const colNote = (() => {
+      const parts = [];
+      if (result.user_cols_dropped) parts.push(`−${result.user_cols_dropped} dropped`);
+      if (result.ohe_cols_added)    parts.push(`+${result.ohe_cols_added} OHE`);
+      return parts.length ? ` <span style="color:var(--text3);font-weight:400">(${parts.join(', ')})</span>` : '';
+    })();
+    // Update stepper to show Configure as done
+    const stepsEl = document.querySelector('.wizard-steps');
+    if (stepsEl) stepsEl.outerHTML = _automlStepsHTML(3, false);
     resEl.innerHTML = `
       <div style="padding:0.85rem 1rem;border:1px solid #34d399;border-radius:8px;background:transparent;margin-bottom:1.2rem">
         <div style="font-size:0.82rem;font-weight:700;color:#34d399;margin-bottom:0.5rem">Preprocessing complete</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:0.4rem;font-size:0.78rem;color:var(--text2)">
           <div>Rows: <strong>${result.rows_before.toLocaleString()} → ${result.rows_after.toLocaleString()}</strong></div>
-          <div>Columns: <strong>${result.cols_before} → ${result.cols_after}</strong></div>
+          <div>Columns: <strong>${result.cols_before} → ${result.cols_after}</strong>${colNote}</div>
           <div>Missing: <strong>${result.total_missing}</strong> remaining</div>
           ${fsLine}
         </div>

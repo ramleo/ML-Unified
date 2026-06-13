@@ -407,6 +407,7 @@ async def automl_preprocess(request: Request):
 
     # 0. Drop user-selected high-cardinality / ID columns
     drop_cols = [c for c in (options.get("drop_columns") or []) if c in df_feat.columns]
+    user_cols_dropped = len(drop_cols)
     if drop_cols:
         df_feat = df_feat.drop(columns=drop_cols)
 
@@ -512,13 +513,16 @@ async def automl_preprocess(request: Request):
     ordinal_cols = options.get("ordinal_columns", [])
     nominal_cols = [c for c in cat_cols if c not in ordinal_cols]
 
+    ohe_cols_added = 0
     if encode_method == "onehot" and nominal_cols:
+        _cols_before_ohe = len(df_feat.columns)
         df_feat = pd.get_dummies(df_feat, columns=nominal_cols, drop_first=False)
         # pandas ≥2.0 returns bool dtype from get_dummies; cast to int8 so
         # select_dtypes(include="number") sees them correctly in feature selection.
         _bool_ohe = df_feat.select_dtypes(include="bool").columns.tolist()
         if _bool_ohe:
             df_feat[_bool_ohe] = df_feat[_bool_ohe].astype(_np.int8)
+        ohe_cols_added = len(df_feat.columns) - _cols_before_ohe
 
     elif encode_method == "ordinal":
         cols_to_encode = ordinal_cols if ordinal_cols else cat_cols
@@ -700,6 +704,8 @@ async def automl_preprocess(request: Request):
         "cols_after":            cols_after,
         "features_before":       features_before,
         "features_after":        features_after,
+        "user_cols_dropped":     user_cols_dropped,
+        "ohe_cols_added":        ohe_cols_added,
         # analysis fields (same structure as /analyze)
         "columns":               columns_out,
         "suggested_target":      suggested_target,
