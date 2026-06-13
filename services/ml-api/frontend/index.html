@@ -4258,6 +4258,11 @@ function _renderAutoMLStep1b(preselectedTarget) {
           </div>
 
           <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
+            <input type="checkbox" id="amlPrepDupes" style="accent-color:var(--active-accent,var(--accent))">
+            Remove duplicate rows
+          </label>
+
+          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
             <input type="checkbox" id="amlPrepOutliers" ${hasOutliers ? 'checked' : ''} style="accent-color:var(--active-accent,var(--accent))">
             Remove outliers (IQR method)
           </label>
@@ -4485,6 +4490,7 @@ async function _applyAutoMLPreprocessing() {
               ? (document.getElementById('amlPrepMissingCat')?.value || 'most_frequent') : null,
     encode_method:   encMethod,
     ordinal_columns: ordinalCols,
+    remove_duplicates: document.getElementById('amlPrepDupes').checked,
     remove_outliers: document.getElementById('amlPrepOutliers').checked,
     fix_skewness:    document.getElementById('amlPrepSkew').checked,
     standardize:     document.getElementById('amlPrepScale').checked,

@@ -411,6 +411,13 @@ async def automl_preprocess(request: Request):
     if drop_cols:
         df_feat = df_feat.drop(columns=drop_cols)
 
+    # 0b. Remove duplicate rows
+    if options.get("remove_duplicates"):
+        before_dedup = len(df_feat)
+        df_feat = df_feat.drop_duplicates()
+        if target_series is not None:
+            target_series = target_series.loc[df_feat.index]
+
     num_cols = df_feat.select_dtypes(include="number").columns.tolist()
     cat_cols = df_feat.select_dtypes(exclude="number").columns.tolist()
 
