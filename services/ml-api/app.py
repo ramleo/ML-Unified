@@ -1182,28 +1182,37 @@ async def train_model(
                     sel_label  = "F1-macro" if is_imbal else "F1 (weighted)"
 
                     X_cv, y_cv = _cv_sample(X, y_enc)
-                    cv_split   = StratifiedKFold(n_splits=3, shuffle=True, random_state=42)
+                    cv_split   = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+                    cw = "balanced" if is_imbal else None
 
-                    p.update(15, "Testing Random Forest (3-fold CV)…")
+                    p.update(12, "Testing Random Forest (5-fold CV)…")
                     rf_pl  = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
-                                       ("model", RandomForestClassifier(n_estimators=100, random_state=42))])
+                                       ("model", RandomForestClassifier(n_estimators=100, random_state=42,
+                                                                        class_weight=cw))])
                     rf_cv  = float(cross_val_score(rf_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric).mean())
 
-                    p.update(35, "Testing XGBoost (3-fold CV)…")
+                    p.update(28, "Testing XGBoost (5-fold CV)…")
                     xgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                        ("model", XGBClassifier(n_estimators=100, random_state=42,
                                                                eval_metric="logloss", verbosity=0))])
                     xgb_cv = float(cross_val_score(xgb_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric).mean())
 
-                    p.update(55, "Testing LightGBM (3-fold CV)…")
+                    p.update(44, "Testing LightGBM (5-fold CV)…")
                     lgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
-                                       ("model", LGBMClassifier(n_estimators=100, random_state=42, verbose=-1))])
+                                       ("model", LGBMClassifier(n_estimators=100, random_state=42,
+                                                                class_weight=cw, verbose=-1))])
                     lgb_cv = float(cross_val_score(lgb_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric).mean())
+
+                    p.update(58, "Testing CatBoost (5-fold CV)…")
+                    cat_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                       ("model", CatBoostClassifier(iterations=100, random_seed=42, verbose=0))])
+                    cat_cv = float(cross_val_score(cat_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric).mean())
 
                     cv_results = [
                         {"algorithm": "Random Forest", "score": round(rf_cv,  4)},
                         {"algorithm": "XGBoost",       "score": round(xgb_cv, 4)},
                         {"algorithm": "LightGBM",      "score": round(lgb_cv, 4)},
+                        {"algorithm": "CatBoost",      "score": round(cat_cv, 4)},
                     ]
                     winner = max(cv_results, key=lambda r: r["score"])["algorithm"]
                     _effective_algorithm = winner
@@ -1212,9 +1221,13 @@ async def train_model(
                         estimator = XGBClassifier(n_estimators=100, random_state=42,
                                                   eval_metric="logloss", verbosity=0)
                     elif winner == "LightGBM":
-                        estimator = LGBMClassifier(n_estimators=100, random_state=42, verbose=-1)
+                        estimator = LGBMClassifier(n_estimators=100, random_state=42,
+                                                   class_weight=cw, verbose=-1)
+                    elif winner == "CatBoost":
+                        estimator = CatBoostClassifier(iterations=100, random_seed=42, verbose=0)
                     else:
-                        estimator = RandomForestClassifier(n_estimators=100, random_state=42)
+                        estimator = RandomForestClassifier(n_estimators=100, random_state=42,
+                                                           class_weight=cw)
 
                     automl_result = {
                         "winner":           winner,
@@ -1247,7 +1260,8 @@ async def train_model(
 
             pipeline = Pipeline([("prep", preprocessor), ("model", estimator)])
             split    = 0.2 if len(X) >= 10 else 0.1
-            X_train, X_test, y_train, y_test = train_test_split(X, y_enc, test_size=split, random_state=42)
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y_enc, test_size=split, random_state=42, stratify=y_enc)
             train_pct = 68 if automl_result else 20
             p.update(train_pct, f"Training {_effective_algorithm} classifier…")
             pipeline.fit(X_train, y_train)
@@ -1308,30 +1322,37 @@ async def train_model(
             if _algorithm == "AutoML":
                 try:
                     X_cv, y_cv = _cv_sample(X, y_enc)
-                    cv_split   = KFold(n_splits=3, shuffle=True, random_state=42)
+                    cv_split   = KFold(n_splits=5, shuffle=True, random_state=42)
 
-                    p.update(15, "Testing Random Forest (3-fold CV)…")
+                    p.update(12, "Testing Random Forest (5-fold CV)…")
                     rf_pl  = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                        ("model", RandomForestRegressor(n_estimators=100, random_state=42))])
                     rf_cv  = -float(cross_val_score(rf_pl, X_cv, y_cv, cv=cv_split,
                                                     scoring="neg_mean_absolute_error").mean())
 
-                    p.update(35, "Testing XGBoost (3-fold CV)…")
+                    p.update(28, "Testing XGBoost (5-fold CV)…")
                     xgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                        ("model", XGBRegressor(n_estimators=100, random_state=42, verbosity=0))])
                     xgb_cv = -float(cross_val_score(xgb_pl, X_cv, y_cv, cv=cv_split,
                                                     scoring="neg_mean_absolute_error").mean())
 
-                    p.update(55, "Testing LightGBM (3-fold CV)…")
+                    p.update(44, "Testing LightGBM (5-fold CV)…")
                     lgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                        ("model", LGBMRegressor(n_estimators=100, random_state=42, verbose=-1))])
                     lgb_cv = -float(cross_val_score(lgb_pl, X_cv, y_cv, cv=cv_split,
+                                                    scoring="neg_mean_absolute_error").mean())
+
+                    p.update(58, "Testing CatBoost (5-fold CV)…")
+                    cat_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                       ("model", CatBoostRegressor(iterations=100, random_seed=42, verbose=0))])
+                    cat_cv = -float(cross_val_score(cat_pl, X_cv, y_cv, cv=cv_split,
                                                     scoring="neg_mean_absolute_error").mean())
 
                     cv_results = [
                         {"algorithm": "Random Forest", "score": round(rf_cv,  4)},
                         {"algorithm": "XGBoost",       "score": round(xgb_cv, 4)},
                         {"algorithm": "LightGBM",      "score": round(lgb_cv, 4)},
+                        {"algorithm": "CatBoost",      "score": round(cat_cv, 4)},
                     ]
                     winner = min(cv_results, key=lambda r: r["score"])["algorithm"]
                     _effective_algorithm = winner
@@ -1340,6 +1361,8 @@ async def train_model(
                         estimator = XGBRegressor(n_estimators=100, random_state=42, verbosity=0)
                     elif winner == "LightGBM":
                         estimator = LGBMRegressor(n_estimators=100, random_state=42, verbose=-1)
+                    elif winner == "CatBoost":
+                        estimator = CatBoostRegressor(iterations=100, random_seed=42, verbose=0)
                     else:
                         estimator = RandomForestRegressor(n_estimators=100, random_state=42)
 
