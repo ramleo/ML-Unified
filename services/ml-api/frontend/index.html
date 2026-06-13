@@ -4238,6 +4238,7 @@ function _amlStep0Skip() {
 function _renderAutoMLStep1b(preselectedTarget) {
   const a = automlAnalysis;
   const effectiveTarget = preselectedTarget || a.suggested_target;
+  const _acc = document.documentElement.style.getPropertyValue('--active-accent') || '#818cf8';
   const catCols = a.columns.filter(c => !c.is_numeric && c.name !== effectiveTarget).map(c => c.name);
   const numCols = a.columns.filter(c => c.is_numeric && c.name !== effectiveTarget).map(c => c.name);
 
@@ -4351,8 +4352,8 @@ function _renderAutoMLStep1b(preselectedTarget) {
         <div class="aml-results-right">
           <div id="amlPrepOptions" style="display:none">
 
-            <div style="padding:0.85rem 1rem;border:1px solid rgba(251,191,36,0.3);border-radius:12px;background:rgba(251,191,36,0.05);margin-bottom:1.2rem">
-              <div style="font-size:0.8rem;font-weight:700;color:#fbbf24;margin-bottom:0.35rem">⚠ Columns to consider dropping</div>
+            <div style="padding:0.85rem 1rem;border:1px solid ${_acc}55;border-radius:12px;background:${_acc}0d;margin-bottom:1.2rem">
+              <div style="font-size:0.8rem;font-weight:700;color:${_acc};margin-bottom:0.35rem">⚠ Columns to consider dropping</div>
               <div style="font-size:0.75rem;color:var(--text2);margin-bottom:0.75rem;line-height:1.5">
                 Auto-detected ID/name/code columns. Check to <strong style="color:#f87171">drop</strong>, or add more below:
               </div>
