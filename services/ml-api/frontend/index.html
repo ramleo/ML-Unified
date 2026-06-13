@@ -1116,7 +1116,7 @@ body {
                 padding: 0.85rem 1rem; }
 .aml-stat-lbl { font-size: 0.63rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
                 color: var(--text3); margin-bottom: 0.3rem; }
-.aml-stat-val { font-size: 1.1rem; font-weight: 800; color: var(--text1); line-height: 1.2; }
+.aml-stat-val { font-size: 1.1rem; font-weight: 800; color: var(--active-accent, var(--accent-from)); line-height: 1.2; }
 .aml-stat-sub { font-size: 0.68rem; color: var(--text3); margin-top: 0.15rem; }
 .aml-charts   { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
 @media (max-width: 600px) { .aml-charts { grid-template-columns: 1fr; } }
@@ -1131,7 +1131,7 @@ body {
 .aml-algo-name    { font-size: 0.78rem; font-weight: 600; color: var(--text2); }
 .aml-algo-name.aml-win { font-weight: 800; color: var(--text1); }
 .aml-algo-right   { display: flex; align-items: center; gap: 0.45rem; }
-.aml-algo-val     { font-size: 0.76rem; font-variant-numeric: tabular-nums; color: var(--text2); }
+.aml-algo-val     { font-size: 0.76rem; font-variant-numeric: tabular-nums; color: var(--active-accent, var(--accent-from)); }
 .aml-winner-pill  { font-size: 0.58rem; font-weight: 800; text-transform: uppercase;
                     letter-spacing: 0.08em; padding: 0.15rem 0.5rem; border-radius: 9999px;
                     border: 1px solid transparent; }
@@ -3305,7 +3305,7 @@ function renderWizardStep2() {
       ${wizardStepsHTML(2, false)}
       <h2 style="font-size:1.3rem;font-weight:800;margin-bottom:0.4rem">Configure Model</h2>
       <p style="font-size:0.85rem;color:var(--text2);margin-bottom:1.5rem">
-        Detected <strong>${a.rows.toLocaleString()} rows</strong> &middot; <strong>${a.columns.length} columns</strong>
+        Detected <strong style="color:var(--active-accent,#818cf8)">${a.rows.toLocaleString()} rows</strong> &middot; <strong style="color:var(--active-accent,#818cf8)">${a.columns.length} columns</strong>
       </p>
       <div class="wizard-section">
         <label class="wizard-label" for="wModelName">Model Name</label>
@@ -4295,7 +4295,7 @@ function _renderAutoMLStep1b(preselectedTarget) {
       <div id="amlWizardStepper">${_automlStepsHTML(1, false)}</div>
       <h2 style="font-size:1.3rem;font-weight:800;margin:1rem 0 0.25rem">Data Quality &amp; Preprocessing</h2>
       <p style="font-size:0.85rem;color:var(--text2);margin-bottom:0.75rem">
-        Analysed <strong>${(a.rows || 0).toLocaleString()} rows</strong> &middot; <strong>${a.columns.length} columns</strong>
+        Analysed <strong style="color:var(--active-accent,#818cf8)">${(a.rows || 0).toLocaleString()} rows</strong> &middot; <strong style="color:var(--active-accent,#818cf8)">${a.columns.length} columns</strong>
       </p>
 
       <div class="aml-results-grid">
@@ -4790,8 +4790,8 @@ function _renderAutoMLStep2() {
       ${_automlStepsHTML(2, false)}
       <h2 style="font-size:1.3rem;font-weight:800;margin-bottom:0.4rem">Configure AutoML</h2>
       <p style="font-size:0.85rem;color:var(--text2);margin-bottom:1.5rem">
-        Detected <strong>${a.rows.toLocaleString()} rows</strong> &middot;
-        <strong>${a.columns.length} columns</strong>
+        Detected <strong style="color:var(--active-accent,#818cf8)">${a.rows.toLocaleString()} rows</strong> &middot;
+        <strong style="color:var(--active-accent,#818cf8)">${a.columns.length} columns</strong>
       </p>
       <label class="wizard-label">Model Name</label>
       <input type="text" class="field-input" id="amlModelName" placeholder="e.g. My Classifier"
