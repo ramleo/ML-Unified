@@ -3526,6 +3526,7 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
     </div>`;
 
   return `<div class="aml-exp-dashboard">${leftCol}${rightCol}</div>`;
+}
 
 function _renderAutoMLReport(automl, accent) {
   const { winner, selection_metric, cv_results, feature_importance,
