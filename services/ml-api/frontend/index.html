@@ -4732,7 +4732,7 @@ async function _applyAutoMLPreprocessing() {
       { label: 'ROWS',     value: `${result.rows_after.toLocaleString()}`, sub: rowDiff > 0 ? `−${rowDiff.toLocaleString()} removed` : 'no rows removed', color: 'var(--active-accent,#818cf8)' },
       { label: 'COLUMNS',  value: `${result.cols_after}`, sub: [result.user_cols_dropped ? `−${result.user_cols_dropped} dropped` : '', result.ohe_cols_added ? `+${result.ohe_cols_added} OHE` : ''].filter(Boolean).join(', ') || `from ${result.cols_before}`, color: 'var(--active-accent,#818cf8)' },
       { label: 'MISSING',  value: `${result.total_missing}`, sub: result.total_missing === 0 ? 'all resolved' : 'remaining', color: result.total_missing === 0 ? 'var(--active-accent,#818cf8)' : '#fbbf24' },
-      ...(fsMethod !== 'none' ? [{ label: 'FEATURES', value: `${fsAfter}`, sub: `selected from ${fsBefore}`, color: '#f59e0b' }] : []),
+      ...(fsMethod !== 'none' ? [{ label: 'FEATURES', value: `${fsAfter}`, sub: `selected from ${fsBefore}`, color: 'var(--active-accent,#818cf8)' }] : []),
     ];
     resEl.innerHTML = `
       <div style="padding:1rem 1.1rem 0.75rem;border:1px solid ${acc}66;border-radius:12px;background:${acc}0a;margin-bottom:1.4rem">
