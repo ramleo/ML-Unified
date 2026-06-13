@@ -21,9 +21,12 @@ from sklearn.cluster import KMeans, DBSCAN
 # of shared-library memory at startup (critical on Render free tier 512 MB limit)
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
-from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold, KFold
+from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold, KFold, learning_curve
+from sklearn.base import clone
 from sklearn.metrics import (accuracy_score, mean_absolute_error, mean_squared_error,
-                             silhouette_score, f1_score, roc_auc_score, r2_score)
+                             silhouette_score, f1_score, roc_auc_score, r2_score,
+                             precision_score, recall_score, confusion_matrix as sk_confusion_matrix,
+                             median_absolute_error, mean_absolute_percentage_error)
 from typing import Any, Dict
 import io
 import joblib
@@ -1004,12 +1007,17 @@ def _build_prompt(winner, cv_results, task, selection_metric, is_imbalanced, fea
         f"Dataset: {n_rows:,} rows | Task: {task}{imbalance_note}\n"
         f"Algorithms tested (3-fold cross-validation):\n{results_text}\n\n"
         f"Winner: {winner}\n\nTop features by importance:\n{fi_text}\n\n"
-        f"Return ONLY a valid JSON object with exactly these 4 fields. No markdown, no code fences, no extra text — just the raw JSON:\n\n"
+        f"Return ONLY a valid JSON object with exactly these 5 fields. No markdown, no code fences, no extra text — just the raw JSON:\n\n"
         f"{{\n"
         f'  "why_won": "2-3 sentences on why {winner} outperformed the others given the dataset characteristics.",\n'
         f'  "score_analysis": "2-3 sentences interpreting the cross-validation scores — how close the competition was, what the margin means in practice, and whether the result is reliable.",\n'
         f'  "key_drivers": "2-3 sentences on what the top features reveal about what drives the predictions and any notable patterns.",\n'
-        f'  "recommendations": ["Actionable next step 1.", "Actionable next step 2.", "Actionable next step 3."]\n'
+        f'  "recommendations": ["Actionable next step 1.", "Actionable next step 2.", "Actionable next step 3."],\n'
+        f'  "actionable_insights": [\n'
+        f'    {{"title": "3-5 word title", "detail": "1-2 specific sentences tied to the actual numbers."}},\n'
+        f'    {{"title": "3-5 word title", "detail": "1-2 specific sentences tied to the actual numbers."}},\n'
+        f'    {{"title": "3-5 word title", "detail": "1-2 specific sentences tied to the actual numbers."}}\n'
+        f'  ]\n'
         f"}}\n\n"
         f"Be specific to the numbers provided. No generic filler. Avoid jargon."
     )
@@ -1026,7 +1034,7 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
             import openai  # noqa: PLC0415
             client = openai.OpenAI(api_key=api_key)
             resp = client.chat.completions.create(
-                model="gpt-4o-mini", max_tokens=800,
+                model="gpt-4o-mini", max_tokens=1200,
                 messages=[{"role": "user", "content": prompt}],
             )
             raw_text = resp.choices[0].message.content.strip()
@@ -1034,7 +1042,7 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
             import openai  # noqa: PLC0415
             client = openai.OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
             resp = client.chat.completions.create(
-                model="llama-3.3-70b-versatile", max_tokens=800,
+                model="llama-3.3-70b-versatile", max_tokens=1200,
                 messages=[{"role": "user", "content": prompt}],
             )
             raw_text = resp.choices[0].message.content.strip()
@@ -1050,7 +1058,7 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
             client = anthropic.Anthropic(api_key=api_key)
             msg = client.messages.create(
                 model="claude-haiku-4-5-20251001",
-                max_tokens=800,
+                max_tokens=1200,
                 messages=[{"role": "user", "content": prompt}],
             )
             raw_text = msg.content[0].text.strip()
@@ -1237,30 +1245,34 @@ async def train_model(
                     rf_pl  = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                        ("model", RandomForestClassifier(n_estimators=100, random_state=42,
                                                                         class_weight=cw))])
-                    rf_cv  = float(cross_val_score(rf_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric).mean())
+                    _rf_folds  = cross_val_score(rf_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
+                    rf_cv  = float(_rf_folds.mean())
 
                     p.update(28, "Testing XGBoost (5-fold CV)…")
                     xgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                        ("model", XGBClassifier(n_estimators=100, random_state=42,
                                                                eval_metric="logloss", verbosity=0))])
-                    xgb_cv = float(cross_val_score(xgb_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric).mean())
+                    _xgb_folds = cross_val_score(xgb_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
+                    xgb_cv = float(_xgb_folds.mean())
 
                     p.update(44, "Testing LightGBM (5-fold CV)…")
                     lgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                        ("model", LGBMClassifier(n_estimators=100, random_state=42,
                                                                 class_weight=cw, verbose=-1))])
-                    lgb_cv = float(cross_val_score(lgb_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric).mean())
+                    _lgb_folds = cross_val_score(lgb_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
+                    lgb_cv = float(_lgb_folds.mean())
 
                     p.update(58, "Testing CatBoost (5-fold CV)…")
                     cat_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                        ("model", CatBoostClassifier(iterations=100, random_seed=42, verbose=0))])
-                    cat_cv = float(cross_val_score(cat_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric).mean())
+                    _cat_folds = cross_val_score(cat_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
+                    cat_cv = float(_cat_folds.mean())
 
                     cv_results = [
-                        {"algorithm": "Random Forest", "score": round(rf_cv,  4)},
-                        {"algorithm": "XGBoost",       "score": round(xgb_cv, 4)},
-                        {"algorithm": "LightGBM",      "score": round(lgb_cv, 4)},
-                        {"algorithm": "CatBoost",      "score": round(cat_cv, 4)},
+                        {"algorithm": "Random Forest", "score": round(rf_cv,  4), "fold_scores": [round(float(s), 4) for s in _rf_folds]},
+                        {"algorithm": "XGBoost",       "score": round(xgb_cv, 4), "fold_scores": [round(float(s), 4) for s in _xgb_folds]},
+                        {"algorithm": "LightGBM",      "score": round(lgb_cv, 4), "fold_scores": [round(float(s), 4) for s in _lgb_folds]},
+                        {"algorithm": "CatBoost",      "score": round(cat_cv, 4), "fold_scores": [round(float(s), 4) for s in _cat_folds]},
                     ]
                     winner = max(cv_results, key=lambda r: r["score"])["algorithm"]
                     _effective_algorithm = winner
@@ -1335,9 +1347,44 @@ async def train_model(
                     auc   = roc_auc_score(y_test, proba, multi_class="ovr", average="macro")
                 extra_metrics.append({"label": "ROC-AUC", "value": f"{auc:.3f}"})
             except Exception:
-                pass
+                auc = None
 
             if automl_result:
+                prec_w = precision_score(y_test, y_pred, average="weighted", zero_division=0)
+                rec_w  = recall_score(y_test, y_pred, average="weighted", zero_division=0)
+                wm = {
+                    "accuracy":    round(float(acc),    4),
+                    "f1_weighted": round(float(f1_w),   4),
+                    "precision":   round(float(prec_w), 4),
+                    "recall":      round(float(rec_w),  4),
+                }
+                if auc is not None:
+                    wm["roc_auc"] = round(float(auc), 4)
+                automl_result["winner_metrics"] = wm
+
+                # Confusion matrix
+                cm = sk_confusion_matrix(y_test, y_pred)
+                automl_result["confusion_matrix"] = cm.tolist()
+                automl_result["class_names"] = [str(c) for c in le.classes_]
+
+                # Learning curve (5 training sizes, winner pipeline)
+                try:
+                    p.update(83, "Computing learning curve…")
+                    lc_sizes, lc_train_sc, lc_val_sc = learning_curve(
+                        clone(pipeline), X_cv, y_cv,
+                        cv=StratifiedKFold(n_splits=5, shuffle=True, random_state=42),
+                        train_sizes=[0.2, 0.4, 0.6, 0.8, 1.0],
+                        scoring=sel_metric, n_jobs=1,
+                    )
+                    automl_result["learning_curve"] = {
+                        "train_sizes":   [int(s) for s in lc_sizes],
+                        "train_scores":  [round(float(s.mean()), 4) for s in lc_train_sc],
+                        "val_scores":    [round(float(s.mean()), 4) for s in lc_val_sc],
+                        "metric_label":  sel_label,
+                    }
+                except Exception as _lc_err:
+                    print(f"Learning curve failed: {_lc_err}", flush=True)
+
                 p.update(84, "Extracting feature importances…")
                 automl_result["feature_importance"] = _extract_feature_importances(
                     pipeline, num_cols, cat_cols)
@@ -1375,32 +1422,32 @@ async def train_model(
                     p.update(12, "Testing Random Forest (5-fold CV)…")
                     rf_pl  = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                        ("model", RandomForestRegressor(n_estimators=100, random_state=42))])
-                    rf_cv  = -float(cross_val_score(rf_pl, X_cv, y_cv, cv=cv_split,
-                                                    scoring="neg_mean_absolute_error").mean())
+                    _rf_folds_r  = cross_val_score(rf_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
+                    rf_cv  = -float(_rf_folds_r.mean())
 
                     p.update(28, "Testing XGBoost (5-fold CV)…")
                     xgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                        ("model", XGBRegressor(n_estimators=100, random_state=42, verbosity=0))])
-                    xgb_cv = -float(cross_val_score(xgb_pl, X_cv, y_cv, cv=cv_split,
-                                                    scoring="neg_mean_absolute_error").mean())
+                    _xgb_folds_r = cross_val_score(xgb_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
+                    xgb_cv = -float(_xgb_folds_r.mean())
 
                     p.update(44, "Testing LightGBM (5-fold CV)…")
                     lgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                        ("model", LGBMRegressor(n_estimators=100, random_state=42, verbose=-1))])
-                    lgb_cv = -float(cross_val_score(lgb_pl, X_cv, y_cv, cv=cv_split,
-                                                    scoring="neg_mean_absolute_error").mean())
+                    _lgb_folds_r = cross_val_score(lgb_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
+                    lgb_cv = -float(_lgb_folds_r.mean())
 
                     p.update(58, "Testing CatBoost (5-fold CV)…")
                     cat_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                        ("model", CatBoostRegressor(iterations=100, random_seed=42, verbose=0))])
-                    cat_cv = -float(cross_val_score(cat_pl, X_cv, y_cv, cv=cv_split,
-                                                    scoring="neg_mean_absolute_error").mean())
+                    _cat_folds_r = cross_val_score(cat_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
+                    cat_cv = -float(_cat_folds_r.mean())
 
                     cv_results = [
-                        {"algorithm": "Random Forest", "score": round(rf_cv,  4)},
-                        {"algorithm": "XGBoost",       "score": round(xgb_cv, 4)},
-                        {"algorithm": "LightGBM",      "score": round(lgb_cv, 4)},
-                        {"algorithm": "CatBoost",      "score": round(cat_cv, 4)},
+                        {"algorithm": "Random Forest", "score": round(rf_cv,  4), "fold_scores": [round(-float(s), 4) for s in _rf_folds_r]},
+                        {"algorithm": "XGBoost",       "score": round(xgb_cv, 4), "fold_scores": [round(-float(s), 4) for s in _xgb_folds_r]},
+                        {"algorithm": "LightGBM",      "score": round(lgb_cv, 4), "fold_scores": [round(-float(s), 4) for s in _lgb_folds_r]},
+                        {"algorithm": "CatBoost",      "score": round(cat_cv, 4), "fold_scores": [round(-float(s), 4) for s in _cat_folds_r]},
                     ]
                     winner = min(cv_results, key=lambda r: r["score"])["algorithm"]
                     _effective_algorithm = winner
@@ -1460,6 +1507,46 @@ async def train_model(
                 extra_metrics.append({"label": "R²", "value": f"{r2:.3f}"})
 
             if automl_result:
+                y_test_arr = np.array(y_test)
+                mape    = float(mean_absolute_percentage_error(y_test_arr, y_pred))
+                med_ae  = float(median_absolute_error(y_test_arr, y_pred))
+                max_err = float(np.max(np.abs(y_test_arr - y_pred)))
+                wm_reg = {
+                    "mae":       round(float(mae),    4),
+                    "rmse":      round(float(rmse),   4),
+                    "mape":      round(mape,           4),
+                    "max_error": round(max_err,        4),
+                    "median_ae": round(med_ae,         4),
+                }
+                if r2 >= 0.60:
+                    wm_reg["r2"] = round(float(r2), 4)
+                automl_result["winner_metrics"] = wm_reg
+
+                # Scatter: predicted vs actual (sample to 300)
+                import random as _rnd
+                n_pts = len(y_test_arr)
+                idxs  = sorted(_rnd.sample(range(n_pts), min(300, n_pts)))
+                automl_result["scatter_actual"]    = [round(float(v), 4) for v in y_test_arr[idxs]]
+                automl_result["scatter_predicted"] = [round(float(v), 4) for v in y_pred[idxs]]
+
+                # Learning curve (5 training sizes, winner pipeline)
+                try:
+                    p.update(83, "Computing learning curve…")
+                    lc_sizes, lc_train_sc, lc_val_sc = learning_curve(
+                        clone(pipeline), X, y_enc,
+                        cv=KFold(n_splits=5, shuffle=True, random_state=42),
+                        train_sizes=[0.2, 0.4, 0.6, 0.8, 1.0],
+                        scoring="neg_mean_absolute_error", n_jobs=1,
+                    )
+                    automl_result["learning_curve"] = {
+                        "train_sizes":  [int(s) for s in lc_sizes],
+                        "train_scores": [round(-float(s.mean()), 4) for s in lc_train_sc],
+                        "val_scores":   [round(-float(s.mean()), 4) for s in lc_val_sc],
+                        "metric_label": "MAE",
+                    }
+                except Exception as _lc_err:
+                    print(f"Learning curve failed: {_lc_err}", flush=True)
+
                 p.update(84, "Extracting feature importances…")
                 automl_result["feature_importance"] = _extract_feature_importances(
                     pipeline, num_cols, cat_cols)

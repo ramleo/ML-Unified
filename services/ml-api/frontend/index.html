@@ -3431,7 +3431,7 @@ function _updateProgressBar(fillId, msgId, pctId, pct, msg) {
 // ── AutoML report ─────────────────────────────────────────────
 let _currentAutoMLData = null;
 
-function _renderExplanationDashboard(explanation, cv_results, feature_importance, accent, winner, can_upgrade, isReg, selection_metric, winner_metrics) {
+function _renderExplanationDashboard(explanation, cv_results, feature_importance, accent, winner, can_upgrade, isReg, selection_metric, winner_metrics, vizData) {
   let exp;
   if (typeof explanation === 'string') {
     exp = { why_won: explanation, score_analysis: '', key_drivers: '', recommendations: [], actionable_insights: [] };
@@ -3440,67 +3440,149 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
   } else {
     exp = { why_won: '', score_analysis: '', key_drivers: '', recommendations: [], actionable_insights: [] };
   }
+  const recs     = Array.isArray(exp.recommendations)     ? exp.recommendations     : [];
+  const insights = Array.isArray(exp.actionable_insights) ? exp.actionable_insights : [];
+  const wm  = winner_metrics || {};
+  const viz = vizData || {};
 
-  const recs     = Array.isArray(exp.recommendations)      ? exp.recommendations      : [];
-  const insights = Array.isArray(exp.actionable_insights)  ? exp.actionable_insights  : [];
-  const wm       = winner_metrics || {};
+  // ── Confusion matrix (classification) ────────────────────────
+  function _confusionMatrixSVG(cm, classNames, ac) {
+    if (!cm || !cm.length) return '<div style="font-size:0.74rem;color:var(--text3)">Run a new analysis to see confusion matrix</div>';
+    const n    = cm.length;
+    const show = Math.min(n, 5);
+    const names = (classNames || []).slice(0, show);
+    const W = 260, pad = 44, cell = (W - pad) / show;
+    const maxVal = Math.max(...cm.flat());
+    const rows = cm.slice(0, show).map((row, i) =>
+      row.slice(0, show).map((v, j) => {
+        const isDiag = i === j;
+        const intensity = maxVal > 0 ? v / maxVal : 0;
+        const bg = isDiag
+          ? `${ac}${Math.round(30 + intensity * 180).toString(16).padStart(2,'0')}`
+          : `rgba(255,255,255,${(intensity * 0.25).toFixed(2)})`;
+        const tx = isDiag ? ac : (intensity > 0.4 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)');
+        const x = pad + j * cell, y = pad + i * cell;
+        return `<rect x="${x}" y="${y}" width="${cell-2}" height="${cell-2}" rx="3" fill="${bg}"/>
+                <text x="${x + cell/2 - 1}" y="${y + cell/2}" font-size="${cell > 40 ? 11 : 9}" font-weight="700" fill="${tx}" text-anchor="middle" dominant-baseline="middle">${v}</text>`;
+      }).join('')
+    ).join('');
+    const xLabels = names.map((nm, j) =>
+      `<text x="${pad + j*cell + cell/2 - 1}" y="${pad - 6}" font-size="8" fill="var(--text3)" text-anchor="middle">${String(nm).slice(0,8)}</text>`
+    ).join('');
+    const yLabels = names.map((nm, i) =>
+      `<text x="${pad - 5}" y="${pad + i*cell + cell/2}" font-size="8" fill="var(--text3)" text-anchor="end" dominant-baseline="middle">${String(nm).slice(0,8)}</text>`
+    ).join('');
+    const H = pad + show * cell + 8;
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:180px">
+      <text x="2" y="${pad + show*cell/2}" font-size="8" fill="var(--text3)" text-anchor="middle" dominant-baseline="middle" transform="rotate(-90,8,${pad+show*cell/2})">Actual</text>
+      <text x="${pad + show*cell/2}" y="${H}" font-size="8" fill="var(--text3)" text-anchor="middle">Predicted</text>
+      ${xLabels}${yLabels}${rows}
+    </svg>`;
+  }
 
-  // ── CV Fold Stability for winner ──────────────────────────────
-  const winnerResult = (cv_results || []).find(r => r.algorithm === winner);
-  const foldScores   = winnerResult?.fold_scores || [];
-  const foldAvg      = foldScores.length ? foldScores.reduce((a, b) => a + b, 0) / foldScores.length : 0;
-  const foldMax      = foldScores.length ? Math.max(...foldScores) : 1;
-  const foldMin      = foldScores.length ? Math.min(...foldScores) : 0;
-  const foldStd      = foldScores.length > 1
-    ? Math.sqrt(foldScores.reduce((s, x) => s + (x - foldAvg) ** 2, 0) / foldScores.length)
-    : 0;
+  // ── Predicted vs Actual scatter (regression) ──────────────────
+  function _scatterSVG(actual, predicted, ac) {
+    if (!actual || !actual.length) return '<div style="font-size:0.74rem;color:var(--text3)">Run a new analysis to see scatter plot</div>';
+    const W = 260, H = 180, pad = 36;
+    const cW = W - pad - 8, cH = H - pad - 14;
+    const allV  = [...actual, ...predicted];
+    const vMin  = Math.min(...allV), vMax = Math.max(...allV), vRng = (vMax - vMin) || 1;
+    const xOf   = v => pad + (v - vMin) / vRng * cW;
+    const yOf   = v => pad + (1 - (v - vMin) / vRng) * cH;
+    // ±1 RMSE band
+    const resid = actual.map((a, i) => predicted[i] - a);
+    const rmse  = Math.sqrt(resid.reduce((s, r) => s + r*r, 0) / resid.length);
+    const bandPts = [[vMin, vMin+rmse],[vMax, vMax+rmse],[vMax, vMax-rmse],[vMin, vMin-rmse]];
+    const bandPath = bandPts.map((p, i) => `${i?'L':'M'}${xOf(p[0]).toFixed(1)},${yOf(p[1]).toFixed(1)}`).join(' ') + 'Z';
+    // Perfect diagonal
+    const diagLine = `M${xOf(vMin).toFixed(1)},${yOf(vMin).toFixed(1)} L${xOf(vMax).toFixed(1)},${yOf(vMax).toFixed(1)}`;
+    // Points (sample if > 100 to keep SVG light)
+    const step   = actual.length > 100 ? Math.ceil(actual.length / 100) : 1;
+    const dots   = actual.filter((_, i) => i % step === 0).map((a, i) => {
+      const pi = i * step;
+      return `<circle cx="${xOf(a).toFixed(1)}" cy="${yOf(predicted[pi]).toFixed(1)}" r="2.2" fill="${ac}" opacity="0.65"/>`;
+    }).join('');
+    // Axis ticks
+    const ticks = [vMin, (vMin+vMax)/2, vMax].map(v => {
+      const lbl = Math.abs(v) >= 1000 ? `${(v/1000).toFixed(1)}k` : v.toFixed(v >= 10 ? 0 : 1);
+      return `<text x="${xOf(v).toFixed(1)}" y="${pad+cH+11}" font-size="8" fill="var(--text3)" text-anchor="middle">${lbl}</text>
+              <text x="${pad-4}" y="${yOf(v).toFixed(1)}" font-size="8" fill="var(--text3)" text-anchor="end" dominant-baseline="middle">${lbl}</text>`;
+    }).join('');
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:180px">
+      <path d="${bandPath}" fill="${ac}" opacity="0.08"/>
+      <path d="${diagLine}" stroke="${ac}" stroke-width="1.2" stroke-dasharray="4,3" opacity="0.5"/>
+      <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${pad+cH}" stroke="var(--border2)" stroke-width="1"/>
+      <line x1="${pad}" y1="${pad+cH}" x2="${pad+cW}" y2="${pad+cH}" stroke="var(--border2)" stroke-width="1"/>
+      ${ticks}${dots}
+      <text x="${pad+cW/2}" y="${H-1}" font-size="8" fill="var(--text3)" text-anchor="middle">Actual</text>
+      <text x="8" y="${pad+cH/2}" font-size="8" fill="var(--text3)" text-anchor="middle" dominant-baseline="middle" transform="rotate(-90,8,${pad+cH/2})">Predicted</text>
+    </svg>`;
+  }
 
-  const foldBars = foldScores.length > 0 ? foldScores.map((s, i) => {
-    const isAbove = s >= foldAvg;
-    const pct = isReg
-      ? foldMax > foldMin ? (100 - (s - foldMin) / (foldMax - foldMin) * 80).toFixed(1) : '60'
-      : (foldMax > 0 ? s / foldMax * 100 : 50).toFixed(1);
-    const color  = isAbove ? accent : 'rgba(255,255,255,0.18)';
-    const valStr = isReg ? s.toFixed(3) : (s * 100).toFixed(1) + '%';
-    return `<div style="margin-bottom:0.45rem">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-        <span style="font-size:0.68rem;color:var(--text3)">Fold ${i + 1}</span>
-        <span style="font-size:0.68rem;font-weight:600;color:${isAbove ? accent : 'var(--text3)'}">${valStr}</span>
-      </div>
-      <div style="height:7px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
-        <div style="height:100%;width:${pct}%;background:${color};border-radius:4px"></div>
-      </div>
+  // ── Learning curve ────────────────────────────────────────────
+  function _learningCurveSVG(lc, ac, reg) {
+    if (!lc || !lc.train_sizes || !lc.train_sizes.length) return '<div style="font-size:0.74rem;color:var(--text3)">Run a new analysis to see learning curve</div>';
+    const W = 260, H = 130, padL = 36, padR = 8, padT = 10, padB = 22;
+    const cW = W - padL - padR, cH = H - padT - padB;
+    const allV = [...lc.train_scores, ...lc.val_scores];
+    const yMin = Math.min(...allV) * 0.97, yMax = Math.max(...allV) * 1.02, yRng = (yMax - yMin) || 1;
+    const n = lc.train_sizes.length;
+    const xOf = i => padL + (i / (n - 1)) * cW;
+    const yOf = v => padT + (1 - (v - yMin) / yRng) * cH;
+    const trainPath = lc.train_scores.map((v, i) => `${i?'L':'M'}${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join(' ');
+    const valPath   = lc.val_scores.map((v, i) => `${i?'L':'M'}${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`).join(' ');
+    const fillPath  = [...lc.train_scores.map((v, i) => `${i?'L':'M'}${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`),
+                       ...[...lc.val_scores].reverse().map((v, i) => `L${xOf(n-1-i).toFixed(1)},${yOf(v).toFixed(1)}`), 'Z'].join(' ');
+    const yTicks = [yMin, (yMin+yMax)/2, yMax].map(v => {
+      const lbl = reg ? v.toFixed(2) : (v*100).toFixed(0)+'%';
+      const sy  = yOf(v).toFixed(1);
+      return `<line x1="${padL}" y1="${sy}" x2="${W-padR}" y2="${sy}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3,4"/>
+              <text x="${padL-4}" y="${sy}" font-size="8" fill="var(--text3)" text-anchor="end" dominant-baseline="middle">${lbl}</text>`;
+    }).join('');
+    const xLabels = lc.train_sizes.map((s, i) =>
+      `<text x="${xOf(i).toFixed(1)}" y="${padT+cH+13}" font-size="8" fill="var(--text3)" text-anchor="middle">${s}</text>`
+    ).join('');
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-height:130px">
+      ${yTicks}
+      <path d="${fillPath}" fill="${ac}" opacity="0.07"/>
+      <path d="${trainPath}" fill="none" stroke="${ac}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="${valPath}"   fill="none" stroke="${ac}" stroke-width="1.8" stroke-dasharray="5,3" stroke-linecap="round" opacity="0.65"/>
+      ${xLabels}
+    </svg>
+    <div style="display:flex;gap:1rem;margin-top:0.3rem">
+      <div style="display:flex;align-items:center;gap:0.3rem"><div style="width:14px;height:2px;background:${ac};border-radius:1px"></div><span style="font-size:0.65rem;color:var(--text3)">Train</span></div>
+      <div style="display:flex;align-items:center;gap:0.3rem"><div style="width:14px;height:2px;background:${ac};opacity:0.6;border-radius:1px;border-top:1px dashed ${ac}"></div><span style="font-size:0.65rem;color:var(--text3)">Validation</span></div>
     </div>`;
-  }).join('') : '<div style="font-size:0.74rem;color:var(--text3)">Run a new analysis to see fold data</div>';
+  }
 
-  const foldFooter = foldScores.length > 1 ? `
-    <div style="display:flex;gap:1rem;margin-top:0.5rem;padding-top:0.45rem;border-top:1px solid var(--border2)">
-      <div><div style="font-size:0.58rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3)">Std Dev</div>
-           <div style="font-size:0.78rem;font-weight:700;color:var(--text1)">${isReg ? foldStd.toFixed(4) : (foldStd * 100).toFixed(2) + '%'}</div></div>
-      <div><div style="font-size:0.58rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3)">Range</div>
-           <div style="font-size:0.78rem;font-weight:700;color:var(--text1)">${isReg ? (foldMax - foldMin).toFixed(4) : ((foldMax - foldMin) * 100).toFixed(2) + '%'}</div></div>
-      <div><div style="font-size:0.58rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3)">Stability</div>
-           <div style="font-size:0.78rem;font-weight:700;color:${foldStd < 0.02 ? '#34d399' : foldStd < 0.05 ? '#fbbf24' : '#f87171'}">${foldStd < 0.02 ? 'High' : foldStd < 0.05 ? 'Medium' : 'Low'}</div></div>
-    </div>` : '';
-
-  // ── Key Metrics grid ──────────────────────────────────────────
-  const metricEntries = isReg ? [
-    ['MAE',  wm.mae  != null ? String(wm.mae.toFixed(3))  : '—'],
-    ['RMSE', wm.rmse != null ? String(wm.rmse.toFixed(3)) : '—'],
-    ['R²',   wm.r2   != null ? String(wm.r2.toFixed(3))  : '—'],
-  ] : [
-    ['Accuracy',  wm.accuracy    != null ? (wm.accuracy    * 100).toFixed(1) + '%' : '—'],
-    ['F1 Score',  wm.f1_weighted != null ? (wm.f1_weighted * 100).toFixed(1) + '%' : '—'],
-    ['Precision', wm.precision   != null ? (wm.precision   * 100).toFixed(1) + '%' : '—'],
-    ['Recall',    wm.recall      != null ? (wm.recall      * 100).toFixed(1) + '%' : '—'],
-    ...(wm.roc_auc != null ? [['ROC-AUC', wm.roc_auc.toFixed(3)]] : []),
-  ];
-  const metricsGrid = metricEntries.map(([lbl, val]) =>
-    `<div style="padding:0.45rem 0.55rem;border-radius:7px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
-      <div style="font-size:0.56rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text3)">${lbl}</div>
-      <div style="font-size:0.9rem;font-weight:800;color:${accent};margin-top:0.12rem">${val}</div>
-    </div>`
-  ).join('');
+  // ── Winner model metrics ──────────────────────────────────────
+  function _metricCard(lbl, val, fullWidth) {
+    return `<div style="padding:0.5rem 0.65rem;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border);${fullWidth?'grid-column:1/-1':''}">
+      <div style="font-size:0.58rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text3)">${lbl}</div>
+      <div style="font-size:1rem;font-weight:800;color:${accent};margin-top:0.1rem">${val}</div>
+    </div>`;
+  }
+  const metricsHTML = isReg ? (() => {
+    const entries = [
+      ['MAE',       wm.mae       != null ? wm.mae.toFixed(3)       : '—'],
+      ['RMSE',      wm.rmse      != null ? wm.rmse.toFixed(3)      : '—'],
+      ['MAPE',      wm.mape      != null ? (wm.mape*100).toFixed(1)+'%' : '—'],
+      ['Max Error', wm.max_error != null ? wm.max_error.toFixed(3) : '—'],
+      ['Median AE', wm.median_ae != null ? wm.median_ae.toFixed(3) : '—'],
+      ...(wm.r2 != null ? [['R²', wm.r2.toFixed(3)]] : []),
+    ];
+    // 2-col grid, last card spans full if odd count
+    return entries.map((e, i) => _metricCard(e[0], e[1], entries.length % 2 !== 0 && i === entries.length - 1)).join('');
+  })() : (() => {
+    const base = [
+      ['Accuracy',  wm.accuracy    != null ? (wm.accuracy*100).toFixed(1)+'%'    : '—'],
+      ['F1 Score',  wm.f1_weighted != null ? (wm.f1_weighted*100).toFixed(1)+'%' : '—'],
+      ['Precision', wm.precision   != null ? (wm.precision*100).toFixed(1)+'%'   : '—'],
+      ['Recall',    wm.recall      != null ? (wm.recall*100).toFixed(1)+'%'      : '—'],
+    ];
+    const rocCard = wm.roc_auc != null ? _metricCard('ROC-AUC', wm.roc_auc.toFixed(3), true) : '';
+    return base.map(e => _metricCard(e[0], e[1], false)).join('') + rocCard;
+  })();
 
   // ── Left column ───────────────────────────────────────────────
   const leftCol = `
@@ -3524,23 +3606,37 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
     </div>`;
 
   // ── Right column ──────────────────────────────────────────────
+  const vizTitle   = isReg ? 'Predicted vs Actual' : 'Confusion Matrix';
+  const vizSubtitle= isReg ? `Diagonal band = ±1 RMSE · dashed line = perfect prediction` : `Diagonal = correct · off-diagonal = errors`;
+  const vizContent = isReg
+    ? _scatterSVG(viz.scatter_actual, viz.scatter_predicted, accent)
+    : _confusionMatrixSVG(viz.confusion_matrix, viz.class_names, accent);
+
+  const lcTitle    = `Learning Curve · ${viz.learning_curve?.metric_label || (isReg ? 'MAE' : 'F1')}`;
+  const lcSubtitle = 'Solid = train · dashed = validation · 5 training sizes · gap = overfitting';
+
   const rightCol = `
     <div class="aml-exp-right">
       <div class="aml-exp-panel">
-        <div class="aml-exp-panel-title">CV Fold Stability · ${(winner || '').replace('Random Forest', 'RF')}</div>
-        <div style="font-size:0.67rem;color:var(--text3);margin-bottom:0.55rem">${isReg ? 'Lower MAE per fold = better · bars show relative performance' : 'Per-fold ' + selection_metric + ' · above-avg folds highlighted'}</div>
-        ${foldBars}
-        ${foldFooter}
+        <div class="aml-exp-panel-title">${vizTitle}</div>
+        <div style="font-size:0.67rem;color:var(--text3);margin-bottom:0.55rem">${vizSubtitle}</div>
+        ${vizContent}
       </div>
       <div class="aml-exp-panel">
         <div class="aml-exp-panel-title">Winner Model Metrics</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;margin-top:0.3rem">
-          ${metricsGrid || '<div style="font-size:0.74rem;color:var(--text3)">Run a new analysis to see metrics</div>'}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;margin-top:0.4rem">
+          ${metricsHTML}
         </div>
+      </div>
+      <div class="aml-exp-panel">
+        <div class="aml-exp-panel-title">${lcTitle}</div>
+        <div style="font-size:0.67rem;color:var(--text3);margin-bottom:0.45rem">${lcSubtitle}</div>
+        ${_learningCurveSVG(viz.learning_curve, accent, isReg)}
+        <div style="font-size:0.62rem;color:var(--text3);margin-top:0.4rem">Computed with 5 training sizes — adds ~5 extra model fits</div>
       </div>
     </div>`;
 
-  // ── Actionable Insights (below, full-width) ───────────────────
+  // ── Actionable Insights (full-width below) ────────────────────
   const insightIcons = ['💡', '🎯', '⚡', '🔍'];
   const insightsHTML = insights.length > 0 ? `
     <div style="margin-top:1rem;padding-top:0.85rem;border-top:1px solid var(--border2)">
@@ -3560,7 +3656,8 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
 function _renderAutoMLReport(automl, accent) {
   const { winner, selection_metric, cv_results, feature_importance,
           explanation, explanation_source, can_upgrade, is_imbalanced, n_rows,
-          winner_metrics } = automl;
+          winner_metrics, confusion_matrix, class_names,
+          scatter_actual, scatter_predicted, learning_curve } = automl;
   const isReg = selection_metric === 'MAE';
 
   const scores  = cv_results.map(r => r.score);
@@ -3726,7 +3823,7 @@ function _renderAutoMLReport(automl, accent) {
         ${srcBadge}
       </div>
       <div id="amlExplanation">${isAI
-        ? _renderExplanationDashboard(explanation, cv_results, feature_importance, accent, winner, can_upgrade, isReg, selection_metric, winner_metrics)
+        ? _renderExplanationDashboard(explanation, cv_results, feature_importance, accent, winner, can_upgrade, isReg, selection_metric, winner_metrics, {confusion_matrix, class_names, scatter_actual, scatter_predicted, learning_curve})
         : `<p class="aml-exp-text">${typeof explanation === 'string' ? explanation : (explanation?.why_won || '')}</p>`
       }</div>
       ${keyInput}
@@ -3900,10 +3997,11 @@ async function getAIExplanation() {
     const isAI = data.source === 'user_key';
     const expEl = document.getElementById('amlExplanation');
     if (expEl && _currentAutoMLData) {
-      const { cv_results, feature_importance, winner, selection_metric, winner_metrics } = _currentAutoMLData;
+      const { cv_results, feature_importance, winner, selection_metric, winner_metrics,
+              confusion_matrix, class_names, scatter_actual, scatter_predicted, learning_curve } = _currentAutoMLData;
       const isReg = selection_metric === 'MAE';
       const accent = document.documentElement.style.getPropertyValue('--active-accent') || '#818cf8';
-      expEl.innerHTML = _renderExplanationDashboard(data.explanation, cv_results, feature_importance, accent, winner, false, isReg, selection_metric, winner_metrics);
+      expEl.innerHTML = _renderExplanationDashboard(data.explanation, cv_results, feature_importance, accent, winner, false, isReg, selection_metric, winner_metrics, {confusion_matrix, class_names, scatter_actual, scatter_predicted, learning_curve});
       _animateAutoMLBars();
     }
     const badge = document.querySelector('.aml-source-badge');
