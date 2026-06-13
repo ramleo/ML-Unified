@@ -3366,7 +3366,12 @@ function toggleClusteringMode(isClustering) {
 function selectAccent(el) {
   document.querySelectorAll('.accent-swatch').forEach(s => s.classList.remove('selected'));
   el.classList.add('selected');
-  document.getElementById('wAccent').value = el.dataset.color;
+  const color = el.dataset.color;
+  document.documentElement.style.setProperty('--active-accent', color);
+  const wA = document.getElementById('wAccent');
+  const aA = document.getElementById('amlAccent');
+  if (wA) wA.value = color;
+  if (aA) aA.value = color;
 }
 
 function suggestTask() {
@@ -4557,14 +4562,26 @@ async function _applyAutoMLPreprocessing() {
     // Update stepper: Upload ✓ Configure ✓ → Results active
     const stepperEl = document.getElementById('amlWizardStepper');
     if (stepperEl) stepperEl.innerHTML = _automlStepsHTML(3, false);
+    const rowDiff = result.rows_before - result.rows_after;
+    const statCards = [
+      { label: 'ROWS',     value: `${result.rows_after.toLocaleString()}`, sub: rowDiff > 0 ? `−${rowDiff.toLocaleString()} removed` : 'no rows removed', color: '#34d399' },
+      { label: 'COLUMNS',  value: `${result.cols_after}`, sub: [result.user_cols_dropped ? `−${result.user_cols_dropped} dropped` : '', result.ohe_cols_added ? `+${result.ohe_cols_added} OHE` : ''].filter(Boolean).join(', ') || `from ${result.cols_before}`, color: 'var(--active-accent,#818cf8)' },
+      { label: 'MISSING',  value: `${result.total_missing}`, sub: result.total_missing === 0 ? 'all resolved' : 'remaining', color: result.total_missing === 0 ? '#34d399' : '#fbbf24' },
+      ...(fsMethod !== 'none' ? [{ label: 'FEATURES', value: `${fsAfter}`, sub: `selected from ${fsBefore}`, color: '#f59e0b' }] : []),
+    ];
     resEl.innerHTML = `
-      <div style="padding:0.85rem 1rem;border:1px solid #34d399;border-radius:8px;background:transparent;margin-bottom:1.2rem">
-        <div style="font-size:0.82rem;font-weight:700;color:#34d399;margin-bottom:0.5rem">Preprocessing complete</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:0.4rem;font-size:0.78rem;color:var(--text2)">
-          <div>Rows: <strong>${result.rows_before.toLocaleString()} → ${result.rows_after.toLocaleString()}</strong></div>
-          <div>Columns: <strong>${result.cols_before} → ${result.cols_after}</strong>${colNote}</div>
-          <div>Missing: <strong>${result.total_missing}</strong> remaining</div>
-          ${fsLine}
+      <div style="padding:1rem 1.1rem 0.75rem;border:1px solid rgba(52,211,153,0.4);border-radius:12px;background:rgba(52,211,153,0.04);margin-bottom:1.4rem">
+        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="9" stroke="#34d399" stroke-width="1.5"/><path d="M6 10l3 3 5-5" stroke="#34d399" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span style="font-size:0.78rem;font-weight:700;color:#34d399;letter-spacing:0.06em;text-transform:uppercase">Preprocessing Complete</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:0.6rem">
+          ${statCards.map(s => `
+          <div style="padding:0.65rem 0.75rem;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
+            <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:0.25rem">${s.label}</div>
+            <div style="font-size:1.35rem;font-weight:800;color:${s.color};line-height:1">${s.value}</div>
+            <div style="font-size:0.68rem;color:var(--text3);margin-top:0.2rem">${s.sub}</div>
+          </div>`).join('')}
         </div>
       </div>
       <div style="font-size:0.85rem;font-weight:600;color:var(--text1);margin-bottom:0.75rem">Proceed to AutoML training?</div>
@@ -4643,8 +4660,7 @@ function _renderAutoMLStep2() {
       <div id="amlWizardErr"></div>
       <div class="action-row">
         <button class="btn btn-clear" onclick="_renderAutoMLStep1b(_automlTargetCol)">← Back</button>
-        <button class="btn btn-primary" onclick="runAutoML()"
-                style="background:linear-gradient(135deg,#818cf8,#6366f1)">
+        <button class="btn btn-primary" onclick="runAutoML()">
           Run AutoML →
         </button>
       </div>
