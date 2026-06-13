@@ -552,7 +552,9 @@ async def automl_preprocess(request: Request):
         scaler = StandardScaler()
         df_feat[final_num_cols] = scaler.fit_transform(df_feat[final_num_cols])
 
-    # 7. Feature selection — after encoding so top_k trims the fully-encoded feature set
+    # 7. Feature selection — after encoding so top_k trims the fully-encoded feature set.
+    #    Non-numeric columns that were not encoded are dropped first; they cannot
+    #    contribute to any numeric selection method and would bypass top_k otherwise.
     features_before = len(df_feat.columns)
     fs = options.get("feature_selection", {})
     fs_method = (fs.get("method") or "none").lower()
@@ -560,14 +562,19 @@ async def automl_preprocess(request: Request):
 
     if fs_method != "none":
         try:
+            # Drop any remaining non-numeric (unencoded) columns — feature selection
+            # is undefined for them and keeping them would inflate the column count.
+            leftover_non_num = df_feat.select_dtypes(exclude="number").columns.tolist()
+            if leftover_non_num:
+                df_feat = df_feat.drop(columns=leftover_non_num)
+
             num_X = df_feat.select_dtypes(include="number").fillna(0)
-            non_num_cols = df_feat.select_dtypes(exclude="number").columns.tolist()
             k = min(top_k, len(num_X.columns))
             y_fs = target_series.reindex(df_feat.index) if target_series is not None else None
 
             if fs_method == "variance" and len(num_X.columns) > k:
                 keep = num_X.var().nlargest(k).index.tolist()
-                df_feat = df_feat[keep + non_num_cols]
+                df_feat = df_feat[keep]
 
             elif fs_method == "correlation" and len(num_X.columns) > 1:
                 corr = num_X.corr().abs()
@@ -577,10 +584,9 @@ async def automl_preprocess(request: Request):
                 remaining_num = df_feat.select_dtypes(include="number")
                 if len(remaining_num.columns) > k:
                     keep = remaining_num.var().nlargest(k).index.tolist()
-                    remaining_non_num = df_feat.select_dtypes(exclude="number").columns.tolist()
-                    df_feat = df_feat[keep + remaining_non_num]
+                    df_feat = df_feat[keep]
 
-            elif fs_method == "rfe" and y_fs is not None and len(num_X.columns) > k:
+            elif fs_method == "rfe" and y_fs is not None and len(num_X.columns) >= k:
                 from sklearn.feature_selection import RFE  # noqa: PLC0415
                 from sklearn.ensemble import RandomForestClassifier as _RFC, RandomForestRegressor as _RFR  # noqa: PLC0415
                 is_clf = y_fs.dtype == object or y_fs.nunique() < 20
@@ -589,9 +595,9 @@ async def automl_preprocess(request: Request):
                 rfe = RFE(estimator, n_features_to_select=k)
                 rfe.fit(num_X, y_fit)
                 keep = num_X.columns[rfe.support_].tolist()
-                df_feat = df_feat[keep + non_num_cols]
+                df_feat = df_feat[keep]
 
-            elif fs_method == "kbest" and y_fs is not None and len(num_X.columns) > k:
+            elif fs_method == "kbest" and y_fs is not None and len(num_X.columns) >= k:
                 from sklearn.feature_selection import SelectKBest, mutual_info_classif, mutual_info_regression  # noqa: PLC0415
                 is_clf = y_fs.dtype == object or y_fs.nunique() < 20
                 score_fn = mutual_info_classif if is_clf else mutual_info_regression
@@ -599,9 +605,10 @@ async def automl_preprocess(request: Request):
                 sel = SelectKBest(score_fn, k=k)
                 sel.fit(num_X, y_fit)
                 keep = num_X.columns[sel.get_support()].tolist()
-                df_feat = df_feat[keep + non_num_cols]
-        except Exception:
-            pass
+                df_feat = df_feat[keep]
+        except Exception as _fs_err:
+            import logging as _log
+            _log.warning("Feature selection failed: %s", _fs_err)
 
     features_after = len(df_feat.columns)
 
