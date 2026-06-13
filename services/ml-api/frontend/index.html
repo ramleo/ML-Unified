@@ -1167,8 +1167,9 @@ body {
                     padding-top: 0.75rem; border-top: 1px solid var(--border2); }
 
 /* ── Explanation Two-Column Dashboard ── */
-.aml-exp-dashboard { display: flex; gap: 1.25rem; align-items: flex-start; margin-bottom: 0.5rem; }
+.aml-exp-dashboard { display: flex; gap: 1.25rem; align-items: stretch; margin-bottom: 0.5rem; }
 .aml-exp-left      { flex: 0 0 45%; display: flex; flex-direction: column; gap: 0.75rem; }
+.aml-exp-left .aml-exp-panel:last-child { flex: 1; }
 .aml-exp-right     { flex: 0 0 calc(55% - 1.25rem); display: flex; flex-direction: column; gap: 0.75rem; }
 .aml-exp-panel     { background: rgba(255,255,255,0.035); border: 1px solid var(--border2);
                      border-radius: 10px; padding: 0.85rem 1rem; }
