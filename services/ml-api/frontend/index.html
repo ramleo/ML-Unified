@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- build:2a29bad -->
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
@@ -4098,7 +4099,7 @@ function _renderAutoMLStep1b(preselectedTarget) {
 
   // High-cardinality columns (>20 unique values, non-target) — likely IDs, names, codes
   const highCardCols = a.columns.filter(c =>
-    c.name !== effectiveTarget && (c.nunique || 0) > 20
+    c.name !== effectiveTarget && !c.is_numeric && (c.nunique || 0) > 20
   );
 
   // Detect issues
