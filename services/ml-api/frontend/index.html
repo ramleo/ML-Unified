@@ -3890,7 +3890,7 @@ async function getAIExplanation() {
       const isReg = selection_metric === 'MAE';
       const accent = document.documentElement.style.getPropertyValue('--active-accent') || '#818cf8';
       expEl.innerHTML = _renderExplanationDashboard(data.explanation, cv_results, feature_importance, accent, winner, false, isReg, selection_metric);
-      _drawExpCharts();
+      requestAnimationFrame(() => requestAnimationFrame(() => _drawExpCharts()));
     }
     const badge = document.querySelector('.aml-source-badge');
     if (badge && isAI) { badge.textContent = 'AI'; badge.classList.add('aml-ai'); }
@@ -4683,7 +4683,7 @@ function _renderAutoMLResultsPage(result) {
 
   if (result.automl) {
     _animateAutoMLBars();
-    _drawExpCharts();
+    requestAnimationFrame(() => requestAnimationFrame(() => _drawExpCharts()));
     setTimeout(() => _amlRenderShap(), 400);
   }
 }
