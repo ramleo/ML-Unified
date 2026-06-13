@@ -4270,10 +4270,10 @@ function _renderAutoMLStep1b(preselectedTarget) {
   });
 
   const issues = [];
-  if (hasMissing)  issues.push(`<span style="color:#fbbf24">${a.total_missing || '?'} missing value(s)</span>`);
-  if (hasCat)      issues.push(`<span style="color:#818cf8">${catCols.length} categorical column(s)</span>`);
-  if (hasOutliers) issues.push(`<span style="color:#f87171">potential outliers detected</span>`);
-  if (hasSkewness) issues.push(`<span style="color:#34d399">skewed numeric column(s)</span>`);
+  if (hasMissing)  issues.push(`<span style="color:${_acc}">${a.total_missing || '?'} missing value(s)</span>`);
+  if (hasCat)      issues.push(`<span style="color:${_acc}">${catCols.length} categorical column(s)</span>`);
+  if (hasOutliers) issues.push(`<span style="color:${_acc}">potential outliers detected</span>`);
+  if (hasSkewness) issues.push(`<span style="color:${_acc}">skewed numeric column(s)</span>`);
 
   const qualityHTML = issues.length
     ? `<div style="display:flex;flex-wrap:wrap;gap:0.5rem;font-size:0.78rem;margin-top:0.5rem">${issues.map(i => `<span style="padding:0.2rem 0.55rem;border-radius:4px;background:var(--bg-input);border:1px solid var(--border2)">${i}</span>`).join('')}</div>`
@@ -4305,7 +4305,7 @@ function _renderAutoMLStep1b(preselectedTarget) {
           <div class="aml-results-summary" style="text-align:left;padding:1.4rem 1.25rem">
 
             <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1.25rem">
-              <div style="width:36px;height:36px;border-radius:50%;background:rgba(129,140,248,0.12);border:1.5px solid rgba(129,140,248,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+              <div style="width:36px;height:36px;border-radius:50%;background:${_acc}1e;border:1.5px solid ${_acc}4d;display:flex;align-items:center;justify-content:center;flex-shrink:0">
                 <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
                   <rect x="2" y="4" width="16" height="13" rx="2" stroke="var(--active-accent,#818cf8)" stroke-width="1.6"/>
                   <line x1="2" y1="8" x2="18" y2="8" stroke="var(--active-accent,#818cf8)" stroke-width="1.2"/>
@@ -4321,11 +4321,11 @@ function _renderAutoMLStep1b(preselectedTarget) {
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.5rem">
               <div style="padding:0.55rem 0.65rem;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
                 <div style="font-size:0.58rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text3)">Rows</div>
-                <div style="font-size:1.1rem;font-weight:800;color:var(--text1)">${(a.rows||0).toLocaleString()}</div>
+                <div style="font-size:1.1rem;font-weight:800;color:${_acc}">${(a.rows||0).toLocaleString()}</div>
               </div>
               <div style="padding:0.55rem 0.65rem;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
                 <div style="font-size:0.58rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text3)">Columns</div>
-                <div style="font-size:1.1rem;font-weight:800;color:var(--text1)">${a.columns.length}</div>
+                <div style="font-size:1.1rem;font-weight:800;color:${_acc}">${a.columns.length}</div>
               </div>
             </div>
             <div style="padding:0.55rem 0.65rem;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border);margin-bottom:1.1rem">
@@ -4337,7 +4337,7 @@ function _renderAutoMLStep1b(preselectedTarget) {
             <div style="display:flex;flex-direction:column;gap:0.35rem;margin-bottom:1.25rem">
               ${issues.length
                 ? issues.map(i => `<div style="font-size:0.75rem;padding:0.28rem 0.5rem;border-radius:6px;background:var(--bg-input);border:1px solid var(--border2)">${i}</div>`).join('')
-                : '<div style="font-size:0.75rem;color:#34d399;padding:0.28rem 0">✓ No major issues detected</div>'}
+                : `<div style="font-size:0.75rem;color:${_acc};padding:0.28rem 0">✓ No major issues detected</div>`}
             </div>
 
             <div style="font-size:0.82rem;font-weight:600;color:var(--text1);margin-bottom:0.6rem">Preprocess before training?</div>
@@ -4362,7 +4362,7 @@ function _renderAutoMLStep1b(preselectedTarget) {
                 <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;cursor:pointer;padding:0.35rem 0.5rem;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
                   <input type="checkbox" class="aml-drop-col" value="${c.name}" checked style="accent-color:#f87171;flex-shrink:0">
                   <span style="color:var(--text1);font-weight:500">${c.name}</span>
-                  <span style="margin-left:auto;font-size:0.7rem;color:#f59e0b">ID column · ${c.nunique} unique</span>
+                  <span style="margin-left:auto;font-size:0.7rem;color:${_acc}">ID column · ${c.nunique} unique</span>
                 </label>`).join('')}
                 ${highCardCols.map(c => `
                 <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.78rem;cursor:pointer;padding:0.35rem 0.5rem;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
