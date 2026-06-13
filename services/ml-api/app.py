@@ -495,6 +495,11 @@ async def automl_preprocess(request: Request):
 
     if encode_method == "onehot" and nominal_cols:
         df_feat = pd.get_dummies(df_feat, columns=nominal_cols, drop_first=False)
+        # pandas ≥2.0 returns bool dtype from get_dummies; cast to int8 so
+        # select_dtypes(include="number") sees them correctly in feature selection.
+        _bool_ohe = df_feat.select_dtypes(include="bool").columns.tolist()
+        if _bool_ohe:
+            df_feat[_bool_ohe] = df_feat[_bool_ohe].astype(_np.int8)
 
     elif encode_method == "ordinal":
         cols_to_encode = ordinal_cols if ordinal_cols else cat_cols
