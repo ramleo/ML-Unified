@@ -3696,7 +3696,10 @@ function _renderAutoMLReport(automl, accent) {
         <div class="aml-exp-title-row">${brainSvg}<span class="aml-exp-title">AI Explanation</span></div>
         ${srcBadge}
       </div>
-      <div id="amlExplanation">${_renderExplanationDashboard(explanation, cv_results, feature_importance, accent, winner, can_upgrade, isReg, selection_metric)}</div>
+      <div id="amlExplanation">${isAI
+        ? _renderExplanationDashboard(explanation, cv_results, feature_importance, accent, winner, can_upgrade, isReg, selection_metric)
+        : `<p class="aml-exp-text">${typeof explanation === 'string' ? explanation : (explanation?.why_won || '')}</p>`
+      }</div>
       ${keyInput}
     </div>
   </div>`;
