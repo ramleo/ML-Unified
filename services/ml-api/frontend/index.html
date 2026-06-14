@@ -3686,10 +3686,10 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
     ? _scatterSVG(viz.scatter_actual, viz.scatter_predicted, accent)
     : _confusionMatrixSVG(viz.confusion_matrix, viz.class_names, accent);
 
-  const lcFoldsUsed = viz.learning_curve?.cv_folds || automl?.lc_cv_folds || 5;
+  const lcFoldsUsed = viz.learning_curve?.cv_folds || viz.lc_cv_folds || 5;
   const lcTitle    = `Learning Curve · ${viz.learning_curve?.metric_label || (isReg ? 'MAE' : 'F1')}`;
   const lcSubtitle = `Solid = train · dashed = validation · 5 sizes · ${lcFoldsUsed}-fold CV`;
-  const lcSkipReason = automl?.lc_skip_reason;
+  const lcSkipReason = viz.lc_skip_reason;
   const lcContent  = lcSkipReason
     ? `<div style="padding:1.1rem 0.75rem;border-radius:8px;border:1px dashed var(--border2);
                    text-align:center;color:var(--text3);font-size:0.75rem;margin-top:0.4rem">
@@ -3909,7 +3909,7 @@ function _renderAutoMLReport(automl, accent) {
         ${srcBadge}
       </div>
       <div id="amlExplanation">${isAI
-        ? _renderExplanationDashboard(explanation, cv_results, feature_importance, accent, winner, can_upgrade, isReg, selection_metric, winner_metrics, {confusion_matrix, class_names, scatter_actual, scatter_predicted, learning_curve})
+        ? _renderExplanationDashboard(explanation, cv_results, feature_importance, accent, winner, can_upgrade, isReg, selection_metric, winner_metrics, {confusion_matrix, class_names, scatter_actual, scatter_predicted, learning_curve, lc_skip_reason: automl.lc_skip_reason, lc_cv_folds: automl.lc_cv_folds})
         : `<p class="aml-exp-text">${typeof explanation === 'string' ? explanation : (explanation?.why_won || '')}</p>`
       }</div>
       ${keyInput}
@@ -4088,7 +4088,7 @@ async function getAIExplanation() {
                 confusion_matrix, class_names, scatter_actual, scatter_predicted, learning_curve } = _currentAutoMLData;
         const isReg = selection_metric === 'MAE';
         const accent = document.documentElement.style.getPropertyValue('--active-accent') || '#818cf8';
-        expEl.innerHTML = _renderExplanationDashboard(data.explanation, cv_results, feature_importance, accent, winner, false, isReg, selection_metric, winner_metrics, {confusion_matrix, class_names, scatter_actual, scatter_predicted, learning_curve});
+        expEl.innerHTML = _renderExplanationDashboard(data.explanation, cv_results, feature_importance, accent, winner, false, isReg, selection_metric, winner_metrics, {confusion_matrix, class_names, scatter_actual, scatter_predicted, learning_curve, lc_skip_reason: _currentAutoMLData.lc_skip_reason, lc_cv_folds: _currentAutoMLData.lc_cv_folds});
         _animateAutoMLBars();
       }
     } catch(renderErr) {
@@ -4274,7 +4274,7 @@ function _renderAutoMLStep0() {
         <div style="margin-bottom:1rem">
           <label class="wizard-label">Dataset name <span style="font-weight:400;color:var(--text3)">(optional)</span></label>
           <input type="text" id="amlStep0Name" class="field-input" placeholder="e.g. Titanic survival data"
-                 value="${_automlDatasetName}" style="margin-top:0.35rem">
+                 value="${_automlDatasetName}" style="margin-top:0.35rem;background:transparent;border-color:var(--border2)">
         </div>
 
         <div style="margin-bottom:1.25rem">
