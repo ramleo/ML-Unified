@@ -1322,6 +1322,9 @@ async def train_model(
             split    = 0.2 if len(X) >= 10 else 0.1
             X_train, X_test, y_train, y_test = train_test_split(
                 X, y_enc, test_size=split, random_state=42, stratify=y_enc)
+            if automl_result:
+                automl_result["n_train"] = len(X_train)
+                automl_result["n_test"]  = len(X_test)
             train_pct = 68 if automl_result else 20
             p.update(train_pct, f"Training {_effective_algorithm} classifier…")
             pipeline.fit(X_train, y_train)
@@ -1491,6 +1494,9 @@ async def train_model(
             pipeline = Pipeline([("prep", preprocessor), ("model", estimator)])
             split    = 0.2 if len(X) >= 10 else 0.1
             X_train, X_test, y_train, y_test = train_test_split(X, y_enc, test_size=split, random_state=42)
+            if automl_result:
+                automl_result["n_train"] = len(X_train)
+                automl_result["n_test"]  = len(X_test)
             train_pct = 68 if automl_result else 20
             p.update(train_pct, f"Training {_effective_algorithm} regressor…")
             pipeline.fit(X_train, y_train)

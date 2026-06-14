@@ -4885,10 +4885,16 @@ function _renderAutoMLResultsPage(result) {
   const trainingDetails = aml ? (() => {
     const nFeat    = (aml.feature_importance || []).length;
     const taskLbl  = aml.selection_metric === 'MAE' ? 'Regression' : 'Classification';
+    const nTrain  = aml.n_train || 0;
+    const nTest   = aml.n_test  || 0;
+    const splitLbl = nTrain && nTest
+      ? `${nTrain.toLocaleString()} train · ${nTest.toLocaleString()} test`
+      : '80 / 20';
     const rows = [
       ['Rows',          (aml.n_rows || 0).toLocaleString()],
       ['Features',      nFeat || '—'],
       ['Task',          taskLbl],
+      ['Split',         splitLbl],
       ['Validation',    '5-fold CV'],
       ['Models tested', (aml.cv_results || []).map(r => r.algorithm.replace('Random Forest','RF').replace('XGBoost','XGB').replace('LightGBM','LGB').replace('CatBoost','CAT')).join(' · ') || 'RF · XGB · LGB · CAT'],
     ];
