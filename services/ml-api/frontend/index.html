@@ -4333,6 +4333,9 @@ function _amlStep0Skip() {
 // ── Step 1.5: Data Quality & Preprocessing ────────────────────
 function _renderAutoMLStep1b(preselectedTarget) {
   const a = automlAnalysis;
+  // Use original (pre-preprocessing) analysis for DQ issue detection so that
+  // after Revert the missing/skew/outlier flags reflect the raw dataset.
+  const aOrig = _automlOrigAnalysis || a;
   const effectiveTarget = preselectedTarget || a.suggested_target;
   const _acc = document.documentElement.style.getPropertyValue('--active-accent') || '#818cf8';
   const catCols = a.columns.filter(c => !c.is_numeric && c.name !== effectiveTarget).map(c => c.name);
@@ -4351,22 +4354,22 @@ function _renderAutoMLStep1b(preselectedTarget) {
     return c.is_numeric && (c.nunique || 0) / (a.rows || 1) >= 0.9;
   });
 
-  // Detect issues
-  const hasMissing   = (a.total_missing || 0) > 0 || a.columns.some(c => (c.missing || 0) > 0);
+  // Detect issues — use original analysis so Revert still shows real data quality
+  const hasMissing   = (aOrig.total_missing || 0) > 0 || aOrig.columns.some(c => (c.missing || 0) > 0);
   const hasCat       = catCols.length > 0;
   const hasOutliers  = numCols.some(c => {
-    const col = a.columns.find(x => x.name === c);
+    const col = aOrig.columns.find(x => x.name === c);
     if (!col || col.std == null) return false;
     const range = (col.max || 0) - (col.min || 0);
     return col.std > 0 && range / col.std > 6;
   });
   const hasSkewness  = numCols.some(c => {
-    const col = a.columns.find(x => x.name === c);
+    const col = aOrig.columns.find(x => x.name === c);
     return col && col.skew != null && Math.abs(col.skew) > 0.75;
   });
 
   const issues = [];
-  if (hasMissing)  issues.push(`<span style="color:${_acc}">${a.total_missing || '?'} missing value(s)</span>`);
+  if (hasMissing)  issues.push(`<span style="color:${_acc}">${aOrig.total_missing || '?'} missing value(s)</span>`);
   if (hasCat)      issues.push(`<span style="color:var(--text1)">${catCols.length} categorical column(s)</span>`);
   if (hasOutliers) issues.push(`<span style="color:var(--text1)">potential outliers detected</span>`);
   if (hasSkewness) issues.push(`<span style="color:var(--text1)">skewed numeric column(s)</span>`);
@@ -4481,7 +4484,7 @@ function _renderAutoMLStep1b(preselectedTarget) {
             <div style="display:flex;flex-direction:column;gap:0.6rem;margin-bottom:1.2rem;padding:0.75rem;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
 
               <label style="display:flex;align-items:flex-start;gap:0.5rem;cursor:pointer;font-size:0.82rem;color:var(--text1)">
-                <input type="checkbox" id="amlPrepMissing" ${hasMissing ? 'checked' : ''} style="accent-color:var(--active-accent,var(--accent));margin-top:2px">
+                <input type="checkbox" id="amlPrepMissing" ${hasMissing ? 'checked' : ''} onchange="_onMissingMethodChange()" style="accent-color:var(--active-accent,var(--accent));margin-top:2px">
                 <span style="flex:1">
                   Handle missing values
                   <div id="amlMissingOpts" style="display:grid;grid-template-columns:auto 1fr;gap:0.3rem 0.5rem;align-items:center;margin-top:0.45rem">
@@ -4521,6 +4524,7 @@ function _renderAutoMLStep1b(preselectedTarget) {
                     <option value="target">Target encode</option>
                   </select>
                 </label>
+                ${!hasCat ? `<div style="margin-left:1.5rem;font-size:0.73rem;color:var(--text3);margin-bottom:0.3rem">ℹ No text/categorical columns detected — encoding will have no effect.</div>` : ''}
                 <div id="amlEncHint" style="margin-left:1.5rem;font-size:0.75rem;margin-bottom:0.3rem;display:none"></div>
                 <div id="amlOrdinalCols" style="display:none">
                   ${catCols.length ? `<div style="margin-left:1.5rem;margin-top:0.4rem;font-size:0.75rem;color:var(--text3);margin-bottom:0.3rem">Mark which columns are ordinal:</div>
@@ -4799,6 +4803,9 @@ async function _applyAutoMLPreprocessing() {
     setTimeout(() => { progEl.style.display = 'none'; }, 1200);
     btn.style.opacity = '1';
 
+    // Save original analysis before overwriting (used by DQ page on Revert)
+    if (!_automlOrigAnalysis) _automlOrigAnalysis = automlAnalysis;
+
     // Update global state
     const csvBytes = atob(result.csv_b64);
     const arr = new Uint8Array(csvBytes.length);
@@ -4845,6 +4852,18 @@ async function _applyAutoMLPreprocessing() {
             <div style="font-size:0.68rem;color:var(--text3);margin-top:0.2rem">${s.sub}</div>
           </div>`).join('')}
         </div>
+        ${(() => {
+          const fe = _automlFeatureEng;
+          const hasLogSqrt = Object.values(fe.numeric || {}).some(v => v.log1p || v.sqrt || v.yeo_johnson || v.rank || v.outlier_flag || v.missing_flag || (v.bin && v.bin !== 'none'));
+          const hasDerived = (fe.derived || []).length > 0;
+          const hasPoly    = (fe.poly_cols || []).length >= 2;
+          const hasDateFE  = Object.keys(fe.dates || {}).length > 0;
+          return (hasLogSqrt || hasDerived || hasPoly || hasDateFE)
+            ? `<div style="font-size:0.71rem;color:var(--text3);margin-top:0.75rem;padding-top:0.6rem;border-top:1px solid var(--border2)">
+                 ℹ Feature engineering is active — additional columns will be added at training time.
+               </div>`
+            : '';
+        })()}
       </div>
       <div style="font-size:0.85rem;font-weight:600;color:${acc};margin-bottom:0.75rem">Proceed to AutoML training?</div>
       <div class="action-row" style="margin-top:0">
@@ -4866,7 +4885,8 @@ async function _applyAutoMLPreprocessing() {
   }
 }
 
-let _automlFeatureEng = { numeric: {}, dates: {}, derived: [], poly_cols: [] };
+let _automlFeatureEng    = { numeric: {}, dates: {}, derived: [], poly_cols: [] };
+let _automlOrigAnalysis  = null;
 
 function _renderAutoMLStep1c() {
   const a            = automlAnalysis;
@@ -5034,9 +5054,14 @@ function _renderAutoMLStep1c() {
     <div class="wizard">
       ${_automlStepsHTML(2, false)}
       <h2 style="font-size:1.25rem;font-weight:800;margin-bottom:0.25rem;color:${_acc}">Feature Engineering</h2>
-      <p style="font-size:0.8rem;color:var(--text2);margin-bottom:1.1rem">
+      <p style="font-size:0.8rem;color:var(--text2);margin-bottom:0.7rem">
         Add derived features before training. All transforms are fit on training data only.
       </p>
+      <div style="font-size:0.72rem;color:var(--text3);padding:0.4rem 0.65rem;border-radius:8px;
+                  border:1px solid var(--border2);background:rgba(255,255,255,0.02);margin-bottom:1rem">
+        ℹ FE-derived columns (e.g. log transforms, interaction terms) are added at training time,
+          not during preprocessing. The column count on the next step will not reflect them.
+      </div>
 
       <div style="${sectionStyle}">
         <div style="${sectionTitle}">Numeric Transforms</div>
@@ -5066,19 +5091,20 @@ function _renderAutoMLStep1c() {
           : `<div style="font-size:0.72rem;color:var(--text3);margin-bottom:0.5rem">
                Select columns to include — only pairwise interaction terms (e.g. Age × Fare) will be added.
              </div>
-             <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.35rem">
+             <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.4rem">
                <button onclick="_polySelectAll()" style="font-size:0.63rem;padding:0.15rem 0.45rem;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">All</button>
                <button onclick="_polySelectNone()" style="font-size:0.63rem;padding:0.15rem 0.45rem;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">None</button>
+               <span style="font-size:0.65rem;color:var(--text3);margin-left:0.3rem">${polyCount} selected</span>
              </div>
-             <div style="display:flex;flex-wrap:wrap;gap:0.35rem 0.6rem">
+             <div style="max-height:140px;overflow-y:auto;border:1px solid var(--border2);border-radius:8px;
+                         padding:0.35rem 0.6rem;display:flex;flex-direction:column;gap:0.2rem">
                ${numCols.map(c => {
                  const on = polySelected.includes(c.name);
-                 return `<label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;
-                                      padding:0.25rem 0.55rem;border-radius:20px;border:1px solid var(--border2);
-                                      background:${on ? _acc : 'transparent'}">
-                   <input type="checkbox" ${on?'checked':''} style="display:none"
+                 return `<label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;
+                                      padding:0.18rem 0;font-size:0.78rem">
+                   <input type="checkbox" ${on?'checked':''} style="accent-color:${_acc};flex-shrink:0"
                           onchange="_togglePolyCol('${c.name}',this.checked)">
-                   <span style="font-size:0.7rem;font-weight:600;color:${on?'#fff':'var(--text3)'}">${c.name}</span>
+                   <span style="color:${on ? _acc : 'var(--text2)'}">${c.name}</span>
                  </label>`;
                }).join('')}
              </div>
