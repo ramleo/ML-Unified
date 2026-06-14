@@ -4338,20 +4338,22 @@ function _renderAutoMLStep1b(preselectedTarget) {
   const aOrig = _automlOrigAnalysis || a;
   const effectiveTarget = preselectedTarget || a.suggested_target;
   const _acc = document.documentElement.style.getPropertyValue('--active-accent') || '#818cf8';
-  const catCols = a.columns.filter(c => !c.is_numeric && c.name !== effectiveTarget).map(c => c.name);
-  const numCols = a.columns.filter(c => c.is_numeric && c.name !== effectiveTarget).map(c => c.name);
+  // Use aOrig throughout so the column lists, DQ flags, and drop suggestions
+  // always reflect the raw uploaded dataset — even after preprocessing has run.
+  const catCols = aOrig.columns.filter(c => !c.is_numeric && c.name !== effectiveTarget).map(c => c.name);
+  const numCols = aOrig.columns.filter(c => c.is_numeric && c.name !== effectiveTarget).map(c => c.name);
 
   // High-cardinality text columns (non-numeric, >20 unique) — names, codes, free text
-  const highCardCols = a.columns.filter(c =>
+  const highCardCols = aOrig.columns.filter(c =>
     c.name !== effectiveTarget && !c.is_numeric && (c.nunique || 0) > 20
   );
   // Likely numeric ID columns — nearly all unique values (>90% of rows) OR "id" in name
-  const likelyIdCols = a.columns.filter(c => {
+  const likelyIdCols = aOrig.columns.filter(c => {
     if (c.name === effectiveTarget) return false;
     const nm = c.name.toLowerCase();
     const nameHasId = nm === 'id' || nm.endsWith('id') || nm.includes('_id') || nm.startsWith('id_');
     if (nameHasId) return true;
-    return c.is_numeric && (c.nunique || 0) / (a.rows || 1) >= 0.9;
+    return c.is_numeric && (c.nunique || 0) / (aOrig.rows || 1) >= 0.9;
   });
 
   // Detect issues — use original analysis so Revert still shows real data quality
@@ -4385,7 +4387,7 @@ function _renderAutoMLStep1b(preselectedTarget) {
   ).join('') : '<span style="font-size:0.75rem;color:var(--text3)">None</span>';
 
   const autoDetected = new Set([...likelyIdCols, ...highCardCols].map(c => c.name));
-  const manualCols   = a.columns
+  const manualCols   = aOrig.columns
     .filter(c => c.name !== effectiveTarget && !autoDetected.has(c.name))
     .map(c => c.name);
 
@@ -4394,7 +4396,7 @@ function _renderAutoMLStep1b(preselectedTarget) {
       <div id="amlWizardStepper">${_automlStepsHTML(1, false)}</div>
       <h2 style="font-size:1.3rem;font-weight:800;margin:1rem 0 0.25rem;color:var(--active-accent,#818cf8)">Data Quality &amp; Preprocessing</h2>
       <p style="font-size:0.85rem;color:var(--text2);margin-bottom:0.75rem">
-        Analysed <strong style="color:var(--active-accent,#818cf8)">${(a.rows || 0).toLocaleString()} rows</strong> &middot; <strong style="color:var(--active-accent,#818cf8)">${a.columns.length} columns</strong>
+        Analysed <strong style="color:var(--active-accent,#818cf8)">${(aOrig.rows || 0).toLocaleString()} rows</strong> &middot; <strong style="color:var(--active-accent,#818cf8)">${aOrig.columns.length} columns</strong>
       </p>
 
       <div class="aml-results-grid">
@@ -4420,11 +4422,11 @@ function _renderAutoMLStep1b(preselectedTarget) {
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.5rem">
               <div style="padding:0.55rem 0.65rem;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
                 <div style="font-size:0.58rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text3)">Rows</div>
-                <div style="font-size:1.1rem;font-weight:800;color:${_acc}">${(a.rows||0).toLocaleString()}</div>
+                <div style="font-size:1.1rem;font-weight:800;color:${_acc}">${(aOrig.rows||0).toLocaleString()}</div>
               </div>
               <div style="padding:0.55rem 0.65rem;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border)">
                 <div style="font-size:0.58rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text3)">Columns</div>
-                <div style="font-size:1.1rem;font-weight:800;color:${_acc}">${a.columns.length}</div>
+                <div style="font-size:1.1rem;font-weight:800;color:${_acc}">${aOrig.columns.length}</div>
               </div>
             </div>
             <div style="padding:0.55rem 0.65rem;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border);margin-bottom:1.1rem">
@@ -4600,6 +4602,12 @@ function _renderAutoMLStep1b(preselectedTarget) {
 
       </div>
     </div>`;
+}
+
+function _amlRevertPreprocessing() {
+  if (_automlOrigAnalysis) automlAnalysis = _automlOrigAnalysis;
+  if (_automlOrigFile)     automlFile     = _automlOrigFile;
+  _renderAutoMLStep1b(_automlTargetCol);
 }
 
 function _showAutoMLPrepOptions() {
@@ -4803,8 +4811,9 @@ async function _applyAutoMLPreprocessing() {
     setTimeout(() => { progEl.style.display = 'none'; }, 1200);
     btn.style.opacity = '1';
 
-    // Save original analysis before overwriting (used by DQ page on Revert)
+    // Save originals before overwriting (used to restore state on Revert)
     if (!_automlOrigAnalysis) _automlOrigAnalysis = automlAnalysis;
+    if (!_automlOrigFile)     _automlOrigFile     = automlFile;
 
     // Update global state
     const csvBytes = atob(result.csv_b64);
@@ -4867,7 +4876,7 @@ async function _applyAutoMLPreprocessing() {
       </div>
       <div style="font-size:0.85rem;font-weight:600;color:${acc};margin-bottom:0.75rem">Proceed to AutoML training?</div>
       <div class="action-row" style="margin-top:0">
-        <button class="btn btn-clear" onclick="_renderAutoMLStep1b(_automlTargetCol)">← Revert</button>
+        <button class="btn btn-clear" onclick="_amlRevertPreprocessing()">← Revert</button>
         <button class="btn btn-primary" onclick="_renderAutoMLStep2()">Yes, Configure AutoML →</button>
       </div>`;
   } catch(e) {
@@ -4887,6 +4896,7 @@ async function _applyAutoMLPreprocessing() {
 
 let _automlFeatureEng    = { numeric: {}, dates: {}, derived: [], poly_cols: [] };
 let _automlOrigAnalysis  = null;
+let _automlOrigFile      = null;
 
 function _renderAutoMLStep1c() {
   const a            = automlAnalysis;
