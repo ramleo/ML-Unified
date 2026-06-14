@@ -22,7 +22,8 @@ from sklearn.cluster import KMeans, DBSCAN
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold, KFold, learning_curve
-from sklearn.base import clone
+from sklearn.base import clone, BaseEstimator, TransformerMixin
+from sklearn.preprocessing import PowerTransformer
 from sklearn.metrics import (accuracy_score, mean_absolute_error, mean_squared_error,
                              silhouette_score, f1_score, roc_auc_score, r2_score,
                              precision_score, recall_score, confusion_matrix as sk_confusion_matrix,
@@ -201,11 +202,14 @@ def _load():
         pipeline = joblib.load(pkl_path)
         le_path  = os.path.join(MODEL_DIR, f"{mid}_labels.pkl")
         le       = joblib.load(le_path) if os.path.exists(le_path) else None
+        _fe_pkl  = os.path.join(MODEL_DIR, f"{mid}_fe.pkl")
+        _fe_loaded = joblib.load(_fe_pkl) if os.path.exists(_fe_pkl) else FeatureEngineeringTransformer({})
         MODELS[mid] = {
             "pipeline": pipeline,
             "le":       le,
             "classes":  le.classes_.tolist() if le is not None else None,
             "schema":   schema,
+            "fe":       _fe_loaded,
         }
 
 @app.get("/")
@@ -311,6 +315,12 @@ async def predict(model_id: str, request: Request):
 
     pipeline = m["pipeline"]
     le       = m["le"]
+    fe = m.get("fe")
+    if fe is not None and fe.fe_config:
+        try:
+            df = fe.transform(df)
+        except Exception as _fe_pred_err:
+            print(f"FE transform in predict failed (skipped): {_fe_pred_err}", flush=True)
 
     _drift_router.record_input(model_id, dict(data))
 
@@ -1108,38 +1118,205 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
         return {"why_won": raw_text, "score_analysis": "", "key_drivers": "", "recommendations": []}
 
 
-def _apply_feature_engineering(df: pd.DataFrame, fe_config: dict) -> pd.DataFrame:
-    if not fe_config:
-        return df
-    import numpy as np
-    df = df.copy()
-    for col, transforms in fe_config.items():
-        if col.startswith('__') or col not in df.columns:
-            continue
-        if not isinstance(transforms, dict):
-            continue
-        if transforms.get('log1p'):
-            df[f'{col}_log'] = np.log1p(df[col].clip(lower=0))
-        if transforms.get('bin'):
+class FeatureEngineeringTransformer(BaseEstimator, TransformerMixin):
+    """Fit on train data only, transform both train and test."""
+
+    def __init__(self, fe_config=None):
+        self.fe_config = fe_config or {}
+
+    def fit(self, X, y=None):
+        import numpy as np
+        cfg = self.fe_config
+        X_df = pd.DataFrame(X) if not isinstance(X, pd.DataFrame) else X.copy()
+
+        self._bin_edges_       = {}
+        self._yeo_transformers_= {}
+        self._iqr_bounds_      = {}
+        self._rank_vals_       = {}
+        self._date_mins_       = {}
+        self._poly_transformer_= None
+        self._poly_cols_       = []
+
+        for col, transforms in cfg.get("numeric", {}).items():
+            if col not in X_df.columns or not isinstance(transforms, dict):
+                continue
+            series = X_df[col].dropna()
+            if series.empty:
+                continue
+
+            bin_method = transforms.get("bin", "none")
+            bin_n      = int(transforms.get("bin_n", 5) or 5)
+            if bin_method == "quantile":
+                try:
+                    _, edges = pd.qcut(series, q=bin_n, retbins=True, duplicates="drop")
+                    self._bin_edges_[col] = edges
+                except Exception:
+                    pass
+            elif bin_method == "equal_width":
+                try:
+                    _, edges = pd.cut(series, bins=bin_n, retbins=True)
+                    self._bin_edges_[col] = edges
+                except Exception:
+                    pass
+            elif bin_method == "custom":
+                try:
+                    raw = str(transforms.get("bin_custom", "") or "")
+                    edges = sorted(float(x.strip()) for x in raw.split(",") if x.strip())
+                    if len(edges) >= 2:
+                        self._bin_edges_[col] = edges
+                except Exception:
+                    pass
+
+            if transforms.get("yeo_johnson"):
+                try:
+                    pt = PowerTransformer(method="yeo-johnson")
+                    pt.fit(series.values.reshape(-1, 1))
+                    self._yeo_transformers_[col] = pt
+                except Exception:
+                    pass
+
+            if transforms.get("outlier_flag"):
+                q1, q3 = float(series.quantile(0.25)), float(series.quantile(0.75))
+                iqr    = q3 - q1
+                self._iqr_bounds_[col] = (q1 - 1.5 * iqr, q3 + 1.5 * iqr)
+
+            if transforms.get("rank"):
+                self._rank_vals_[col] = np.sort(series.values)
+
+        for col, dcfg in cfg.get("dates", {}).items():
+            if col not in X_df.columns or not isinstance(dcfg, dict):
+                continue
+            if dcfg.get("days_since_min"):
+                try:
+                    self._date_mins_[col] = pd.to_datetime(X_df[col], errors="coerce").min()
+                except Exception:
+                    pass
+
+        if cfg.get("poly"):
+            num_cols = X_df.select_dtypes(include="number").columns.tolist()
+            if 1 < len(num_cols) <= 15:
+                try:
+                    from sklearn.preprocessing import PolynomialFeatures
+                    pf = PolynomialFeatures(degree=2, interaction_only=True, include_bias=False)
+                    pf.fit(X_df[num_cols].fillna(0))
+                    self._poly_transformer_ = pf
+                    self._poly_cols_        = num_cols
+                except Exception:
+                    pass
+
+        return self
+
+    def transform(self, X):
+        import numpy as np
+        cfg  = self.fe_config
+        X_df = pd.DataFrame(X) if not isinstance(X, pd.DataFrame) else X.copy()
+
+        # 1. Missing indicators (before any other transform)
+        for col, transforms in cfg.get("numeric", {}).items():
+            if col not in X_df.columns or not isinstance(transforms, dict):
+                continue
+            if transforms.get("missing_flag"):
+                X_df[f"{col}_was_missing"] = X_df[col].isna().astype("int8")
+
+        # 2. Numeric transforms
+        for col, transforms in cfg.get("numeric", {}).items():
+            if col not in X_df.columns or not isinstance(transforms, dict):
+                continue
+            if transforms.get("log1p"):
+                X_df[f"{col}_log"] = np.log1p(X_df[col].clip(lower=0))
+            if transforms.get("sqrt"):
+                X_df[f"{col}_sqrt"] = np.sqrt(X_df[col].clip(lower=0))
+            if transforms.get("yeo_johnson") and col in self._yeo_transformers_:
+                try:
+                    pt   = self._yeo_transformers_[col]
+                    vals = pt.transform(X_df[col].fillna(0).values.reshape(-1, 1)).flatten()
+                    X_df[f"{col}_yj"] = vals
+                except Exception:
+                    pass
+            if transforms.get("rank") and col in self._rank_vals_:
+                try:
+                    train_sorted = self._rank_vals_[col]
+                    n            = len(train_sorted)
+                    raw          = X_df[col].values
+                    ranks        = np.searchsorted(train_sorted, raw, side="left") / max(n, 1)
+                    X_df[f"{col}_rank"] = np.where(pd.isna(X_df[col]), np.nan, ranks)
+                except Exception:
+                    pass
+
+        # 3. Binning (using fitted edges)
+        for col, edges in self._bin_edges_.items():
+            if col not in X_df.columns:
+                continue
             try:
-                df[f'{col}_bin'] = pd.cut(df[col], bins=5, labels=False, duplicates='drop')
+                X_df[f"{col}_bin"] = pd.cut(
+                    X_df[col], bins=edges, labels=False, include_lowest=True
+                )
             except Exception:
                 pass
-    if fe_config.get('__poly__'):
-        from sklearn.preprocessing import PolynomialFeatures
-        num_cols = df.select_dtypes(include='number').columns.tolist()
-        if 1 < len(num_cols) <= 15:
+
+        # 4. Outlier flags
+        for col, (lower, upper) in self._iqr_bounds_.items():
+            if col not in X_df.columns:
+                continue
+            X_df[f"{col}_is_outlier"] = (
+                (X_df[col] < lower) | (X_df[col] > upper)
+            ).astype("int8")
+
+        # 5. Date extraction
+        for col, dcfg in cfg.get("dates", {}).items():
+            if col not in X_df.columns or not isinstance(dcfg, dict):
+                continue
             try:
-                pf   = PolynomialFeatures(degree=2, interaction_only=True, include_bias=False)
-                poly = pf.fit_transform(df[num_cols].fillna(0))
-                names = pf.get_feature_names_out(num_cols)
-                poly_df = pd.DataFrame(poly, columns=names, index=df.index)
-                # only keep interaction columns (contain ' ')
-                inter_cols = [c for c in names if ' ' in c]
-                df = pd.concat([df, poly_df[inter_cols]], axis=1)
+                dt = pd.to_datetime(X_df[col], errors="coerce")
+                if dcfg.get("year"):         X_df[f"{col}_year"]        = dt.dt.year
+                if dcfg.get("month"):        X_df[f"{col}_month"]       = dt.dt.month
+                if dcfg.get("day"):          X_df[f"{col}_day"]         = dt.dt.day
+                if dcfg.get("dow"):          X_df[f"{col}_dow"]         = dt.dt.dayofweek
+                if dcfg.get("quarter"):      X_df[f"{col}_quarter"]     = dt.dt.quarter
+                if dcfg.get("is_weekend"):   X_df[f"{col}_is_weekend"]  = (dt.dt.dayofweek >= 5).astype("int8")
+                if dcfg.get("days_since_min") and col in self._date_mins_:
+                    X_df[f"{col}_days_since_min"] = (dt - self._date_mins_[col]).dt.days
+                if dcfg.get("cyclical"):
+                    if dcfg.get("month"):
+                        m = dt.dt.month
+                        X_df[f"{col}_month_sin"] = np.sin(2 * np.pi * m / 12)
+                        X_df[f"{col}_month_cos"] = np.cos(2 * np.pi * m / 12)
+                    if dcfg.get("dow"):
+                        d = dt.dt.dayofweek
+                        X_df[f"{col}_dow_sin"] = np.sin(2 * np.pi * d / 7)
+                        X_df[f"{col}_dow_cos"] = np.cos(2 * np.pi * d / 7)
+                if not dcfg.get("keep_original"):
+                    X_df = X_df.drop(columns=[col], errors="ignore")
             except Exception:
                 pass
-    return df
+
+        # 6. Derived features
+        for d in cfg.get("derived", []):
+            col_a = d.get("col_a"); col_b = d.get("col_b"); op = d.get("op")
+            if not col_a or not col_b or col_a not in X_df.columns or col_b not in X_df.columns:
+                continue
+            try:
+                if op == "ratio":
+                    X_df[f"{col_a}_div_{col_b}"] = X_df[col_a] / (X_df[col_b].replace(0, np.nan) + 1e-9)
+                elif op == "diff":
+                    X_df[f"{col_a}_minus_{col_b}"] = X_df[col_a] - X_df[col_b]
+            except Exception:
+                pass
+
+        # 7. Polynomial interactions
+        if self._poly_transformer_ is not None:
+            try:
+                avail = [c for c in self._poly_cols_ if c in X_df.columns]
+                if avail:
+                    poly_out  = self._poly_transformer_.transform(X_df[avail].fillna(0))
+                    names     = self._poly_transformer_.get_feature_names_out(avail)
+                    inter     = [c for c in names if " " in c]
+                    poly_df   = pd.DataFrame(poly_out, columns=names, index=X_df.index)
+                    X_df      = pd.concat([X_df, poly_df[inter]], axis=1)
+            except Exception:
+                pass
+
+        return X_df
 
 
 @app.post("/train")
@@ -1168,14 +1345,12 @@ async def train_model(
     if not model_id:
         raise HTTPException(400, "Invalid model name — use letters, numbers, or spaces")
 
-    # Apply feature engineering before splitting X/y
+    # Parse feature engineering config
     try:
         import json as _json_fe
-        fe_config = _json_fe.loads(feature_engineering or "{}")
-        if fe_config:
-            df = _apply_feature_engineering(df, fe_config)
-    except Exception as _fe_err:
-        print(f"Feature engineering failed (skipped): {_fe_err}", flush=True)
+        _fe_config = _json_fe.loads(feature_engineering or "{}")
+    except Exception:
+        _fe_config = {}
 
     if task == "clustering":
         X = df.copy()
@@ -1194,6 +1369,19 @@ async def train_model(
     if _bool_cols:
         X = X.copy()
         X[_bool_cols] = X[_bool_cols].astype("int8")
+
+    # Apply feature engineering (fit+transform on full X — acceptable for MVP)
+    _fe_transformer = FeatureEngineeringTransformer(_fe_config)
+    if _fe_config:
+        try:
+            X = _fe_transformer.fit_transform(X)
+            # Re-cast any new bool columns
+            _new_bool = X.select_dtypes(include="bool").columns.tolist()
+            if _new_bool:
+                X[_new_bool] = X[_new_bool].astype("int8")
+        except Exception as _fe_err:
+            print(f"Feature engineering failed (skipped): {_fe_err}", flush=True)
+            _fe_transformer = FeatureEngineeringTransformer({})
 
     num_cols = X.select_dtypes(include="number").columns.tolist()
     cat_cols = X.select_dtypes(exclude="number").columns.tolist()
@@ -1217,6 +1405,7 @@ async def train_model(
     _model_id  = model_id
     _model_name = model_name
     _target_col = target_col
+    _fe_tfm    = _fe_transformer
     _n_clusters = n_clusters
     _y          = y
 
@@ -1706,6 +1895,7 @@ async def train_model(
         with open(os.path.join(SCHEMA_DIR, f"{_model_id}.json"), "w") as f:
             json.dump(schema, f, indent=2)
         joblib.dump(pipeline, os.path.join(MODEL_DIR, f"{_model_id}_pipeline.pkl"))
+        joblib.dump(_fe_tfm, os.path.join(MODEL_DIR, f"{_model_id}_fe.pkl"))
         if le is not None:
             joblib.dump(le, os.path.join(MODEL_DIR, f"{_model_id}_labels.pkl"))
 
@@ -1714,6 +1904,7 @@ async def train_model(
             "le":       le,
             "classes":  le.classes_.tolist() if le is not None else None,
             "schema":   schema,
+            "fe":       _fe_tfm,
         }
 
         resp = {

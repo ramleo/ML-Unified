@@ -4865,87 +4865,267 @@ async function _applyAutoMLPreprocessing() {
   }
 }
 
-let _automlFeatureEng = {};   // persists selections across back/forward
+let _automlFeatureEng = { numeric: {}, dates: {}, derived: [], poly: false };
 
 function _renderAutoMLStep1c() {
-  const a             = automlAnalysis;
-  const effectTarget  = _automlTargetCol || a.suggested_target;
-  const _acc          = document.documentElement.style.getPropertyValue('--active-accent') || '#a78bfa';
-  const numCols       = (a.columns || []).filter(c => c.is_numeric && c.name !== effectTarget);
+  const a            = automlAnalysis;
+  const effectTarget = _automlTargetCol || a.suggested_target;
+  const _acc         = document.documentElement.style.getPropertyValue('--active-accent') || '#a78bfa';
+  const allCols      = a.columns || [];
+  const numCols      = allCols.filter(c => c.is_numeric && c.name !== effectTarget);
+  const catCols      = allCols.filter(c => !c.is_numeric && c.name !== effectTarget);
 
-  const colRows = numCols.map(c => {
-    const fe  = _automlFeatureEng[c.name] || {};
-    const log = fe.log1p ? 'selected' : '';
-    const bin = fe.bin   ? 'selected' : '';
+  // Ensure structure
+  if (!_automlFeatureEng.numeric)  _automlFeatureEng.numeric  = {};
+  if (!_automlFeatureEng.dates)    _automlFeatureEng.dates    = {};
+  if (!Array.isArray(_automlFeatureEng.derived)) _automlFeatureEng.derived = [];
+
+  // ── SECTION 1: Numeric transforms ──────────────────────────────────────
+  const numRows = numCols.map(c => {
+    const fe  = _automlFeatureEng.numeric[c.name] || {};
+    const chips = [
+      { t: 'log1p',       label: 'log1p',     tip: 'log(1+x) — heavy right skew' },
+      { t: 'sqrt',        label: 'sqrt',       tip: 'Square root — mild right skew' },
+      { t: 'yeo_johnson', label: 'Yeo-J',      tip: 'Yeo-Johnson power transform' },
+      { t: 'rank',        label: 'rank',       tip: 'Percentile rank (0–1) — outlier-robust' },
+      { t: 'outlier_flag',label: 'outlier ⚑',  tip: 'Add is_outlier flag (IQR)' },
+      { t: 'missing_flag',label: 'missing ⚑',  tip: 'Add was_missing flag' },
+    ].map(ch => {
+      const on = !!fe[ch.t];
+      return `<button class="aml-fe-chip${on?' selected':''}" data-col="${c.name}" data-t="${ch.t}"
+                      title="${ch.tip}"
+                      onclick="_toggleFEChipNum(this)"
+                      style="font-size:0.66rem;padding:0.18rem 0.5rem;border-radius:20px;
+                             border:1px solid var(--border2);cursor:pointer;
+                             background:${on ? _acc : 'transparent'};
+                             color:${on ? '#fff' : 'var(--text3)'}">${ch.label}</button>`;
+    }).join('');
+
+    const binVal = fe.bin || 'none';
+    const binN   = fe.bin_n || 5;
+    const binCustom = fe.bin_custom || '';
+    const customVis = binVal === 'custom' ? '' : 'display:none';
     return `
-      <div style="display:flex;align-items:center;gap:0.75rem;padding:0.55rem 0.65rem;
-                  border-radius:8px;border:1px solid var(--border2);background:var(--bg-card)">
-        <div style="flex:1;font-size:0.82rem;font-weight:600;color:var(--text)">${c.name}</div>
-        <div style="font-size:0.67rem;color:var(--text3)">${c.dtype || 'numeric'}</div>
-        <button class="aml-fe-chip ${log}" data-col="${c.name}" data-t="log1p"
-                onclick="_toggleFEChip(this)" style="font-size:0.68rem;padding:0.2rem 0.55rem;
-                border-radius:20px;border:1px solid var(--border2);cursor:pointer;
-                background:${log ? _acc : 'transparent'};
-                color:${log ? '#fff' : 'var(--text3)'}">log1p</button>
-        <button class="aml-fe-chip ${bin}" data-col="${c.name}" data-t="bin"
-                onclick="_toggleFEChip(this)" style="font-size:0.68rem;padding:0.2rem 0.55rem;
-                border-radius:20px;border:1px solid var(--border2);cursor:pointer;
-                background:${bin ? _acc : 'transparent'};
-                color:${bin ? '#fff' : 'var(--text3)'}">bin</button>
+      <div style="padding:0.55rem 0.65rem;border-radius:8px;border:1px solid var(--border2);
+                  background:var(--bg-card);margin-bottom:0.35rem">
+        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.4rem">
+          <div style="font-size:0.8rem;font-weight:600;color:var(--text);min-width:80px">${c.name}</div>
+          <div style="font-size:0.65rem;color:var(--text3)">${c.dtype||'numeric'}</div>
+          ${chips}
+        </div>
+        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+          <span style="font-size:0.65rem;color:var(--text3)">Bin:</span>
+          ${['none','quantile','equal_width','custom'].map(m => {
+            const lbl = {none:'None',quantile:'Quantile ✓',equal_width:'Equal-width',custom:'Custom'}[m];
+            const sel = binVal === m;
+            return `<button onclick="_setBinMethod('${c.name}','${m}',this)"
+                            style="font-size:0.63rem;padding:0.15rem 0.45rem;border-radius:12px;
+                                   border:1px solid var(--border2);cursor:pointer;
+                                   background:${sel ? _acc : 'transparent'};
+                                   color:${sel ? '#fff' : 'var(--text3)'}">${lbl}</button>`;
+          }).join('')}
+          <input type="number" min="2" max="20" value="${binN}"
+                 onchange="_automlFeatureEng.numeric['${c.name}'] = _automlFeatureEng.numeric['${c.name}']||{}; _automlFeatureEng.numeric['${c.name}'].bin_n = parseInt(this.value)||5"
+                 style="width:42px;font-size:0.68rem;padding:0.12rem 0.3rem;border-radius:6px;
+                        border:1px solid var(--border2);background:var(--bg-glass);color:var(--text)"
+                 title="Number of bins">
+          <input type="text" id="binCustom_${c.name}" value="${binCustom}" placeholder="e.g. 0,10,50,100"
+                 onchange="_automlFeatureEng.numeric['${c.name}'] = _automlFeatureEng.numeric['${c.name}']||{}; _automlFeatureEng.numeric['${c.name}'].bin_custom = this.value"
+                 style="${customVis};font-size:0.68rem;padding:0.12rem 0.4rem;border-radius:6px;
+                         border:1px solid var(--border2);background:var(--bg-glass);color:var(--text);width:130px"
+                 title="Comma-separated breakpoints">
+        </div>
       </div>`;
   }).join('');
 
-  const polyChecked = _automlFeatureEng.__poly__ || false;
+  // ── SECTION 2: Date columns ─────────────────────────────────────────────
+  const dateRows = catCols.length === 0
+    ? `<div style="font-size:0.78rem;color:var(--text3)">No non-numeric columns detected.</div>`
+    : catCols.map(c => {
+        const isMarked = !!_automlFeatureEng.dates[c.name];
+        const dcfg     = _automlFeatureEng.dates[c.name] || {};
+        const dateComponents = [
+          { k:'year',          label:'Year'         },
+          { k:'month',         label:'Month'        },
+          { k:'day',           label:'Day'          },
+          { k:'dow',           label:'Day of week'  },
+          { k:'quarter',       label:'Quarter'      },
+          { k:'is_weekend',    label:'Is weekend'   },
+          { k:'days_since_min',label:'Days since earliest'},
+          { k:'cyclical',      label:'Cyclical encoding (sin/cos)'},
+        ];
+        const compRows = isMarked ? `
+          <div style="margin-top:0.45rem;padding-left:0.5rem;border-left:2px solid ${_acc};
+                      display:flex;flex-wrap:wrap;gap:0.3rem 0.8rem">
+            ${dateComponents.map(({k, label}) => {
+              const checked = !!dcfg[k];
+              return `<label style="display:flex;align-items:center;gap:0.3rem;font-size:0.72rem;cursor:pointer">
+                <input type="checkbox" ${checked?'checked':''} style="accent-color:${_acc}"
+                       onchange="_toggleDateComp('${c.name}','${k}',this.checked)">
+                <span style="color:var(--text2)">${label}</span>
+              </label>`;
+            }).join('')}
+            <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.72rem;cursor:pointer">
+              <input type="checkbox" ${dcfg.keep_original?'checked':''} style="accent-color:${_acc}"
+                     onchange="_toggleDateComp('${c.name}','keep_original',this.checked)">
+              <span style="color:var(--text3)">Keep original column</span>
+            </label>
+          </div>` : '';
+        return `
+          <div style="padding:0.5rem 0.65rem;border-radius:8px;border:1px solid var(--border2);
+                      background:var(--bg-card);margin-bottom:0.3rem">
+            <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer">
+              <input type="checkbox" ${isMarked?'checked':''} style="accent-color:${_acc}"
+                     onchange="_markAsDate('${c.name}',this.checked)">
+              <span style="font-size:0.8rem;font-weight:600;color:var(--text)">${c.name}</span>
+              <span style="font-size:0.65rem;color:var(--text3)">${c.dtype||'object'}</span>
+            </label>
+            ${compRows}
+          </div>`;
+      }).join('');
+
+  // ── SECTION 3: Derived features ─────────────────────────────────────────
+  const numColNames = numCols.map(c => c.name);
+  const colOpts     = numColNames.map(n => `<option value="${n}">${n}</option>`).join('');
+  const derivedRows = _automlFeatureEng.derived.map((d, i) => `
+    <div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.3rem">
+      <select onchange="_automlFeatureEng.derived[${i}].col_a=this.value"
+              style="font-size:0.72rem;padding:0.2rem 0.3rem;border-radius:6px;
+                     border:1px solid var(--border2);background:var(--bg-glass);color:var(--text)">
+        ${numColNames.map(n => `<option value="${n}"${d.col_a===n?' selected':''}>${n}</option>`).join('')}
+      </select>
+      <select onchange="_automlFeatureEng.derived[${i}].op=this.value"
+              style="font-size:0.72rem;padding:0.2rem 0.3rem;border-radius:6px;
+                     border:1px solid var(--border2);background:var(--bg-glass);color:var(--text)">
+        <option value="ratio"${d.op==='ratio'?' selected':''}>÷ ratio</option>
+        <option value="diff"${d.op==='diff'?' selected':''}>− diff</option>
+      </select>
+      <select onchange="_automlFeatureEng.derived[${i}].col_b=this.value"
+              style="font-size:0.72rem;padding:0.2rem 0.3rem;border-radius:6px;
+                     border:1px solid var(--border2);background:var(--bg-glass);color:var(--text)">
+        ${numColNames.map(n => `<option value="${n}"${d.col_b===n?' selected':''}>${n}</option>`).join('')}
+      </select>
+      <button onclick="_automlFeatureEng.derived.splice(${i},1);_renderAutoMLStep1c()"
+              style="font-size:0.68rem;padding:0.15rem 0.4rem;border-radius:6px;
+                     border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">✕</button>
+    </div>`).join('');
+  const addDerivedBtn = numColNames.length >= 2
+    ? `<button onclick="_addDerivedFeature()" class="btn btn-clear"
+               style="font-size:0.72rem;padding:0.2rem 0.6rem;margin-top:0.35rem">+ Add pair</button>`
+    : `<div style="font-size:0.72rem;color:var(--text3)">Need ≥ 2 numeric columns.</div>`;
+
+  // ── SECTION 4: Polynomial ───────────────────────────────────────────────
+  const polyChecked = !!_automlFeatureEng.poly;
   const polyWarn    = numCols.length > 8
-    ? `<div style="font-size:0.7rem;color:var(--color-warning);margin-top:0.35rem">
-         ⚠ ${numCols.length} numeric columns → ~${Math.round(numCols.length*(numCols.length+1)/2)} new features</div>`
+    ? `<div style="font-size:0.68rem;color:var(--color-warning,#f87171);margin-top:0.3rem">
+         ⚠ ${numCols.length} numeric cols → ~${Math.round(numCols.length*(numCols.length-1)/2)} interaction terms</div>`
     : '';
+
+  const sectionStyle = 'margin-bottom:1.1rem';
+  const sectionTitle = `font-size:0.63rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:${_acc};margin-bottom:0.55rem`;
 
   document.getElementById('main').innerHTML = `
     <div class="wizard">
       ${_automlStepsHTML(2, false)}
-      <h2 style="font-size:1.3rem;font-weight:800;margin-bottom:0.3rem;color:var(--active-accent,#a78bfa)">Feature Engineering</h2>
-      <p style="font-size:0.82rem;color:var(--text2);margin-bottom:1.25rem">
-        Optionally add derived features before training. New columns are added alongside originals.
+      <h2 style="font-size:1.25rem;font-weight:800;margin-bottom:0.25rem;color:${_acc}">Feature Engineering</h2>
+      <p style="font-size:0.8rem;color:var(--text2);margin-bottom:1.1rem">
+        Add derived features before training. All transforms are fit on training data only.
       </p>
 
-      ${numCols.length === 0
-        ? `<div style="color:var(--text3);font-size:0.85rem;margin-bottom:1rem">No numeric feature columns available.</div>`
-        : `<div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;
-                       color:var(--active-accent,#a78bfa);margin-bottom:0.55rem">Per-Column Transforms</div>
-           <div style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:1.25rem">${colRows}</div>`
-      }
+      <div style="${sectionStyle}">
+        <div style="${sectionTitle}">Numeric Transforms</div>
+        ${numCols.length === 0
+          ? `<div style="font-size:0.78rem;color:var(--text3)">No numeric feature columns.</div>`
+          : numRows}
+      </div>
 
-      <div style="padding:0.7rem 0.9rem;border-radius:8px;border:1px solid var(--border2);
-                  background:var(--bg-card);margin-bottom:1.25rem">
-        <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.82rem">
-          <input type="checkbox" id="amlFePoly" ${polyChecked ? 'checked' : ''}
-                 onchange="_automlFeatureEng.__poly__ = this.checked"
-                 style="width:15px;height:15px;accent-color:var(--active-accent,#a78bfa)">
-          <span style="font-weight:600;color:var(--text)">Polynomial features (degree 2)</span>
-          <span style="color:var(--text3);font-size:0.72rem">— all numeric columns × interactions</span>
-        </label>
-        ${polyWarn}
+      <div style="${sectionStyle}">
+        <div style="${sectionTitle}">Date Columns</div>
+        <div style="font-size:0.72rem;color:var(--text3);margin-bottom:0.45rem">
+          Check any column that contains dates to extract time features from it.
+        </div>
+        ${dateRows}
+      </div>
+
+      <div style="${sectionStyle}">
+        <div style="${sectionTitle}">Derived Features</div>
+        ${derivedRows}
+        ${addDerivedBtn}
+      </div>
+
+      <div style="${sectionStyle}">
+        <div style="${sectionTitle}">Polynomial Interactions</div>
+        <div style="padding:0.6rem 0.85rem;border-radius:8px;border:1px solid var(--border2);background:var(--bg-card)">
+          <label style="display:flex;align-items:center;gap:0.55rem;cursor:pointer;font-size:0.82rem">
+            <input type="checkbox" ${polyChecked?'checked':''}
+                   onchange="_automlFeatureEng.poly = this.checked"
+                   style="width:15px;height:15px;accent-color:${_acc}">
+            <span style="font-weight:600;color:var(--text)">Polynomial features (degree 2)</span>
+            <span style="color:var(--text3);font-size:0.7rem">— interaction terms only</span>
+          </label>
+          ${polyWarn}
+        </div>
       </div>
 
       <div class="action-row">
         <button class="btn btn-clear" onclick="_renderAutoMLStep1b(_automlTargetCol)">← Back</button>
-        <button class="btn btn-clear" onclick="_automlFeatureEng={};_renderAutoMLStep2()">Skip →</button>
+        <button class="btn btn-clear" onclick="_automlFeatureEng={numeric:{},dates:{},derived:[],poly:false};_renderAutoMLStep2()">Skip →</button>
         <button class="btn btn-primary" onclick="_renderAutoMLStep2()">Apply & Configure →</button>
       </div>
     </div>`;
 }
 
-function _toggleFEChip(el) {
+function _toggleFEChipNum(el) {
   const col  = el.dataset.col;
   const type = el.dataset.t;
   const acc  = document.documentElement.style.getPropertyValue('--active-accent') || '#a78bfa';
-  if (!_automlFeatureEng[col]) _automlFeatureEng[col] = {};
-  const on = !_automlFeatureEng[col][type];
-  _automlFeatureEng[col][type] = on;
+  if (!_automlFeatureEng.numeric[col]) _automlFeatureEng.numeric[col] = {};
+  const on = !_automlFeatureEng.numeric[col][type];
+  _automlFeatureEng.numeric[col][type] = on;
   el.style.background = on ? acc : 'transparent';
   el.style.color      = on ? '#fff' : 'var(--text3)';
   el.classList.toggle('selected', on);
+}
+
+function _setBinMethod(col, method, btn) {
+  if (!_automlFeatureEng.numeric[col]) _automlFeatureEng.numeric[col] = {};
+  _automlFeatureEng.numeric[col].bin = method;
+  const acc = document.documentElement.style.getPropertyValue('--active-accent') || '#a78bfa';
+  // update sibling buttons
+  const siblings = btn.parentElement.querySelectorAll('button[onclick^="_setBinMethod"]');
+  siblings.forEach(b => {
+    const isThis = b === btn;
+    b.style.background = isThis ? acc : 'transparent';
+    b.style.color      = isThis ? '#fff' : 'var(--text3)';
+  });
+  // show/hide custom input
+  const customInput = btn.closest('div[style*="border-radius:8px"]').querySelector('input[id^="binCustom_"]');
+  if (customInput) customInput.style.display = method === 'custom' ? '' : 'none';
+}
+
+function _markAsDate(col, checked) {
+  if (checked) {
+    if (!_automlFeatureEng.dates[col]) {
+      _automlFeatureEng.dates[col] = { year: true, month: true, day: false, dow: false, quarter: false, is_weekend: false, days_since_min: false, cyclical: false, keep_original: false };
+    }
+  } else {
+    delete _automlFeatureEng.dates[col];
+  }
+  _renderAutoMLStep1c();
+}
+
+function _toggleDateComp(col, key, val) {
+  if (!_automlFeatureEng.dates[col]) _automlFeatureEng.dates[col] = {};
+  _automlFeatureEng.dates[col][key] = val;
+}
+
+function _addDerivedFeature() {
+  const a            = automlAnalysis;
+  const effectTarget = _automlTargetCol || a.suggested_target;
+  const numCols      = (a.columns || []).filter(c => c.is_numeric && c.name !== effectTarget);
+  if (numCols.length < 2) return;
+  _automlFeatureEng.derived.push({ op: 'ratio', col_a: numCols[0].name, col_b: numCols[1].name });
+  _renderAutoMLStep1c();
 }
 
 function _renderAutoMLStep2() {
