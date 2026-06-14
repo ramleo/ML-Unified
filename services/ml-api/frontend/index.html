@@ -4212,6 +4212,9 @@ function _renderAutoMLStep1() {
     const f = e.dataTransfer.files[0];
     if (f && f.name.toLowerCase().endsWith('.csv')) _setAutoMLFile(f);
   });
+  // Apply default accent (first swatch) immediately on render
+  const defaultSwatch = document.querySelector('.accent-swatch');
+  if (defaultSwatch) selectAccent(defaultSwatch);
 }
 
 function _handleAutoMLFile(e) {
