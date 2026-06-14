@@ -436,7 +436,7 @@ body {
 .btn:active { transform: translateY(0); }
 .btn-primary  { background: var(--active-accent, var(--accent-from)); color: #fff; box-shadow: 0 4px 16px color-mix(in srgb, var(--active-accent, var(--accent-from)) 35%, transparent); }
 .btn-sample   { background: color-mix(in srgb, var(--active-accent, var(--accent)) 12%, transparent); border: 1px solid color-mix(in srgb, var(--active-accent, var(--accent)) 30%, transparent); color: var(--active-accent, var(--accent)); }
-.btn-clear    { background: var(--border); border: 1px solid color-mix(in srgb, var(--active-accent, var(--accent-from)) 40%, transparent); color: var(--active-accent, var(--accent-from)); }
+.btn-clear    { background: var(--active-accent, var(--accent-from)); border: 1px solid var(--active-accent, var(--accent-from)); color: #fff; }
 
 /* ── Result panel ── */
 .result-wrap { margin-top: 0.75rem; }
@@ -1062,10 +1062,14 @@ body {
 /* ── Wizard form sections ── */
 .wizard-section { margin-bottom: 1.25rem; }
 .wizard-label {
-  font-size: 0.72rem; font-weight: 600; color: var(--text2);
+  font-size: 0.72rem; font-weight: 600; color: var(--active-accent, var(--accent-from));
   text-transform: uppercase; letter-spacing: 0.04em;
   display: block; margin-bottom: 0.4rem;
 }
+.wizard * { color: var(--active-accent, var(--accent-from)); }
+.aml-results-page * { color: var(--active-accent, var(--accent-from)); }
+.wizard .btn, .aml-results-page .btn { color: #fff; }
+.wizard .btn *, .aml-results-page .btn * { color: #fff; }
 
 /* ── Task type toggle ── */
 .task-toggle { display: flex; gap: 0.5rem; }
