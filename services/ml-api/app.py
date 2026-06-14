@@ -318,6 +318,9 @@ async def predict(model_id: str, request: Request):
     fe = m.get("fe")
     if fe is not None and fe.fe_config:
         try:
+            pre_fe = schema.get("pre_fe_cols")
+            if pre_fe:
+                df = df[[c for c in pre_fe if c in df.columns]]
             df = fe.transform(df)
         except Exception as _fe_pred_err:
             print(f"FE transform in predict failed (skipped): {_fe_pred_err}", flush=True)
@@ -1378,6 +1381,9 @@ async def train_model(
         X = X.copy()
         X[_bool_cols] = X[_bool_cols].astype("int8")
 
+    # Capture original column names before FE adds derived columns
+    _pre_fe_cols = list(X.columns)
+
     # Apply feature engineering (fit+transform on full X — acceptable for MVP)
     _fe_transformer = FeatureEngineeringTransformer(_fe_config)
     if _fe_config:
@@ -1413,7 +1419,8 @@ async def train_model(
     _model_id  = model_id
     _model_name = model_name
     _target_col = target_col
-    _fe_tfm    = _fe_transformer
+    _fe_tfm       = _fe_transformer
+    _pre_fe_cols_ = _pre_fe_cols
     _n_clusters = n_clusters
     _y          = y
 
@@ -1853,7 +1860,7 @@ async def train_model(
                 automl_result["can_upgrade"] = automl_result["explanation_source"] == "rule"
 
         p.update(88, "Building schema…")
-        feature_cols = X.columns.tolist()
+        feature_cols = [c for c in _pre_fe_cols_ if c in X.columns]
         fields: list = []
         sample: dict = {}
         for col in feature_cols:
@@ -1892,9 +1899,10 @@ async def train_model(
             "model":       _effective_algorithm,
             "metric":      metric,
             "metricLabel": metric_label,
-            "id_cols":     [],
-            "ensure_cols": [],
-            "fields":      fields,
+            "id_cols":      [],
+            "ensure_cols":  [],
+            "pre_fe_cols":  _pre_fe_cols_,
+            "fields":       fields,
             "sample":      sample,
             "output":      output_meta,
         }

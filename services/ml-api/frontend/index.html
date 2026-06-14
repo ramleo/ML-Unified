@@ -4321,13 +4321,13 @@ function _amlStep0Continue() {
   errEl.style.display = 'none';
   _automlDatasetName = nameEl.value.trim();
   _automlTargetCol   = targetEl.value;
-  _renderAutoMLStep1b(_automlTargetCol);
+  _renderAutoMLStep1c();
 }
 
 function _amlStep0Skip() {
   _automlDatasetName = '';
   _automlTargetCol   = null;
-  _renderAutoMLStep1b(null);
+  _renderAutoMLStep1c();
 }
 
 // ── Step 1.5: Data Quality & Preprocessing ────────────────────
@@ -4439,7 +4439,8 @@ function _renderAutoMLStep1b(preselectedTarget) {
             <div style="font-size:0.82rem;font-weight:600;color:${_acc};margin-bottom:0.6rem">Preprocess before training?</div>
             <div id="amlPrepYesNo" style="display:flex;flex-direction:column;gap:0.45rem">
               <button class="btn btn-primary" onclick="_showAutoMLPrepOptions()" style="font-size:0.82rem">Yes, preprocess</button>
-              <button class="btn btn-clear" onclick="_renderAutoMLStep1c()" style="font-size:0.82rem">No, skip →</button>
+              <button class="btn btn-clear" onclick="_renderAutoMLStep2()" style="font-size:0.82rem">No, skip →</button>
+              <button class="btn btn-clear" onclick="_renderAutoMLStep1c()" style="font-size:0.82rem;margin-top:0.25rem">← Back to FE</button>
             </div>
           </div>
         </div>
@@ -4848,7 +4849,7 @@ async function _applyAutoMLPreprocessing() {
       <div style="font-size:0.85rem;font-weight:600;color:${acc};margin-bottom:0.75rem">Proceed to AutoML training?</div>
       <div class="action-row" style="margin-top:0">
         <button class="btn btn-clear" onclick="_renderAutoMLStep1b(_automlTargetCol)">← Revert</button>
-        <button class="btn btn-primary" onclick="_renderAutoMLStep1c()">Yes, Feature Engineering →</button>
+        <button class="btn btn-primary" onclick="_renderAutoMLStep2()">Yes, Configure AutoML →</button>
       </div>`;
   } catch(e) {
     timers.forEach(clearTimeout);
@@ -5068,9 +5069,9 @@ function _renderAutoMLStep1c() {
       </div>
 
       <div class="action-row">
-        <button class="btn btn-clear" onclick="_renderAutoMLStep1b(_automlTargetCol)">← Back</button>
-        <button class="btn btn-clear" onclick="_automlFeatureEng={numeric:{},dates:{},derived:[],poly:false};_renderAutoMLStep2()">Skip →</button>
-        <button class="btn btn-primary" onclick="_renderAutoMLStep2()">Apply & Configure →</button>
+        <button class="btn btn-clear" onclick="_renderAutoMLStep1()">← Back</button>
+        <button class="btn btn-clear" onclick="_automlFeatureEng={numeric:{},dates:{},derived:[],poly:false};_renderAutoMLStep1b(_automlTargetCol)">Skip →</button>
+        <button class="btn btn-primary" onclick="_renderAutoMLStep1b(_automlTargetCol)">Apply & Preprocess →</button>
       </div>
     </div>`;
 }
