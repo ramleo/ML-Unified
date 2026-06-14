@@ -58,8 +58,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── GPU detection ─────────────────────────────────────────────────────────────
+def _detect_gpu() -> dict:
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return {"available": True, "name": torch.cuda.get_device_name(0)}
+    except Exception:
+        pass
+    try:
+        import subprocess
+        r = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=3,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            return {"available": True, "name": r.stdout.strip().split("\n")[0]}
+    except Exception:
+        pass
+    return {"available": False, "name": None}
+
 # ── Request monitoring ────────────────────────────────────────────────────────
-_SKIP_PATHS = {"/", "/health", "/metrics", "/app-config", "/favicon.ico"}
+_SKIP_PATHS = {"/", "/health", "/metrics", "/app-config", "/favicon.ico", "/system-info"}
 _req_log: collections.deque = collections.deque(maxlen=1000)
 _svc_start = time.time()
 
@@ -221,6 +241,10 @@ def favicon_svg():
 @app.get("/health")
 def health():
     return {"status": "ok", "models": list(MODELS.keys())}
+
+@app.get("/system-info")
+def system_info():
+    return {"gpu": _detect_gpu()}
 
 @app.get("/app-config")
 def app_config():
@@ -1296,6 +1320,7 @@ async def train_model(
                         "n_rows":           len(X),
                         "cv_results":       cv_results,
                         "task":             "classification",
+                        "gpu":              _detect_gpu(),
                     }
                     p.update(65, f"Winner: {winner}. Training on full dataset…")
 
@@ -1370,23 +1395,32 @@ async def train_model(
                 automl_result["confusion_matrix"] = cm.tolist()
                 automl_result["class_names"] = [str(c) for c in le.classes_]
 
-                # Learning curve (5 training sizes, winner pipeline)
-                try:
-                    p.update(83, "Computing learning curve…")
-                    lc_sizes, lc_train_sc, lc_val_sc = learning_curve(
-                        clone(pipeline), X_cv, y_cv,
-                        cv=StratifiedKFold(n_splits=5, shuffle=True, random_state=42),
-                        train_sizes=[0.2, 0.4, 0.6, 0.8, 1.0],
-                        scoring=sel_metric, n_jobs=1,
-                    )
-                    automl_result["learning_curve"] = {
-                        "train_sizes":   [int(s) for s in lc_sizes],
-                        "train_scores":  [round(float(s.mean()), 4) for s in lc_train_sc],
-                        "val_scores":    [round(float(s.mean()), 4) for s in lc_val_sc],
-                        "metric_label":  sel_label,
-                    }
-                except Exception as _lc_err:
-                    print(f"Learning curve failed: {_lc_err}", flush=True)
+                # Learning curve — adaptive CV folds, skip if dataset too large
+                _lc_rows   = len(X)
+                _lc_folds  = 3 if _lc_rows > 5000 else 5
+                _lc_skip   = _lc_rows > 20000
+                automl_result["lc_cv_folds"] = _lc_folds
+                if _lc_skip:
+                    automl_result["lc_skip_reason"] = f"Dataset too large ({_lc_rows:,} rows > 20,000 threshold)"
+                else:
+                    try:
+                        p.update(83, "Computing learning curve…")
+                        lc_sizes, lc_train_sc, lc_val_sc = learning_curve(
+                            clone(pipeline), X_cv, y_cv,
+                            cv=StratifiedKFold(n_splits=_lc_folds, shuffle=True, random_state=42),
+                            train_sizes=[0.2, 0.4, 0.6, 0.8, 1.0],
+                            scoring=sel_metric, n_jobs=1,
+                        )
+                        automl_result["learning_curve"] = {
+                            "train_sizes":   [int(s) for s in lc_sizes],
+                            "train_scores":  [round(float(s.mean()), 4) for s in lc_train_sc],
+                            "val_scores":    [round(float(s.mean()), 4) for s in lc_val_sc],
+                            "metric_label":  sel_label,
+                            "cv_folds":      _lc_folds,
+                        }
+                    except Exception as _lc_err:
+                        print(f"Learning curve failed: {_lc_err}", flush=True)
+                        automl_result["lc_skip_reason"] = f"Could not compute: insufficient data or resources"
 
                 p.update(84, "Extracting feature importances…")
                 automl_result["feature_importance"] = _extract_feature_importances(
@@ -1471,6 +1505,7 @@ async def train_model(
                         "n_rows":           len(X),
                         "cv_results":       cv_results,
                         "task":             "regression",
+                        "gpu":              _detect_gpu(),
                     }
                     p.update(65, f"Winner: {winner}. Training on full dataset…")
 
@@ -1535,23 +1570,32 @@ async def train_model(
                 automl_result["scatter_actual"]    = [round(float(v), 4) for v in y_test_arr[idxs]]
                 automl_result["scatter_predicted"] = [round(float(v), 4) for v in y_pred[idxs]]
 
-                # Learning curve (5 training sizes, winner pipeline)
-                try:
-                    p.update(83, "Computing learning curve…")
-                    lc_sizes, lc_train_sc, lc_val_sc = learning_curve(
-                        clone(pipeline), X, y_enc,
-                        cv=KFold(n_splits=5, shuffle=True, random_state=42),
-                        train_sizes=[0.2, 0.4, 0.6, 0.8, 1.0],
-                        scoring="neg_mean_absolute_error", n_jobs=1,
-                    )
-                    automl_result["learning_curve"] = {
-                        "train_sizes":  [int(s) for s in lc_sizes],
-                        "train_scores": [round(-float(s.mean()), 4) for s in lc_train_sc],
-                        "val_scores":   [round(-float(s.mean()), 4) for s in lc_val_sc],
-                        "metric_label": "MAE",
-                    }
-                except Exception as _lc_err:
-                    print(f"Learning curve failed: {_lc_err}", flush=True)
+                # Learning curve — adaptive CV folds, skip if dataset too large
+                _lc_rows_r  = len(X)
+                _lc_folds_r = 3 if _lc_rows_r > 5000 else 5
+                _lc_skip_r  = _lc_rows_r > 20000
+                automl_result["lc_cv_folds"] = _lc_folds_r
+                if _lc_skip_r:
+                    automl_result["lc_skip_reason"] = f"Dataset too large ({_lc_rows_r:,} rows > 20,000 threshold)"
+                else:
+                    try:
+                        p.update(83, "Computing learning curve…")
+                        lc_sizes, lc_train_sc, lc_val_sc = learning_curve(
+                            clone(pipeline), X, y_enc,
+                            cv=KFold(n_splits=_lc_folds_r, shuffle=True, random_state=42),
+                            train_sizes=[0.2, 0.4, 0.6, 0.8, 1.0],
+                            scoring="neg_mean_absolute_error", n_jobs=1,
+                        )
+                        automl_result["learning_curve"] = {
+                            "train_sizes":  [int(s) for s in lc_sizes],
+                            "train_scores": [round(-float(s.mean()), 4) for s in lc_train_sc],
+                            "val_scores":   [round(-float(s.mean()), 4) for s in lc_val_sc],
+                            "metric_label": "MAE",
+                            "cv_folds":     _lc_folds_r,
+                        }
+                    except Exception as _lc_err:
+                        print(f"Learning curve failed: {_lc_err}", flush=True)
+                        automl_result["lc_skip_reason"] = f"Could not compute: insufficient data or resources"
 
                 p.update(84, "Extracting feature importances…")
                 automl_result["feature_importance"] = _extract_feature_importances(
