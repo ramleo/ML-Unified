@@ -313,6 +313,8 @@ async def predict(model_id: str, request: Request):
         df["psd_day_of_week"] = None if pd.isnull(psd) else int(psd.dayofweek)
         df = df.drop(columns=[date_field], errors="ignore")
 
+    df = df.apply(pd.to_numeric, errors='ignore')
+
     pipeline = m["pipeline"]
     le       = m["le"]
     fe = m.get("fe")
@@ -1604,6 +1606,7 @@ async def train_model(
                         "selection_metric": sel_label,
                         "is_imbalanced":    is_imbal,
                         "n_rows":           len(X),
+                        "n_input_cols":     len(X.columns),
                         "cv_results":       cv_results,
                         "task":             "classification",
                         "gpu":              _detect_gpu(),
@@ -1785,6 +1788,7 @@ async def train_model(
                         "selection_metric": "MAE",
                         "is_imbalanced":    False,
                         "n_rows":           len(X),
+                        "n_input_cols":     len(X.columns),
                         "cv_results":       cv_results,
                         "task":             "regression",
                         "gpu":              _detect_gpu(),

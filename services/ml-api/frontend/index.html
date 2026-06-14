@@ -4149,6 +4149,11 @@ function _startFreshAutoML() {
   automlAnalysis = null;
   _automlDatasetName = '';
   _automlTargetCol   = null;
+  _automlFeatureEng    = { numeric: {}, dates: {}, derived: [], poly_cols: [] };
+  _automlOrigAnalysis  = null;
+  _automlOrigFile      = null;
+  automlFEB64          = '';
+  automlPreFeCols      = [];
   _renderAutoMLStep1();
   document.getElementById('main').scrollTop = 0;
 }
@@ -5374,7 +5379,7 @@ function _renderAutoMLResultsPage(result) {
     : '';
 
   const trainingDetails = aml ? (() => {
-    const nFeat    = (aml.feature_importance || []).length;
+    const nFeat    = aml.n_input_cols ?? (aml.feature_importance || []).length;
     const taskLbl  = aml.selection_metric === 'MAE' ? 'Regression' : 'Classification';
     const nTrain  = aml.n_train || 0;
     const nTest   = aml.n_test  || 0;

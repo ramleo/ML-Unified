@@ -31,6 +31,8 @@ def _prep_df(data: dict, schema: dict) -> pd.DataFrame:
         df["psd_day_of_week"] = None if pd.isnull(psd) else int(psd.dayofweek)
         df = df.drop(columns=[date_field], errors="ignore")
 
+    df = df.apply(pd.to_numeric, errors='ignore')
+    df = df.apply(pd.to_numeric, errors='ignore')
     return df
 
 
