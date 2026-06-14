@@ -419,6 +419,7 @@ async def automl_preprocess(request: Request):
     filename      = body.get("filename", "")
     options       = body.get("options", {})
     target_column = body.get("target_column", "")
+    fe_config_prep = body.get("fe_config", {})
 
     # The frontend sends the CSV as base64 under "csv_b64"
     csv_b64 = body.get("csv_b64", "")
@@ -626,9 +627,31 @@ async def automl_preprocess(request: Request):
         scaler = StandardScaler()
         df_feat[final_num_cols] = scaler.fit_transform(df_feat[final_num_cols])
 
-    # 7. Feature selection — after encoding so top_k trims the fully-encoded feature set.
-    #    Non-numeric columns that were not encoded are dropped first; they cannot
-    #    contribute to any numeric selection method and would bypass top_k otherwise.
+    # 7. Feature engineering — applied BEFORE feature selection so that selection
+    #    can score and prune FE-derived columns (e.g. polynomial interaction terms).
+    pre_fe_cols   = list(df_feat.columns)
+    fe_cols_added = 0
+    fe_b64_out    = ""
+    _fe_tfm_prep  = FeatureEngineeringTransformer(fe_config_prep)
+    if fe_config_prep:
+        try:
+            df_feat = _fe_tfm_prep.fit_transform(df_feat)
+            # Re-cast any bool columns produced by FE
+            _fe_bool = df_feat.select_dtypes(include="bool").columns.tolist()
+            if _fe_bool:
+                df_feat[_fe_bool] = df_feat[_fe_bool].astype(_np.int8)
+            fe_cols_added = len(df_feat.columns) - len(pre_fe_cols)
+            _fe_buf = io.BytesIO()
+            joblib.dump(_fe_tfm_prep, _fe_buf)
+            fe_b64_out = base64.b64encode(_fe_buf.getvalue()).decode()
+        except Exception as _fe_prep_err:
+            print(f"FE in preprocess failed (skipped): {_fe_prep_err}", flush=True)
+            _fe_tfm_prep  = FeatureEngineeringTransformer({})
+            fe_cols_added = 0
+            fe_b64_out    = ""
+
+    # 8. Feature selection — now operates on FE-enriched columns so polynomial
+    #    and other derived features are visible to the selection method.
     features_before = len(df_feat.columns)
     fs = options.get("feature_selection", {})
     fs_method = (fs.get("method") or "none").lower()
@@ -752,6 +775,9 @@ async def automl_preprocess(request: Request):
         "features_after":        features_after,
         "user_cols_dropped":     user_cols_dropped,
         "ohe_cols_added":        ohe_cols_added,
+        "fe_cols_added":         fe_cols_added,
+        "fe_b64":                fe_b64_out,
+        "pre_fe_cols":           pre_fe_cols,
         # analysis fields (same structure as /analyze)
         "columns":               columns_out,
         "suggested_target":      suggested_target,
@@ -1339,6 +1365,8 @@ async def train_model(
     accent:              str        = Form(...),
     n_clusters:          int        = Form(3),
     feature_engineering: str        = Form("{}"),
+    fe_b64:              str        = Form(""),
+    pre_fe_cols_json:    str        = Form("[]"),
 ):
     content = await file.read()
     try:
@@ -1362,6 +1390,11 @@ async def train_model(
     except Exception:
         _fe_config = {}
 
+    try:
+        _pre_fe_cols_from_prep = _json_fe.loads(pre_fe_cols_json or "[]")
+    except Exception:
+        _pre_fe_cols_from_prep = []
+
     if task == "clustering":
         X = df.copy()
         y = None
@@ -1380,21 +1413,26 @@ async def train_model(
         X = X.copy()
         X[_bool_cols] = X[_bool_cols].astype("int8")
 
-    # Capture original column names before FE adds derived columns
-    _pre_fe_cols = list(X.columns)
-
-    # Apply feature engineering (fit+transform on full X — acceptable for MVP)
-    _fe_transformer = FeatureEngineeringTransformer(_fe_config)
-    if _fe_config:
-        try:
-            X = _fe_transformer.fit_transform(X)
-            # Re-cast any new bool columns
-            _new_bool = X.select_dtypes(include="bool").columns.tolist()
-            if _new_bool:
-                X[_new_bool] = X[_new_bool].astype("int8")
-        except Exception as _fe_err:
-            print(f"Feature engineering failed (skipped): {_fe_err}", flush=True)
-            _fe_transformer = FeatureEngineeringTransformer({})
+    if fe_b64:
+        # FE was applied during /automl/preprocess — deserialize the pre-fit
+        # transformer so it can be used for prediction.  The CSV (automlFile)
+        # is already FE'd, so we must NOT re-apply it here.
+        _fe_transformer = joblib.load(io.BytesIO(base64.b64decode(fe_b64)))
+        _pre_fe_cols    = _pre_fe_cols_from_prep or list(X.columns)
+    else:
+        # Legacy path: no preprocessing was done, or preprocessing ran without
+        # FE config.  Apply FE directly to the raw training CSV.
+        _pre_fe_cols    = list(X.columns)
+        _fe_transformer = FeatureEngineeringTransformer(_fe_config)
+        if _fe_config:
+            try:
+                X = _fe_transformer.fit_transform(X)
+                _new_bool = X.select_dtypes(include="bool").columns.tolist()
+                if _new_bool:
+                    X[_new_bool] = X[_new_bool].astype("int8")
+            except Exception as _fe_err:
+                print(f"Feature engineering failed (skipped): {_fe_err}", flush=True)
+                _fe_transformer = FeatureEngineeringTransformer({})
 
     num_cols = X.select_dtypes(include="number").columns.tolist()
     cat_cols = X.select_dtypes(exclude="number").columns.tolist()

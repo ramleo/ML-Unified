@@ -4607,6 +4607,8 @@ function _renderAutoMLStep1b(preselectedTarget) {
 function _amlRevertPreprocessing() {
   if (_automlOrigAnalysis) automlAnalysis = _automlOrigAnalysis;
   if (_automlOrigFile)     automlFile     = _automlOrigFile;
+  automlFEB64     = '';
+  automlPreFeCols = [];
   _renderAutoMLStep1b(_automlTargetCol);
 }
 
@@ -4792,6 +4794,7 @@ async function _applyAutoMLPreprocessing() {
         options,
         target_column: target,
         csv_b64:       csvB64,
+        fe_config:     _automlFeatureEng || {},
       }),
     });
     if (!res.ok) { const t = await res.text(); throw new Error(t); }
@@ -4814,6 +4817,10 @@ async function _applyAutoMLPreprocessing() {
     // Save originals before overwriting (used to restore state on Revert)
     if (!_automlOrigAnalysis) _automlOrigAnalysis = automlAnalysis;
     if (!_automlOrigFile)     _automlOrigFile     = automlFile;
+
+    // Save FE transformer (serialized) and pre-FE column list for training
+    automlFEB64     = result.fe_b64     || '';
+    automlPreFeCols = result.pre_fe_cols || [];
 
     // Update global state
     const csvBytes = atob(result.csv_b64);
@@ -4843,7 +4850,7 @@ async function _applyAutoMLPreprocessing() {
     const rowDiff = result.rows_before - result.rows_after;
     const statCards = [
       { label: 'ROWS',     value: `${result.rows_after.toLocaleString()}`, sub: rowDiff > 0 ? `−${rowDiff.toLocaleString()} removed` : 'no rows removed', color: 'var(--active-accent,#818cf8)' },
-      { label: 'COLUMNS',  value: `${result.cols_after}`, sub: [result.user_cols_dropped ? `−${result.user_cols_dropped} dropped` : '', result.ohe_cols_added ? `+${result.ohe_cols_added} OHE` : ''].filter(Boolean).join(', ') || `from ${result.cols_before}`, color: 'var(--active-accent,#818cf8)' },
+      { label: 'COLUMNS',  value: `${result.cols_after}`, sub: [result.user_cols_dropped ? `−${result.user_cols_dropped} dropped` : '', result.ohe_cols_added ? `+${result.ohe_cols_added} OHE` : '', result.fe_cols_added ? `+${result.fe_cols_added} FE` : ''].filter(Boolean).join(', ') || `from ${result.cols_before}`, color: 'var(--active-accent,#818cf8)' },
       { label: 'MISSING',  value: `${result.total_missing}`, sub: result.total_missing === 0 ? 'all resolved' : 'remaining', color: result.total_missing === 0 ? 'var(--active-accent,#818cf8)' : '#fbbf24' },
       ...(fsMethod !== 'none' ? [{ label: 'FEATURES', value: `${fsAfter}`, sub: `selected from ${fsBefore}`, color: 'var(--active-accent,#818cf8)' }] : []),
     ];
@@ -4897,6 +4904,8 @@ async function _applyAutoMLPreprocessing() {
 let _automlFeatureEng    = { numeric: {}, dates: {}, derived: [], poly_cols: [] };
 let _automlOrigAnalysis  = null;
 let _automlOrigFile      = null;
+let automlFEB64          = '';
+let automlPreFeCols      = [];
 
 function _renderAutoMLStep1c() {
   const a            = automlAnalysis;
@@ -5486,6 +5495,8 @@ async function runAutoML() {
   form.append('algorithm',           'AutoML');
   form.append('accent',              accent);
   form.append('feature_engineering', JSON.stringify(_automlFeatureEng || {}));
+  form.append('fe_b64',              automlFEB64 || '');
+  form.append('pre_fe_cols_json',    JSON.stringify(automlPreFeCols || []));
 
   try {
     const res = await fetch(API + '/train', { method: 'POST', body: form });
