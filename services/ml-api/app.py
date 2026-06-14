@@ -1268,12 +1268,18 @@ class FeatureEngineeringTransformer(BaseEstimator, TransformerMixin):
                 continue
             try:
                 dt = pd.to_datetime(X_df[col], errors="coerce")
-                if dcfg.get("year"):         X_df[f"{col}_year"]        = dt.dt.year
-                if dcfg.get("month"):        X_df[f"{col}_month"]       = dt.dt.month
-                if dcfg.get("day"):          X_df[f"{col}_day"]         = dt.dt.day
-                if dcfg.get("dow"):          X_df[f"{col}_dow"]         = dt.dt.dayofweek
-                if dcfg.get("quarter"):      X_df[f"{col}_quarter"]     = dt.dt.quarter
-                if dcfg.get("is_weekend"):   X_df[f"{col}_is_weekend"]  = (dt.dt.dayofweek >= 5).astype("int8")
+                if dcfg.get("year"):
+                    X_df[f"{col}_year"] = dt.dt.year
+                if dcfg.get("month"):
+                    X_df[f"{col}_month"] = dt.dt.month
+                if dcfg.get("day"):
+                    X_df[f"{col}_day"] = dt.dt.day
+                if dcfg.get("dow"):
+                    X_df[f"{col}_dow"] = dt.dt.dayofweek
+                if dcfg.get("quarter"):
+                    X_df[f"{col}_quarter"] = dt.dt.quarter
+                if dcfg.get("is_weekend"):
+                    X_df[f"{col}_is_weekend"] = (dt.dt.dayofweek >= 5).astype("int8")
                 if dcfg.get("days_since_min") and col in self._date_mins_:
                     X_df[f"{col}_days_since_min"] = (dt - self._date_mins_[col]).dt.days
                 if dcfg.get("cyclical"):
@@ -1292,7 +1298,9 @@ class FeatureEngineeringTransformer(BaseEstimator, TransformerMixin):
 
         # 6. Derived features
         for d in cfg.get("derived", []):
-            col_a = d.get("col_a"); col_b = d.get("col_b"); op = d.get("op")
+            col_a = d.get("col_a")
+            col_b = d.get("col_b")
+            op = d.get("op")
             if not col_a or not col_b or col_a not in X_df.columns or col_b not in X_df.columns:
                 continue
             try:
