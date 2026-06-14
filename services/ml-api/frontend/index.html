@@ -4064,7 +4064,7 @@ async function getAIExplanation() {
   if (progBar) progBar.style.transition = 'width 0.4s ease';
   if (progEl) progEl.style.display = 'block';
   let _pct = 0;
-  const _labels = ['Sending context…', 'Model is thinking…', 'Generating explanation…', 'Almost done…'];
+  const _labels = ['Sending context…', 'Model is thinking…', 'Generating AI explanation…', 'Finalising AI explanation…'];
   const _progTimer = setInterval(() => {
     const step = _pct < 30 ? 8 : _pct < 60 ? 5 : _pct < 80 ? 2 : 0.5;
     _pct = Math.min(_pct + step, 85);
