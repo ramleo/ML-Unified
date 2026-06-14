@@ -4948,10 +4948,7 @@ function _renderAutoMLStep2() {
     if (timeEl) timeEl.textContent = est.timeLbl;
     if (cvEl)   cvEl.textContent   = `5-fold CV · ${est.lcFolds}-fold LC`;
     if (lcEl) {
-      if (est.lcSkip) {
-        lcEl.textContent = 'Skipped (> 20K rows)';
-        lcEl.style.color = 'var(--color-warning)';
-      } else if (est.lcFolds === 3) {
+      if (est.lcFolds === 3) {
         lcEl.textContent = '3-fold CV (reduced, > 5K rows)';
         lcEl.style.color = 'var(--color-warning)';
       } else {

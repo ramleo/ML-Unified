@@ -1395,32 +1395,28 @@ async def train_model(
                 automl_result["confusion_matrix"] = cm.tolist()
                 automl_result["class_names"] = [str(c) for c in le.classes_]
 
-                # Learning curve — adaptive CV folds, skip if dataset too large
+                # Learning curve — adaptive CV folds (3-fold for large datasets)
                 _lc_rows   = len(X)
                 _lc_folds  = 3 if _lc_rows > 5000 else 5
-                _lc_skip   = _lc_rows > 20000
                 automl_result["lc_cv_folds"] = _lc_folds
-                if _lc_skip:
-                    automl_result["lc_skip_reason"] = f"Dataset too large ({_lc_rows:,} rows > 20,000 threshold)"
-                else:
-                    try:
-                        p.update(83, "Computing learning curve…")
-                        lc_sizes, lc_train_sc, lc_val_sc = learning_curve(
-                            clone(pipeline), X_cv, y_cv,
-                            cv=StratifiedKFold(n_splits=_lc_folds, shuffle=True, random_state=42),
-                            train_sizes=[0.2, 0.4, 0.6, 0.8, 1.0],
-                            scoring=sel_metric, n_jobs=1,
-                        )
-                        automl_result["learning_curve"] = {
-                            "train_sizes":   [int(s) for s in lc_sizes],
-                            "train_scores":  [round(float(s.mean()), 4) for s in lc_train_sc],
-                            "val_scores":    [round(float(s.mean()), 4) for s in lc_val_sc],
-                            "metric_label":  sel_label,
-                            "cv_folds":      _lc_folds,
-                        }
-                    except Exception as _lc_err:
-                        print(f"Learning curve failed: {_lc_err}", flush=True)
-                        automl_result["lc_skip_reason"] = f"Could not compute: insufficient data or resources"
+                try:
+                    p.update(83, "Computing learning curve…")
+                    lc_sizes, lc_train_sc, lc_val_sc = learning_curve(
+                        clone(pipeline), X_cv, y_cv,
+                        cv=StratifiedKFold(n_splits=_lc_folds, shuffle=True, random_state=42),
+                        train_sizes=[0.2, 0.4, 0.6, 0.8, 1.0],
+                        scoring=sel_metric, n_jobs=1,
+                    )
+                    automl_result["learning_curve"] = {
+                        "train_sizes":   [int(s) for s in lc_sizes],
+                        "train_scores":  [round(float(s.mean()), 4) for s in lc_train_sc],
+                        "val_scores":    [round(float(s.mean()), 4) for s in lc_val_sc],
+                        "metric_label":  sel_label,
+                        "cv_folds":      _lc_folds,
+                    }
+                except Exception as _lc_err:
+                    print(f"Learning curve failed: {_lc_err}", flush=True)
+                    automl_result["lc_skip_reason"] = "Could not generate — likely OOM or timeout on current resources"
 
                 p.update(84, "Extracting feature importances…")
                 automl_result["feature_importance"] = _extract_feature_importances(
@@ -1570,32 +1566,28 @@ async def train_model(
                 automl_result["scatter_actual"]    = [round(float(v), 4) for v in y_test_arr[idxs]]
                 automl_result["scatter_predicted"] = [round(float(v), 4) for v in y_pred[idxs]]
 
-                # Learning curve — adaptive CV folds, skip if dataset too large
+                # Learning curve — adaptive CV folds (3-fold for large datasets)
                 _lc_rows_r  = len(X)
                 _lc_folds_r = 3 if _lc_rows_r > 5000 else 5
-                _lc_skip_r  = _lc_rows_r > 20000
                 automl_result["lc_cv_folds"] = _lc_folds_r
-                if _lc_skip_r:
-                    automl_result["lc_skip_reason"] = f"Dataset too large ({_lc_rows_r:,} rows > 20,000 threshold)"
-                else:
-                    try:
-                        p.update(83, "Computing learning curve…")
-                        lc_sizes, lc_train_sc, lc_val_sc = learning_curve(
-                            clone(pipeline), X, y_enc,
-                            cv=KFold(n_splits=_lc_folds_r, shuffle=True, random_state=42),
-                            train_sizes=[0.2, 0.4, 0.6, 0.8, 1.0],
-                            scoring="neg_mean_absolute_error", n_jobs=1,
-                        )
-                        automl_result["learning_curve"] = {
-                            "train_sizes":  [int(s) for s in lc_sizes],
-                            "train_scores": [round(-float(s.mean()), 4) for s in lc_train_sc],
-                            "val_scores":   [round(-float(s.mean()), 4) for s in lc_val_sc],
-                            "metric_label": "MAE",
-                            "cv_folds":     _lc_folds_r,
-                        }
-                    except Exception as _lc_err:
-                        print(f"Learning curve failed: {_lc_err}", flush=True)
-                        automl_result["lc_skip_reason"] = f"Could not compute: insufficient data or resources"
+                try:
+                    p.update(83, "Computing learning curve…")
+                    lc_sizes, lc_train_sc, lc_val_sc = learning_curve(
+                        clone(pipeline), X, y_enc,
+                        cv=KFold(n_splits=_lc_folds_r, shuffle=True, random_state=42),
+                        train_sizes=[0.2, 0.4, 0.6, 0.8, 1.0],
+                        scoring="neg_mean_absolute_error", n_jobs=1,
+                    )
+                    automl_result["learning_curve"] = {
+                        "train_sizes":  [int(s) for s in lc_sizes],
+                        "train_scores": [round(-float(s.mean()), 4) for s in lc_train_sc],
+                        "val_scores":   [round(-float(s.mean()), 4) for s in lc_val_sc],
+                        "metric_label": "MAE",
+                        "cv_folds":     _lc_folds_r,
+                    }
+                except Exception as _lc_err:
+                    print(f"Learning curve failed: {_lc_err}", flush=True)
+                    automl_result["lc_skip_reason"] = "Could not generate — likely OOM or timeout on current resources"
 
                 p.update(84, "Extracting feature importances…")
                 automl_result["feature_importance"] = _extract_feature_importances(
