@@ -4866,7 +4866,7 @@ async function _applyAutoMLPreprocessing() {
   }
 }
 
-let _automlFeatureEng = { numeric: {}, dates: {}, derived: [], poly: false };
+let _automlFeatureEng = { numeric: {}, dates: {}, derived: [], poly_cols: [] };
 
 function _renderAutoMLStep1c() {
   const a            = automlAnalysis;
@@ -5016,10 +5016,15 @@ function _renderAutoMLStep1c() {
     : `<div style="font-size:0.72rem;color:var(--text3)">Need ≥ 2 numeric columns.</div>`;
 
   // ── SECTION 4: Polynomial ───────────────────────────────────────────────
-  const polyChecked = !!_automlFeatureEng.poly;
-  const polyWarn    = numCols.length > 8
-    ? `<div style="font-size:0.68rem;color:var(--color-warning,#f87171);margin-top:0.3rem">
-         ⚠ ${numCols.length} numeric cols → ~${Math.round(numCols.length*(numCols.length-1)/2)} interaction terms</div>`
+  if (!Array.isArray(_automlFeatureEng.poly_cols)) _automlFeatureEng.poly_cols = [];
+  const polySelected = _automlFeatureEng.poly_cols;
+  const polyCount    = polySelected.length;
+  const polyTerms    = polyCount >= 2 ? Math.round(polyCount * (polyCount - 1) / 2) : 0;
+  const polyWarn     = polyCount > 8
+    ? `<div style="font-size:0.68rem;color:var(--color-warning,#f87171);margin-top:0.45rem">
+         ⚠ ${polyCount} cols selected → ${polyTerms} interaction terms — consider fewer columns</div>`
+    : polyCount >= 2
+    ? `<div style="font-size:0.68rem;color:var(--text3);margin-top:0.45rem">${polyTerms} interaction term${polyTerms===1?'':'s'} will be added</div>`
     : '';
 
   const sectionStyle = 'margin-bottom:1.1rem';
@@ -5055,22 +5060,35 @@ function _renderAutoMLStep1c() {
       </div>
 
       <div style="${sectionStyle}">
-        <div style="${sectionTitle}">Polynomial Interactions</div>
-        <div style="padding:0.6rem 0.85rem;border-radius:8px;border:1px solid var(--border2);background:var(--bg-card)">
-          <label style="display:flex;align-items:center;gap:0.55rem;cursor:pointer;font-size:0.82rem">
-            <input type="checkbox" ${polyChecked?'checked':''}
-                   onchange="_automlFeatureEng.poly = this.checked"
-                   style="width:15px;height:15px;accent-color:${_acc}">
-            <span style="font-weight:600;color:var(--text)">Polynomial features (degree 2)</span>
-            <span style="color:var(--text3);font-size:0.7rem">— interaction terms only</span>
-          </label>
-          ${polyWarn}
-        </div>
+        <div style="${sectionTitle}">Polynomial Interactions (degree 2)</div>
+        ${numCols.length < 2
+          ? `<div style="font-size:0.78rem;color:var(--text3)">Need ≥ 2 numeric columns.</div>`
+          : `<div style="font-size:0.72rem;color:var(--text3);margin-bottom:0.5rem">
+               Select columns to include — only pairwise interaction terms (e.g. Age × Fare) will be added.
+             </div>
+             <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.35rem">
+               <button onclick="_polySelectAll()" style="font-size:0.63rem;padding:0.15rem 0.45rem;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">All</button>
+               <button onclick="_polySelectNone()" style="font-size:0.63rem;padding:0.15rem 0.45rem;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">None</button>
+             </div>
+             <div style="display:flex;flex-wrap:wrap;gap:0.35rem 0.6rem">
+               ${numCols.map(c => {
+                 const on = polySelected.includes(c.name);
+                 return `<label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;
+                                      padding:0.25rem 0.55rem;border-radius:20px;border:1px solid var(--border2);
+                                      background:${on ? _acc : 'transparent'}">
+                   <input type="checkbox" ${on?'checked':''} style="display:none"
+                          onchange="_togglePolyCol('${c.name}',this.checked)">
+                   <span style="font-size:0.7rem;font-weight:600;color:${on?'#fff':'var(--text3)'}">${c.name}</span>
+                 </label>`;
+               }).join('')}
+             </div>
+             ${polyWarn}`
+        }
       </div>
 
       <div class="action-row">
         <button class="btn btn-clear" onclick="_renderAutoMLStep1b(_automlTargetCol)">← Back</button>
-        <button class="btn btn-clear" onclick="_automlFeatureEng={numeric:{},dates:{},derived:[],poly:false};_renderAutoMLStep1b(_automlTargetCol)">Skip →</button>
+        <button class="btn btn-clear" onclick="_automlFeatureEng={numeric:{},dates:{},derived:[],poly_cols:[]};_renderAutoMLStep1b(_automlTargetCol)">Skip →</button>
         <button class="btn btn-primary" onclick="_renderAutoMLStep1b(_automlTargetCol)">Apply & Preprocess →</button>
       </div>
     </div>`;
@@ -5126,6 +5144,30 @@ function _addDerivedFeature() {
   const numCols      = (a.columns || []).filter(c => c.is_numeric && c.name !== effectTarget);
   if (numCols.length < 2) return;
   _automlFeatureEng.derived.push({ op: 'ratio', col_a: numCols[0].name, col_b: numCols[1].name });
+  _renderAutoMLStep1c();
+}
+
+function _togglePolyCol(col, checked) {
+  if (!Array.isArray(_automlFeatureEng.poly_cols)) _automlFeatureEng.poly_cols = [];
+  if (checked) {
+    if (!_automlFeatureEng.poly_cols.includes(col)) _automlFeatureEng.poly_cols.push(col);
+  } else {
+    _automlFeatureEng.poly_cols = _automlFeatureEng.poly_cols.filter(c => c !== col);
+  }
+  _renderAutoMLStep1c();
+}
+
+function _polySelectAll() {
+  const a = automlAnalysis;
+  const effectTarget = _automlTargetCol || a.suggested_target;
+  _automlFeatureEng.poly_cols = (a.columns || [])
+    .filter(c => c.is_numeric && c.name !== effectTarget)
+    .map(c => c.name);
+  _renderAutoMLStep1c();
+}
+
+function _polySelectNone() {
+  _automlFeatureEng.poly_cols = [];
   _renderAutoMLStep1c();
 }
 

@@ -1195,17 +1195,16 @@ class FeatureEngineeringTransformer(BaseEstimator, TransformerMixin):
                 except Exception:
                     pass
 
-        if cfg.get("poly"):
-            num_cols = X_df.select_dtypes(include="number").columns.tolist()
-            if 1 < len(num_cols) <= 15:
-                try:
-                    from sklearn.preprocessing import PolynomialFeatures
-                    pf = PolynomialFeatures(degree=2, interaction_only=True, include_bias=False)
-                    pf.fit(X_df[num_cols].fillna(0))
-                    self._poly_transformer_ = pf
-                    self._poly_cols_        = num_cols
-                except Exception:
-                    pass
+        poly_cols = [c for c in cfg.get("poly_cols", []) if c in X_df.columns]
+        if len(poly_cols) >= 2:
+            try:
+                from sklearn.preprocessing import PolynomialFeatures
+                pf = PolynomialFeatures(degree=2, interaction_only=True, include_bias=False)
+                pf.fit(X_df[poly_cols].fillna(0))
+                self._poly_transformer_ = pf
+                self._poly_cols_        = poly_cols
+            except Exception:
+                pass
 
         return self
 
