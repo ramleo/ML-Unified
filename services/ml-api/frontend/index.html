@@ -3690,6 +3690,39 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
   const lcTitle    = `Learning Curve · ${viz.learning_curve?.metric_label || (isReg ? 'MAE' : 'F1')}`;
   const lcSubtitle = `Solid = train · dashed = validation · 5 sizes · ${lcFoldsUsed}-fold CV`;
   const lcSkipReason = viz.lc_skip_reason;
+
+  function _lcInterpret(lc, reg) {
+    if (!lc || !lc.val_scores || lc.val_scores.length < 2) return null;
+    const n     = lc.val_scores.length;
+    const vLast = lc.val_scores[n - 1];
+    const vPrev = lc.val_scores[n - 2];
+    const tLast = lc.train_scores[n - 1];
+    // Gap: how much worse is validation vs train (relative)
+    const gap       = reg ? (vLast - tLast) / (Math.abs(vLast) || 1)
+                          : (tLast - vLast) / (Math.abs(tLast) || 1);
+    const isOverfit = gap > 0.25;
+    // Still improving? val score moving toward better direction (>0.5% change)
+    const improving = reg ? (vLast < vPrev * 0.995) : (vLast > vPrev * 1.005);
+    let msg = '';
+    if (isOverfit) {
+      msg += 'The model is <strong>overfitting</strong> — it performs much better on training data than on unseen data. ';
+      if (improving) {
+        msg += 'Validation is still improving with more data — <strong>adding more training samples should help close this gap</strong> and improve generalisation.';
+      } else {
+        msg += 'Validation has plateaued — <strong>adding more data is unlikely to fix this</strong>. Consider using fewer features or simpler transforms.';
+      }
+    } else {
+      msg += 'Train and validation scores are close — the model <strong>generalises well</strong>. ';
+      if (improving) {
+        msg += 'Validation is still improving — <strong>more training data could push performance higher</strong>.';
+      } else {
+        msg += 'Validation has plateaued — <strong>adding more data will not significantly improve performance</strong>. The model has converged on available data.';
+      }
+    }
+    return msg;
+  }
+
+  const lcInterpret = !lcSkipReason ? _lcInterpret(viz.learning_curve, isReg) : null;
   const lcContent  = lcSkipReason
     ? `<div style="padding:1.1rem 0.75rem;border-radius:8px;border:1px dashed var(--border2);
                    text-align:center;color:var(--text3);font-size:0.75rem;margin-top:0.4rem">
@@ -3700,7 +3733,8 @@ function _renderExplanationDashboard(explanation, cv_results, feature_importance
     : `${_learningCurveSVG(viz.learning_curve, accent, isReg)}
        <div style="font-size:0.62rem;color:var(--text3);margin-top:0.4rem">
          5 training sizes · ${lcFoldsUsed}-fold CV · gap between lines = overfitting
-       </div>`;
+       </div>
+       ${lcInterpret ? `<div style="font-size:0.72rem;color:var(--text2);margin-top:0.6rem;line-height:1.6;padding:0.5rem 0.65rem;border-radius:6px;background:rgba(255,255,255,0.03);border:1px solid var(--border2)">${lcInterpret}</div>` : ''}`;
 
   const rightCol = `
     <div class="aml-exp-right">
@@ -5389,9 +5423,15 @@ function _renderAutoMLResultsPage(result) {
     const gpuInfo  = aml.gpu?.available
       ? (aml.gpu.name || 'Available')
       : 'CPU only';
+    const nOrig     = (aml.feature_importance || []).length;
+    const nDerived  = aml.n_input_cols != null ? (aml.n_input_cols - nOrig) : 0;
+    const featTip   = nDerived > 0
+      ? `${nOrig} original column${nOrig!==1?'s':''} + ${nDerived} auto-created by feature engineering (rank transforms, bins, interactions). At prediction time your inputs are automatically expanded to ${nFeat} before the model predicts.`
+      : `${nFeat} columns the model was trained on.`;
+    const featVal   = `${nFeat || '—'} <span title="${featTip}" style="cursor:help;font-size:0.65em;opacity:0.6;font-weight:400">ⓘ</span>`;
     const rows = [
       ['Rows',          (aml.n_rows || 0).toLocaleString()],
-      ['Features',      nFeat || '—'],
+      ['Features',      featVal],
       ['Task',          taskLbl],
       ['Split',         splitLbl],
       ['Validation',    `5-fold CV · ${aml.lc_cv_folds || 5}-fold LC`],
