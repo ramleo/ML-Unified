@@ -182,7 +182,17 @@ async def compute_shap(model_id: str, request: Request):
         try:
             p.update(10, "Preprocessing features…")
             preprocessor, model = _extract(_m["pipeline"])
-            X_prep = preprocessor.transform(_df)
+            _df_fe = _df.copy()
+            _fe = _m.get("fe")
+            if _fe is not None and _fe.fe_config:
+                try:
+                    _pre_fe = _schema.get("pre_fe_cols")
+                    if _pre_fe:
+                        _df_fe = _df_fe[[c for c in _pre_fe if c in _df_fe.columns]]
+                    _df_fe = _fe.transform(_df_fe)
+                except Exception as _fe_err:
+                    print(f"FE transform in SHAP failed (skipped): {_fe_err}", flush=True)
+            X_prep = preprocessor.transform(_df_fe)
             feat_names_out = _feature_names(preprocessor, X_prep.shape[1])
 
             pred_class = None
