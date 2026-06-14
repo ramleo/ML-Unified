@@ -1108,15 +1108,50 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
         return {"why_won": raw_text, "score_analysis": "", "key_drivers": "", "recommendations": []}
 
 
+def _apply_feature_engineering(df: pd.DataFrame, fe_config: dict) -> pd.DataFrame:
+    if not fe_config:
+        return df
+    import numpy as np
+    df = df.copy()
+    for col, transforms in fe_config.items():
+        if col.startswith('__') or col not in df.columns:
+            continue
+        if not isinstance(transforms, dict):
+            continue
+        if transforms.get('log1p'):
+            df[f'{col}_log'] = np.log1p(df[col].clip(lower=0))
+        if transforms.get('bin'):
+            try:
+                df[f'{col}_bin'] = pd.cut(df[col], bins=5, labels=False, duplicates='drop')
+            except Exception:
+                pass
+    if fe_config.get('__poly__'):
+        from sklearn.preprocessing import PolynomialFeatures
+        num_cols = df.select_dtypes(include='number').columns.tolist()
+        if 1 < len(num_cols) <= 15:
+            try:
+                pf   = PolynomialFeatures(degree=2, interaction_only=True, include_bias=False)
+                poly = pf.fit_transform(df[num_cols].fillna(0))
+                names = pf.get_feature_names_out(num_cols)
+                poly_df = pd.DataFrame(poly, columns=names, index=df.index)
+                # only keep interaction columns (contain ' ')
+                inter_cols = [c for c in names if ' ' in c]
+                df = pd.concat([df, poly_df[inter_cols]], axis=1)
+            except Exception:
+                pass
+    return df
+
+
 @app.post("/train")
 async def train_model(
-    file:       UploadFile = File(...),
-    model_name: str        = Form(...),
-    target_col: str        = Form(""),
-    task:       str        = Form(...),
-    algorithm:  str        = Form(...),
-    accent:     str        = Form(...),
-    n_clusters: int        = Form(3),
+    file:                UploadFile = File(...),
+    model_name:          str        = Form(...),
+    target_col:          str        = Form(""),
+    task:                str        = Form(...),
+    algorithm:           str        = Form(...),
+    accent:              str        = Form(...),
+    n_clusters:          int        = Form(3),
+    feature_engineering: str        = Form("{}"),
 ):
     content = await file.read()
     try:
@@ -1132,6 +1167,15 @@ async def train_model(
     model_id = slugify(model_name)
     if not model_id:
         raise HTTPException(400, "Invalid model name — use letters, numbers, or spaces")
+
+    # Apply feature engineering before splitting X/y
+    try:
+        import json as _json_fe
+        fe_config = _json_fe.loads(feature_engineering or "{}")
+        if fe_config:
+            df = _apply_feature_engineering(df, fe_config)
+    except Exception as _fe_err:
+        print(f"Feature engineering failed (skipped): {_fe_err}", flush=True)
 
     if task == "clustering":
         X = df.copy()

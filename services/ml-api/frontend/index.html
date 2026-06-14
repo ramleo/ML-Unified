@@ -4439,7 +4439,7 @@ function _renderAutoMLStep1b(preselectedTarget) {
             <div style="font-size:0.82rem;font-weight:600;color:${_acc};margin-bottom:0.6rem">Preprocess before training?</div>
             <div id="amlPrepYesNo" style="display:flex;flex-direction:column;gap:0.45rem">
               <button class="btn btn-primary" onclick="_showAutoMLPrepOptions()" style="font-size:0.82rem">Yes, preprocess</button>
-              <button class="btn btn-clear" onclick="_renderAutoMLStep2()" style="font-size:0.82rem">No, skip →</button>
+              <button class="btn btn-clear" onclick="_renderAutoMLStep1c()" style="font-size:0.82rem">No, skip →</button>
             </div>
           </div>
         </div>
@@ -4848,7 +4848,7 @@ async function _applyAutoMLPreprocessing() {
       <div style="font-size:0.85rem;font-weight:600;color:${acc};margin-bottom:0.75rem">Proceed to AutoML training?</div>
       <div class="action-row" style="margin-top:0">
         <button class="btn btn-clear" onclick="_renderAutoMLStep1b(_automlTargetCol)">← Revert</button>
-        <button class="btn btn-primary" onclick="_renderAutoMLStep2()">Yes, Configure AutoML →</button>
+        <button class="btn btn-primary" onclick="_renderAutoMLStep1c()">Yes, Feature Engineering →</button>
       </div>`;
   } catch(e) {
     timers.forEach(clearTimeout);
@@ -4863,6 +4863,89 @@ async function _applyAutoMLPreprocessing() {
     btn.disabled = false;
     btn.style.opacity = '1';
   }
+}
+
+let _automlFeatureEng = {};   // persists selections across back/forward
+
+function _renderAutoMLStep1c() {
+  const a             = automlAnalysis;
+  const effectTarget  = _automlTargetCol || a.suggested_target;
+  const _acc          = document.documentElement.style.getPropertyValue('--active-accent') || '#a78bfa';
+  const numCols       = (a.columns || []).filter(c => c.is_numeric && c.name !== effectTarget);
+
+  const colRows = numCols.map(c => {
+    const fe  = _automlFeatureEng[c.name] || {};
+    const log = fe.log1p ? 'selected' : '';
+    const bin = fe.bin   ? 'selected' : '';
+    return `
+      <div style="display:flex;align-items:center;gap:0.75rem;padding:0.55rem 0.65rem;
+                  border-radius:8px;border:1px solid var(--border2);background:var(--bg-card)">
+        <div style="flex:1;font-size:0.82rem;font-weight:600;color:var(--text)">${c.name}</div>
+        <div style="font-size:0.67rem;color:var(--text3)">${c.dtype || 'numeric'}</div>
+        <button class="aml-fe-chip ${log}" data-col="${c.name}" data-t="log1p"
+                onclick="_toggleFEChip(this)" style="font-size:0.68rem;padding:0.2rem 0.55rem;
+                border-radius:20px;border:1px solid var(--border2);cursor:pointer;
+                background:${log ? _acc : 'transparent'};
+                color:${log ? '#fff' : 'var(--text3)'}">log1p</button>
+        <button class="aml-fe-chip ${bin}" data-col="${c.name}" data-t="bin"
+                onclick="_toggleFEChip(this)" style="font-size:0.68rem;padding:0.2rem 0.55rem;
+                border-radius:20px;border:1px solid var(--border2);cursor:pointer;
+                background:${bin ? _acc : 'transparent'};
+                color:${bin ? '#fff' : 'var(--text3)'}">bin</button>
+      </div>`;
+  }).join('');
+
+  const polyChecked = _automlFeatureEng.__poly__ || false;
+  const polyWarn    = numCols.length > 8
+    ? `<div style="font-size:0.7rem;color:var(--color-warning);margin-top:0.35rem">
+         ⚠ ${numCols.length} numeric columns → ~${Math.round(numCols.length*(numCols.length+1)/2)} new features</div>`
+    : '';
+
+  document.getElementById('main').innerHTML = `
+    <div class="wizard">
+      ${_automlStepsHTML(2, false)}
+      <h2 style="font-size:1.3rem;font-weight:800;margin-bottom:0.3rem;color:var(--active-accent,#a78bfa)">Feature Engineering</h2>
+      <p style="font-size:0.82rem;color:var(--text2);margin-bottom:1.25rem">
+        Optionally add derived features before training. New columns are added alongside originals.
+      </p>
+
+      ${numCols.length === 0
+        ? `<div style="color:var(--text3);font-size:0.85rem;margin-bottom:1rem">No numeric feature columns available.</div>`
+        : `<div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;
+                       color:var(--active-accent,#a78bfa);margin-bottom:0.55rem">Per-Column Transforms</div>
+           <div style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:1.25rem">${colRows}</div>`
+      }
+
+      <div style="padding:0.7rem 0.9rem;border-radius:8px;border:1px solid var(--border2);
+                  background:var(--bg-card);margin-bottom:1.25rem">
+        <label style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;font-size:0.82rem">
+          <input type="checkbox" id="amlFePoly" ${polyChecked ? 'checked' : ''}
+                 onchange="_automlFeatureEng.__poly__ = this.checked"
+                 style="width:15px;height:15px;accent-color:var(--active-accent,#a78bfa)">
+          <span style="font-weight:600;color:var(--text)">Polynomial features (degree 2)</span>
+          <span style="color:var(--text3);font-size:0.72rem">— all numeric columns × interactions</span>
+        </label>
+        ${polyWarn}
+      </div>
+
+      <div class="action-row">
+        <button class="btn btn-clear" onclick="_renderAutoMLStep1b(_automlTargetCol)">← Back</button>
+        <button class="btn btn-clear" onclick="_automlFeatureEng={};_renderAutoMLStep2()">Skip →</button>
+        <button class="btn btn-primary" onclick="_renderAutoMLStep2()">Apply & Configure →</button>
+      </div>
+    </div>`;
+}
+
+function _toggleFEChip(el) {
+  const col  = el.dataset.col;
+  const type = el.dataset.t;
+  const acc  = document.documentElement.style.getPropertyValue('--active-accent') || '#a78bfa';
+  if (!_automlFeatureEng[col]) _automlFeatureEng[col] = {};
+  const on = !_automlFeatureEng[col][type];
+  _automlFeatureEng[col][type] = on;
+  el.style.background = on ? acc : 'transparent';
+  el.style.color      = on ? '#fff' : 'var(--text3)';
+  el.classList.toggle('selected', on);
 }
 
 function _renderAutoMLStep2() {
@@ -5137,12 +5220,13 @@ async function runAutoML() {
     </div>`;
 
   const form = new FormData();
-  form.append('file',       automlFile);
-  form.append('model_name', modelName);
-  form.append('target_col', targetCol);
-  form.append('task',       task);
-  form.append('algorithm',  'AutoML');
-  form.append('accent',     accent);
+  form.append('file',                automlFile);
+  form.append('model_name',          modelName);
+  form.append('target_col',          targetCol);
+  form.append('task',                task);
+  form.append('algorithm',           'AutoML');
+  form.append('accent',              accent);
+  form.append('feature_engineering', JSON.stringify(_automlFeatureEng || {}));
 
   try {
     const res = await fetch(API + '/train', { method: 'POST', body: form });
