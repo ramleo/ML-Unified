@@ -4314,7 +4314,7 @@ function _renderAutoMLStep1b(preselectedTarget) {
               </div>
               <div>
                 <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3)">Dataset</div>
-                <div style="font-size:0.88rem;font-weight:700;color:var(--text1)">${_automlDatasetName || 'Untitled'}</div>
+                <div style="font-size:0.88rem;font-weight:700;color:${_acc}">${_automlDatasetName || 'Untitled'}</div>
               </div>
             </div>
 
@@ -4330,7 +4330,7 @@ function _renderAutoMLStep1b(preselectedTarget) {
             </div>
             <div style="padding:0.55rem 0.65rem;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid var(--border);margin-bottom:1.1rem">
               <div style="font-size:0.58rem;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--text3);margin-bottom:0.15rem">Target Column</div>
-              <div style="font-size:0.88rem;font-weight:700;color:var(--active-accent,#818cf8)">${effectiveTarget || '—'}</div>
+              <div style="font-size:0.88rem;font-weight:700;color:${_acc}">${effectiveTarget || '—'}</div>
             </div>
 
             <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:0.45rem">Data Quality</div>
