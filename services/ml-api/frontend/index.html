@@ -436,7 +436,7 @@ body {
 .btn:active { transform: translateY(0); }
 .btn-primary  { background: var(--active-accent, var(--accent-from)); color: #fff; box-shadow: 0 4px 16px color-mix(in srgb, var(--active-accent, var(--accent-from)) 35%, transparent); }
 .btn-sample   { background: color-mix(in srgb, var(--active-accent, var(--accent)) 12%, transparent); border: 1px solid color-mix(in srgb, var(--active-accent, var(--accent)) 30%, transparent); color: var(--active-accent, var(--accent)); }
-.btn-clear    { background: var(--border); border: 1px solid var(--border2); color: var(--text2); }
+.btn-clear    { background: var(--border); border: 1px solid color-mix(in srgb, var(--active-accent, var(--accent-from)) 40%, transparent); color: var(--active-accent, var(--accent-from)); }
 
 /* ── Result panel ── */
 .result-wrap { margin-top: 0.75rem; }
@@ -4271,9 +4271,9 @@ function _renderAutoMLStep1b(preselectedTarget) {
 
   const issues = [];
   if (hasMissing)  issues.push(`<span style="color:${_acc}">${a.total_missing || '?'} missing value(s)</span>`);
-  if (hasCat)      issues.push(`<span style="color:${_acc}">${catCols.length} categorical column(s)</span>`);
-  if (hasOutliers) issues.push(`<span style="color:${_acc}">potential outliers detected</span>`);
-  if (hasSkewness) issues.push(`<span style="color:${_acc}">skewed numeric column(s)</span>`);
+  if (hasCat)      issues.push(`<span style="color:var(--text1)">${catCols.length} categorical column(s)</span>`);
+  if (hasOutliers) issues.push(`<span style="color:var(--text1)">potential outliers detected</span>`);
+  if (hasSkewness) issues.push(`<span style="color:var(--text1)">skewed numeric column(s)</span>`);
 
   const qualityHTML = issues.length
     ? `<div style="display:flex;flex-wrap:wrap;gap:0.5rem;font-size:0.78rem;margin-top:0.5rem">${issues.map(i => `<span style="padding:0.2rem 0.55rem;border-radius:4px;background:var(--bg-input);border:1px solid var(--border2)">${i}</span>`).join('')}</div>`
@@ -4878,7 +4878,7 @@ function _renderAutoMLResultsPage(result) {
     ];
     return `<div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border2)">
       <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;
-                  color:${accent};font-weight:700;margin-bottom:0.65rem">Training Info</div>
+                  color:${result.accent};font-weight:700;margin-bottom:0.65rem">Training Info</div>
       <div style="display:flex;flex-direction:column;gap:0.5rem">
         ${rows.map(([lbl, val]) =>
           `<div style="display:flex;justify-content:space-between;align-items:center;font-size:0.78rem">
