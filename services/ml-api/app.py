@@ -1417,7 +1417,8 @@ async def train_model(
         # FE was applied during /automl/preprocess — deserialize the pre-fit
         # transformer so it can be used for prediction.  The CSV (automlFile)
         # is already FE'd, so we must NOT re-apply it here.
-        _fe_transformer = joblib.load(io.BytesIO(base64.b64decode(fe_b64)))
+        import base64 as _b64_train  # noqa: PLC0415
+        _fe_transformer = joblib.load(io.BytesIO(_b64_train.b64decode(fe_b64)))
         _pre_fe_cols    = _pre_fe_cols_from_prep or list(X.columns)
     else:
         # Legacy path: no preprocessing was done, or preprocessing ran without
