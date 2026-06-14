@@ -1070,6 +1070,8 @@ body {
 .aml-results-page * { color: var(--active-accent, var(--accent-from)); }
 .wizard .btn, .aml-results-page .btn { color: #fff; }
 .wizard .btn *, .aml-results-page .btn * { color: #fff; }
+.aml-exp-panel-body, .aml-exp-panel-body * { color: var(--text1); }
+.aml-exp-recs li, .aml-exp-recs li * { color: var(--text1); }
 
 /* ── Task type toggle ── */
 .task-toggle { display: flex; gap: 0.5rem; }
@@ -4109,6 +4111,16 @@ function _renderAutoMLStep1() {
         <div class="upload-zone-sub">CSV files only</div>
       </div>
       <div id="automlFileInfo" style="display:none;padding:0.7rem 1rem;background:var(--bg-input);border:1px solid var(--border2);border-radius:8px;font-size:0.82rem;color:var(--text2);margin-bottom:1.5rem"></div>
+      <div style="margin-bottom:1.25rem">
+        <label class="wizard-label">Accent Colour</label>
+        <div style="display:flex;gap:0.45rem;flex-wrap:wrap;margin-top:0.35rem">
+          ${ACCENT_PALETTE_DEFAULT.map((c, i) =>
+            `<div class="accent-swatch${i === 0 ? ' selected' : ''}" data-color="${c}"
+                  style="background:${c}" onclick="selectAccent(this)"></div>`
+          ).join('')}
+        </div>
+        <input type="hidden" id="amlAccent" value="${ACCENT_PALETTE_DEFAULT[0]}">
+      </div>
       <div class="action-row">
         <button class="btn btn-clear" onclick="cancelWizard()">Cancel</button>
         <button class="btn btn-primary" id="automlAnalyzeBtn" onclick="_analyzeAutoMLCSV()" disabled style="opacity:0.4">Next →</button>
