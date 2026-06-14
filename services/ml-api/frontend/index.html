@@ -12,6 +12,7 @@
 <style>
 /* ── Theme variables ── */
 :root {
+  color-scheme: dark;
   /* Dark (default) */
   --bg:          #0a0f1e;
   --bg-card:     #111827;
@@ -43,6 +44,7 @@
 
 /* ── Light theme ── */
 [data-theme="light"] {
+  color-scheme: light;
   --bg:          #dce4f0;
   --bg-card:     #eef2f8;
   --bg-glass:    rgba(238,242,248,0.82);
@@ -72,6 +74,7 @@
 
 /* ── Midnight theme ── */
 [data-theme="midnight"] {
+  color-scheme: dark;
   --bg:          #000000;
   --bg-card:     #0d0d0d;
   --bg-glass:    rgba(13,13,13,0.75);
@@ -101,6 +104,7 @@
 
 /* ── Ocean theme ── */
 [data-theme="ocean"] {
+  color-scheme: dark;
   --bg:          #020c1b;
   --bg-card:     #0a1628;
   --bg-glass:    rgba(10,22,40,0.72);
@@ -130,6 +134,7 @@
 
 /* ── Sunset theme ── */
 [data-theme="sunset"] {
+  color-scheme: dark;
   --bg:          #180c04;
   --bg-card:     #211208;
   --bg-glass:    rgba(33,18,8,0.75);
@@ -159,6 +164,7 @@
 
 /* ── Forest theme ── */
 [data-theme="forest"] {
+  color-scheme: dark;
   --bg:          #020f05;
   --bg-card:     #081a0c;
   --bg-glass:    rgba(8,26,12,0.72);
@@ -4075,14 +4081,18 @@ async function getAIExplanation() {
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
     const isAI = data.source === 'user_key';
-    const expEl = document.getElementById('amlExplanation');
-    if (expEl && _currentAutoMLData) {
-      const { cv_results, feature_importance, winner, selection_metric, winner_metrics,
-              confusion_matrix, class_names, scatter_actual, scatter_predicted, learning_curve } = _currentAutoMLData;
-      const isReg = selection_metric === 'MAE';
-      const accent = document.documentElement.style.getPropertyValue('--active-accent') || '#818cf8';
-      expEl.innerHTML = _renderExplanationDashboard(data.explanation, cv_results, feature_importance, accent, winner, false, isReg, selection_metric, winner_metrics, {confusion_matrix, class_names, scatter_actual, scatter_predicted, learning_curve});
-      _animateAutoMLBars();
+    try {
+      const expEl = document.getElementById('amlExplanation');
+      if (expEl && _currentAutoMLData) {
+        const { cv_results, feature_importance, winner, selection_metric, winner_metrics,
+                confusion_matrix, class_names, scatter_actual, scatter_predicted, learning_curve } = _currentAutoMLData;
+        const isReg = selection_metric === 'MAE';
+        const accent = document.documentElement.style.getPropertyValue('--active-accent') || '#818cf8';
+        expEl.innerHTML = _renderExplanationDashboard(data.explanation, cv_results, feature_importance, accent, winner, false, isReg, selection_metric, winner_metrics, {confusion_matrix, class_names, scatter_actual, scatter_predicted, learning_curve});
+        _animateAutoMLBars();
+      }
+    } catch(renderErr) {
+      console.error('Explanation render error:', renderErr);
     }
     const badge = document.querySelector('.aml-source-badge');
     if (badge && isAI) { badge.textContent = 'AI'; badge.classList.add('aml-ai'); }
@@ -4090,13 +4100,7 @@ async function getAIExplanation() {
     if (progBar) progBar.style.width = '100%';
     if (progPct) progPct.textContent = '100%';
     if (progLbl) progLbl.textContent = isAI ? 'Done!' : 'Completed';
-    setTimeout(() => {
-      if (progEl) progEl.style.display = 'none';
-      if (!isAI && errEl) {
-        errEl.textContent = 'AI call failed — check your API key. Showing auto-generated summary.';
-        errEl.style.display = 'block';
-      }
-    }, 1200);
+    setTimeout(() => { if (progEl) progEl.style.display = 'none'; }, 1200);
     if (btn) { btn.disabled = false; btn.textContent = isAI ? 'Regenerate' : 'Try Again'; }
   } catch(e) {
     clearInterval(_progTimer);
@@ -4106,7 +4110,7 @@ async function getAIExplanation() {
     if (progLbl) progLbl.textContent = 'Request failed';
     setTimeout(() => { if (progEl) progEl.style.display = 'none'; }, 2000);
     if (btn) { btn.disabled = false; btn.textContent = 'Try Again'; }
-    if (errEl) { errEl.textContent = 'Request failed — check your key and try again.'; errEl.style.display = 'block'; }
+    if (errEl) { errEl.textContent = 'Request failed — check your API key and try again.'; errEl.style.display = 'block'; }
   }
 }
 
