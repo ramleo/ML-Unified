@@ -306,6 +306,24 @@ body {
   padding: 1.25rem 0.75rem;
   display: flex; flex-direction: column; gap: 0.55rem;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 35%, transparent) transparent;
+}
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 4px;
+}
+.main {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 25%, transparent) transparent;
+}
+.main::-webkit-scrollbar { width: 4px; }
+.main::-webkit-scrollbar-track { background: transparent; }
+.main::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  border-radius: 4px;
 }
 .sidebar-label {
   font-size: 0.6rem; font-weight: 600; text-transform: uppercase;
@@ -1089,9 +1107,23 @@ body {
 .accent-swatch {
   width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
   border: 2px solid transparent; transition: transform 0.1s, border-color 0.1s; flex-shrink: 0;
+  position: relative;
 }
 .accent-swatch:hover  { transform: scale(1.15); }
 .accent-swatch.selected { border-color: var(--text); transform: scale(1.1); }
+.accent-swatch[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%; transform: translateX(-50%);
+  background: var(--bg-card); color: var(--text);
+  font-size: 0.62rem; font-weight: 500; white-space: nowrap;
+  padding: 0.2rem 0.5rem; border-radius: 4px;
+  border: 1px solid var(--border2);
+  pointer-events: none; opacity: 0;
+  transition: opacity 0.15s; z-index: 200;
+}
+.accent-swatch[data-tip]:hover::after { opacity: 1; }
 
 /* ── Training success ── */
 .train-result { text-align: center; padding: 2rem 1rem; }
@@ -1801,6 +1833,19 @@ const ACCENT_PALETTE_DEFAULT = [
   "#818cf8","#38bdf8","#34d399","#fbbf24",
   "#f87171","#fb923c","#a78bfa","#4ade80",
 ];
+const ACCENT_NAMES = {
+  "#818cf8": "Indigo",
+  "#38bdf8": "Sky Blue",
+  "#34d399": "Emerald",
+  "#fbbf24": "Amber",
+  "#f87171": "Rose",
+  "#fb923c": "Orange",
+  "#a78bfa": "Violet",
+  "#4ade80": "Green",
+};
+function _swatchTip(c) {
+  return (ACCENT_NAMES[c.toLowerCase()] || '') + ' · ' + c;
+}
 
 // ── Theme system ──────────────────────────────────────────────
 const THEMES = {
@@ -3343,7 +3388,7 @@ function renderWizardStep2() {
       <div class="wizard-section">
         <label class="wizard-label">Accent Color</label>
         <div class="accent-palette" id="accentPalette">
-          ${palette.map((c, i) => '<div class="accent-swatch' + (i === 0 ? ' selected' : '') + '" style="background:' + c + '" data-color="' + c + '" onclick="selectAccent(this)"></div>').join('')}
+          ${palette.map((c, i) => '<div class="accent-swatch' + (i === 0 ? ' selected' : '') + '" style="background:' + c + '" data-color="' + c + '" data-tip="' + _swatchTip(c) + '" onclick="selectAccent(this)"></div>').join('')}
         </div>
         <input type="hidden" id="wAccent" value="${palette[0]}">
       </div>
@@ -4116,7 +4161,7 @@ function _renderAutoMLStep1() {
         <div style="display:flex;gap:0.45rem;flex-wrap:wrap;margin-top:0.35rem">
           ${ACCENT_PALETTE_DEFAULT.map((c, i) =>
             `<div class="accent-swatch${i === 0 ? ' selected' : ''}" data-color="${c}"
-                  style="background:${c}" onclick="selectAccent(this)"></div>`
+                  style="background:${c}" data-tip="${_swatchTip(c)}" onclick="selectAccent(this)"></div>`
           ).join('')}
         </div>
         <input type="hidden" id="amlAccent" value="${ACCENT_PALETTE_DEFAULT[0]}">
@@ -4216,7 +4261,7 @@ function _renderAutoMLStep0() {
           <div style="display:flex;gap:0.45rem;flex-wrap:wrap;margin-top:0.35rem">
             ${palette.map((c, i) =>
               `<div class="accent-swatch${i === 0 ? ' selected' : ''}" data-color="${c}"
-                    style="background:${c}" onclick="selectAccent(this)"></div>`
+                    style="background:${c}" data-tip="${_swatchTip(c)}" onclick="selectAccent(this)"></div>`
             ).join('')}
           </div>
           <input type="hidden" id="amlAccent" value="${palette[0]}">
