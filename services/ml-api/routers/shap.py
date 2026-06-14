@@ -32,7 +32,6 @@ def _prep_df(data: dict, schema: dict) -> pd.DataFrame:
         df = df.drop(columns=[date_field], errors="ignore")
 
     df = df.apply(pd.to_numeric, errors='ignore')
-    df = df.apply(pd.to_numeric, errors='ignore')
     return df
 
 
