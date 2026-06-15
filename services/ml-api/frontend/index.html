@@ -338,8 +338,8 @@ body {
 }
 .sidebar-label:first-child { margin-top: 0; }
 .model-btn {
-  display: flex; align-items: center; gap: 0.75rem;
-  padding: 1.4rem 0.75rem 1.4rem 1rem; border-radius: 14px;
+  display: flex; align-items: center; gap: 0.65rem;
+  padding: 0.65rem 2.2rem 0.65rem 0.85rem; border-radius: 11px;
   cursor: pointer; border: 1px solid transparent; background: transparent;
   color: var(--text2); text-align: left; width: 100%;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -352,7 +352,7 @@ body {
   -webkit-backdrop-filter: blur(8px);
   color: var(--text);
   border-color: var(--border2);
-  padding-left: 1.25rem;
+  padding-left: 1rem;
   box-shadow: 0 2px 12px rgba(0,0,0,0.15);
 }
 .model-btn.active::before {
@@ -377,15 +377,14 @@ body {
 }
 .model-btn-wrap { position: relative; }
 .model-delete-btn {
-  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-  width: 26px; height: 26px; border-radius: 6px;
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  width: 22px; height: 22px; border-radius: 5px;
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer; opacity: 0; transition: opacity 0.15s, background 0.15s, color 0.15s;
-  color: var(--text3); border: none; background: transparent;
-  pointer-events: none;
+  cursor: pointer; opacity: 0.28; transition: opacity 0.15s, background 0.15s, color 0.15s;
+  color: var(--text3); border: none; background: transparent; z-index: 2;
 }
-.model-btn-wrap:hover .model-delete-btn { opacity: 1; pointer-events: auto; }
-.model-delete-btn:hover { background: rgba(239,68,68,0.12); color: #f87171; }
+.model-btn-wrap:hover .model-delete-btn { opacity: 1; }
+.model-delete-btn:hover { background: rgba(239,68,68,0.15); color: #f87171; }
 .sample-toggle {
   display: flex; align-items: center; gap: 0.5rem; width: 100%;
   background: transparent; border: none; cursor: pointer;
