@@ -196,9 +196,7 @@ async def compute_shap(model_id: str, request: Request):
                         _df_fe = _df_fe[[c for c in _pre_fe if c in _df_fe.columns]]
                     _df_fe = _fe.transform(_df_fe)
                 except Exception as _fe_err:
-                    import traceback as _tb
-                    p.finish(error=f"FE transform failed: {_fe_err} | {_tb.format_exc()}")
-                    return
+                    print(f"FE transform in SHAP failed (skipped): {_fe_err}", flush=True)
             X_prep = preprocessor.transform(_df_fe)
             feat_names_out = _feature_names(preprocessor, X_prep.shape[1])
 
