@@ -5194,7 +5194,21 @@ function _renderAutoMLStep1c(preserveScroll) {
         <div style="${sectionTitle}">Numeric Transforms</div>
         ${numCols.length === 0
           ? `<div style="font-size:0.78rem;color:var(--text3)">No numeric feature columns.</div>`
-          : numRows}
+          : (() => {
+              const _totalDerived = numCols.reduce((acc, c) => {
+                const fe = _automlFeatureEng.numeric[c.name] || {};
+                return acc
+                  + ['log1p','sqrt','yeo_johnson','rank','outlier_flag','missing_flag'].filter(k => fe[k]).length
+                  + (fe.bin && fe.bin !== 'none' ? 1 : 0);
+              }, 0);
+              const _totalSuffix = _totalDerived > 0
+                ? `<div style="font-size:0.68rem;color:var(--text3);margin-top:0.4rem;opacity:0.75">
+                     Total: <strong style="color:var(--active-accent,var(--accent-from))">${_totalDerived}</strong> derived column${_totalDerived===1?'':'s'} will be added
+                   </div>`
+                : '';
+              return numRows + _totalSuffix;
+            })()
+        }
       </div>
 
       <div style="${sectionStyle}">
@@ -5245,7 +5259,7 @@ function _renderAutoMLStep1c(preserveScroll) {
         <button class="btn btn-primary" onclick="_renderAutoMLStep1b(_automlTargetCol)">Apply & Preprocess →</button>
       </div>
     </div>`;
-  if (preserveScroll) requestAnimationFrame(() => { document.getElementById('main').scrollTop = _feScr; });
+  if (preserveScroll) requestAnimationFrame(() => requestAnimationFrame(() => { document.getElementById('main').scrollTop = _feScr; }));
 }
 
 function _toggleFEChipNum(el) {
