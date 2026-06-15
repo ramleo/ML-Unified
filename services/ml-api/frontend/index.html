@@ -2150,8 +2150,9 @@ function renderSidebar() {
   const showVision = APP_MODE !== 'ml'     && APP_MODE !== 'eda';
   const showEDA    = APP_MODE === 'eda';
 
-  const customModels  = allModels.filter(m => !m.builtin);
-  const builtinModels = allModels.filter(m => m.builtin);
+  const _BUILTIN_IDS  = new Set(['titanic', 'iris', 'diabetes', 'insurance']);
+  const customModels  = allModels.filter(m => !m.builtin && !_BUILTIN_IDS.has(m.id));
+  const builtinModels = allModels.filter(m =>  m.builtin ||  _BUILTIN_IDS.has(m.id));
   const samplesOpen   = customModels.length === 0;
 
   function _modelBtnHTML(m) {
