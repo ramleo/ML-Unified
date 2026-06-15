@@ -339,7 +339,7 @@ body {
 .sidebar-label:first-child { margin-top: 0; }
 .model-btn {
   display: flex; align-items: center; gap: 0.65rem;
-  padding: 0.65rem 2.2rem 0.65rem 0.85rem; border-radius: 11px;
+  padding: 0.65rem 0.75rem 0.65rem 0.85rem; border-radius: 11px;
   cursor: pointer; border: 1px solid transparent; background: transparent;
   color: var(--text2); text-align: left; width: 100%;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
@@ -376,6 +376,7 @@ body {
   background: var(--border2); color: var(--text2); flex-shrink: 0;
 }
 .model-btn-wrap { position: relative; }
+.model-btn-wrap .model-btn { padding-right: 2.2rem; }
 .model-delete-btn {
   position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
   width: 22px; height: 22px; border-radius: 5px;
