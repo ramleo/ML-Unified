@@ -322,9 +322,10 @@ async def predict(model_id: str, request: Request):
         try:
             pre_fe = schema.get("pre_fe_cols")
             if pre_fe:
+                _pfs = schema.get("pre_fe_sample", {})
                 for _c in pre_fe:
                     if _c not in df.columns:
-                        df[_c] = float("nan")
+                        df[_c] = _pfs.get(_c, float("nan"))
                 df = df[[c for c in pre_fe if c in df.columns]]
             df = fe.transform(df)
         except Exception as _fe_pred_err:
@@ -635,6 +636,15 @@ async def automl_preprocess(request: Request):
     # 7. Feature engineering — applied BEFORE feature selection so that selection
     #    can score and prune FE-derived columns (e.g. polynomial interaction terms).
     pre_fe_cols   = list(df_feat.columns)
+    # Sample values for every pre-FE column — stored so /predict can fill
+    # columns that feature-selection later drops with real defaults (not NaN).
+    _pre_fe_sample_out: dict = {}
+    for _pfc in pre_fe_cols:
+        if pd.api.types.is_numeric_dtype(df_feat[_pfc]):
+            _pre_fe_sample_out[_pfc] = round(float(df_feat[_pfc].median()), 4)
+        else:
+            _m = df_feat[_pfc].mode()
+            _pre_fe_sample_out[_pfc] = str(_m[0]) if not _m.empty else ""
     fe_cols_added = 0
     fe_b64_out    = ""
     _fe_tfm_prep  = FeatureEngineeringTransformer(fe_config_prep)
@@ -783,6 +793,7 @@ async def automl_preprocess(request: Request):
         "fe_cols_added":         fe_cols_added,
         "fe_b64":                fe_b64_out,
         "pre_fe_cols":           pre_fe_cols,
+        "pre_fe_sample":         _pre_fe_sample_out,
         # analysis fields (same structure as /analyze)
         "columns":               columns_out,
         "suggested_target":      suggested_target,
@@ -1375,6 +1386,7 @@ async def train_model(
     feature_engineering: str        = Form("{}"),
     fe_b64:              str        = Form(""),
     pre_fe_cols_json:    str        = Form("[]"),
+    pre_fe_sample_json:  str        = Form("{}"),
 ):
     content = await file.read()
     try:
@@ -1402,6 +1414,11 @@ async def train_model(
         _pre_fe_cols_from_prep = _json_fe.loads(pre_fe_cols_json or "[]")
     except Exception:
         _pre_fe_cols_from_prep = []
+
+    try:
+        _pre_fe_sample: dict = _json_fe.loads(pre_fe_sample_json or "{}")
+    except Exception:
+        _pre_fe_sample = {}
 
     if task == "clustering":
         X = df.copy()
@@ -1432,6 +1449,12 @@ async def train_model(
         # Legacy path: no preprocessing was done, or preprocessing ran without
         # FE config.  Apply FE directly to the raw training CSV.
         _pre_fe_cols    = list(X.columns)
+        for _pfc in _pre_fe_cols:
+            if pd.api.types.is_numeric_dtype(X[_pfc]):
+                _pre_fe_sample[_pfc] = round(float(X[_pfc].median()), 4)
+            else:
+                _m = X[_pfc].mode()
+                _pre_fe_sample[_pfc] = str(_m[0]) if not _m.empty else ""
         _fe_transformer = FeatureEngineeringTransformer(_fe_config)
         if _fe_config:
             try:
@@ -1465,8 +1488,9 @@ async def train_model(
     _model_id  = model_id
     _model_name = model_name
     _target_col = target_col
-    _fe_tfm       = _fe_transformer
-    _pre_fe_cols_ = _pre_fe_cols
+    _fe_tfm        = _fe_transformer
+    _pre_fe_cols_  = _pre_fe_cols
+    _pre_fe_sample_= _pre_fe_sample
     _n_clusters = n_clusters
     _y          = y
 
@@ -1949,9 +1973,10 @@ async def train_model(
             "metricLabel": metric_label,
             "id_cols":      [],
             "ensure_cols":  [],
-            "pre_fe_cols":  _pre_fe_cols_,
-            "fields":       fields,
-            "sample":      sample,
+            "pre_fe_cols":   _pre_fe_cols_,
+            "pre_fe_sample": _pre_fe_sample_,
+            "fields":        fields,
+            "sample":        sample,
             "output":      output_meta,
         }
 

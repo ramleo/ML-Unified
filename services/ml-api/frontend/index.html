@@ -4246,6 +4246,7 @@ function _startFreshAutoML() {
   _automlOrigFile      = null;
   automlFEB64          = '';
   automlPreFeCols      = [];
+  automlPreFeSample    = {};
   _renderAutoMLStep1();
   document.getElementById('main').scrollTop = 0;
 }
@@ -4704,8 +4705,9 @@ function _renderAutoMLStep1b(preselectedTarget) {
 function _amlRevertPreprocessing() {
   if (_automlOrigAnalysis) automlAnalysis = _automlOrigAnalysis;
   if (_automlOrigFile)     automlFile     = _automlOrigFile;
-  automlFEB64     = '';
-  automlPreFeCols = [];
+  automlFEB64       = '';
+  automlPreFeCols   = [];
+  automlPreFeSample = {};
   _renderAutoMLStep1b(_automlTargetCol);
 }
 
@@ -4916,8 +4918,9 @@ async function _applyAutoMLPreprocessing() {
     if (!_automlOrigFile)     _automlOrigFile     = automlFile;
 
     // Save FE transformer (serialized) and pre-FE column list for training
-    automlFEB64     = result.fe_b64     || '';
-    automlPreFeCols = result.pre_fe_cols || [];
+    automlFEB64       = result.fe_b64        || '';
+    automlPreFeCols   = result.pre_fe_cols   || [];
+    automlPreFeSample = result.pre_fe_sample || {};
 
     // Update global state
     const csvBytes = atob(result.csv_b64);
@@ -5003,6 +5006,7 @@ let _automlOrigAnalysis  = null;
 let _automlOrigFile      = null;
 let automlFEB64          = '';
 let automlPreFeCols      = [];
+let automlPreFeSample    = {};
 
 function _renderAutoMLStep1c(preserveScroll) {
   const a            = automlAnalysis;
@@ -5607,7 +5611,8 @@ async function runAutoML() {
   form.append('accent',              accent);
   form.append('feature_engineering', JSON.stringify(_automlFeatureEng || {}));
   form.append('fe_b64',              automlFEB64 || '');
-  form.append('pre_fe_cols_json',    JSON.stringify(automlPreFeCols || []));
+  form.append('pre_fe_cols_json',    JSON.stringify(automlPreFeCols   || []));
+  form.append('pre_fe_sample_json',  JSON.stringify(automlPreFeSample || {}));
 
   try {
     const res = await fetch(API + '/train', { method: 'POST', body: form });

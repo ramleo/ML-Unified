@@ -189,9 +189,10 @@ async def compute_shap(model_id: str, request: Request):
                 try:
                     _pre_fe = _schema.get("pre_fe_cols")
                     if _pre_fe:
+                        _pfs = _schema.get("pre_fe_sample", {})
                         for _c in _pre_fe:
                             if _c not in _df_fe.columns:
-                                _df_fe[_c] = float("nan")
+                                _df_fe[_c] = _pfs.get(_c, float("nan"))
                         _df_fe = _df_fe[[c for c in _pre_fe if c in _df_fe.columns]]
                     _df_fe = _fe.transform(_df_fe)
                 except Exception as _fe_err:
