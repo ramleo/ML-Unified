@@ -1347,14 +1347,16 @@ class FeatureEngineeringTransformer(BaseEstimator, TransformerMixin):
         # 7. Polynomial interactions
         if self._poly_transformer_ is not None:
             try:
+                from itertools import combinations as _comb
                 avail = [c for c in self._poly_cols_ if c in X_df.columns]
                 if len(avail) == len(self._poly_cols_):
-                    poly_arr  = X_df[avail].fillna(0).to_numpy()
-                    poly_out  = self._poly_transformer_.transform(poly_arr)
-                    names     = list(self._poly_transformer_.get_feature_names_out())
-                    inter     = [c for c in names if " " in c]
-                    poly_df   = pd.DataFrame(poly_out, columns=names, index=X_df.index)
-                    X_df      = pd.concat([X_df, poly_df[inter]], axis=1)
+                    poly_arr    = X_df[avail].fillna(0).to_numpy()
+                    poly_out    = self._poly_transformer_.transform(poly_arr)
+                    inter_names = [f"{a} {b}" for a, b in _comb(avail, 2)]
+                    n_inter     = len(inter_names)
+                    inter_vals  = poly_out[:, -n_inter:]
+                    inter_df    = pd.DataFrame(inter_vals, columns=inter_names, index=X_df.index)
+                    X_df        = pd.concat([X_df, inter_df], axis=1)
             except Exception as _poly_exc:
                 print(f"Polynomial FE transform failed: {_poly_exc}", flush=True)
 
