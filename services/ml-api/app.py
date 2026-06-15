@@ -260,12 +260,15 @@ def _load():
         le       = joblib.load(le_path) if os.path.exists(le_path) else None
         _fe_pkl  = os.path.join(MODEL_DIR, f"{mid}_fe.pkl")
         _fe_loaded = joblib.load(_fe_pkl) if os.path.exists(_fe_pkl) else FeatureEngineeringTransformer({})
+        _act_pkl = os.path.join(MODEL_DIR, f"{mid}_actuals.json")
+        _actuals_loaded = json.load(open(_act_pkl)) if os.path.exists(_act_pkl) else None
         MODELS[mid] = {
             "pipeline": pipeline,
             "le":       le,
             "classes":  le.classes_.tolist() if le is not None else None,
             "schema":   schema,
             "fe":       _fe_loaded,
+            "actuals":  _actuals_loaded,
         }
 
 @app.get("/")
@@ -398,12 +401,18 @@ def delete_model(model_id: str):
 def get_actuals(model_id: str):
     if model_id not in MODELS:
         raise HTTPException(404, "Model not found")
+    # Serve from in-memory cache first (populated right after training)
+    _mem = MODELS[model_id].get("actuals")
+    if _mem:
+        return _mem
+    # Fall back to file (for models loaded on startup)
     _path = os.path.join(MODEL_DIR, f"{model_id}_actuals.json")
-    print(f"ACTUALS GET: {model_id} → {_path} exists={os.path.exists(_path)}", flush=True)
     if not os.path.exists(_path):
-        raise HTTPException(404, "No actuals data for this model")
+        raise HTTPException(404, "No actuals data — retrain this model to generate it")
     with open(_path) as _f:
-        return json.load(_f)
+        data = json.load(_f)
+    MODELS[model_id]["actuals"] = data  # cache for next call
+    return data
 
 
 @app.post("/predict/{model_id}")
@@ -2141,6 +2150,7 @@ async def train_model(
             "classes":  le.classes_.tolist() if le is not None else None,
             "schema":   schema,
             "fe":       _fe_tfm,
+            "actuals":  _actuals_data,
         }
 
         resp = {
