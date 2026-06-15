@@ -1180,6 +1180,105 @@ def _extract_feature_importances(pipeline, num_cols: list, cat_cols: list) -> li
     ][:10]
 
 
+def _optuna_tune(
+    algorithm: str, task: str, X_cv, y_cv, transformers: list,
+    cv_split, n_trials: int, is_imbal: bool, on_trial,
+) -> tuple[dict, float]:
+    import optuna  # noqa: PLC0415
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    from xgboost import XGBClassifier, XGBRegressor          # noqa: PLC0415
+    from lightgbm import LGBMClassifier, LGBMRegressor        # noqa: PLC0415
+    from catboost import CatBoostClassifier, CatBoostRegressor  # noqa: PLC0415
+    scoring = (
+        "neg_mean_absolute_error" if task == "regression"
+        else ("f1_macro" if is_imbal else "f1_weighted")
+    )
+
+    def objective(trial):
+        cw = "balanced" if is_imbal else None
+        if algorithm == "Random Forest":
+            params: dict = {
+                "n_estimators":      trial.suggest_int("n_estimators", 50, 300),
+                "max_depth":         trial.suggest_categorical("max_depth", [None, 5, 10, 15, 20]),
+                "min_samples_split": trial.suggest_int("min_samples_split", 2, 10),
+                "min_samples_leaf":  trial.suggest_int("min_samples_leaf", 1, 4),
+                "max_features":      trial.suggest_categorical("max_features", ["sqrt", "log2"]),
+            }
+            est = (RandomForestClassifier(random_state=42, class_weight=cw, **params)
+                   if task == "classification"
+                   else RandomForestRegressor(random_state=42, **params))
+        elif algorithm == "XGBoost":
+            params = {
+                "n_estimators":     trial.suggest_int("n_estimators", 50, 400),
+                "max_depth":        trial.suggest_int("max_depth", 3, 10),
+                "learning_rate":    trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
+                "subsample":        trial.suggest_float("subsample", 0.6, 1.0),
+                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
+                "reg_alpha":        trial.suggest_float("reg_alpha", 0.0, 5.0),
+                "reg_lambda":       trial.suggest_float("reg_lambda", 0.1, 5.0),
+            }
+            est = (XGBClassifier(random_state=42, eval_metric="logloss", verbosity=0, **params)
+                   if task == "classification"
+                   else XGBRegressor(random_state=42, verbosity=0, **params))
+        elif algorithm == "LightGBM":
+            params = {
+                "n_estimators":     trial.suggest_int("n_estimators", 50, 400),
+                "num_leaves":       trial.suggest_int("num_leaves", 20, 150),
+                "learning_rate":    trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
+                "subsample":        trial.suggest_float("subsample", 0.6, 1.0),
+                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
+                "reg_alpha":        trial.suggest_float("reg_alpha", 0.0, 5.0),
+                "reg_lambda":       trial.suggest_float("reg_lambda", 0.0, 5.0),
+            }
+            est = (LGBMClassifier(random_state=42, verbose=-1, class_weight=cw, **params)
+                   if task == "classification"
+                   else LGBMRegressor(random_state=42, verbose=-1, **params))
+        else:  # CatBoost
+            params = {
+                "iterations":    trial.suggest_int("iterations", 50, 400),
+                "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
+                "depth":         trial.suggest_int("depth", 4, 10),
+                "l2_leaf_reg":   trial.suggest_float("l2_leaf_reg", 1.0, 10.0),
+            }
+            est = (CatBoostClassifier(random_seed=42, verbose=0, **params)
+                   if task == "classification"
+                   else CatBoostRegressor(random_seed=42, verbose=0, **params))
+
+        pl     = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")), ("model", est)])
+        score  = float(cross_val_score(pl, X_cv, y_cv, cv=cv_split, scoring=scoring).mean())
+        on_trial(trial.number + 1, score)
+        return score
+
+    study = optuna.create_study(
+        direction="maximize",
+        sampler=optuna.samplers.TPESampler(seed=42),
+    )
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
+    return study.best_params, study.best_value
+
+
+def _build_tuned_estimator(algorithm: str, task: str, best_params: dict, is_imbal: bool):
+    from xgboost import XGBClassifier, XGBRegressor          # noqa: PLC0415
+    from lightgbm import LGBMClassifier, LGBMRegressor        # noqa: PLC0415
+    from catboost import CatBoostClassifier, CatBoostRegressor  # noqa: PLC0415
+    cw = "balanced" if is_imbal else None
+    if algorithm == "Random Forest":
+        return (RandomForestClassifier(random_state=42, class_weight=cw, **best_params)
+                if task == "classification"
+                else RandomForestRegressor(random_state=42, **best_params))
+    if algorithm == "XGBoost":
+        return (XGBClassifier(random_state=42, eval_metric="logloss", verbosity=0, **best_params)
+                if task == "classification"
+                else XGBRegressor(random_state=42, verbosity=0, **best_params))
+    if algorithm == "LightGBM":
+        return (LGBMClassifier(random_state=42, verbose=-1, class_weight=cw, **best_params)
+                if task == "classification"
+                else LGBMRegressor(random_state=42, verbose=-1, **best_params))
+    return (CatBoostClassifier(random_seed=42, verbose=0, **best_params)
+            if task == "classification"
+            else CatBoostRegressor(random_seed=42, verbose=0, **best_params))
+
+
 def _rule_explanation(winner: str, cv_results: list, task: str,
                       selection_metric: str, is_imbalanced: bool,
                       feature_importance: list, n_rows: int) -> str:
@@ -1517,6 +1616,8 @@ async def train_model(
     fe_b64:              str        = Form(""),
     pre_fe_cols_json:    str        = Form("[]"),
     pre_fe_sample_json:  str        = Form("{}"),
+    tune:                bool       = Form(False),
+    n_trials:            int        = Form(20),
 ):
     content = await file.read()
     try:
@@ -1622,6 +1723,8 @@ async def train_model(
     _pre_fe_cols_  = _pre_fe_cols
     _pre_fe_sample_= _pre_fe_sample
     _n_clusters = n_clusters
+    _tune       = tune
+    _n_trials   = max(5, min(50, n_trials))
     _y          = y
 
     streaming_task = StreamingTask()
@@ -1772,7 +1875,28 @@ async def train_model(
                         "task":             "classification",
                         "gpu":              _detect_gpu(),
                     }
-                    p.update(65, f"Winner: {winner}. Training on full dataset…")
+
+                    if _tune:
+                        p.update(65, f"Winner: {winner}. Tuning with Optuna ({_n_trials} trials)…")
+                        try:
+                            _best_params, _best_val = _optuna_tune(
+                                winner, "classification", X_cv, y_cv, transformers,
+                                cv_split, _n_trials, is_imbal,
+                                lambda t, s: p.update(
+                                    65 + int(t / _n_trials * 13),
+                                    f"Optuna trial {t}/{_n_trials} — best {sel_label}: {s:.4f}",
+                                ),
+                            )
+                            estimator = _build_tuned_estimator(winner, "classification", _best_params, is_imbal)
+                            automl_result["optuna_params"]      = _best_params
+                            automl_result["optuna_best_score"]  = round(_best_val, 4)
+                            automl_result["optuna_n_trials"]    = _n_trials
+                            p.update(78, f"Tuning done. Training {winner} with best params…")
+                        except Exception as _oe:
+                            print(f"Optuna tuning failed, using default params: {_oe}", flush=True)
+                            p.update(78, f"Tuning failed — using default {winner} params…")
+                    else:
+                        p.update(65, f"Winner: {winner}. Training on full dataset…")
 
                 except Exception as _exc:
                     # CV failed — fall back to Random Forest
@@ -1800,7 +1924,7 @@ async def train_model(
             if automl_result:
                 automl_result["n_train"] = len(X_train)
                 automl_result["n_test"]  = len(X_test)
-            train_pct = 68 if automl_result else 20
+            train_pct = (79 if (_tune and automl_result) else 68 if automl_result else 20)
             p.update(train_pct, f"Training {_effective_algorithm} classifier…")
             pipeline.fit(X_train, y_train)
             p.update(82, "Evaluating on test set…")
@@ -1955,7 +2079,28 @@ async def train_model(
                         "task":             "regression",
                         "gpu":              _detect_gpu(),
                     }
-                    p.update(65, f"Winner: {winner}. Training on full dataset…")
+
+                    if _tune:
+                        p.update(65, f"Winner: {winner}. Tuning with Optuna ({_n_trials} trials)…")
+                        try:
+                            _best_params_r, _best_val_r = _optuna_tune(
+                                winner, "regression", X_cv, y_cv, transformers,
+                                cv_split, _n_trials, False,
+                                lambda t, s: p.update(
+                                    65 + int(t / _n_trials * 13),
+                                    f"Optuna trial {t}/{_n_trials} — best MAE: {-s:.4f}",
+                                ),
+                            )
+                            estimator = _build_tuned_estimator(winner, "regression", _best_params_r, False)
+                            automl_result["optuna_params"]     = _best_params_r
+                            automl_result["optuna_best_score"] = round(-_best_val_r, 4)
+                            automl_result["optuna_n_trials"]   = _n_trials
+                            p.update(78, f"Tuning done. Training {winner} with best params…")
+                        except Exception as _oe:
+                            print(f"Optuna tuning failed, using default params: {_oe}", flush=True)
+                            p.update(78, f"Tuning failed — using default {winner} params…")
+                    else:
+                        p.update(65, f"Winner: {winner}. Training on full dataset…")
 
                 except Exception as _exc:
                     print(f"AutoML CV failed, falling back to Random Forest: {_exc}", flush=True)
@@ -1980,7 +2125,7 @@ async def train_model(
             if automl_result:
                 automl_result["n_train"] = len(X_train)
                 automl_result["n_test"]  = len(X_test)
-            train_pct = 68 if automl_result else 20
+            train_pct = (79 if (_tune and automl_result) else 68 if automl_result else 20)
             p.update(train_pct, f"Training {_effective_algorithm} regressor…")
             pipeline.fit(X_train, y_train)
             p.update(82, "Evaluating on test set…")
