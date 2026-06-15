@@ -5647,7 +5647,7 @@ function _renderAutoMLStep2() {
           <div style="font-size:0.73rem;color:var(--text3);margin-bottom:0.5rem">Trials — more trials = better params, longer wait</div>
           <div style="display:flex;gap:0.5rem">
             ${[10,20,30].map(n => `<label style="display:flex;align-items:center;gap:0.3rem;font-size:0.8rem;cursor:pointer;padding:0.3rem 0.75rem;border-radius:20px;border:1px solid var(--border2);background:rgba(255,255,255,0.03)">
-              <input type="radio" name="amlTrials" value="${n}" ${n===20?'checked':''} style="accent-color:var(--active-accent,#818cf8)"> ${n}
+              <input type="radio" name="amlTrials" value="${n}" ${n===10?'checked':''} style="accent-color:var(--active-accent,#818cf8)"> ${n}
             </label>`).join('')}
           </div>
         </div>

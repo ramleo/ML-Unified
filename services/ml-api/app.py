@@ -1617,7 +1617,7 @@ async def train_model(
     pre_fe_cols_json:    str        = Form("[]"),
     pre_fe_sample_json:  str        = Form("{}"),
     tune:                bool       = Form(False),
-    n_trials:            int        = Form(20),
+    n_trials:            int        = Form(10),
 ):
     content = await file.read()
     try:
