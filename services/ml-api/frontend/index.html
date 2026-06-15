@@ -375,16 +375,14 @@ body {
   font-size: 0.58rem; font-weight: 700; padding: 2px 7px; border-radius: 9999px;
   background: var(--border2); color: var(--text2); flex-shrink: 0;
 }
-.model-btn-wrap { position: relative; }
-.model-btn-wrap .model-btn { padding-right: 2.2rem; }
 .model-delete-btn {
   position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
   width: 22px; height: 22px; border-radius: 5px;
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer; opacity: 0.28; transition: opacity 0.15s, background 0.15s, color 0.15s;
-  color: var(--text3); border: none; background: transparent; z-index: 2;
+  cursor: pointer; opacity: 0.3; transition: opacity 0.15s, background 0.15s, color 0.15s;
+  color: var(--text3); z-index: 2; flex-shrink: 0;
 }
-.model-btn-wrap:hover .model-delete-btn { opacity: 1; }
+.model-btn:hover .model-delete-btn { opacity: 1; }
 .model-delete-btn:hover { background: rgba(239,68,68,0.15); color: #f87171; }
 .sample-toggle {
   display: flex; align-items: center; gap: 0.5rem; width: 100%;
@@ -2157,21 +2155,19 @@ function renderSidebar() {
 
   function _modelBtnHTML(m) {
     return `
-      <div class="model-btn-wrap">
-        <button class="model-btn" id="btn-${m.id}" onclick="selectModel('${m.id}')">
-          <div class="model-dot" style="background:${m.accent}"></div>
-          <div class="model-btn-info">
-            <div class="model-btn-title">${m.title}</div>
-            <div class="model-btn-sub">${m.model || ''}</div>
-          </div>
-          <div class="model-badge">${m.metric}</div>
-        </button>
-        <button class="model-delete-btn" onclick="confirmDeleteModel('${m.id}','${m.title.replace(/'/g,"\\'")}')">
+      <button class="model-btn" id="btn-${m.id}" onclick="selectModel('${m.id}')">
+        <div class="model-dot" style="background:${m.accent}"></div>
+        <div class="model-btn-info">
+          <div class="model-btn-title">${m.title}</div>
+          <div class="model-btn-sub">${m.model || ''}</div>
+        </div>
+        <div class="model-badge">${m.metric}</div>
+        <span class="model-delete-btn" onclick="event.stopPropagation();confirmDeleteModel('${m.id}','${m.title.replace(/'/g,"\\'")}')">
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M2 4h12"/><path d="M5 4V2h6v2"/><path d="M3 4l1 10h8l1-10"/><path d="M6.5 7v4M9.5 7v4"/>
           </svg>
-        </button>
-      </div>`;
+        </span>
+      </button>`;
   }
 
   const customSection = customModels.length > 0
