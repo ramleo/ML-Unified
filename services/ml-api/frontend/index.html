@@ -395,8 +395,7 @@ body {
 .sample-toggle:hover { color: var(--text2); }
 .sample-toggle svg { transition: transform 0.2s; flex-shrink: 0; }
 .sample-toggle.open svg { transform: rotate(90deg); }
-.sample-body { display: flex; flex-direction: column; gap: 0.55rem; }
-.sample-body.hidden { display: none; }
+.sample-item.hidden { display: none !important; }
 .del-overlay {
   display: none; position: fixed; inset: 0; z-index: 200;
   background: rgba(0,0,0,0.5); backdrop-filter: blur(2px);
@@ -2070,11 +2069,12 @@ function closeToolsSheet() {
 
 function toggleSampleProjects() {
   const toggle = document.getElementById('sampleToggle');
-  const body   = document.getElementById('sampleBody');
-  if (!toggle || !body) return;
+  if (!toggle) return;
   const isOpen = toggle.classList.contains('open');
   toggle.classList.toggle('open', !isOpen);
-  body.classList.toggle('hidden', isOpen);
+  document.querySelectorAll('#sidebar .sample-item').forEach(el =>
+    el.classList.toggle('hidden', isOpen)
+  );
 }
 
 let _pendingDeleteId = null;
@@ -2153,9 +2153,9 @@ function renderSidebar() {
   const builtinModels = allModels.filter(m =>  m.builtin ||  _BUILTIN_IDS.has(m.id));
   const samplesOpen   = customModels.length === 0;
 
-  function _modelBtnHTML(m) {
+  function _modelBtnHTML(m, hidden) {
     return `
-      <button class="model-btn" id="btn-${m.id}" onclick="selectModel('${m.id}')">
+      <button class="model-btn sample-item${hidden ? ' hidden' : ''}" id="btn-${m.id}" onclick="selectModel('${m.id}')">
         <div class="model-dot" style="background:${m.accent}"></div>
         <div class="model-btn-info">
           <div class="model-btn-title">${m.title}</div>
@@ -2179,9 +2179,7 @@ function renderSidebar() {
       <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><polygon points="1,1 7,4 1,7"/></svg>
       Sample Projects
     </button>
-    <div class="sample-body ${samplesOpen ? '' : 'hidden'}" id="sampleBody">
-      ${builtinModels.map(_modelBtnHTML).join('')}
-    </div>` : '';
+    ${builtinModels.map(m => _modelBtnHTML(m, !samplesOpen)).join('')}` : '';
 
   const mlSection =
     customSection +
