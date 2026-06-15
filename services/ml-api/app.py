@@ -322,6 +322,9 @@ async def predict(model_id: str, request: Request):
         try:
             pre_fe = schema.get("pre_fe_cols")
             if pre_fe:
+                for _c in pre_fe:
+                    if _c not in df.columns:
+                        df[_c] = float("nan")
                 df = df[[c for c in pre_fe if c in df.columns]]
             df = fe.transform(df)
         except Exception as _fe_pred_err:
