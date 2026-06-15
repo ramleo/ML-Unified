@@ -142,6 +142,8 @@ FRONTEND   = os.path.join(HERE, "frontend", "index.html")
 
 MODELS: Dict[str, Any] = {}
 
+_BUILTIN_IDS: frozenset[str] = frozenset({"titanic", "iris", "diabetes", "insurance"})
+
 ACCENT_PALETTE = [
     "#818cf8", "#38bdf8", "#34d399", "#fbbf24",
     "#f87171", "#fb923c", "#a78bfa", "#4ade80",
@@ -318,6 +320,7 @@ def list_models():
             "metricLabel": m["schema"]["metricLabel"],
             "classes":     m["classes"],
             "class_names": m["schema"].get("output", {}).get("class_names"),
+            "builtin":     mid in _BUILTIN_IDS,
         }
         for mid, m in MODELS.items()
     ]
@@ -330,6 +333,56 @@ def get_schema(model_id: str):
     s["classes"]     = MODELS[model_id]["classes"]
     s["class_names"] = s.get("output", {}).get("class_names")
     return s
+
+
+def _delete_model_from_hf(model_id: str) -> None:
+    if not os.environ.get("SPACE_ID"):
+        return
+    token = os.environ.get("HF_TOKEN")
+    if not token:
+        return
+    try:
+        from huggingface_hub import HfApi as _HfApi
+        _api = _HfApi()
+        _candidates = [
+            f"models/{model_id}_pipeline.pkl",
+            f"models/{model_id}_fe.pkl",
+            f"models/{model_id}_labels.pkl",
+            f"schemas/{model_id}.json",
+        ]
+        for _rpath in _candidates:
+            try:
+                _api.delete_file(
+                    path_in_repo=_rpath,
+                    repo_id=_HF_SPACE_ID,
+                    repo_type="space",
+                    token=token,
+                )
+            except Exception:
+                pass
+    except Exception as _exc:
+        print(f"HF: delete failed (non-fatal): {_exc}", flush=True)
+
+
+@app.delete("/models/{model_id}")
+def delete_model(model_id: str):
+    if model_id not in MODELS:
+        raise HTTPException(404, "Model not found")
+    MODELS.pop(model_id)
+    for fname in [
+        f"{model_id}_pipeline.pkl",
+        f"{model_id}_fe.pkl",
+        f"{model_id}_labels.pkl",
+    ]:
+        _p = os.path.join(MODEL_DIR, fname)
+        if os.path.exists(_p):
+            os.remove(_p)
+    _sp = os.path.join(SCHEMA_DIR, f"{model_id}.json")
+    if os.path.exists(_sp):
+        os.remove(_sp)
+    _delete_model_from_hf(model_id)
+    return {"deleted": model_id}
+
 
 @app.post("/predict/{model_id}")
 async def predict(model_id: str, request: Request):

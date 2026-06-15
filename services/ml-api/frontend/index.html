@@ -375,6 +375,46 @@ body {
   font-size: 0.58rem; font-weight: 700; padding: 2px 7px; border-radius: 9999px;
   background: var(--border2); color: var(--text2); flex-shrink: 0;
 }
+.model-btn-wrap { position: relative; }
+.model-delete-btn {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  width: 26px; height: 26px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; opacity: 0; transition: opacity 0.15s, background 0.15s, color 0.15s;
+  color: var(--text3); border: none; background: transparent;
+  pointer-events: none;
+}
+.model-btn-wrap:hover .model-delete-btn { opacity: 1; pointer-events: auto; }
+.model-delete-btn:hover { background: rgba(239,68,68,0.12); color: #f87171; }
+.sample-toggle {
+  display: flex; align-items: center; gap: 0.5rem; width: 100%;
+  background: transparent; border: none; cursor: pointer;
+  color: var(--text3); font-size: 0.6rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  padding: 0 0.75rem; margin-bottom: 0.25rem; margin-top: 0.75rem;
+  transition: color 0.15s;
+}
+.sample-toggle:hover { color: var(--text2); }
+.sample-toggle svg { transition: transform 0.2s; flex-shrink: 0; }
+.sample-toggle.open svg { transform: rotate(90deg); }
+.sample-body { display: flex; flex-direction: column; gap: 0.55rem; }
+.sample-body.hidden { display: none; }
+.del-overlay {
+  display: none; position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.5); backdrop-filter: blur(2px);
+}
+.del-overlay.open { display: block; }
+.del-modal {
+  display: none; position: fixed; z-index: 201;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  background: var(--bg-card); border: 1px solid var(--border2);
+  border-radius: 18px; padding: 1.5rem 1.75rem; min-width: 280px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.35);
+}
+.del-modal.open { display: block; }
+.del-modal-title { font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem; }
+.del-modal-body  { font-size: 0.82rem; color: var(--text2); margin-bottom: 1.25rem; line-height: 1.5; }
+.del-modal-actions { display: flex; gap: 0.6rem; justify-content: flex-end; }
 
 /* ── Main area ── */
 .main {
@@ -1778,6 +1818,17 @@ body {
 </nav>
 
 <!-- Tools bottom sheet -->
+<!-- Delete model confirmation modal -->
+<div class="del-overlay" id="delOverlay" onclick="cancelDeleteModel()"></div>
+<div class="del-modal" id="delModal">
+  <div class="del-modal-title">Delete Model</div>
+  <div class="del-modal-body" id="delModalBody"></div>
+  <div class="del-modal-actions">
+    <button class="btn btn-clear" onclick="cancelDeleteModel()">Cancel</button>
+    <button class="btn" id="delConfirmBtn" style="background:#ef4444;color:#fff" onclick="executeDeleteModel()">Delete</button>
+  </div>
+</div>
+
 <div class="tools-sheet-overlay" id="tools-sheet-overlay" onclick="closeToolsSheet()"></div>
 <div class="tools-sheet" id="tools-sheet">
   <div class="tools-sheet-handle"></div>
@@ -2019,6 +2070,45 @@ function closeToolsSheet() {
   document.getElementById('tools-sheet').classList.remove('open');
 }
 
+function toggleSampleProjects() {
+  const toggle = document.getElementById('sampleToggle');
+  const body   = document.getElementById('sampleBody');
+  if (!toggle || !body) return;
+  const isOpen = toggle.classList.contains('open');
+  toggle.classList.toggle('open', !isOpen);
+  body.classList.toggle('hidden', isOpen);
+}
+
+let _pendingDeleteId = null;
+function confirmDeleteModel(id, title) {
+  _pendingDeleteId = id;
+  document.getElementById('delModalBody').textContent = `Delete "${title}"? This cannot be undone.`;
+  document.getElementById('delOverlay').classList.add('open');
+  document.getElementById('delModal').classList.add('open');
+}
+function cancelDeleteModel() {
+  _pendingDeleteId = null;
+  document.getElementById('delOverlay').classList.remove('open');
+  document.getElementById('delModal').classList.remove('open');
+}
+async function executeDeleteModel() {
+  if (!_pendingDeleteId) return;
+  const id = _pendingDeleteId;
+  cancelDeleteModel();
+  try {
+    await fetch(`${API}/models/${id}`, { method: 'DELETE' });
+  } catch(e) {
+    console.error('Delete failed:', e);
+  }
+  const mr = await fetch(`${API}/models`);
+  allModels = await mr.json();
+  renderSidebar();
+  if (activeModel && activeModel.id === id) {
+    if (allModels.length > 0) selectModel(allModels[0].id);
+    else document.getElementById('main').innerHTML = `<div class="empty-hero"><div class="empty-hero-title">No models</div><div class="empty-hero-sub">Train a new model to get started.</div></div>`;
+  }
+}
+
 // ── Boot ──────────────────────────────────────────────────────
 async function init() {
   const coldStartTimer = setTimeout(() => {
@@ -2060,18 +2150,45 @@ function renderSidebar() {
   const showVision = APP_MODE !== 'ml'     && APP_MODE !== 'eda';
   const showEDA    = APP_MODE === 'eda';
 
+  const customModels  = allModels.filter(m => !m.builtin);
+  const builtinModels = allModels.filter(m => m.builtin);
+  const samplesOpen   = customModels.length === 0;
+
+  function _modelBtnHTML(m) {
+    return `
+      <div class="model-btn-wrap">
+        <button class="model-btn" id="btn-${m.id}" onclick="selectModel('${m.id}')">
+          <div class="model-dot" style="background:${m.accent}"></div>
+          <div class="model-btn-info">
+            <div class="model-btn-title">${m.title}</div>
+            <div class="model-btn-sub">${m.model || ''}</div>
+          </div>
+          <div class="model-badge">${m.metric}</div>
+        </button>
+        <button class="model-delete-btn" onclick="confirmDeleteModel('${m.id}','${m.title.replace(/'/g,"\\'")}')">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 4h12"/><path d="M5 4V2h6v2"/><path d="M3 4l1 10h8l1-10"/><path d="M6.5 7v4M9.5 7v4"/>
+          </svg>
+        </button>
+      </div>`;
+  }
+
+  const customSection = customModels.length > 0
+    ? '<div class="sidebar-label">Your Models</div>' + customModels.map(_modelBtnHTML).join('')
+    : '';
+
+  const sampleSection = builtinModels.length > 0 ? `
+    <button class="sample-toggle ${samplesOpen ? 'open' : ''}" id="sampleToggle" onclick="toggleSampleProjects()">
+      <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><polygon points="1,1 7,4 1,7"/></svg>
+      Sample Projects
+    </button>
+    <div class="sample-body ${samplesOpen ? '' : 'hidden'}" id="sampleBody">
+      ${builtinModels.map(_modelBtnHTML).join('')}
+    </div>` : '';
+
   const mlSection =
-    '<div class="sidebar-label">Supervised Models</div>' +
-    allModels.map(m => `
-      <button class="model-btn" id="btn-${m.id}" onclick="selectModel('${m.id}')">
-        <div class="model-dot" style="background:${m.accent}"></div>
-        <div class="model-btn-info">
-          <div class="model-btn-title">${m.title}</div>
-          <div class="model-btn-sub">${m.model}</div>
-        </div>
-        <div class="model-badge">${m.metric}</div>
-      </button>
-    `).join('') +
+    customSection +
+    sampleSection +
     '<div class="sidebar-label">Unsupervised Analysis</div>' +
     UNSUPERVISED.map(a => `
       <button class="model-btn" id="ubtn-${a.id}" onclick="selectUnsupervised('${a.id}','${a.label}','${a.accent}')">
