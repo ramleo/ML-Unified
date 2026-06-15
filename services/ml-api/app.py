@@ -173,7 +173,17 @@ def _fetch_hf_models():
         return
     os.makedirs(MODEL_DIR, exist_ok=True)
     token = os.environ.get("HF_TOKEN")
-    for fpath in _HF_PKL_FILES:
+    # Fixed model pkls
+    all_fpaths = list(_HF_PKL_FILES)
+    # Also try to fetch _fe.pkl for every known schema
+    if os.path.isdir(SCHEMA_DIR):
+        for _sf in os.listdir(SCHEMA_DIR):
+            if _sf.endswith(".json"):
+                _mid = _sf[:-5]
+                _fe_fpath = f"models/{_mid}_fe.pkl"
+                if _fe_fpath not in all_fpaths:
+                    all_fpaths.append(_fe_fpath)
+    for fpath in all_fpaths:
         local = os.path.join(HERE, fpath)
         if os.path.exists(local):
             continue
@@ -189,6 +199,42 @@ def _fetch_hf_models():
             print(f"HF: {fpath} ready", flush=True)
         except Exception as exc:
             print(f"HF: could not download {fpath}: {exc}", flush=True)
+
+
+def _upload_model_to_hf(model_id: str) -> None:
+    """Upload newly trained model files to HF Space XET storage for persistence across restarts."""
+    if not os.environ.get("SPACE_ID"):
+        return
+    token = os.environ.get("HF_TOKEN")
+    if not token:
+        print("HF: HF_TOKEN not set — trained model will not persist across restarts", flush=True)
+        return
+    try:
+        from huggingface_hub import HfApi as _HfApi  # noqa: PLC0415
+        _api = _HfApi()
+        _files = [
+            (os.path.join(MODEL_DIR, f"{model_id}_pipeline.pkl"), f"models/{model_id}_pipeline.pkl"),
+            (os.path.join(MODEL_DIR, f"{model_id}_fe.pkl"),       f"models/{model_id}_fe.pkl"),
+            (os.path.join(SCHEMA_DIR, f"{model_id}.json"),        f"schemas/{model_id}.json"),
+        ]
+        if os.path.exists(os.path.join(MODEL_DIR, f"{model_id}_labels.pkl")):
+            _files.append((
+                os.path.join(MODEL_DIR, f"{model_id}_labels.pkl"),
+                f"models/{model_id}_labels.pkl",
+            ))
+        for _local, _repo_path in _files:
+            if not os.path.exists(_local):
+                continue
+            _api.upload_file(
+                path_or_fileobj=_local,
+                path_in_repo=_repo_path,
+                repo_id=_HF_SPACE_ID,
+                repo_type="space",
+                token=token,
+            )
+            print(f"HF: uploaded {_repo_path}", flush=True)
+    except Exception as _exc:
+        print(f"HF: upload after train failed (non-fatal): {_exc}", flush=True)
 
 def _load():
     for fname in sorted(os.listdir(SCHEMA_DIR)):
@@ -1987,6 +2033,7 @@ async def train_model(
         joblib.dump(_fe_tfm, os.path.join(MODEL_DIR, f"{_model_id}_fe.pkl"))
         if le is not None:
             joblib.dump(le, os.path.join(MODEL_DIR, f"{_model_id}_labels.pkl"))
+        _upload_model_to_hf(_model_id)
 
         MODELS[_model_id] = {
             "pipeline": pipeline,
