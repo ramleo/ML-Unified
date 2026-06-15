@@ -399,6 +399,7 @@ def get_actuals(model_id: str):
     if model_id not in MODELS:
         raise HTTPException(404, "Model not found")
     _path = os.path.join(MODEL_DIR, f"{model_id}_actuals.json")
+    print(f"ACTUALS GET: {model_id} → {_path} exists={os.path.exists(_path)}", flush=True)
     if not os.path.exists(_path):
         raise HTTPException(404, "No actuals data for this model")
     with open(_path) as _f:
@@ -2126,8 +2127,12 @@ async def train_model(
         if le is not None:
             joblib.dump(le, os.path.join(MODEL_DIR, f"{_model_id}_labels.pkl"))
         if _actuals_data is not None:
-            with open(os.path.join(MODEL_DIR, f"{_model_id}_actuals.json"), "w") as _af:
+            _act_path = os.path.join(MODEL_DIR, f"{_model_id}_actuals.json")
+            with open(_act_path, "w") as _af:
                 json.dump(_actuals_data, _af)
+            print(f"ACTUALS: saved {_act_path} ({len(_actuals_data.get('actual', []))} pts)", flush=True)
+        else:
+            print(f"ACTUALS: _actuals_data is None for {_model_id} (task={_task})", flush=True)
         _upload_model_to_hf(_model_id)
 
         MODELS[_model_id] = {
