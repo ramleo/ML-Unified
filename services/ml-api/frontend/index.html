@@ -3368,6 +3368,7 @@ function renderShap(shap) {
 // ── Wizard state ─────────────────────────────────────────────
 let wizardFile     = null;
 let wizardAnalysis = null;
+let wizardAccent   = null;
 
 // ── Wizard step header ────────────────────────────────────────
 function wizardStepsHTML(active, allDone) {
@@ -3518,6 +3519,7 @@ function showUploadWizard() {
 }
 
 function renderWizardStep1() {
+  if (!wizardAccent) wizardAccent = ACCENT_PALETTE_DEFAULT[0];
   document.getElementById('main').innerHTML = `
     <div class="wizard">
       ${wizardStepsHTML(1, false)}
@@ -3532,6 +3534,14 @@ function renderWizardStep1() {
         <div class="upload-zone-sub">CSV files only</div>
       </div>
       <div id="fileInfo" style="display:none;padding:0.7rem 1rem;background:var(--bg-input);border:1px solid var(--border2);border-radius:8px;font-size:0.82rem;color:var(--text2);margin-bottom:1.5rem"></div>
+      <div style="margin-bottom:1.25rem">
+        <label class="wizard-label">Accent Color</label>
+        <div class="accent-palette" style="margin-top:0.35rem">
+          ${ACCENT_PALETTE_DEFAULT.map((c) =>
+            `<div class="accent-swatch${c === wizardAccent ? ' selected' : ''}" style="background:${c}" data-color="${c}" data-tip="${_swatchTip(c)}" onclick="selectAccent(this)"></div>`
+          ).join('')}
+        </div>
+      </div>
       <div class="action-row">
         <button class="btn btn-clear" onclick="cancelWizard()">Cancel</button>
         <button class="btn btn-primary" id="analyzeBtn" onclick="analyzeCSV()" disabled style="opacity:0.4">Next \u2192</button>
@@ -3638,13 +3648,7 @@ function renderWizardStep2() {
         <label class="wizard-label" for="wAlgorithm">Algorithm</label>
         <select class="field-select" id="wAlgorithm">${algorithmOptions(a.suggested_task)}</select>
       </div>
-      <div class="wizard-section">
-        <label class="wizard-label">Accent Color</label>
-        <div class="accent-palette" id="accentPalette">
-          ${palette.map((c, i) => '<div class="accent-swatch' + (i === 0 ? ' selected' : '') + '" style="background:' + c + '" data-color="' + c + '" data-tip="' + _swatchTip(c) + '" onclick="selectAccent(this)"></div>').join('')}
-        </div>
-        <input type="hidden" id="wAccent" value="${palette[0]}">
-      </div>
+      <input type="hidden" id="wAccent" value="${wizardAccent || palette[0]}">
       <div id="wizardErr"></div>
       <div class="action-row">
         <button class="btn btn-clear" onclick="renderWizardStep1()">\u2190 Back</button>
@@ -3673,6 +3677,7 @@ function selectAccent(el) {
   el.classList.add('selected');
   const color = el.dataset.color;
   document.documentElement.style.setProperty('--active-accent', color);
+  wizardAccent = color;
   const wA = document.getElementById('wAccent');
   const aA = document.getElementById('amlAccent');
   if (wA) wA.value = color;
@@ -6017,6 +6022,7 @@ function drawClusterPlot(canvasId, plotData, nClusters, accent) {
 }
 
 function cancelWizard() {
+  wizardFile = null; wizardAnalysis = null; wizardAccent = null;
   if (allModels.length > 0) selectModel(allModels[0].id);
   else document.getElementById('main').innerHTML =
     '<div class="empty-state"><div class="empty-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><circle cx="22" cy="22" r="5" fill="#818cf8" opacity="0.75"/><circle cx="22" cy="8" r="3" fill="#818cf8" opacity="0.5"/><circle cx="36" cy="22" r="3" fill="#38bdf8" opacity="0.5"/><circle cx="22" cy="36" r="3" fill="#34d399" opacity="0.5"/><circle cx="8" cy="22" r="3" fill="#818cf8" opacity="0.5"/><line x1="22" y1="22" x2="22" y2="11" stroke="#818cf8" stroke-width="1.1" opacity="0.4"/><line x1="22" y1="22" x2="33" y2="22" stroke="#38bdf8" stroke-width="1.1" opacity="0.4"/><line x1="22" y1="22" x2="22" y2="33" stroke="#34d399" stroke-width="1.1" opacity="0.4"/><line x1="22" y1="22" x2="11" y2="22" stroke="#818cf8" stroke-width="1.1" opacity="0.4"/></svg></div><div>Select a model from the sidebar to get started</div></div>';
