@@ -2161,7 +2161,6 @@ function renderSidebar() {
           <div class="model-btn-title">${m.title}</div>
           <div class="model-btn-sub">${m.model || ''}</div>
         </div>
-        <div class="model-badge">${m.metric}</div>
         <span class="model-delete-btn" onclick="event.stopPropagation();confirmDeleteModel('${m.id}','${m.title.replace(/'/g,"\\'")}')">
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M2 4h12"/><path d="M5 4V2h6v2"/><path d="M3 4l1 10h8l1-10"/><path d="M6.5 7v4M9.5 7v4"/>
