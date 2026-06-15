@@ -4026,6 +4026,7 @@ async function _amlRenderShap() {
         </div>
       </div>`;
     body.innerHTML = `
+      ${_shapInfoHTML}
       <div class="shap-body">
         ${shap.features.map(f => {
           const isPos = f.shap >= 0;
@@ -4041,8 +4042,7 @@ async function _amlRenderShap() {
           </div>`;
         }).join('')}
       </div>
-      <div class="shap-base">Base value (avg prediction): <strong>${shap.base_value.toFixed(3)}</strong></div>
-      ${_shapInfoHTML}`;
+      <div class="shap-base">Base value (avg prediction): <strong>${shap.base_value.toFixed(3)}</strong></div>`;
     requestAnimationFrame(() => requestAnimationFrame(() => {
       document.querySelectorAll('#amlTabBody .shap-bar-fill[data-pct]').forEach(b => {
         b.style.width = b.dataset.pct + '%';
@@ -5245,19 +5245,15 @@ function _renderAutoMLStep1c(preserveScroll) {
         <button class="btn btn-primary" onclick="_renderAutoMLStep1b(_automlTargetCol)">Apply & Preprocess →</button>
       </div>
     </div>`;
-  if (preserveScroll) document.getElementById('main').scrollTop = _feScr;
+  if (preserveScroll) requestAnimationFrame(() => { document.getElementById('main').scrollTop = _feScr; });
 }
 
 function _toggleFEChipNum(el) {
   const col  = el.dataset.col;
   const type = el.dataset.t;
-  const acc  = document.documentElement.style.getPropertyValue('--active-accent') || '#a78bfa';
   if (!_automlFeatureEng.numeric[col]) _automlFeatureEng.numeric[col] = {};
-  const on = !_automlFeatureEng.numeric[col][type];
-  _automlFeatureEng.numeric[col][type] = on;
-  el.style.background = on ? acc : 'transparent';
-  el.style.color      = on ? '#fff' : 'var(--text3)';
-  el.classList.toggle('selected', on);
+  _automlFeatureEng.numeric[col][type] = !_automlFeatureEng.numeric[col][type];
+  _renderAutoMLStep1c(true);
 }
 
 function _setBinMethod(col, method, btn) {
