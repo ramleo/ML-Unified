@@ -2183,25 +2183,32 @@ async function selectModel(id) {
     if (dot) { dot.classList.remove('dot-pulse'); void dot.offsetWidth; dot.classList.add('dot-pulse'); }
   }
 
-  // Fetch schema + fade out in parallel
-  const [schemaRes, modelMeta] = await Promise.all([
-    fetch(`${API}/schemas/${id}`).then(r => r.json()),
-    Promise.resolve(allModels.find(m => m.id === id)),
-    animateMainOut(),
-  ]);
+  try {
+    // Fetch schema + fade out in parallel
+    const [schemaRes, modelMeta] = await Promise.all([
+      fetch(`${API}/schemas/${id}`).then(r => r.json()),
+      Promise.resolve(allModels.find(m => m.id === id)),
+      animateMainOut(),
+    ]);
 
-  activeModel = { ...modelMeta, schema: schemaRes };
+    if (!schemaRes || !modelMeta) { animateMainIn(); return; }
 
-  // Model accent only — never override the theme's --accent
-  document.documentElement.style.setProperty('--model-accent', modelMeta.accent);
-  document.documentElement.style.setProperty('--active-accent', modelMeta.accent);
-  if (btn) btn.style.setProperty('--active-accent', modelMeta.accent);
-  setAmbientFromAccent(modelMeta.accent);
+    activeModel = { ...modelMeta, schema: schemaRes };
 
-  renderMain();
-  animateMainIn();
-  countUpMetricPill();
-  syncBottomTab('models');
+    // Model accent only — never override the theme's --accent
+    document.documentElement.style.setProperty('--model-accent', modelMeta.accent);
+    document.documentElement.style.setProperty('--active-accent', modelMeta.accent);
+    if (btn) btn.style.setProperty('--active-accent', modelMeta.accent);
+    setAmbientFromAccent(modelMeta.accent);
+
+    renderMain();
+    animateMainIn();
+    countUpMetricPill();
+    syncBottomTab('models');
+  } catch(e) {
+    console.error('selectModel failed:', e);
+    animateMainIn();
+  }
 }
 
 // ── Render main area ──────────────────────────────────────────
@@ -3144,7 +3151,7 @@ function wizardStepsHTML(active, allDone) {
   return '<div class="wizard-steps">' +
     steps.map((s, i) => {
       const n   = i + 1;
-      const cls = n < active ? 'done' : n === active ? 'active' : '';
+      const cls = (allDone || n < active) ? 'done' : n === active ? 'active' : '';
       const num = (n < active || allDone) ? '\u2713' : String(n);
       return (n > 1 ? '<div class="wizard-sep"></div>' : '') +
         `<div class="wizard-step ${cls}"><div class="wizard-step-num">${num}</div>${s}</div>`;
@@ -5724,13 +5731,15 @@ async function runTrain() {
       <div class="wizard">
         ${wizardStepsHTML(3, true)}
         <div class="train-result">
-          <div style="font-size:3rem;margin-bottom:1rem">\u2705</div>
+          <div style="width:40px;height:40px;border-radius:50%;background:rgba(52,211,153,0.15);border:1.5px solid rgba(52,211,153,0.4);display:flex;align-items:center;justify-content:center;margin:0 auto 0.85rem">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#34d399" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4.5 4.5L16 6"/></svg>
+          </div>
           <div style="font-size:1.3rem;font-weight:800;margin-bottom:0.5rem">${result.title}</div>
           <div class="train-result-metric" style="color:${result.accent}">${result.metric}</div>
           <div class="train-result-label">${result.metricLabel}</div>
           ${extraRow}
           ${clusterPlot}
-          <button class="btn btn-primary" onclick="selectModel('${result.id}')">Use Model \u2192</button>
+          <button class="btn btn-primary" style="margin-top:1.25rem" onclick="selectModel('${result.id}')">Use Model \u2192</button>
         </div>
       </div>`;
 
