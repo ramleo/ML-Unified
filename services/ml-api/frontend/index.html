@@ -3548,6 +3548,9 @@ function renderWizardStep1() {
       </div>
     </div>`;
 
+  // Sync --active-accent with the initially selected swatch
+  document.documentElement.style.setProperty('--active-accent', wizardAccent);
+
   const zone = document.getElementById('uploadZone');
   zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag'); });
   zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
