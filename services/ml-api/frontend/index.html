@@ -5004,7 +5004,7 @@ let _automlOrigFile      = null;
 let automlFEB64          = '';
 let automlPreFeCols      = [];
 
-function _renderAutoMLStep1c() {
+function _renderAutoMLStep1c(preserveScroll) {
   const a            = automlAnalysis;
   const effectTarget = _automlTargetCol || a.suggested_target;
   const _acc         = document.documentElement.style.getPropertyValue('--active-accent') || '#a78bfa';
@@ -5020,6 +5020,11 @@ function _renderAutoMLStep1c() {
   // ── SECTION 1: Numeric transforms ──────────────────────────────────────
   const numRows = numCols.map(c => {
     const fe  = _automlFeatureEng.numeric[c.name] || {};
+    const _nDerived = ['log1p','sqrt','yeo_johnson','rank','outlier_flag','missing_flag'].filter(k => fe[k]).length
+      + (fe.bin && fe.bin !== 'none' ? 1 : 0);
+    const _derivedBadge = _nDerived > 0
+      ? `<span style="font-size:0.62rem;color:var(--text3);margin-left:0.25rem;opacity:0.8">+${_nDerived} derived</span>`
+      : '';
     const chips = [
       { t: 'log1p',       label: 'log1p',     tip: 'log(1+x) — heavy right skew' },
       { t: 'sqrt',        label: 'sqrt',       tip: 'Square root — mild right skew' },
@@ -5048,6 +5053,7 @@ function _renderAutoMLStep1c() {
         <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.4rem">
           <div style="font-size:0.8rem;font-weight:600;color:var(--text);min-width:80px">${c.name}</div>
           <div style="font-size:0.65rem;color:var(--text3)">${c.dtype||'numeric'}</div>
+          ${_derivedBadge}
           ${chips}
         </div>
         <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
@@ -5142,7 +5148,7 @@ function _renderAutoMLStep1c() {
                      border:1px solid var(--border2);background:var(--bg-glass);color:var(--text)">
         ${numColNames.map(n => `<option value="${n}"${d.col_b===n?' selected':''}>${n}</option>`).join('')}
       </select>
-      <button onclick="_automlFeatureEng.derived.splice(${i},1);_renderAutoMLStep1c()"
+      <button onclick="_automlFeatureEng.derived.splice(${i},1);_renderAutoMLStep1c(true)"
               style="font-size:0.68rem;padding:0.15rem 0.4rem;border-radius:6px;
                      border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">✕</button>
     </div>`).join('');
@@ -5166,6 +5172,7 @@ function _renderAutoMLStep1c() {
   const sectionStyle = 'margin-bottom:1.1rem';
   const sectionTitle = `font-size:0.63rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:${_acc};margin-bottom:0.55rem`;
 
+  const _feScr = preserveScroll ? document.getElementById('main').scrollTop : 0;
   document.getElementById('main').innerHTML = `
     <div class="wizard">
       ${_automlStepsHTML(2, false)}
@@ -5234,6 +5241,7 @@ function _renderAutoMLStep1c() {
         <button class="btn btn-primary" onclick="_renderAutoMLStep1b(_automlTargetCol)">Apply & Preprocess →</button>
       </div>
     </div>`;
+  if (preserveScroll) document.getElementById('main').scrollTop = _feScr;
 }
 
 function _toggleFEChipNum(el) {
@@ -5272,7 +5280,7 @@ function _markAsDate(col, checked) {
   } else {
     delete _automlFeatureEng.dates[col];
   }
-  _renderAutoMLStep1c();
+  _renderAutoMLStep1c(true);
 }
 
 function _toggleDateComp(col, key, val) {
@@ -5286,7 +5294,7 @@ function _addDerivedFeature() {
   const numCols      = (a.columns || []).filter(c => c.is_numeric && c.name !== effectTarget);
   if (numCols.length < 2) return;
   _automlFeatureEng.derived.push({ op: 'ratio', col_a: numCols[0].name, col_b: numCols[1].name });
-  _renderAutoMLStep1c();
+  _renderAutoMLStep1c(true);
 }
 
 function _togglePolyCol(col, checked) {
@@ -5296,7 +5304,7 @@ function _togglePolyCol(col, checked) {
   } else {
     _automlFeatureEng.poly_cols = _automlFeatureEng.poly_cols.filter(c => c !== col);
   }
-  _renderAutoMLStep1c();
+  _renderAutoMLStep1c(true);
 }
 
 function _polySelectAll() {
@@ -5305,12 +5313,12 @@ function _polySelectAll() {
   _automlFeatureEng.poly_cols = (a.columns || [])
     .filter(c => c.is_numeric && c.name !== effectTarget)
     .map(c => c.name);
-  _renderAutoMLStep1c();
+  _renderAutoMLStep1c(true);
 }
 
 function _polySelectNone() {
   _automlFeatureEng.poly_cols = [];
-  _renderAutoMLStep1c();
+  _renderAutoMLStep1c(true);
 }
 
 function _renderAutoMLStep2() {
