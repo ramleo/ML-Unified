@@ -224,6 +224,11 @@ def _upload_model_to_hf(model_id: str) -> None:
                 os.path.join(MODEL_DIR, f"{model_id}_labels.pkl"),
                 f"models/{model_id}_labels.pkl",
             ))
+        if os.path.exists(os.path.join(MODEL_DIR, f"{model_id}_actuals.json")):
+            _files.append((
+                os.path.join(MODEL_DIR, f"{model_id}_actuals.json"),
+                f"models/{model_id}_actuals.json",
+            ))
         for _local, _repo_path in _files:
             if not os.path.exists(_local):
                 continue
@@ -348,6 +353,7 @@ def _delete_model_from_hf(model_id: str) -> None:
             f"models/{model_id}_pipeline.pkl",
             f"models/{model_id}_fe.pkl",
             f"models/{model_id}_labels.pkl",
+            f"models/{model_id}_actuals.json",
             f"schemas/{model_id}.json",
         ]
         for _rpath in _candidates:
@@ -373,6 +379,7 @@ def delete_model(model_id: str):
         f"{model_id}_pipeline.pkl",
         f"{model_id}_fe.pkl",
         f"{model_id}_labels.pkl",
+        f"{model_id}_actuals.json",
     ]:
         _p = os.path.join(MODEL_DIR, fname)
         if os.path.exists(_p):
@@ -382,6 +389,17 @@ def delete_model(model_id: str):
         os.remove(_sp)
     _delete_model_from_hf(model_id)
     return {"deleted": model_id}
+
+
+@app.get("/models/{model_id}/actuals")
+def get_actuals(model_id: str):
+    if model_id not in MODELS:
+        raise HTTPException(404, "Model not found")
+    _path = os.path.join(MODEL_DIR, f"{model_id}_actuals.json")
+    if not os.path.exists(_path):
+        raise HTTPException(404, "No actuals data for this model")
+    with open(_path) as _f:
+        return json.load(_f)
 
 
 @app.post("/predict/{model_id}")
@@ -1608,6 +1626,7 @@ async def train_model(
         metric = metric_label = ""
         extra_metrics: list  = []
         automl_result        = None
+        _actuals_data        = None
         _effective_algorithm = _algorithm
 
         p.update(5, "Preparing feature matrix…")
@@ -1861,6 +1880,7 @@ async def train_model(
                 automl_result["can_upgrade"] = automl_result["explanation_source"] == "rule"
 
         else:  # regression
+            _actuals_data = None
             p.update(10, "Preparing regression target…")
             y_num = pd.to_numeric(_y, errors="coerce")
             y_enc = y_num.fillna(float(y_num.median()))
@@ -1961,6 +1981,22 @@ async def train_model(
             extra_metrics = [{"label": "RMSE", "value": f"{rmse:.2f}"}]
             if r2 >= 0.60:
                 extra_metrics.append({"label": "R²", "value": f"{r2:.3f}"})
+
+            # Persist actuals for scatter plot endpoint
+            import random as _rnd_act  # noqa: PLC0415
+            _ya = np.array(y_test)
+            _yp = np.array(y_pred)
+            _n_act = len(_ya)
+            _act_idxs = sorted(_rnd_act.sample(range(_n_act), min(300, _n_act)))
+            _actuals_data: dict = {
+                "actual":    [round(float(v), 4) for v in _ya[_act_idxs]],
+                "predicted": [round(float(v), 4) for v in _yp[_act_idxs]],
+                "mae":  round(float(mae), 4),
+                "rmse": round(float(rmse), 4),
+                "residual_std": round(float(np.std(_ya - _yp)), 4),
+            }
+            if r2 >= 0.60:
+                _actuals_data["r2"] = round(float(r2), 4)
 
             if automl_result:
                 y_test_arr = np.array(y_test)
@@ -2086,6 +2122,9 @@ async def train_model(
         joblib.dump(_fe_tfm, os.path.join(MODEL_DIR, f"{_model_id}_fe.pkl"))
         if le is not None:
             joblib.dump(le, os.path.join(MODEL_DIR, f"{_model_id}_labels.pkl"))
+        if _actuals_data is not None:
+            with open(os.path.join(MODEL_DIR, f"{_model_id}_actuals.json"), "w") as _af:
+                json.dump(_actuals_data, _af)
         _upload_model_to_hf(_model_id)
 
         MODELS[_model_id] = {

@@ -668,6 +668,28 @@ body {
 /* ── What-if view ── */
 #trainingView { display: none; padding: 0.5rem 0 1.5rem; }
 #trainingView.visible { display: block; }
+
+/* ── Performance view ── */
+#performanceView { display: none; padding: 0.5rem 0 1.5rem; }
+#performanceView.visible { display: block; }
+.perf-card {
+  background: transparent; border: 1px solid var(--border2); border-radius: 14px;
+  padding: 1.25rem 1.35rem; margin-bottom: 1.25rem;
+}
+.perf-card-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); margin-bottom: 0.75rem; }
+.perf-ci-note {
+  margin-top: 0.85rem; padding: 0.65rem 0.75rem;
+  background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 9px;
+  font-size: 0.72rem; color: var(--text2); line-height: 1.5;
+}
+.perf-ci-note strong { color: var(--text); }
+.perf-metrics-row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
+.perf-metric-chip {
+  padding: 0.3rem 0.65rem; border-radius: 20px;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border2);
+  font-size: 0.7rem; font-weight: 700; color: var(--text2);
+}
+.perf-metric-chip span { color: var(--text); font-weight: 800; }
 .train-card {
   background: transparent; border: 1px solid var(--border2); border-radius: 14px;
   padding: 1.25rem 1.35rem; margin-bottom: 1.25rem;
@@ -2360,6 +2382,11 @@ function renderMain() {
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 11 Q4 5 8 8 Q12 11 15 5"/><circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/></svg>
           Drift
         </button>
+        ${s.task === 'regression' ? `
+        <button class="model-tab" id="tabPerformance" onclick="setModelTab('performance')">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="11" r="1.5" fill="currentColor" stroke="none"/><circle cx="8" cy="7" r="1.5" fill="currentColor" stroke="none"/><circle cx="11" cy="9" r="1.5" fill="currentColor" stroke="none"/><circle cx="13" cy="4" r="1.5" fill="currentColor" stroke="none"/><path d="M1 14 L5 11 L8 7 L11 9 L13 4"/></svg>
+          Performance
+        </button>` : ''}
       </div>
     </div>
 
@@ -2371,6 +2398,9 @@ function renderMain() {
 
     <!-- Drift view -->
     <div id="driftView"></div>
+
+    <!-- Performance view (regression only) -->
+    <div id="performanceView"></div>
 
     <!-- Form -->
     <form id="pForm" onsubmit="return false">
@@ -2415,15 +2445,17 @@ function renderMain() {
 
 // ── Model content tabs ────────────────────────────────────────
 function setModelTab(tab) {
-  const predictEl  = document.getElementById('pForm');
-  const resultEl   = document.getElementById('resultWrap');
-  const pipelineEl = document.getElementById('pipelineView');
-  const trainingEl = document.getElementById('trainingView');
-  const driftEl    = document.getElementById('driftView');
-  const tabPredict  = document.getElementById('tabPredict');
-  const tabPipeline = document.getElementById('tabPipeline');
-  const tabTraining = document.getElementById('tabTraining');
-  const tabDrift    = document.getElementById('tabDrift');
+  const predictEl     = document.getElementById('pForm');
+  const resultEl      = document.getElementById('resultWrap');
+  const pipelineEl    = document.getElementById('pipelineView');
+  const trainingEl    = document.getElementById('trainingView');
+  const driftEl       = document.getElementById('driftView');
+  const performanceEl = document.getElementById('performanceView');
+  const tabPredict     = document.getElementById('tabPredict');
+  const tabPipeline    = document.getElementById('tabPipeline');
+  const tabTraining    = document.getElementById('tabTraining');
+  const tabDrift       = document.getElementById('tabDrift');
+  const tabPerformance = document.getElementById('tabPerformance');
 
   // Hide all panels, deactivate all tabs
   if (predictEl)  predictEl.style.display  = 'none';
@@ -2431,10 +2463,12 @@ function setModelTab(tab) {
   pipelineEl?.classList.remove('visible');
   trainingEl?.classList.remove('visible');
   driftEl?.classList.remove('visible');
+  performanceEl?.classList.remove('visible');
   tabPredict?.classList.remove('active');
   tabPipeline?.classList.remove('active');
   tabTraining?.classList.remove('active');
   tabDrift?.classList.remove('active');
+  tabPerformance?.classList.remove('active');
 
   if (tab === 'pipeline') {
     pipelineEl?.classList.add('visible');
@@ -2448,6 +2482,10 @@ function setModelTab(tab) {
     driftEl?.classList.add('visible');
     tabDrift?.classList.add('active');
     loadDriftPanel();
+  } else if (tab === 'performance') {
+    performanceEl?.classList.add('visible');
+    tabPerformance?.classList.add('active');
+    if (!performanceEl?.dataset.loaded) loadPerformance();
   } else {
     if (predictEl) predictEl.style.display = '';
     if (resultEl)  resultEl.style.display  = '';
@@ -2502,6 +2540,82 @@ async function loadDriftPanel() {
   if (!el) return;
   el.innerHTML = _driftShell();
   if (_driftMode === 'predictions') await _loadDriftPredictions();
+}
+
+// ── Performance tab (regression: Actual vs Predicted + 95% CI) ─
+
+function _perfScatterSVG(actual, predicted, accent, residStd) {
+  const W = 360, H = 280, pad = 44;
+  const cW = W - pad - 10, cH = H - pad - 18;
+  const allV = [...actual, ...predicted];
+  const vMin = Math.min(...allV), vMax = Math.max(...allV), vRng = (vMax - vMin) || 1;
+  const xOf = v => pad + (v - vMin) / vRng * cW;
+  const yOf = v => pad + (1 - (v - vMin) / vRng) * cH;
+  // 95% CI band: ±1.96 * residual_std
+  const ci = residStd * 1.96;
+  const bandPts = [[vMin, vMin+ci],[vMax, vMax+ci],[vMax, vMax-ci],[vMin, vMin-ci]];
+  const bandPath = bandPts.map((p, i) => `${i?'L':'M'}${xOf(p[0]).toFixed(1)},${yOf(p[1]).toFixed(1)}`).join(' ') + 'Z';
+  const diagLine = `M${xOf(vMin).toFixed(1)},${yOf(vMin).toFixed(1)} L${xOf(vMax).toFixed(1)},${yOf(vMax).toFixed(1)}`;
+  const step = actual.length > 150 ? Math.ceil(actual.length / 150) : 1;
+  const dots = actual.filter((_, i) => i % step === 0).map((a, i) => {
+    const pi = i * step;
+    return `<circle cx="${xOf(a).toFixed(1)}" cy="${yOf(predicted[pi]).toFixed(1)}" r="2.5" fill="${accent}" opacity="0.6"/>`;
+  }).join('');
+  const ticks = [vMin, (vMin+vMax)/2, vMax].map(v => {
+    const lbl = Math.abs(v) >= 1000 ? `${(v/1000).toFixed(1)}k` : v.toFixed(Math.abs(v) >= 10 ? 1 : 2);
+    return `<text x="${xOf(v).toFixed(1)}" y="${pad+cH+13}" font-size="9" fill="var(--text3)" text-anchor="middle">${lbl}</text>
+            <text x="${pad-5}" y="${yOf(v).toFixed(1)}" font-size="9" fill="var(--text3)" text-anchor="end" dominant-baseline="middle">${lbl}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:480px">
+    <path d="${bandPath}" fill="${accent}" opacity="0.1"/>
+    <path d="${diagLine}" stroke="${accent}" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.6"/>
+    <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${pad+cH}" stroke="var(--border2)" stroke-width="1"/>
+    <line x1="${pad}" y1="${pad+cH}" x2="${pad+cW}" y2="${pad+cH}" stroke="var(--border2)" stroke-width="1"/>
+    ${ticks}${dots}
+    <text x="${pad+cW/2}" y="${H-2}" font-size="9" fill="var(--text3)" text-anchor="middle">Actual</text>
+    <text x="10" y="${pad+cH/2}" font-size="9" fill="var(--text3)" text-anchor="middle" transform="rotate(-90,10,${pad+cH/2})">Predicted</text>
+  </svg>`;
+}
+
+async function loadPerformance() {
+  const el = document.getElementById('performanceView');
+  if (!el || !activeModel) return;
+  el.dataset.loaded = '1';
+  el.innerHTML = `<div style="padding:2rem;color:var(--text3);font-size:0.8rem">Loading performance data…</div>`;
+  try {
+    const res = await fetch(`${API}/models/${activeModel.id}/actuals`);
+    if (!res.ok) throw new Error('No performance data — retrain this model to generate it.');
+    const d = await res.json();
+    const ac = activeModel.accent || 'var(--accent-from)';
+    const scatterHTML = _perfScatterSVG(d.actual, d.predicted, ac, d.residual_std);
+    const mae  = d.mae  != null ? d.mae.toFixed(3)  : '—';
+    const rmse = d.rmse != null ? d.rmse.toFixed(3) : '—';
+    const r2   = d.r2   != null ? d.r2.toFixed(3)   : null;
+    const ci95 = d.residual_std != null ? (d.residual_std * 1.96).toFixed(3) : '—';
+    const chips = [
+      `MAE <span>${mae}</span>`,
+      `RMSE <span>${rmse}</span>`,
+      `95% CI ±<span>${ci95}</span>`,
+      ...(r2 ? [`R² <span>${r2}</span>`] : []),
+    ].map(h => `<div class="perf-metric-chip">${h}</div>`).join('');
+    el.innerHTML = `
+      <div class="perf-card">
+        <div class="perf-card-title">Actual vs Predicted</div>
+        <div class="perf-metrics-row">${chips}</div>
+        ${scatterHTML}
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-top:0.5rem;font-size:0.65rem;color:var(--text3)">
+          <svg width="24" height="10" viewBox="0 0 24 10"><path d="M0 5 L24 5" stroke="${ac}" stroke-width="1.5" stroke-dasharray="5,3" opacity="0.6"/></svg> Perfect prediction line
+          <svg width="20" height="10" viewBox="0 0 20 10"><rect x="0" y="2" width="20" height="6" fill="${ac}" opacity="0.18" rx="2"/></svg> 95% confidence band
+        </div>
+        <div class="perf-ci-note">
+          <strong>What does 95% CI mean?</strong> The shaded band shows ±${ci95} around the perfect prediction line.
+          If the model's errors are roughly symmetric, about 95 out of 100 new predictions will land inside this band.
+          Points far outside the band are cases where the model struggled — worth investigating for outliers or missing features.
+        </div>
+      </div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="perf-card" style="color:var(--text3);font-size:0.8rem">${e.message}</div>`;
+  }
 }
 
 function _driftShell() {
