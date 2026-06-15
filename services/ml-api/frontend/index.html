@@ -2115,18 +2115,17 @@ async function executeDeleteModel() {
   if (!_pendingDeleteId) return;
   const id = _pendingDeleteId;
   cancelDeleteModel();
-  try {
-    await fetch(`${API}/models/${id}`, { method: 'DELETE' });
-  } catch(e) {
-    console.error('Delete failed:', e);
-  }
-  const mr = await fetch(`${API}/models`);
-  allModels = await mr.json();
+
+  // Optimistic: remove from UI immediately
+  allModels = allModels.filter(m => m.id !== id);
   renderSidebar();
   if (activeModel && activeModel.id === id) {
     if (allModels.length > 0) selectModel(allModels[0].id);
     else document.getElementById('main').innerHTML = `<div class="empty-hero"><div class="empty-hero-title">No models</div><div class="empty-hero-sub">Train a new model to get started.</div></div>`;
   }
+
+  // Fire backend delete in background
+  fetch(`${API}/models/${id}`, { method: 'DELETE' }).catch(e => console.error('Delete failed:', e));
 }
 
 // ── Boot ──────────────────────────────────────────────────────
