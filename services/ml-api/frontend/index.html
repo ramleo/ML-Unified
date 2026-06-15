@@ -2174,9 +2174,9 @@ function renderSidebar() {
   const builtinModels = allModels.filter(m =>  m.builtin ||  _BUILTIN_IDS.has(m.id));
   const samplesOpen   = customModels.length === 0;
 
-  function _modelBtnHTML(m, hidden) {
+  function _modelBtnHTML(m, hidden, isSample) {
     return `
-      <button class="model-btn sample-item${hidden ? ' hidden' : ''}" id="btn-${m.id}" onclick="selectModel('${m.id}')">
+      <button class="model-btn${isSample ? ' sample-item' : ''}${hidden ? ' hidden' : ''}" id="btn-${m.id}" onclick="selectModel('${m.id}')">
         <div class="model-dot" style="background:${m.accent}"></div>
         <div class="model-btn-info">
           <div class="model-btn-title">${m.title}</div>
@@ -2191,7 +2191,7 @@ function renderSidebar() {
   }
 
   const customSection = customModels.length > 0
-    ? '<div class="sidebar-label">Your Models</div>' + customModels.map(_modelBtnHTML).join('')
+    ? '<div class="sidebar-label">Your Models</div>' + customModels.map(m => _modelBtnHTML(m, false, false)).join('')
     : '';
 
   const sampleSection = builtinModels.length > 0 ? `
@@ -2199,7 +2199,7 @@ function renderSidebar() {
       <svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><polygon points="1,1 7,4 1,7"/></svg>
       Sample Projects
     </button>
-    ${builtinModels.map(m => _modelBtnHTML(m, !samplesOpen)).join('')}` : '';
+    ${builtinModels.map(m => _modelBtnHTML(m, !samplesOpen, true)).join('')}` : '';
 
   const mlSection =
     customSection +
