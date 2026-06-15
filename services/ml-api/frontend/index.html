@@ -5176,7 +5176,8 @@ function _renderAutoMLStep1c(preserveScroll) {
   const sectionStyle = 'margin-bottom:1.1rem';
   const sectionTitle = `font-size:0.63rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:${_acc};margin-bottom:0.55rem`;
 
-  const _feScr = preserveScroll ? document.getElementById('main').scrollTop : 0;
+  const _feScr    = preserveScroll ? document.getElementById('main').scrollTop : 0;
+  const _polyScr  = preserveScroll ? (document.getElementById('polyColList')?.scrollTop || 0) : 0;
   document.getElementById('main').innerHTML = `
     <div class="wizard">
       ${_automlStepsHTML(2, false)}
@@ -5237,7 +5238,7 @@ function _renderAutoMLStep1c(preserveScroll) {
                <button onclick="_polySelectNone()" style="font-size:0.63rem;padding:0.15rem 0.45rem;border-radius:10px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">None</button>
                <span style="font-size:0.65rem;color:var(--text3);margin-left:0.3rem">${polyCount} selected</span>
              </div>
-             <div style="max-height:140px;overflow-y:auto;border:1px solid var(--border2);border-radius:8px;
+             <div id="polyColList" style="max-height:140px;overflow-y:auto;border:1px solid var(--border2);border-radius:8px;
                          padding:0.35rem 0.6rem;display:flex;flex-direction:column;gap:0.2rem">
                ${numCols.map(c => {
                  const on = polySelected.includes(c.name);
@@ -5259,7 +5260,11 @@ function _renderAutoMLStep1c(preserveScroll) {
         <button class="btn btn-primary" onclick="_renderAutoMLStep1b(_automlTargetCol)">Apply & Preprocess →</button>
       </div>
     </div>`;
-  if (preserveScroll) requestAnimationFrame(() => requestAnimationFrame(() => { document.getElementById('main').scrollTop = _feScr; }));
+  if (preserveScroll) requestAnimationFrame(() => requestAnimationFrame(() => {
+    document.getElementById('main').scrollTop = _feScr;
+    const _pl = document.getElementById('polyColList');
+    if (_pl && _polyScr) _pl.scrollTop = _polyScr;
+  }));
 }
 
 function _toggleFEChipNum(el) {
@@ -5273,17 +5278,7 @@ function _toggleFEChipNum(el) {
 function _setBinMethod(col, method, btn) {
   if (!_automlFeatureEng.numeric[col]) _automlFeatureEng.numeric[col] = {};
   _automlFeatureEng.numeric[col].bin = method;
-  const acc = document.documentElement.style.getPropertyValue('--active-accent') || '#a78bfa';
-  // update sibling buttons
-  const siblings = btn.parentElement.querySelectorAll('button[onclick^="_setBinMethod"]');
-  siblings.forEach(b => {
-    const isThis = b === btn;
-    b.style.background = isThis ? acc : 'transparent';
-    b.style.color      = isThis ? '#fff' : 'var(--text3)';
-  });
-  // show/hide custom input
-  const customInput = btn.closest('div[style*="border-radius:8px"]').querySelector('input[id^="binCustom_"]');
-  if (customInput) customInput.style.display = method === 'custom' ? '' : 'none';
+  _renderAutoMLStep1c(true);
 }
 
 function _markAsDate(col, checked) {
