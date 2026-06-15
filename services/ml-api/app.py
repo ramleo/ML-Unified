@@ -177,14 +177,17 @@ def _fetch_hf_models():
     token = os.environ.get("HF_TOKEN")
     # Fixed model pkls
     all_fpaths = list(_HF_PKL_FILES)
-    # Also try to fetch _fe.pkl for every known schema
+    # Also try to fetch _fe.pkl and _actuals.json for every user-trained model
     if os.path.isdir(SCHEMA_DIR):
         for _sf in os.listdir(SCHEMA_DIR):
             if _sf.endswith(".json"):
                 _mid = _sf[:-5]
-                _fe_fpath = f"models/{_mid}_fe.pkl"
-                if _fe_fpath not in all_fpaths:
-                    all_fpaths.append(_fe_fpath)
+                if _mid in _BUILTIN_IDS:
+                    continue  # built-ins never have FE or actuals files
+                for _suffix in ("_fe.pkl", "_actuals.json"):
+                    _extra = f"models/{_mid}{_suffix}"
+                    if _extra not in all_fpaths:
+                        all_fpaths.append(_extra)
     for fpath in all_fpaths:
         local = os.path.join(HERE, fpath)
         if os.path.exists(local):
