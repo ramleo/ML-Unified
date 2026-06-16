@@ -1932,6 +1932,13 @@ function _fmtMb(mb)  { return mb < 1024 ? `~${mb} MB` : `~${(mb/1024).toFixed(1)
 function _updateResourceCard(est) {
   const grid  = document.getElementById('amlResGrid');
   if (!grid || !est) return;
+
+  // Recompute estimate with live FE-derived columns
+  const feDerived = _countFEDerivedCols();
+  if (_amlResBase && feDerived > 0) {
+    est = _estimateResources(_amlResBase.rows, _amlResBase.nCols + feDerived, _amlResBase.nCatCols);
+  }
+
   const doTune  = document.getElementById('amlOptuna')?.checked || false;
   const nTrials = parseInt(document.querySelector('input[name="amlTrials"]:checked')?.value || '10');
   const optSecs = Math.round(nTrials * est.oneTrialSecs);
@@ -1972,6 +1979,9 @@ function _updateResourceCard(est) {
     ${ramRows}
     ${sectionSep}
     ${timeRows}
+    ${feDerived > 0 ? `
+    <div style="color:var(--text3)">FE Columns</div>
+    <div style="color:var(--text2);font-weight:600">+${feDerived} derived</div>` : ''}
     <div style="color:var(--text3)">CV Folds</div>
     <div style="color:var(--text2);font-weight:600">5-fold CV · ${est.lcFolds}-fold LC</div>
     <div style="color:var(--text3)">Learning Curve</div>
@@ -5740,7 +5750,8 @@ function _renderAutoMLStep2() {
     // Fill resource estimates
     const a    = automlAnalysis;
     const nCatC = (a.columns || []).filter(c => !c.is_numeric).length;
-    _amlResEst = _estimateResources(a.rows || 0, (a.columns || []).length, nCatC);
+    _amlResBase = { rows: a.rows || 0, nCols: (a.columns || []).length, nCatCols: nCatC };
+    _amlResEst  = _estimateResources(_amlResBase.rows, _amlResBase.nCols, _amlResBase.nCatCols);
     _updateResourceCard(_amlResEst);
     // Fetch GPU info separately (async)
     fetch('/system-info').then(r => r.json()).then(d => {
@@ -5760,7 +5771,29 @@ function _renderAutoMLStep2() {
   });
 }
 
-let _amlResEst = null;
+let _amlResEst  = null;
+let _amlResBase = null; // { rows, nCols, nCatCols } — stored so card can recompute with live FE
+
+function _countFEDerivedCols() {
+  const fe = _automlFeatureEng || {};
+  let n = 0;
+  // Numeric transforms
+  for (const cfg of Object.values(fe.numeric || {})) {
+    n += ['log1p','sqrt','yeo_johnson','rank','outlier_flag','missing_flag'].filter(k => cfg[k]).length;
+    if (cfg.bin && cfg.bin !== 'none') n++;
+  }
+  // Date features
+  for (const dcfg of Object.values(fe.dates || {})) {
+    n += ['year','month','day','dow','quarter','is_weekend','days_since_min'].filter(k => dcfg[k]).length;
+    if (dcfg.cyclical) n += 2;
+  }
+  // Interaction terms (ratio etc.)
+  n += (fe.derived || []).length;
+  // Polynomial pairwise interactions
+  const pc = (fe.poly_cols || []).length;
+  if (pc >= 2) n += Math.round(pc * (pc - 1) / 2);
+  return n;
+}
 
 function _toggleOptunaTrials() {
   const checked = document.getElementById('amlOptuna')?.checked;
