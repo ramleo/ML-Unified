@@ -2345,14 +2345,26 @@ async def train_model(
 
 @app.post("/explain")
 async def explain_automl(request: Request):
-    """Generate an LLM explanation for an AutoML result using a user-supplied API key."""
+    """Generate an LLM explanation for an AutoML result.
+
+    user_api_key is optional — if omitted, the server falls back to its own
+    env-configured keys (GEMINI_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY, GROQ_API_KEY).
+    """
     body       = await request.json()
     automl     = body.get("automl_data", {})
     user_key   = (body.get("user_api_key") or "").strip()
-    provider   = (body.get("provider") or "anthropic").strip().lower()
+    provider   = (body.get("provider") or "gemini-2.5").strip().lower()
 
+    # Fall back to server env key when no user key is supplied
     if not user_key:
-        raise HTTPException(400, "user_api_key is required")
+        _server_keys = {
+            "gemini-2.5": os.environ.get("GEMINI_API_KEY", ""),
+            "gemini-3.5": os.environ.get("GEMINI_API_KEY", ""),
+            "anthropic":  os.environ.get("ANTHROPIC_API_KEY", ""),
+            "openai":     os.environ.get("OPENAI_API_KEY", ""),
+            "groq":       os.environ.get("GROQ_API_KEY", ""),
+        }
+        user_key = _server_keys.get(provider, "")
 
     winner     = automl.get("winner", "")
     cv_results = automl.get("cv_results", [])
@@ -2362,10 +2374,11 @@ async def explain_automl(request: Request):
     feat_imp   = automl.get("feature_importance", [])
     n_rows     = automl.get("n_rows", 0)
 
-    llm_exp = _llm_explanation(user_key, winner, cv_results, task,
-                               sel_metric, is_imbal, feat_imp, n_rows, provider)
-    if llm_exp:
-        return {"explanation": llm_exp, "source": "user_key"}
+    if user_key:
+        llm_exp = _llm_explanation(user_key, winner, cv_results, task,
+                                   sel_metric, is_imbal, feat_imp, n_rows, provider)
+        if llm_exp:
+            return {"explanation": llm_exp, "source": provider}
 
     rule_exp = _rule_explanation(winner, cv_results, task, sel_metric,
                                  is_imbal, feat_imp, n_rows)
