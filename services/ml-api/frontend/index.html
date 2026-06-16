@@ -1922,7 +1922,7 @@ function _estimateResources(rows, nCols, nCatCols) {
   // Optuna per-trial: 5-fold CV on min(rows,5000) rows
   const optunaRows   = Math.min(rows, 5000);
   const optunaCompl  = optunaRows * Math.max(effectCols, 1);
-  const oneTrialSecs = 5 * optunaCompl / throughput;
+  const oneTrialSecs = Math.max(1.5, 5 * optunaCompl / throughput);
   return { ramMb, automlSecs, totalSecs, timeLbl, lcFolds, lcSkip, oneTrialSecs };
 }
 
@@ -1975,13 +1975,16 @@ function _updateResourceCard(est) {
     ? `<div style="grid-column:1/-1;border-top:2px solid var(--border2);margin:0.35rem 0"></div>`
     : '';
 
+  const feRow = feDerived > 0 ? `
+    <div style="color:var(--text3)">FE Columns</div>
+    <div style="color:var(--text2);font-weight:600">+${feDerived} derived</div>
+    <div style="grid-column:1/-1;border-top:1px solid var(--border);margin:0.2rem 0"></div>` : '';
+
   grid.innerHTML = `
+    ${feRow}
     ${ramRows}
     ${sectionSep}
     ${timeRows}
-    ${feDerived > 0 ? `
-    <div style="color:var(--text3)">FE Columns</div>
-    <div style="color:var(--text2);font-weight:600">+${feDerived} derived</div>` : ''}
     <div style="color:var(--text3)">CV Folds</div>
     <div style="color:var(--text2);font-weight:600">5-fold CV · ${est.lcFolds}-fold LC</div>
     <div style="color:var(--text3)">Learning Curve</div>
