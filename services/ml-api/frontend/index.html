@@ -1964,8 +1964,13 @@ function _updateResourceCard(est) {
     ? '<span style="color:var(--color-warning)">3-fold CV (reduced, &gt;5K rows)</span>'
     : '5-fold CV';
 
+  const sectionSep = doTune
+    ? `<div style="grid-column:1/-1;border-top:2px solid var(--border2);margin:0.35rem 0"></div>`
+    : '';
+
   grid.innerHTML = `
     ${ramRows}
+    ${sectionSep}
     ${timeRows}
     <div style="color:var(--text3)">CV Folds</div>
     <div style="color:var(--text2);font-weight:600">5-fold CV · ${est.lcFolds}-fold LC</div>
