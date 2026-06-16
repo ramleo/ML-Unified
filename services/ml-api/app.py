@@ -1359,16 +1359,16 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
             import openai  # noqa: PLC0415
             client = openai.OpenAI(api_key=api_key)
             resp = client.chat.completions.create(
-                model="gpt-4o-mini", max_tokens=1200,
+                model=custom_model or "gpt-4o-mini", max_tokens=1200,
                 messages=[{"role": "user", "content": prompt}],
             )
             raw_text = resp.choices[0].message.content.strip()
         elif provider in ("groq", "groq-mixtral"):
             import openai  # noqa: PLC0415
             client = openai.OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
-            model_name = "mixtral-8x7b-32768" if provider == "groq-mixtral" else "llama-3.3-70b-versatile"
+            default_model = "mixtral-8x7b-32768" if provider == "groq-mixtral" else "llama-3.3-70b-versatile"
             resp = client.chat.completions.create(
-                model=model_name, max_tokens=1200,
+                model=custom_model or default_model, max_tokens=1200,
                 messages=[{"role": "user", "content": prompt}],
             )
             raw_text = resp.choices[0].message.content.strip()
@@ -1385,15 +1385,15 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
         elif provider in ("gemini-3.5", "gemini-2.5"):
             import google.generativeai as genai  # noqa: PLC0415
             genai.configure(api_key=api_key)
-            model_name = "gemini-3.5-flash" if provider == "gemini-3.5" else "gemini-2.5-flash"
-            model = genai.GenerativeModel(model_name)
+            default_model = "gemini-3.5-flash" if provider == "gemini-3.5" else "gemini-2.5-flash"
+            model = genai.GenerativeModel(custom_model or default_model)
             resp = model.generate_content(prompt)
             raw_text = resp.text.strip()
         else:
             import anthropic  # noqa: PLC0415
             client = anthropic.Anthropic(api_key=api_key)
             msg = client.messages.create(
-                model="claude-haiku-4-5-20251001",
+                model=custom_model or "claude-haiku-4-5-20251001",
                 max_tokens=1200,
                 messages=[{"role": "user", "content": prompt}],
             )
