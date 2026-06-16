@@ -1975,9 +1975,10 @@ function _updateResourceCard(est) {
     ? `<div style="grid-column:1/-1;border-top:2px solid var(--border2);margin:0.35rem 0"></div>`
     : '';
 
+  const origCols = _amlResBase ? _amlResBase.nCols : 0;
   const feRow = feDerived > 0 ? `
-    <div style="color:var(--text3)">FE Columns</div>
-    <div style="color:var(--text2);font-weight:600">+${feDerived} derived</div>
+    <div style="color:var(--text3)">Columns</div>
+    <div style="color:var(--text2);font-weight:600">${origCols} original + ${feDerived} derived = ${origCols + feDerived} total</div>
     <div style="grid-column:1/-1;border-top:1px solid var(--border);margin:0.2rem 0"></div>` : '';
 
   grid.innerHTML = `
