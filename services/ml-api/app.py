@@ -1817,39 +1817,50 @@ async def train_model(
                     cv_split   = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
                     cw = "balanced" if is_imbal else None
 
+                    cv_results = []
+
                     p.update(12, "Testing Random Forest (5-fold CV)…")
-                    rf_pl  = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
-                                       ("model", RandomForestClassifier(n_estimators=100, random_state=42,
-                                                                        class_weight=cw))])
-                    _rf_folds  = cross_val_score(rf_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
-                    rf_cv  = float(_rf_folds.mean())
+                    try:
+                        rf_pl  = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                           ("model", RandomForestClassifier(n_estimators=100, random_state=42,
+                                                                            class_weight=cw))])
+                        _rf_folds  = cross_val_score(rf_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
+                        cv_results.append({"algorithm": "Random Forest", "score": round(float(_rf_folds.mean()), 4), "fold_scores": [round(float(s), 4) for s in _rf_folds]})
+                    except Exception as _e:
+                        print(f"Random Forest CV failed: {_e}", flush=True)
 
                     p.update(28, "Testing XGBoost (5-fold CV)…")
-                    xgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
-                                       ("model", XGBClassifier(n_estimators=100, random_state=42,
-                                                               eval_metric="logloss", verbosity=0))])
-                    _xgb_folds = cross_val_score(xgb_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
-                    xgb_cv = float(_xgb_folds.mean())
+                    try:
+                        xgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                           ("model", XGBClassifier(n_estimators=100, random_state=42,
+                                                                   eval_metric="logloss", verbosity=0))])
+                        _xgb_folds = cross_val_score(xgb_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
+                        cv_results.append({"algorithm": "XGBoost", "score": round(float(_xgb_folds.mean()), 4), "fold_scores": [round(float(s), 4) for s in _xgb_folds]})
+                    except Exception as _e:
+                        print(f"XGBoost CV failed: {_e}", flush=True)
 
                     p.update(44, "Testing LightGBM (5-fold CV)…")
-                    lgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
-                                       ("model", LGBMClassifier(n_estimators=100, random_state=42,
-                                                                class_weight=cw, verbose=-1))])
-                    _lgb_folds = cross_val_score(lgb_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
-                    lgb_cv = float(_lgb_folds.mean())
+                    try:
+                        lgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                           ("model", LGBMClassifier(n_estimators=100, random_state=42,
+                                                                    class_weight=cw, verbose=-1))])
+                        _lgb_folds = cross_val_score(lgb_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
+                        cv_results.append({"algorithm": "LightGBM", "score": round(float(_lgb_folds.mean()), 4), "fold_scores": [round(float(s), 4) for s in _lgb_folds]})
+                    except Exception as _e:
+                        print(f"LightGBM CV failed: {_e}", flush=True)
 
                     p.update(58, "Testing CatBoost (5-fold CV)…")
-                    cat_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
-                                       ("model", CatBoostClassifier(iterations=100, random_seed=42, verbose=0))])
-                    _cat_folds = cross_val_score(cat_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
-                    cat_cv = float(_cat_folds.mean())
+                    try:
+                        cat_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                           ("model", CatBoostClassifier(iterations=100, random_seed=42, verbose=0))])
+                        _cat_folds = cross_val_score(cat_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
+                        cv_results.append({"algorithm": "CatBoost", "score": round(float(_cat_folds.mean()), 4), "fold_scores": [round(float(s), 4) for s in _cat_folds]})
+                    except Exception as _e:
+                        print(f"CatBoost CV failed: {_e}", flush=True)
 
-                    cv_results = [
-                        {"algorithm": "Random Forest", "score": round(rf_cv,  4), "fold_scores": [round(float(s), 4) for s in _rf_folds]},
-                        {"algorithm": "XGBoost",       "score": round(xgb_cv, 4), "fold_scores": [round(float(s), 4) for s in _xgb_folds]},
-                        {"algorithm": "LightGBM",      "score": round(lgb_cv, 4), "fold_scores": [round(float(s), 4) for s in _lgb_folds]},
-                        {"algorithm": "CatBoost",      "score": round(cat_cv, 4), "fold_scores": [round(float(s), 4) for s in _cat_folds]},
-                    ]
+                    if not cv_results:
+                        raise RuntimeError("All 4 models failed CV")
+
                     winner = max(cv_results, key=lambda r: r["score"])["algorithm"]
                     _effective_algorithm = winner
 
@@ -2027,36 +2038,47 @@ async def train_model(
                     X_cv, y_cv = _cv_sample(X, y_enc)
                     cv_split   = KFold(n_splits=5, shuffle=True, random_state=42)
 
+                    cv_results = []
+
                     p.update(12, "Testing Random Forest (5-fold CV)…")
-                    rf_pl  = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
-                                       ("model", RandomForestRegressor(n_estimators=100, random_state=42))])
-                    _rf_folds_r  = cross_val_score(rf_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
-                    rf_cv  = -float(_rf_folds_r.mean())
+                    try:
+                        rf_pl  = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                           ("model", RandomForestRegressor(n_estimators=100, random_state=42))])
+                        _rf_folds_r  = cross_val_score(rf_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
+                        cv_results.append({"algorithm": "Random Forest", "score": round(-float(_rf_folds_r.mean()), 4), "fold_scores": [round(-float(s), 4) for s in _rf_folds_r]})
+                    except Exception as _e:
+                        print(f"Random Forest CV failed: {_e}", flush=True)
 
                     p.update(28, "Testing XGBoost (5-fold CV)…")
-                    xgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
-                                       ("model", XGBRegressor(n_estimators=100, random_state=42, verbosity=0))])
-                    _xgb_folds_r = cross_val_score(xgb_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
-                    xgb_cv = -float(_xgb_folds_r.mean())
+                    try:
+                        xgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                           ("model", XGBRegressor(n_estimators=100, random_state=42, verbosity=0))])
+                        _xgb_folds_r = cross_val_score(xgb_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
+                        cv_results.append({"algorithm": "XGBoost", "score": round(-float(_xgb_folds_r.mean()), 4), "fold_scores": [round(-float(s), 4) for s in _xgb_folds_r]})
+                    except Exception as _e:
+                        print(f"XGBoost CV failed: {_e}", flush=True)
 
                     p.update(44, "Testing LightGBM (5-fold CV)…")
-                    lgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
-                                       ("model", LGBMRegressor(n_estimators=100, random_state=42, verbose=-1))])
-                    _lgb_folds_r = cross_val_score(lgb_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
-                    lgb_cv = -float(_lgb_folds_r.mean())
+                    try:
+                        lgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                           ("model", LGBMRegressor(n_estimators=100, random_state=42, verbose=-1))])
+                        _lgb_folds_r = cross_val_score(lgb_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
+                        cv_results.append({"algorithm": "LightGBM", "score": round(-float(_lgb_folds_r.mean()), 4), "fold_scores": [round(-float(s), 4) for s in _lgb_folds_r]})
+                    except Exception as _e:
+                        print(f"LightGBM CV failed: {_e}", flush=True)
 
                     p.update(58, "Testing CatBoost (5-fold CV)…")
-                    cat_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
-                                       ("model", CatBoostRegressor(iterations=100, random_seed=42, verbose=0))])
-                    _cat_folds_r = cross_val_score(cat_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
-                    cat_cv = -float(_cat_folds_r.mean())
+                    try:
+                        cat_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                           ("model", CatBoostRegressor(iterations=100, random_seed=42, verbose=0))])
+                        _cat_folds_r = cross_val_score(cat_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
+                        cv_results.append({"algorithm": "CatBoost", "score": round(-float(_cat_folds_r.mean()), 4), "fold_scores": [round(-float(s), 4) for s in _cat_folds_r]})
+                    except Exception as _e:
+                        print(f"CatBoost CV failed: {_e}", flush=True)
 
-                    cv_results = [
-                        {"algorithm": "Random Forest", "score": round(rf_cv,  4), "fold_scores": [round(-float(s), 4) for s in _rf_folds_r]},
-                        {"algorithm": "XGBoost",       "score": round(xgb_cv, 4), "fold_scores": [round(-float(s), 4) for s in _xgb_folds_r]},
-                        {"algorithm": "LightGBM",      "score": round(lgb_cv, 4), "fold_scores": [round(-float(s), 4) for s in _lgb_folds_r]},
-                        {"algorithm": "CatBoost",      "score": round(cat_cv, 4), "fold_scores": [round(-float(s), 4) for s in _cat_folds_r]},
-                    ]
+                    if not cv_results:
+                        raise RuntimeError("All 4 models failed CV")
+
                     winner = min(cv_results, key=lambda r: r["score"])["algorithm"]
                     _effective_algorithm = winner
 
