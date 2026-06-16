@@ -15,7 +15,8 @@ from sklearn.preprocessing import OneHotEncoder, LabelEncoder, StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.ensemble import (RandomForestClassifier, GradientBoostingClassifier,
-                               RandomForestRegressor, GradientBoostingRegressor)
+                               RandomForestRegressor, GradientBoostingRegressor,
+                               ExtraTreesClassifier, ExtraTreesRegressor)
 from sklearn.cluster import KMeans, DBSCAN
 # xgboost, lightgbm, catboost are imported lazily inside train_model to save ~200 MB
 # of shared-library memory at startup (critical on Render free tier 512 MB limit)
@@ -1304,23 +1305,38 @@ def _rule_explanation(winner: str, cv_results: list, task: str,
 
 
 def _build_prompt(winner, cv_results, task, selection_metric, is_imbalanced, feature_importance, n_rows):
-    if task == "regression":
-        results_text = "\n".join(f"  {r['algorithm']}: MAE = {r['score']:.4f}" for r in cv_results)
-    else:
-        results_text = "\n".join(f"  {r['algorithm']}: {selection_metric} = {r['score'] * 100:.2f}%" for r in cv_results)
+    def _fmt_score(r):
+        score_str = f"{r['score'] * 100:.2f}%" if task == "classification" else f"{r['score']:.4f}"
+        folds = r.get("fold_scores", [])
+        if folds:
+            fold_str = ", ".join(f"{s * 100:.2f}%" if task == "classification" else f"{s:.4f}" for s in folds)
+            variance = max(folds) - min(folds)
+            var_str = f"{variance * 100:.2f}%" if task == "classification" else f"{variance:.4f}"
+            return f"  {r['algorithm']}: {selection_metric} = {score_str}  [folds: {fold_str}, spread: {var_str}]"
+        return f"  {r['algorithm']}: {selection_metric} = {score_str}"
+
+    results_text = "\n".join(_fmt_score(r) for r in cv_results)
+    algo_list = ", ".join(r["algorithm"] for r in cv_results)
     fi_text = "\n".join(f"  {i+1}. {f['feature']} ({f['importance']:.1f}%)" for i, f in enumerate(feature_importance[:5])) if feature_importance else "  Not available"
     imbalance_note = " The dataset has class imbalance, so F1-macro was used as the selection metric instead of accuracy." if is_imbalanced else ""
+    lower_is_better = task == "regression"
     return (
         f"You are an expert ML engineer explaining AutoML results to a data analyst.\n\n"
         f"Dataset: {n_rows:,} rows | Task: {task}{imbalance_note}\n"
-        f"Algorithms tested (3-fold cross-validation):\n{results_text}\n\n"
+        f"Selection metric: {selection_metric} ({'lower is better' if lower_is_better else 'higher is better'})\n"
+        f"Algorithms tested (5-fold cross-validation):\n{results_text}\n\n"
         f"Winner: {winner}\n\nTop features by importance:\n{fi_text}\n\n"
-        f"Return ONLY a valid JSON object with exactly these 5 fields. No markdown, no code fences, no extra text — just the raw JSON:\n\n"
+        f"Analyze ALL models, not just the winner. Consider fold spread (high spread = unstable model).\n\n"
+        f"Return ONLY a valid JSON object with exactly these 6 fields. No markdown, no code fences, no extra text — just the raw JSON:\n\n"
         f"{{\n"
-        f'  "why_won": "2-3 sentences on why {winner} outperformed the others given the dataset characteristics.",\n'
-        f'  "score_analysis": "2-3 sentences interpreting the cross-validation scores — how close the competition was, what the margin means in practice, and whether the result is reliable.",\n'
-        f'  "key_drivers": "2-3 sentences on what the top features reveal about what drives the predictions and any notable patterns.",\n'
-        f'  "recommendations": ["Actionable next step 1.", "Actionable next step 2.", "Actionable next step 3."],\n'
+        f'  "why_won": "2-3 sentences on why {winner} outperformed the others — reference the actual score margins and fold stability.",\n'
+        f'  "score_analysis": "2-3 sentences comparing ALL {len(cv_results)} models — discuss how competitive the race was, which models were close, and what the fold spread reveals about stability.",\n'
+        f'  "key_drivers": "2-3 sentences on what the top features reveal about prediction drivers and any patterns.",\n'
+        f'  "recommendations": ["Specific next step referencing actual scores.", "Specific next step.", "Specific next step."],\n'
+        f'  "model_comparison": [\n'
+        f'    {{"algorithm": "<name>", "fitness_score": <0-100 integer rating for this dataset>, "reason": "1 sentence why this score."}}\n'
+        f'    // one entry per algorithm: {algo_list}\n'
+        f'  ],\n'
         f'  "actionable_insights": [\n'
         f'    {{"title": "3-5 word title", "detail": "1-2 specific sentences tied to the actual numbers."}},\n'
         f'    {{"title": "3-5 word title", "detail": "1-2 specific sentences tied to the actual numbers."}},\n'
@@ -1346,11 +1362,12 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
                 messages=[{"role": "user", "content": prompt}],
             )
             raw_text = resp.choices[0].message.content.strip()
-        elif provider == "groq":
+        elif provider in ("groq", "groq-mixtral"):
             import openai  # noqa: PLC0415
             client = openai.OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+            model_name = "mixtral-8x7b-32768" if provider == "groq-mixtral" else "llama-3.3-70b-versatile"
             resp = client.chat.completions.create(
-                model="llama-3.3-70b-versatile", max_tokens=1200,
+                model=model_name, max_tokens=1200,
                 messages=[{"role": "user", "content": prompt}],
             )
             raw_text = resp.choices[0].message.content.strip()
@@ -1381,12 +1398,13 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
     cleaned = _re.sub(r'\n?```$', '', cleaned).strip()
     try:
         parsed = _json.loads(cleaned)
-        # Ensure all expected keys exist
         return {
-            "why_won":         str(parsed.get("why_won", "")),
-            "score_analysis":  str(parsed.get("score_analysis", "")),
-            "key_drivers":     str(parsed.get("key_drivers", "")),
-            "recommendations": parsed.get("recommendations", []),
+            "why_won":            str(parsed.get("why_won", "")),
+            "score_analysis":     str(parsed.get("score_analysis", "")),
+            "key_drivers":        str(parsed.get("key_drivers", "")),
+            "recommendations":    parsed.get("recommendations", []),
+            "model_comparison":   parsed.get("model_comparison", []),
+            "actionable_insights": parsed.get("actionable_insights", []),
         }
     except (_json.JSONDecodeError, Exception):
         return {"why_won": raw_text, "score_analysis": "", "key_drivers": "", "recommendations": []}
@@ -1858,8 +1876,18 @@ async def train_model(
                     except Exception as _e:
                         print(f"CatBoost CV failed: {_e}", flush=True)
 
+                    p.update(70, "Testing Extra Trees (5-fold CV)…")
+                    try:
+                        et_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                          ("model", ExtraTreesClassifier(n_estimators=100, random_state=42,
+                                                                         class_weight=cw))])
+                        _et_folds = cross_val_score(et_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
+                        cv_results.append({"algorithm": "Extra Trees", "score": round(float(_et_folds.mean()), 4), "fold_scores": [round(float(s), 4) for s in _et_folds]})
+                    except Exception as _e:
+                        print(f"Extra Trees CV failed: {_e}", flush=True)
+
                     if not cv_results:
-                        raise RuntimeError("All 4 models failed CV")
+                        raise RuntimeError("All 5 models failed CV")
 
                     winner = max(cv_results, key=lambda r: r["score"])["algorithm"]
                     _effective_algorithm = winner
@@ -1872,6 +1900,9 @@ async def train_model(
                                                    class_weight=cw, verbose=-1)
                     elif winner == "CatBoost":
                         estimator = CatBoostClassifier(iterations=100, random_seed=42, verbose=0)
+                    elif winner == "Extra Trees":
+                        estimator = ExtraTreesClassifier(n_estimators=100, random_state=42,
+                                                         class_weight=cw)
                     else:
                         estimator = RandomForestClassifier(n_estimators=100, random_state=42,
                                                            class_weight=cw)
@@ -2076,8 +2107,17 @@ async def train_model(
                     except Exception as _e:
                         print(f"CatBoost CV failed: {_e}", flush=True)
 
+                    p.update(70, "Testing Extra Trees (5-fold CV)…")
+                    try:
+                        et_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                          ("model", ExtraTreesRegressor(n_estimators=100, random_state=42))])
+                        _et_folds_r = cross_val_score(et_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
+                        cv_results.append({"algorithm": "Extra Trees", "score": round(-float(_et_folds_r.mean()), 4), "fold_scores": [round(-float(s), 4) for s in _et_folds_r]})
+                    except Exception as _e:
+                        print(f"Extra Trees CV failed: {_e}", flush=True)
+
                     if not cv_results:
-                        raise RuntimeError("All 4 models failed CV")
+                        raise RuntimeError("All 5 models failed CV")
 
                     winner = min(cv_results, key=lambda r: r["score"])["algorithm"]
                     _effective_algorithm = winner
@@ -2088,6 +2128,8 @@ async def train_model(
                         estimator = LGBMRegressor(n_estimators=100, random_state=42, verbose=-1)
                     elif winner == "CatBoost":
                         estimator = CatBoostRegressor(iterations=100, random_seed=42, verbose=0)
+                    elif winner == "Extra Trees":
+                        estimator = ExtraTreesRegressor(n_estimators=100, random_state=42)
                     else:
                         estimator = RandomForestRegressor(n_estimators=100, random_state=42)
 
@@ -2362,7 +2404,8 @@ async def explain_automl(request: Request):
             "gemini-3.5": os.environ.get("GEMINI_API_KEY", ""),
             "anthropic":  os.environ.get("ANTHROPIC_API_KEY", ""),
             "openai":     os.environ.get("OPENAI_API_KEY", ""),
-            "groq":       os.environ.get("GROQ_API_KEY", ""),
+            "groq":         os.environ.get("GROQ_API_KEY", ""),
+            "groq-mixtral": os.environ.get("GROQ_API_KEY", ""),
         }
         user_key = _server_keys.get(provider, "")
 
