@@ -1956,7 +1956,7 @@ async def train_model(
                         p.update(_pct_steps[_model_idx % 5], "Testing Naive Bayes (5-fold CV)…"); _model_idx += 1
                         try:
                             nb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
-                                              ("model", GaussianNB())])
+                                              ("model", GaussianNB(var_smoothing=1e-2))])
                             _nb_folds = cross_val_score(nb_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
                             cv_results.append({"algorithm": "Naive Bayes", "score": round(float(_nb_folds.mean()), 4), "fold_scores": [round(float(s), 4) for s in _nb_folds]})
                         except Exception as _e:
