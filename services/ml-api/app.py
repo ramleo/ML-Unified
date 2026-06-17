@@ -1863,7 +1863,8 @@ async def train_model(
                     _model_idx = 0
 
                     if "Random Forest" in _selected_models:
-                        p.update(_pct_steps[_model_idx % 5], "Testing Random Forest (5-fold CV)…"); _model_idx += 1
+                        p.update(_pct_steps[_model_idx % 5], "Testing Random Forest (5-fold CV)…")
+                        _model_idx += 1
                         try:
                             rf_pl  = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                                ("model", RandomForestClassifier(n_estimators=100, random_state=42, class_weight=cw))])
@@ -1873,7 +1874,8 @@ async def train_model(
                             print(f"Random Forest CV failed: {_e}", flush=True)
 
                     if "XGBoost" in _selected_models:
-                        p.update(_pct_steps[_model_idx % 5], "Testing XGBoost (5-fold CV)…"); _model_idx += 1
+                        p.update(_pct_steps[_model_idx % 5], "Testing XGBoost (5-fold CV)…")
+                        _model_idx += 1
                         try:
                             xgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                                ("model", XGBClassifier(n_estimators=100, random_state=42, eval_metric="logloss", verbosity=0))])
@@ -1883,7 +1885,8 @@ async def train_model(
                             print(f"XGBoost CV failed: {_e}", flush=True)
 
                     if "LightGBM" in _selected_models:
-                        p.update(_pct_steps[_model_idx % 5], "Testing LightGBM (5-fold CV)…"); _model_idx += 1
+                        p.update(_pct_steps[_model_idx % 5], "Testing LightGBM (5-fold CV)…")
+                        _model_idx += 1
                         try:
                             lgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                                ("model", LGBMClassifier(n_estimators=100, random_state=42, class_weight=cw, verbose=-1))])
@@ -1893,7 +1896,8 @@ async def train_model(
                             print(f"LightGBM CV failed: {_e}", flush=True)
 
                     if "CatBoost" in _selected_models:
-                        p.update(_pct_steps[_model_idx % 5], "Testing CatBoost (5-fold CV)…"); _model_idx += 1
+                        p.update(_pct_steps[_model_idx % 5], "Testing CatBoost (5-fold CV)…")
+                        _model_idx += 1
                         try:
                             cat_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                                ("model", CatBoostClassifier(iterations=100, random_seed=42, verbose=0))])
@@ -1903,7 +1907,8 @@ async def train_model(
                             print(f"CatBoost CV failed: {_e}", flush=True)
 
                     if "Extra Trees" in _selected_models:
-                        p.update(_pct_steps[_model_idx % 5], "Testing Extra Trees (5-fold CV)…"); _model_idx += 1
+                        p.update(_pct_steps[_model_idx % 5], "Testing Extra Trees (5-fold CV)…")
+                        _model_idx += 1
                         try:
                             et_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                               ("model", ExtraTreesClassifier(n_estimators=100, random_state=42, class_weight=cw))])
@@ -1913,7 +1918,8 @@ async def train_model(
                             print(f"Extra Trees CV failed: {_e}", flush=True)
 
                     if "Decision Tree" in _selected_models:
-                        p.update(_pct_steps[_model_idx % 5], "Testing Decision Tree (5-fold CV)…"); _model_idx += 1
+                        p.update(_pct_steps[_model_idx % 5], "Testing Decision Tree (5-fold CV)…")
+                        _model_idx += 1
                         try:
                             dt_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                               ("model", DecisionTreeClassifier(random_state=42, class_weight=cw))])
@@ -1923,7 +1929,8 @@ async def train_model(
                             print(f"Decision Tree CV failed: {_e}", flush=True)
 
                     if "KNN" in _selected_models:
-                        p.update(_pct_steps[_model_idx % 5], "Testing KNN (5-fold CV)…"); _model_idx += 1
+                        p.update(_pct_steps[_model_idx % 5], "Testing KNN (5-fold CV)…")
+                        _model_idx += 1
                         try:
                             knn_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                                ("model", KNeighborsClassifier(n_neighbors=5))])
@@ -1933,7 +1940,8 @@ async def train_model(
                             print(f"KNN CV failed: {_e}", flush=True)
 
                     if "Logistic Regression" in _selected_models:
-                        p.update(_pct_steps[_model_idx % 5], "Testing Logistic Regression (5-fold CV)…"); _model_idx += 1
+                        p.update(_pct_steps[_model_idx % 5], "Testing Logistic Regression (5-fold CV)…")
+                        _model_idx += 1
                         try:
                             lr_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                               ("model", LogisticRegression(max_iter=1000, random_state=42, class_weight=cw))])
@@ -1943,7 +1951,8 @@ async def train_model(
                             print(f"Logistic Regression CV failed: {_e}", flush=True)
 
                     if "SVM" in _selected_models:
-                        p.update(_pct_steps[_model_idx % 5], "Testing SVM (5-fold CV)…"); _model_idx += 1
+                        p.update(_pct_steps[_model_idx % 5], "Testing SVM (5-fold CV)…")
+                        _model_idx += 1
                         try:
                             svm_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                                ("model", SVC(kernel="rbf", probability=True, class_weight=cw, random_state=42))])
@@ -1953,7 +1962,8 @@ async def train_model(
                             print(f"SVM CV failed: {_e}", flush=True)
 
                     if "Naive Bayes" in _selected_models:
-                        p.update(_pct_steps[_model_idx % 5], "Testing Naive Bayes (5-fold CV)…"); _model_idx += 1
+                        p.update(_pct_steps[_model_idx % 5], "Testing Naive Bayes (5-fold CV)…")
+                        _model_idx += 1
                         try:
                             nb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                               ("model", GaussianNB(var_smoothing=1e-2))])
@@ -1963,7 +1973,8 @@ async def train_model(
                             print(f"Naive Bayes CV failed: {_e}", flush=True)
 
                     if "Gradient Boosting" in _selected_models:
-                        p.update(_pct_steps[_model_idx % 5], "Testing Gradient Boosting (5-fold CV)…"); _model_idx += 1
+                        p.update(_pct_steps[_model_idx % 5], "Testing Gradient Boosting (5-fold CV)…")
+                        _model_idx += 1
                         try:
                             gb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                               ("model", GradientBoostingClassifier(n_estimators=100, random_state=42))])
@@ -1974,7 +1985,8 @@ async def train_model(
 
                     if "AdaBoost" in _selected_models:
                         from sklearn.ensemble import AdaBoostClassifier  # noqa: PLC0415
-                        p.update(_pct_steps[_model_idx % 5], "Testing AdaBoost (5-fold CV)…"); _model_idx += 1
+                        p.update(_pct_steps[_model_idx % 5], "Testing AdaBoost (5-fold CV)…")
+                        _model_idx += 1
                         try:
                             ada_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                                ("model", AdaBoostClassifier(n_estimators=100, random_state=42))])
@@ -2187,7 +2199,8 @@ async def train_model(
                     _model_idx_r = 0
 
                     if "Random Forest" in _selected_models:
-                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing Random Forest (5-fold CV)…"); _model_idx_r += 1
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing Random Forest (5-fold CV)…")
+                        _model_idx_r += 1
                         try:
                             rf_pl  = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                                ("model", RandomForestRegressor(n_estimators=100, random_state=42))])
@@ -2197,7 +2210,8 @@ async def train_model(
                             print(f"Random Forest CV failed: {_e}", flush=True)
 
                     if "XGBoost" in _selected_models:
-                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing XGBoost (5-fold CV)…"); _model_idx_r += 1
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing XGBoost (5-fold CV)…")
+                        _model_idx_r += 1
                         try:
                             xgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                                ("model", XGBRegressor(n_estimators=100, random_state=42, verbosity=0))])
@@ -2207,7 +2221,8 @@ async def train_model(
                             print(f"XGBoost CV failed: {_e}", flush=True)
 
                     if "LightGBM" in _selected_models:
-                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing LightGBM (5-fold CV)…"); _model_idx_r += 1
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing LightGBM (5-fold CV)…")
+                        _model_idx_r += 1
                         try:
                             lgb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                                ("model", LGBMRegressor(n_estimators=100, random_state=42, verbose=-1))])
@@ -2217,7 +2232,8 @@ async def train_model(
                             print(f"LightGBM CV failed: {_e}", flush=True)
 
                     if "CatBoost" in _selected_models:
-                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing CatBoost (5-fold CV)…"); _model_idx_r += 1
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing CatBoost (5-fold CV)…")
+                        _model_idx_r += 1
                         try:
                             cat_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                                ("model", CatBoostRegressor(iterations=100, random_seed=42, verbose=0))])
@@ -2227,7 +2243,8 @@ async def train_model(
                             print(f"CatBoost CV failed: {_e}", flush=True)
 
                     if "Extra Trees" in _selected_models:
-                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing Extra Trees (5-fold CV)…"); _model_idx_r += 1
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing Extra Trees (5-fold CV)…")
+                        _model_idx_r += 1
                         try:
                             et_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                               ("model", ExtraTreesRegressor(n_estimators=100, random_state=42))])
@@ -2237,7 +2254,8 @@ async def train_model(
                             print(f"Extra Trees CV failed: {_e}", flush=True)
 
                     if "Decision Tree" in _selected_models:
-                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing Decision Tree (5-fold CV)…"); _model_idx_r += 1
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing Decision Tree (5-fold CV)…")
+                        _model_idx_r += 1
                         try:
                             dt_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                               ("model", DecisionTreeRegressor(random_state=42))])
@@ -2247,7 +2265,8 @@ async def train_model(
                             print(f"Decision Tree CV failed: {_e}", flush=True)
 
                     if "KNN" in _selected_models:
-                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing KNN (5-fold CV)…"); _model_idx_r += 1
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing KNN (5-fold CV)…")
+                        _model_idx_r += 1
                         try:
                             knn_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                                ("model", KNeighborsRegressor(n_neighbors=5))])
@@ -2257,7 +2276,8 @@ async def train_model(
                             print(f"KNN CV failed: {_e}", flush=True)
 
                     if "Ridge" in _selected_models:
-                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing Ridge (5-fold CV)…"); _model_idx_r += 1
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing Ridge (5-fold CV)…")
+                        _model_idx_r += 1
                         try:
                             ridge_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                                  ("model", RidgeRegressor(alpha=1.0))])
@@ -2267,7 +2287,8 @@ async def train_model(
                             print(f"Ridge CV failed: {_e}", flush=True)
 
                     if "Lasso" in _selected_models:
-                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing Lasso (5-fold CV)…"); _model_idx_r += 1
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing Lasso (5-fold CV)…")
+                        _model_idx_r += 1
                         try:
                             lasso_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                                  ("model", Lasso(alpha=1.0, max_iter=5000))])
@@ -2277,7 +2298,8 @@ async def train_model(
                             print(f"Lasso CV failed: {_e}", flush=True)
 
                     if "ElasticNet" in _selected_models:
-                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing ElasticNet (5-fold CV)…"); _model_idx_r += 1
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing ElasticNet (5-fold CV)…")
+                        _model_idx_r += 1
                         try:
                             enet_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                                 ("model", ElasticNet(alpha=1.0, max_iter=5000))])
@@ -2287,7 +2309,8 @@ async def train_model(
                             print(f"ElasticNet CV failed: {_e}", flush=True)
 
                     if "SVR" in _selected_models:
-                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing SVR (5-fold CV)…"); _model_idx_r += 1
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing SVR (5-fold CV)…")
+                        _model_idx_r += 1
                         try:
                             svr_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                                ("model", SVR(kernel="rbf"))])
@@ -2297,7 +2320,8 @@ async def train_model(
                             print(f"SVR CV failed: {_e}", flush=True)
 
                     if "Gradient Boosting" in _selected_models:
-                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing Gradient Boosting (5-fold CV)…"); _model_idx_r += 1
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing Gradient Boosting (5-fold CV)…")
+                        _model_idx_r += 1
                         try:
                             gb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                               ("model", GradientBoostingRegressor(n_estimators=100, random_state=42))])
