@@ -14,6 +14,9 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder, StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LogisticRegression, Ridge as RidgeRegressor
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
+from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.ensemble import (RandomForestClassifier, GradientBoostingClassifier,
                                RandomForestRegressor, GradientBoostingRegressor,
                                ExtraTreesClassifier, ExtraTreesRegressor)
@@ -1759,7 +1762,7 @@ async def train_model(
     try:
         _selected_models = set(_json_fm.loads(selected_models))
     except Exception:
-        _selected_models = {"Random Forest", "XGBoost", "LightGBM", "CatBoost", "Extra Trees"}
+        _selected_models = {"Random Forest", "XGBoost", "LightGBM", "CatBoost", "Extra Trees", "Decision Tree", "KNN", "Logistic Regression", "Ridge"}
     _y          = y
 
     streaming_task = StreamingTask()
@@ -1898,7 +1901,7 @@ async def train_model(
                             print(f"CatBoost CV failed: {_e}", flush=True)
 
                     if "Extra Trees" in _selected_models:
-                        p.update(_pct_steps[_model_idx % 5], "Testing Extra Trees (5-fold CV)…")
+                        p.update(_pct_steps[_model_idx % 5], "Testing Extra Trees (5-fold CV)…"); _model_idx += 1
                         try:
                             et_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                               ("model", ExtraTreesClassifier(n_estimators=100, random_state=42, class_weight=cw))])
@@ -1906,6 +1909,36 @@ async def train_model(
                             cv_results.append({"algorithm": "Extra Trees", "score": round(float(_et_folds.mean()), 4), "fold_scores": [round(float(s), 4) for s in _et_folds]})
                         except Exception as _e:
                             print(f"Extra Trees CV failed: {_e}", flush=True)
+
+                    if "Decision Tree" in _selected_models:
+                        p.update(_pct_steps[_model_idx % 5], "Testing Decision Tree (5-fold CV)…"); _model_idx += 1
+                        try:
+                            dt_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                              ("model", DecisionTreeClassifier(random_state=42, class_weight=cw))])
+                            _dt_folds = cross_val_score(dt_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
+                            cv_results.append({"algorithm": "Decision Tree", "score": round(float(_dt_folds.mean()), 4), "fold_scores": [round(float(s), 4) for s in _dt_folds]})
+                        except Exception as _e:
+                            print(f"Decision Tree CV failed: {_e}", flush=True)
+
+                    if "KNN" in _selected_models:
+                        p.update(_pct_steps[_model_idx % 5], "Testing KNN (5-fold CV)…"); _model_idx += 1
+                        try:
+                            knn_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                               ("model", KNeighborsClassifier(n_neighbors=5))])
+                            _knn_folds = cross_val_score(knn_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
+                            cv_results.append({"algorithm": "KNN", "score": round(float(_knn_folds.mean()), 4), "fold_scores": [round(float(s), 4) for s in _knn_folds]})
+                        except Exception as _e:
+                            print(f"KNN CV failed: {_e}", flush=True)
+
+                    if "Logistic Regression" in _selected_models:
+                        p.update(_pct_steps[_model_idx % 5], "Testing Logistic Regression (5-fold CV)…"); _model_idx += 1
+                        try:
+                            lr_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                              ("model", LogisticRegression(max_iter=1000, random_state=42, class_weight=cw))])
+                            _lr_folds = cross_val_score(lr_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
+                            cv_results.append({"algorithm": "Logistic Regression", "score": round(float(_lr_folds.mean()), 4), "fold_scores": [round(float(s), 4) for s in _lr_folds]})
+                        except Exception as _e:
+                            print(f"Logistic Regression CV failed: {_e}", flush=True)
 
                     if not cv_results:
                         raise RuntimeError("All selected models failed CV")
@@ -1924,6 +1957,12 @@ async def train_model(
                     elif winner == "Extra Trees":
                         estimator = ExtraTreesClassifier(n_estimators=100, random_state=42,
                                                          class_weight=cw)
+                    elif winner == "Decision Tree":
+                        estimator = DecisionTreeClassifier(random_state=42, class_weight=cw)
+                    elif winner == "KNN":
+                        estimator = KNeighborsClassifier(n_neighbors=5)
+                    elif winner == "Logistic Regression":
+                        estimator = LogisticRegression(max_iter=1000, random_state=42, class_weight=cw)
                     else:
                         estimator = RandomForestClassifier(n_estimators=100, random_state=42,
                                                            class_weight=cw)
@@ -2136,7 +2175,7 @@ async def train_model(
                             print(f"CatBoost CV failed: {_e}", flush=True)
 
                     if "Extra Trees" in _selected_models:
-                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing Extra Trees (5-fold CV)…")
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing Extra Trees (5-fold CV)…"); _model_idx_r += 1
                         try:
                             et_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
                                               ("model", ExtraTreesRegressor(n_estimators=100, random_state=42))])
@@ -2144,6 +2183,36 @@ async def train_model(
                             cv_results.append({"algorithm": "Extra Trees", "score": round(-float(_et_folds_r.mean()), 4), "fold_scores": [round(-float(s), 4) for s in _et_folds_r]})
                         except Exception as _e:
                             print(f"Extra Trees CV failed: {_e}", flush=True)
+
+                    if "Decision Tree" in _selected_models:
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing Decision Tree (5-fold CV)…"); _model_idx_r += 1
+                        try:
+                            dt_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                              ("model", DecisionTreeRegressor(random_state=42))])
+                            _dt_folds_r = cross_val_score(dt_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
+                            cv_results.append({"algorithm": "Decision Tree", "score": round(-float(_dt_folds_r.mean()), 4), "fold_scores": [round(-float(s), 4) for s in _dt_folds_r]})
+                        except Exception as _e:
+                            print(f"Decision Tree CV failed: {_e}", flush=True)
+
+                    if "KNN" in _selected_models:
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing KNN (5-fold CV)…"); _model_idx_r += 1
+                        try:
+                            knn_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                               ("model", KNeighborsRegressor(n_neighbors=5))])
+                            _knn_folds_r = cross_val_score(knn_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
+                            cv_results.append({"algorithm": "KNN", "score": round(-float(_knn_folds_r.mean()), 4), "fold_scores": [round(-float(s), 4) for s in _knn_folds_r]})
+                        except Exception as _e:
+                            print(f"KNN CV failed: {_e}", flush=True)
+
+                    if "Ridge" in _selected_models:
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing Ridge (5-fold CV)…"); _model_idx_r += 1
+                        try:
+                            ridge_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                                 ("model", RidgeRegressor(alpha=1.0))])
+                            _ridge_folds_r = cross_val_score(ridge_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
+                            cv_results.append({"algorithm": "Ridge", "score": round(-float(_ridge_folds_r.mean()), 4), "fold_scores": [round(-float(s), 4) for s in _ridge_folds_r]})
+                        except Exception as _e:
+                            print(f"Ridge CV failed: {_e}", flush=True)
 
                     if not cv_results:
                         raise RuntimeError("All selected models failed CV")
@@ -2159,6 +2228,12 @@ async def train_model(
                         estimator = CatBoostRegressor(iterations=100, random_seed=42, verbose=0)
                     elif winner == "Extra Trees":
                         estimator = ExtraTreesRegressor(n_estimators=100, random_state=42)
+                    elif winner == "Decision Tree":
+                        estimator = DecisionTreeRegressor(random_state=42)
+                    elif winner == "KNN":
+                        estimator = KNeighborsRegressor(n_neighbors=5)
+                    elif winner == "Ridge":
+                        estimator = RidgeRegressor(alpha=1.0)
                     else:
                         estimator = RandomForestRegressor(n_estimators=100, random_state=42)
 
