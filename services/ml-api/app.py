@@ -1737,7 +1737,7 @@ async def train_model(
 
     transformers = []
     if num_cols:
-        transformers.append(("num", Pipeline([("imp", SimpleImputer(strategy="median"))]), num_cols))
+        transformers.append(("num", Pipeline([("imp", SimpleImputer(strategy="median")), ("scaler", StandardScaler())]), num_cols))
     if cat_cols:
         transformers.append(("cat", Pipeline([
             ("imp", SimpleImputer(strategy="most_frequent")),
