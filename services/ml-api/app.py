@@ -14,9 +14,11 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder, StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.linear_model import LogisticRegression, Ridge as RidgeRegressor
+from sklearn.linear_model import LogisticRegression, Ridge as RidgeRegressor, Lasso, ElasticNet
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
+from sklearn.svm import SVC, SVR
+from sklearn.naive_bayes import GaussianNB
 from sklearn.ensemble import (RandomForestClassifier, GradientBoostingClassifier,
                                RandomForestRegressor, GradientBoostingRegressor,
                                ExtraTreesClassifier, ExtraTreesRegressor)
@@ -1940,6 +1942,47 @@ async def train_model(
                         except Exception as _e:
                             print(f"Logistic Regression CV failed: {_e}", flush=True)
 
+                    if "SVM" in _selected_models:
+                        p.update(_pct_steps[_model_idx % 5], "Testing SVM (5-fold CV)…"); _model_idx += 1
+                        try:
+                            svm_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                               ("model", SVC(kernel="rbf", probability=True, class_weight=cw, random_state=42))])
+                            _svm_folds = cross_val_score(svm_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
+                            cv_results.append({"algorithm": "SVM", "score": round(float(_svm_folds.mean()), 4), "fold_scores": [round(float(s), 4) for s in _svm_folds]})
+                        except Exception as _e:
+                            print(f"SVM CV failed: {_e}", flush=True)
+
+                    if "Naive Bayes" in _selected_models:
+                        p.update(_pct_steps[_model_idx % 5], "Testing Naive Bayes (5-fold CV)…"); _model_idx += 1
+                        try:
+                            nb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                              ("model", GaussianNB())])
+                            _nb_folds = cross_val_score(nb_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
+                            cv_results.append({"algorithm": "Naive Bayes", "score": round(float(_nb_folds.mean()), 4), "fold_scores": [round(float(s), 4) for s in _nb_folds]})
+                        except Exception as _e:
+                            print(f"Naive Bayes CV failed: {_e}", flush=True)
+
+                    if "Gradient Boosting" in _selected_models:
+                        p.update(_pct_steps[_model_idx % 5], "Testing Gradient Boosting (5-fold CV)…"); _model_idx += 1
+                        try:
+                            gb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                              ("model", GradientBoostingClassifier(n_estimators=100, random_state=42))])
+                            _gb_folds = cross_val_score(gb_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
+                            cv_results.append({"algorithm": "Gradient Boosting", "score": round(float(_gb_folds.mean()), 4), "fold_scores": [round(float(s), 4) for s in _gb_folds]})
+                        except Exception as _e:
+                            print(f"Gradient Boosting CV failed: {_e}", flush=True)
+
+                    if "AdaBoost" in _selected_models:
+                        from sklearn.ensemble import AdaBoostClassifier  # noqa: PLC0415
+                        p.update(_pct_steps[_model_idx % 5], "Testing AdaBoost (5-fold CV)…"); _model_idx += 1
+                        try:
+                            ada_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                               ("model", AdaBoostClassifier(n_estimators=100, random_state=42))])
+                            _ada_folds = cross_val_score(ada_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
+                            cv_results.append({"algorithm": "AdaBoost", "score": round(float(_ada_folds.mean()), 4), "fold_scores": [round(float(s), 4) for s in _ada_folds]})
+                        except Exception as _e:
+                            print(f"AdaBoost CV failed: {_e}", flush=True)
+
                     if not cv_results:
                         raise RuntimeError("All selected models failed CV")
 
@@ -1963,6 +2006,15 @@ async def train_model(
                         estimator = KNeighborsClassifier(n_neighbors=5)
                     elif winner == "Logistic Regression":
                         estimator = LogisticRegression(max_iter=1000, random_state=42, class_weight=cw)
+                    elif winner == "SVM":
+                        estimator = SVC(kernel="rbf", probability=True, class_weight=cw, random_state=42)
+                    elif winner == "Naive Bayes":
+                        estimator = GaussianNB()
+                    elif winner == "Gradient Boosting":
+                        estimator = GradientBoostingClassifier(n_estimators=100, random_state=42)
+                    elif winner == "AdaBoost":
+                        from sklearn.ensemble import AdaBoostClassifier  # noqa: PLC0415
+                        estimator = AdaBoostClassifier(n_estimators=100, random_state=42)
                     else:
                         estimator = RandomForestClassifier(n_estimators=100, random_state=42,
                                                            class_weight=cw)
@@ -2214,6 +2266,46 @@ async def train_model(
                         except Exception as _e:
                             print(f"Ridge CV failed: {_e}", flush=True)
 
+                    if "Lasso" in _selected_models:
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing Lasso (5-fold CV)…"); _model_idx_r += 1
+                        try:
+                            lasso_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                                 ("model", Lasso(alpha=1.0, max_iter=5000))])
+                            _lasso_folds_r = cross_val_score(lasso_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
+                            cv_results.append({"algorithm": "Lasso", "score": round(-float(_lasso_folds_r.mean()), 4), "fold_scores": [round(-float(s), 4) for s in _lasso_folds_r]})
+                        except Exception as _e:
+                            print(f"Lasso CV failed: {_e}", flush=True)
+
+                    if "ElasticNet" in _selected_models:
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing ElasticNet (5-fold CV)…"); _model_idx_r += 1
+                        try:
+                            enet_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                                ("model", ElasticNet(alpha=1.0, max_iter=5000))])
+                            _enet_folds_r = cross_val_score(enet_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
+                            cv_results.append({"algorithm": "ElasticNet", "score": round(-float(_enet_folds_r.mean()), 4), "fold_scores": [round(-float(s), 4) for s in _enet_folds_r]})
+                        except Exception as _e:
+                            print(f"ElasticNet CV failed: {_e}", flush=True)
+
+                    if "SVR" in _selected_models:
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing SVR (5-fold CV)…"); _model_idx_r += 1
+                        try:
+                            svr_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                               ("model", SVR(kernel="rbf"))])
+                            _svr_folds_r = cross_val_score(svr_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
+                            cv_results.append({"algorithm": "SVR", "score": round(-float(_svr_folds_r.mean()), 4), "fold_scores": [round(-float(s), 4) for s in _svr_folds_r]})
+                        except Exception as _e:
+                            print(f"SVR CV failed: {_e}", flush=True)
+
+                    if "Gradient Boosting" in _selected_models:
+                        p.update(_pct_steps_r[_model_idx_r % 5], "Testing Gradient Boosting (5-fold CV)…"); _model_idx_r += 1
+                        try:
+                            gb_pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")),
+                                              ("model", GradientBoostingRegressor(n_estimators=100, random_state=42))])
+                            _gb_folds_r = cross_val_score(gb_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
+                            cv_results.append({"algorithm": "Gradient Boosting", "score": round(-float(_gb_folds_r.mean()), 4), "fold_scores": [round(-float(s), 4) for s in _gb_folds_r]})
+                        except Exception as _e:
+                            print(f"Gradient Boosting CV failed: {_e}", flush=True)
+
                     if not cv_results:
                         raise RuntimeError("All selected models failed CV")
 
@@ -2234,6 +2326,14 @@ async def train_model(
                         estimator = KNeighborsRegressor(n_neighbors=5)
                     elif winner == "Ridge":
                         estimator = RidgeRegressor(alpha=1.0)
+                    elif winner == "Lasso":
+                        estimator = Lasso(alpha=1.0, max_iter=5000)
+                    elif winner == "ElasticNet":
+                        estimator = ElasticNet(alpha=1.0, max_iter=5000)
+                    elif winner == "SVR":
+                        estimator = SVR(kernel="rbf")
+                    elif winner == "Gradient Boosting":
+                        estimator = GradientBoostingRegressor(n_estimators=100, random_state=42)
                     else:
                         estimator = RandomForestRegressor(n_estimators=100, random_state=42)
 
