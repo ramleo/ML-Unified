@@ -170,9 +170,16 @@ _HF_PKL_FILES = [
 ]
 
 def _fetch_hf_models():
-    """Download pkl files from HF Space XET storage if running on HuggingFace."""
-    if not os.environ.get("SPACE_ID"):
-        return  # only run inside HF Spaces
+    """Download missing model files from HF Space XET storage.
+
+    Runs on any platform where HF_TOKEN is set — not just HF Spaces.
+    Files already present on disk (baked into the Docker image) are skipped,
+    so this only fetches what is missing: user-trained models or future large
+    models that are no longer committed to the image.
+    """
+    token = os.environ.get("HF_TOKEN")
+    if not token:
+        return  # no token — skip silently
     try:
         from huggingface_hub import hf_hub_download
         import shutil
@@ -180,7 +187,6 @@ def _fetch_hf_models():
         print("huggingface_hub not available — skipping model download", flush=True)
         return
     os.makedirs(MODEL_DIR, exist_ok=True)
-    token = os.environ.get("HF_TOKEN")
     # Fixed model pkls
     all_fpaths = list(_HF_PKL_FILES)
     # Also try to fetch _fe.pkl and _actuals.json for every user-trained model
@@ -213,9 +219,10 @@ def _fetch_hf_models():
 
 
 def _upload_model_to_hf(model_id: str) -> None:
-    """Upload newly trained model files to HF Space XET storage for persistence across restarts."""
-    if not os.environ.get("SPACE_ID"):
-        return
+    """Upload newly trained model files to HF Space XET storage for persistence across restarts.
+
+    Runs on any platform where HF_TOKEN is set — not just HF Spaces.
+    """
     token = os.environ.get("HF_TOKEN")
     if not token:
         print("HF: HF_TOKEN not set — trained model will not persist across restarts", flush=True)
