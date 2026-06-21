@@ -1,0 +1,18 @@
+services:
+  ml-api:
+    build:
+      context: ./services/ml-api
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+
+  ml-portfolio:
+    build:
+      context: ../../ml-portfolio
+      args:
+        - NEXT_PUBLIC_ML_UNIFIED_URL=${BACKEND_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - ml-api
