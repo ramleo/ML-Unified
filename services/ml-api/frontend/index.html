@@ -4288,10 +4288,9 @@ function _renderAutoMLReport(automl, accent) {
         <div class="aml-exp-title-row">${brainSvg}<span class="aml-exp-title">AI Explanation</span></div>
         ${srcBadge}
       </div>
-      <div id="amlExplanation">${isAI
-        ? _renderExplanationDashboard(explanation, cv_results, feature_importance, accent, winner, can_upgrade, isReg, selection_metric, winner_metrics, {confusion_matrix, class_names, scatter_actual, scatter_predicted, learning_curve, lc_skip_reason: automl.lc_skip_reason, lc_cv_folds: automl.lc_cv_folds})
-        : `<p class="aml-exp-text">${typeof explanation === 'string' ? explanation : (explanation?.why_won || '')}</p>`
-      }</div>
+      <div id="amlExplanation">
+        ${_renderExplanationDashboard(explanation, cv_results, feature_importance, accent, winner, can_upgrade, isReg, selection_metric, winner_metrics, {confusion_matrix, class_names, scatter_actual, scatter_predicted, learning_curve, lc_skip_reason: automl.lc_skip_reason, lc_cv_folds: automl.lc_cv_folds})}
+      </div>
       ${keyInput}
     </div>
   </div>`;
