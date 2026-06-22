@@ -1395,11 +1395,16 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
             )
             raw_text = resp.choices[0].message.content.strip()
         elif provider in ("gemini-3.5", "gemini-2.5"):
-            from google import genai as google_genai  # noqa: PLC0415
-            client = google_genai.Client(api_key=api_key)
+            import urllib.request as _urllib  # noqa: PLC0415
+            import json as _json2  # noqa: PLC0415
             default_model = "gemini-2.0-flash" if provider == "gemini-3.5" else "gemini-2.5-flash"
-            resp = client.models.generate_content(model=custom_model or default_model, contents=prompt)
-            raw_text = resp.text.strip()
+            _model = custom_model or default_model
+            _url = f"https://generativelanguage.googleapis.com/v1beta/models/{_model}:generateContent?key={api_key}"
+            _body = _json2.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode()
+            _req = _urllib.Request(_url, data=_body, headers={"Content-Type": "application/json"})
+            with _urllib.urlopen(_req, timeout=30) as _r:
+                _data = _json2.loads(_r.read())
+            raw_text = _data["candidates"][0]["content"]["parts"][0]["text"].strip()
         else:
             import anthropic  # noqa: PLC0415
             client = anthropic.Anthropic(api_key=api_key)
