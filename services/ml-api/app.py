@@ -1378,7 +1378,7 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
         elif provider in ("groq", "groq-mixtral"):
             import openai  # noqa: PLC0415
             client = openai.OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
-            default_model = "llama3-8b-8192" if provider == "groq-mixtral" else "llama3-70b-8192"
+            default_model = "llama-3.1-8b-instant" if provider == "groq-mixtral" else "llama-3.3-70b-versatile"
             resp = client.chat.completions.create(
                 model=custom_model or default_model, max_tokens=1200,
                 messages=[{"role": "user", "content": prompt}],
