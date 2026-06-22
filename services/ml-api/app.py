@@ -1378,7 +1378,7 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
         elif provider in ("groq", "groq-mixtral"):
             import openai  # noqa: PLC0415
             client = openai.OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
-            default_model = "llama-3.1-8b-instant" if provider == "groq-mixtral" else "llama-3.1-70b-versatile"
+            default_model = "llama3-8b-8192" if provider == "groq-mixtral" else "llama3-70b-8192"
             resp = client.chat.completions.create(
                 model=custom_model or default_model, max_tokens=1200,
                 messages=[{"role": "user", "content": prompt}],
@@ -1409,7 +1409,8 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
                 messages=[{"role": "user", "content": prompt}],
             )
             raw_text = msg.content[0].text.strip()
-    except Exception:
+    except Exception as e:
+        print(f"[LLM error] provider={provider} error={e}")
         return None
     if raw_text is None:
         return None
@@ -2653,16 +2654,25 @@ async def explain_automl(request: Request):
     feat_imp   = automl.get("feature_importance", [])
     n_rows     = automl.get("n_rows", 0)
 
+    llm_error: str | None = None
     if user_key:
-        llm_exp = _llm_explanation(user_key, winner, cv_results, task,
-                                   sel_metric, is_imbal, feat_imp, n_rows, provider,
-                                   custom_base_url, custom_model)
+        try:
+            llm_exp = _llm_explanation(user_key, winner, cv_results, task,
+                                       sel_metric, is_imbal, feat_imp, n_rows, provider,
+                                       custom_base_url, custom_model)
+        except Exception as e:
+            llm_exp = None
+            llm_error = str(e)
         if llm_exp:
             return {"explanation": llm_exp, "source": provider}
 
     rule_exp = _rule_explanation(winner, cv_results, task, sel_metric,
                                  is_imbal, feat_imp, n_rows)
-    return {"explanation": {"why_won": rule_exp, "score_analysis": "", "key_drivers": "", "recommendations": []}, "source": "rule"}
+    return {
+        "explanation": {"why_won": rule_exp, "score_analysis": "", "key_dirs": "", "recommendations": []},
+        "source": "rule",
+        **({"llm_error": llm_error} if llm_error else {}),
+    }
 
 
 @app.post("/feature-engineer")
