@@ -1378,7 +1378,7 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
         elif provider in ("groq", "groq-mixtral"):
             import openai  # noqa: PLC0415
             client = openai.OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
-            default_model = "mixtral-8x7b-32768" if provider == "groq-mixtral" else "llama-3.3-70b-versatile"
+            default_model = "llama-3.1-8b-instant" if provider == "groq-mixtral" else "llama-3.1-70b-versatile"
             resp = client.chat.completions.create(
                 model=custom_model or default_model, max_tokens=1200,
                 messages=[{"role": "user", "content": prompt}],
@@ -1395,11 +1395,10 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
             )
             raw_text = resp.choices[0].message.content.strip()
         elif provider in ("gemini-3.5", "gemini-2.5"):
-            import google.generativeai as genai  # noqa: PLC0415
-            genai.configure(api_key=api_key)
-            default_model = "gemini-3.5-flash" if provider == "gemini-3.5" else "gemini-2.5-flash"
-            model = genai.GenerativeModel(custom_model or default_model)
-            resp = model.generate_content(prompt)
+            from google import genai as google_genai  # noqa: PLC0415
+            client = google_genai.Client(api_key=api_key)
+            default_model = "gemini-2.0-flash" if provider == "gemini-3.5" else "gemini-2.5-flash"
+            resp = client.models.generate_content(model=custom_model or default_model, contents=prompt)
             raw_text = resp.text.strip()
         else:
             import anthropic  # noqa: PLC0415
