@@ -1,6 +1,11 @@
-__pycache__
-*.pyc
+__pycache__/
+*.py[cod]
 *.pyo
-.pytest_cache
+.env
+.env.*
+*.log
+.git
+.gitignore
+*.md
 tests/
-.python-version
+.pytest_cache/
