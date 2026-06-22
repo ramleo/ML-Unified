@@ -2591,7 +2591,6 @@ async def train_model(
             print(f"ACTUALS: saved {_act_path} ({len(_actuals_data.get('actual', []))} pts)", flush=True)
         else:
             print(f"ACTUALS: _actuals_data is None for {_model_id} (task={_task})", flush=True)
-        _upload_model_to_hf(_model_id)
 
         MODELS[_model_id] = {
             "pipeline": pipeline,
@@ -2617,6 +2616,10 @@ async def train_model(
             resp["automl"] = automl_result
 
         p.finish(result=resp)
+        # Upload to HF after finishing the SSE stream so the proxy timeout
+        # doesn't cut the connection before the user receives results.
+        import threading as _threading  # noqa: PLC0415
+        _threading.Thread(target=_upload_model_to_hf, args=(_model_id,), daemon=True).start()
 
     return StreamingResponse(
         streaming_task.stream(_work),
