@@ -4562,12 +4562,8 @@ function _automlStepsHTML(active, allDone) {
 
 function showAutoMLWizard() {
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
-  if (_lastAutoMLResult) {
-    _renderAutoMLResultsPage(_lastAutoMLResult);
-  } else {
-    _startFreshAutoML();
-  }
-  document.getElementById('main').scrollTop = 0;
+  _lastAutoMLResult = null;
+  _startFreshAutoML();
 }
 
 function _startFreshAutoML() {
