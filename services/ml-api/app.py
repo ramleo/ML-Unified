@@ -2476,6 +2476,27 @@ async def train_model(
                     wm_reg["r2"] = round(float(r2), 4)
                 automl_result["winner_metrics"] = wm_reg
 
+                # 95% bootstrap CI on R² (or RMSE if R² not available)
+                try:
+                    _bt_arr  = np.array(y_test)
+                    _bp_arr  = np.array(y_pred)
+                    _use_r2  = r2 >= 0.60
+                    _bt_samples = []
+                    _rng = np.random.default_rng(42)
+                    for _ in range(200):
+                        _idx = _rng.integers(0, len(_bt_arr), len(_bt_arr))
+                        if _use_r2:
+                            _bt_samples.append(float(r2_score(_bt_arr[_idx], _bp_arr[_idx])))
+                        else:
+                            _bt_samples.append(float(np.sqrt(mean_squared_error(_bt_arr[_idx], _bp_arr[_idx]))))
+                    automl_result["ci_95"] = {
+                        "lower":  round(float(np.percentile(_bt_samples, 2.5)),  4),
+                        "upper":  round(float(np.percentile(_bt_samples, 97.5)), 4),
+                        "metric": "r2" if _use_r2 else "rmse",
+                    }
+                except Exception as _ci_err:
+                    print(f"CI bootstrap failed: {_ci_err}", flush=True)
+
                 # Scatter: predicted vs actual (sample to 300)
                 import random as _rnd
                 n_pts = len(y_test_arr)
