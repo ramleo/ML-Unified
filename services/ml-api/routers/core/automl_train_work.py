@@ -20,6 +20,7 @@ def build_work_fn(
     fe_transformer, pre_fe_cols, pre_fe_sample, n_clusters,
     tune, n_trials, selected_models, num_cols, cat_cols, transformers,
     use_smote=True,
+    opt_metric: str = "auto",
 ):
     """Return the _work(p) closure to pass to StreamingTask.stream()."""
 
@@ -37,6 +38,7 @@ def build_work_fn(
     _n_trials    = n_trials
     _selected_models = selected_models
     _y           = y
+    _opt_metric  = opt_metric
 
     def _work(p):  # noqa: C901
         from xgboost import XGBClassifier, XGBRegressor          # noqa: PLC0415
@@ -67,6 +69,7 @@ def build_work_fn(
                 transformers, num_cols, cat_cols,
                 XGBClassifier, LGBMClassifier, CatBoostClassifier,
                 use_smote=use_smote,
+                opt_metric=_opt_metric,
             )
             le               = _clf_result["le"]
             pipeline         = _clf_result["pipeline"]
@@ -82,6 +85,7 @@ def build_work_fn(
                 p, X, _y, _algorithm, _selected_models, _tune, _n_trials,
                 transformers, num_cols, cat_cols,
                 XGBRegressor, LGBMRegressor, CatBoostRegressor,
+                opt_metric=_opt_metric,
             )
             le               = None
             pipeline         = _reg_result["pipeline"]

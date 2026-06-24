@@ -33,6 +33,7 @@ def run_classification(
     transformers, num_cols, cat_cols,
     XGBClassifier, LGBMClassifier, CatBoostClassifier,
     use_smote=True,
+    opt_metric: str = "auto",
 ):
     from sklearn.preprocessing import LabelEncoder as _LE
     le    = _LE()
@@ -53,6 +54,7 @@ def run_classification(
             p, X, y_enc, selected_models, tune, n_trials, transformers,
             is_imbal, sel_metric, sel_label, cw,
             XGBClassifier, LGBMClassifier, CatBoostClassifier,
+            opt_metric=opt_metric,
         )
     else:
         estimator = _single_clf_estimator(
@@ -182,7 +184,8 @@ def run_classification(
 
 def _automl_clf(p, X, y_enc, selected_models, tune, n_trials, transformers,
                 is_imbal, sel_metric, sel_label, cw,
-                XGBClassifier, LGBMClassifier, CatBoostClassifier):
+                XGBClassifier, LGBMClassifier, CatBoostClassifier,
+                opt_metric: str = "auto"):
     cv_split = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     X_cv, y_cv = _cv_sample(X, y_enc)
     cv_results = []
@@ -224,6 +227,7 @@ def _automl_clf(p, X, y_enc, selected_models, tune, n_trials, transformers,
         "winner": winner, "selection_metric": sel_label, "is_imbalanced": is_imbal,
         "n_rows": len(X), "n_input_cols": len(X.columns), "cv_results": cv_results,
         "task": "classification", "gpu": _detect_gpu(),
+        "debug_tune": repr(tune), "debug_tune_type": type(tune).__name__,
     }
     estimator = _CLF_MAP.get(winner, lambda: RandomForestClassifier(n_estimators=100, random_state=42, class_weight=cw))()
 
@@ -233,6 +237,7 @@ def _automl_clf(p, X, y_enc, selected_models, tune, n_trials, transformers,
             _best_params, _best_val, _optuna_trials, _param_importance = _optuna_tune(
                 winner, "classification", X_cv, y_cv, transformers, cv_split, n_trials, is_imbal,
                 lambda t, s: p.update(65 + int(t / n_trials * 13), f"Optuna trial {t}/{n_trials} — best {sel_label}: {s:.4f}"),
+                opt_metric=opt_metric,
             )
             estimator = _build_tuned_estimator(winner, "classification", _best_params, is_imbal)
             automl_result["optuna_params"]            = _best_params
@@ -242,7 +247,10 @@ def _automl_clf(p, X, y_enc, selected_models, tune, n_trials, transformers,
             automl_result["optuna_param_importance"]  = _param_importance
             p.update(78, f"Tuning done. Training {winner} with best params…")
         except Exception as _oe:
-            print(f"Optuna tuning failed, using default params: {_oe}", flush=True)
+            import traceback as _tb
+            _err = f"{type(_oe).__name__}: {_oe}\n{_tb.format_exc()[-400:]}"
+            print(f"Optuna tuning failed: {_err}", flush=True)
+            automl_result["optuna_error"] = _err
             p.update(78, f"Tuning failed — using default {winner} params…")
     else:
         p.update(65, f"Winner: {winner}. Training on full dataset…")

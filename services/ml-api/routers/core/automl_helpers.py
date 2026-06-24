@@ -64,16 +64,31 @@ def _extract_feature_importances(pipeline, num_cols: list, cat_cols: list) -> li
 def _optuna_tune(
     algorithm: str, task: str, X_cv, y_cv, transformers: list,
     cv_split, n_trials: int, is_imbal: bool, on_trial,
+    opt_metric: str = "auto",
 ) -> tuple[dict, float, list, dict]:
     import optuna  # noqa: PLC0415
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     from xgboost import XGBClassifier, XGBRegressor          # noqa: PLC0415
     from lightgbm import LGBMClassifier, LGBMRegressor        # noqa: PLC0415
     from catboost import CatBoostClassifier, CatBoostRegressor  # noqa: PLC0415
-    scoring = (
-        "neg_mean_absolute_error" if task == "regression"
-        else ("f1_macro" if is_imbal else "f1_weighted")
-    )
+    if task == "regression":
+        if opt_metric == "rmse":
+            scoring = "neg_root_mean_squared_error"
+        elif opt_metric == "r2":
+            scoring = "r2"
+        else:  # "auto" or "mae"
+            scoring = "neg_mean_absolute_error"
+    else:  # classification
+        if opt_metric == "accuracy":
+            scoring = "accuracy"
+        elif opt_metric == "f1_weighted":
+            scoring = "f1_weighted"
+        elif opt_metric == "f1_macro":
+            scoring = "f1_macro"
+        elif opt_metric == "roc_auc":
+            scoring = "roc_auc"
+        else:  # "auto"
+            scoring = "f1_macro" if is_imbal else "f1_weighted"
 
     def objective(trial):
         cw = "balanced" if is_imbal else None
@@ -152,6 +167,8 @@ def _optuna_tune(
     except Exception:
         param_importance = {}
 
+    if not trial_history:
+        raise RuntimeError("All Optuna trials failed — no completed trials")
     return study.best_params, study.best_value, trial_history, param_importance
 
 

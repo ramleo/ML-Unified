@@ -29,6 +29,7 @@ def run_regression(
     p, X, y, algorithm, selected_models, tune, n_trials,
     transformers, num_cols, cat_cols,
     XGBRegressor, LGBMRegressor, CatBoostRegressor,
+    opt_metric: str = "auto",
 ):
     import numpy as np  # noqa: PLC0415
     y_num = pd.to_numeric(y, errors="coerce")
@@ -41,6 +42,7 @@ def run_regression(
         automl_result, estimator, _effective_algorithm = _automl_reg(
             p, X, y_enc, selected_models, tune, n_trials, transformers,
             XGBRegressor, LGBMRegressor, CatBoostRegressor,
+            opt_metric=opt_metric,
         )
     else:
         estimator = _single_reg_estimator(algorithm, XGBRegressor, LGBMRegressor, CatBoostRegressor)
@@ -184,7 +186,8 @@ def _fill_automl_reg_metrics(
 
 
 def _automl_reg(p, X, y_enc, selected_models, tune, n_trials, transformers,
-                XGBRegressor, LGBMRegressor, CatBoostRegressor):
+                XGBRegressor, LGBMRegressor, CatBoostRegressor,
+                opt_metric: str = "auto"):
     cv_split = KFold(n_splits=5, shuffle=True, random_state=42)
     X_cv, y_cv = _cv_sample(X, y_enc)
     cv_results = []
@@ -235,6 +238,7 @@ def _automl_reg(p, X, y_enc, selected_models, tune, n_trials, transformers,
             _best_params_r, _best_val_r, _optuna_trials_r, _param_importance_r = _optuna_tune(
                 winner, "regression", X_cv, y_cv, transformers, cv_split, n_trials, False,
                 lambda t, s: p.update(65 + int(t / n_trials * 13), f"Optuna trial {t}/{n_trials} — best MAE: {-s:.4f}"),
+                opt_metric=opt_metric,
             )
             estimator = _build_tuned_estimator(winner, "regression", _best_params_r, False)
             automl_result["optuna_params"]            = _best_params_r

@@ -18,10 +18,12 @@ from routers.core.automl_preprocess_helpers import (
 )
 from shared.progress import StreamingTask
 from routers.core import automl_fe as _fe_router
+from routers.core import automl_optuna_explain as _optuna_exp_router
 
 router = APIRouter()
 # Mount /feature-engineer from its own module
 router.include_router(_fe_router.router)
+router.include_router(_optuna_exp_router.router)
 
 
 @router.post("/automl/preprocess")
@@ -243,6 +245,8 @@ async def train_model(
     n_trials:            int        = Form(10),
     selected_models:     str        = Form('["Random Forest","XGBoost","LightGBM","CatBoost","Extra Trees"]'),
     use_smote:           str        = Form("true"),
+    drop_cols_json:      str        = Form("[]"),
+    opt_metric:          str        = Form("auto"),
 ):
     import joblib as _jl  # noqa: PLC0415
     from sklearn.compose import ColumnTransformer as _CT  # noqa: PLC0415
@@ -322,6 +326,14 @@ async def train_model(
                 print(f"Feature engineering failed (skipped): {_fe_err}", flush=True)
                 _fe_transformer = FeatureEngineeringTransformer({})
 
+    # Drop user-selected columns
+    try:
+        _user_drop = [c for c in json.loads(drop_cols_json or "[]") if c in X.columns]
+    except Exception:
+        _user_drop = []
+    if _user_drop:
+        X = X.drop(columns=_user_drop)
+
     num_cols = X.select_dtypes(include="number").columns.tolist()
     cat_cols = X.select_dtypes(exclude="number").columns.tolist()
 
@@ -352,6 +364,7 @@ async def train_model(
         n_clusters=n_clusters, tune=tune, n_trials=_n_trials,
         selected_models=_selected_models, num_cols=num_cols, cat_cols=cat_cols,
         transformers=transformers, use_smote=use_smote,
+        opt_metric=opt_metric,
     )
     return StreamingResponse(
         streaming_task.stream(_work),
