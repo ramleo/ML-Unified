@@ -20,7 +20,7 @@ from routers.core.shared import (
     _detect_gpu, MODELS, _fetch_hf_models, _load,
     FRONTEND, HERE,
 )
-from routers.core.monitoring import _req_log, _svc_start, _SKIP_PATHS
+from routers.core.monitoring import _req_log, _SKIP_PATHS
 
 
 @asynccontextmanager
