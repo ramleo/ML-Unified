@@ -56,7 +56,7 @@ def _llm_explanation_raw(api_key: str, prompt: str, provider: str = "gemini-2.5"
         if provider == "cohere":
             _url = "https://api.cohere.com/v2/chat"
             _body = json.dumps({
-                "model": "command-r-plus-08-2024",
+                "model": "command-a-03-2025",
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": 900,
             }).encode()
