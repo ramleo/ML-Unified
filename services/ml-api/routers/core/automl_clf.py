@@ -59,14 +59,38 @@ def run_classification(
         )
 
     from sklearn.model_selection import train_test_split as _tts
-    pipeline = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")), ("model", estimator)])
+    preprocessor = ColumnTransformer(transformers, remainder="drop")
     split    = 0.2 if len(X) >= 10 else 0.1
     X_train, X_test, y_train, y_test = _tts(X, y_enc, test_size=split, random_state=42, stratify=y_enc)
     if automl_result:
         automl_result["n_train"] = len(X_train)
         automl_result["n_test"]  = len(X_test)
+
+    # SMOTE: apply when imbalanced + minority class has >= 20 samples
+    import pandas as _pd
+    min_class_count = int(_pd.Series(y_train).value_counts().min())
+    smote_applied = False
+    if is_imbal and min_class_count >= 20:
+        try:
+            from imblearn.over_sampling import SMOTE as _SMOTE
+            from imblearn.pipeline import Pipeline as _ImbPipeline
+            _k = min(5, min_class_count - 1)
+            pipeline = _ImbPipeline([
+                ("prep",  preprocessor),
+                ("smote", _SMOTE(random_state=42, k_neighbors=_k)),
+                ("model", estimator),
+            ])
+            smote_applied = True
+        except ImportError:
+            pipeline = Pipeline([("prep", preprocessor), ("model", estimator)])
+    else:
+        pipeline = Pipeline([("prep", preprocessor), ("model", estimator)])
+
+    if automl_result:
+        automl_result["smote_applied"] = smote_applied
+
     train_pct = (79 if (tune and automl_result) else 68 if automl_result else 20)
-    p.update(train_pct, f"Training {_effective_algorithm} classifier…")
+    p.update(train_pct, f"Training {_effective_algorithm} classifier{'  [+SMOTE]' if smote_applied else ''}…")
     pipeline.fit(X_train, y_train)
     p.update(82, "Evaluating on test set…")
     y_pred       = pipeline.predict(X_test)
