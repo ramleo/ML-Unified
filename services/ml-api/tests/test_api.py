@@ -2,7 +2,8 @@ import io
 import json
 import os
 from fastapi.testclient import TestClient
-from app import app, MODELS, SCHEMA_DIR, MODEL_DIR
+from app import app
+from routers.core.shared import MODELS, SCHEMA_DIR, MODEL_DIR
 
 client = TestClient(app)
 
