@@ -239,16 +239,21 @@ async def train_model(
     fe_b64:              str        = Form(""),
     pre_fe_cols_json:    str        = Form("[]"),
     pre_fe_sample_json:  str        = Form("{}"),
-    tune:                bool       = Form(False),
+    tune:                str        = Form("false"),
     n_trials:            int        = Form(10),
     selected_models:     str        = Form('["Random Forest","XGBoost","LightGBM","CatBoost","Extra Trees"]'),
-    use_smote:           bool       = Form(True),
+    use_smote:           str        = Form("true"),
 ):
     import joblib as _jl  # noqa: PLC0415
     from sklearn.compose import ColumnTransformer as _CT  # noqa: PLC0415
     from sklearn.impute import SimpleImputer as _SI  # noqa: PLC0415
     from sklearn.pipeline import Pipeline as _PL  # noqa: PLC0415
     from sklearn.preprocessing import OneHotEncoder as _OHE, StandardScaler as _SS  # noqa: PLC0415
+
+    _tune     = tune.lower()     in ("true", "1", "yes") if isinstance(tune, str)     else bool(tune)
+    _use_smote = use_smote.lower() in ("true", "1", "yes") if isinstance(use_smote, str) else bool(use_smote)
+    tune      = _tune
+    use_smote = _use_smote
 
     content = await file.read()
     try:
