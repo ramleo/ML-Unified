@@ -232,14 +232,16 @@ def _automl_reg(p, X, y_enc, selected_models, tune, n_trials, transformers,
     if tune:
         p.update(65, f"Winner: {winner}. Tuning with Optuna ({n_trials} trials)…")
         try:
-            _best_params_r, _best_val_r = _optuna_tune(
+            _best_params_r, _best_val_r, _optuna_trials_r, _param_importance_r = _optuna_tune(
                 winner, "regression", X_cv, y_cv, transformers, cv_split, n_trials, False,
                 lambda t, s: p.update(65 + int(t / n_trials * 13), f"Optuna trial {t}/{n_trials} — best MAE: {-s:.4f}"),
             )
             estimator = _build_tuned_estimator(winner, "regression", _best_params_r, False)
-            automl_result["optuna_params"]     = _best_params_r
-            automl_result["optuna_best_score"] = round(-_best_val_r, 4)
-            automl_result["optuna_n_trials"]   = n_trials
+            automl_result["optuna_params"]            = _best_params_r
+            automl_result["optuna_best_score"]        = round(-_best_val_r, 4)
+            automl_result["optuna_n_trials"]          = n_trials
+            automl_result["optuna_trials"]            = _optuna_trials_r
+            automl_result["optuna_param_importance"]  = _param_importance_r
             p.update(78, f"Tuning done. Training {winner} with best params…")
         except Exception as _oe:
             print(f"Optuna tuning failed, using default params: {_oe}", flush=True)

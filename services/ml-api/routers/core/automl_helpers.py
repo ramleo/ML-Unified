@@ -64,7 +64,7 @@ def _extract_feature_importances(pipeline, num_cols: list, cat_cols: list) -> li
 def _optuna_tune(
     algorithm: str, task: str, X_cv, y_cv, transformers: list,
     cv_split, n_trials: int, is_imbal: bool, on_trial,
-) -> tuple[dict, float]:
+) -> tuple[dict, float, list, dict]:
     import optuna  # noqa: PLC0415
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     from xgboost import XGBClassifier, XGBRegressor          # noqa: PLC0415
@@ -135,7 +135,20 @@ def _optuna_tune(
         sampler=optuna.samplers.TPESampler(seed=42),
     )
     study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
-    return study.best_params, study.best_value
+
+    trial_history = [
+        {"trial": t.number + 1, "value": round(float(t.value), 4)}
+        for t in study.trials
+        if t.value is not None
+    ]
+
+    try:
+        raw_imp = optuna.importance.get_param_importances(study)
+        param_importance = {k: round(float(v), 4) for k, v in raw_imp.items()}
+    except Exception:
+        param_importance = {}
+
+    return study.best_params, study.best_value, trial_history, param_importance
 
 
 def _build_tuned_estimator(algorithm: str, task: str, best_params: dict, is_imbal: bool):

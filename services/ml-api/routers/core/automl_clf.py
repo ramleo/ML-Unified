@@ -230,14 +230,16 @@ def _automl_clf(p, X, y_enc, selected_models, tune, n_trials, transformers,
     if tune:
         p.update(65, f"Winner: {winner}. Tuning with Optuna ({n_trials} trials)…")
         try:
-            _best_params, _best_val = _optuna_tune(
+            _best_params, _best_val, _optuna_trials, _param_importance = _optuna_tune(
                 winner, "classification", X_cv, y_cv, transformers, cv_split, n_trials, is_imbal,
                 lambda t, s: p.update(65 + int(t / n_trials * 13), f"Optuna trial {t}/{n_trials} — best {sel_label}: {s:.4f}"),
             )
             estimator = _build_tuned_estimator(winner, "classification", _best_params, is_imbal)
-            automl_result["optuna_params"]     = _best_params
-            automl_result["optuna_best_score"] = round(_best_val, 4)
-            automl_result["optuna_n_trials"]   = n_trials
+            automl_result["optuna_params"]            = _best_params
+            automl_result["optuna_best_score"]        = round(_best_val, 4)
+            automl_result["optuna_n_trials"]          = n_trials
+            automl_result["optuna_trials"]            = _optuna_trials
+            automl_result["optuna_param_importance"]  = _param_importance
             p.update(78, f"Tuning done. Training {winner} with best params…")
         except Exception as _oe:
             print(f"Optuna tuning failed, using default params: {_oe}", flush=True)
