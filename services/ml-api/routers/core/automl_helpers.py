@@ -90,26 +90,29 @@ def _optuna_tune(
                    else RandomForestRegressor(random_state=42, **params))
         elif algorithm == "XGBoost":
             params = {
-                "n_estimators":     trial.suggest_int("n_estimators", 50, 400),
-                "max_depth":        trial.suggest_int("max_depth", 3, 10),
-                "learning_rate":    trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
-                "subsample":        trial.suggest_float("subsample", 0.6, 1.0),
-                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
-                "reg_alpha":        trial.suggest_float("reg_alpha", 0.0, 5.0),
-                "reg_lambda":       trial.suggest_float("reg_lambda", 0.1, 5.0),
+                "n_estimators":      trial.suggest_int("n_estimators", 50, 500),
+                "max_depth":         trial.suggest_int("max_depth", 3, 12),
+                "learning_rate":     trial.suggest_float("learning_rate", 0.005, 0.3, log=True),
+                "subsample":         trial.suggest_float("subsample", 0.5, 1.0),
+                "colsample_bytree":  trial.suggest_float("colsample_bytree", 0.5, 1.0),
+                "min_child_weight":  trial.suggest_int("min_child_weight", 1, 10),
+                "gamma":             trial.suggest_float("gamma", 0.0, 5.0),
+                "reg_alpha":         trial.suggest_float("reg_alpha", 0.0, 5.0),
+                "reg_lambda":        trial.suggest_float("reg_lambda", 0.1, 5.0),
             }
             est = (XGBClassifier(random_state=42, eval_metric="logloss", verbosity=0, **params)
                    if task == "classification"
                    else XGBRegressor(random_state=42, verbosity=0, **params))
         elif algorithm == "LightGBM":
             params = {
-                "n_estimators":     trial.suggest_int("n_estimators", 50, 400),
-                "num_leaves":       trial.suggest_int("num_leaves", 20, 150),
-                "learning_rate":    trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
-                "subsample":        trial.suggest_float("subsample", 0.6, 1.0),
-                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
-                "reg_alpha":        trial.suggest_float("reg_alpha", 0.0, 5.0),
-                "reg_lambda":       trial.suggest_float("reg_lambda", 0.0, 5.0),
+                "n_estimators":      trial.suggest_int("n_estimators", 50, 500),
+                "num_leaves":        trial.suggest_int("num_leaves", 20, 200),
+                "learning_rate":     trial.suggest_float("learning_rate", 0.005, 0.3, log=True),
+                "subsample":         trial.suggest_float("subsample", 0.5, 1.0),
+                "colsample_bytree":  trial.suggest_float("colsample_bytree", 0.5, 1.0),
+                "min_child_samples": trial.suggest_int("min_child_samples", 5, 100),
+                "reg_alpha":         trial.suggest_float("reg_alpha", 0.0, 5.0),
+                "reg_lambda":        trial.suggest_float("reg_lambda", 0.0, 5.0),
             }
             est = (LGBMClassifier(random_state=42, verbose=-1, class_weight=cw, **params)
                    if task == "classification"
@@ -132,7 +135,8 @@ def _optuna_tune(
 
     study = optuna.create_study(
         direction="maximize",
-        sampler=optuna.samplers.TPESampler(seed=42),
+        sampler=optuna.samplers.TPESampler(seed=42, multivariate=True, n_startup_trials=10),
+        pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=0),
     )
     study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
 
