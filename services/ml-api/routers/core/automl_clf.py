@@ -227,7 +227,6 @@ def _automl_clf(p, X, y_enc, selected_models, tune, n_trials, transformers,
         "winner": winner, "selection_metric": sel_label, "is_imbalanced": is_imbal,
         "n_rows": len(X), "n_input_cols": len(X.columns), "cv_results": cv_results,
         "task": "classification", "gpu": _detect_gpu(),
-        "debug_tune": repr(tune), "debug_tune_type": type(tune).__name__,
     }
     estimator = _CLF_MAP.get(winner, lambda: RandomForestClassifier(n_estimators=100, random_state=42, class_weight=cw))()
 
