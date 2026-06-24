@@ -32,6 +32,7 @@ def run_classification(
     p, X, y, algorithm, selected_models, tune, n_trials,
     transformers, num_cols, cat_cols,
     XGBClassifier, LGBMClassifier, CatBoostClassifier,
+    use_smote=True,
 ):
     from sklearn.preprocessing import LabelEncoder as _LE
     le    = _LE()
@@ -70,7 +71,7 @@ def run_classification(
     import pandas as _pd
     min_class_count = int(_pd.Series(y_train).value_counts().min())
     smote_applied = False
-    if is_imbal and min_class_count >= 20:
+    if use_smote and is_imbal and min_class_count >= 20:
         try:
             from imblearn.over_sampling import SMOTE as _SMOTE
             from imblearn.pipeline import Pipeline as _ImbPipeline

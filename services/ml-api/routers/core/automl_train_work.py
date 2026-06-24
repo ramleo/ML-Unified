@@ -19,6 +19,7 @@ def build_work_fn(
     X, y, task, algorithm, accent, model_id, model_name, target_col,
     fe_transformer, pre_fe_cols, pre_fe_sample, n_clusters,
     tune, n_trials, selected_models, num_cols, cat_cols, transformers,
+    use_smote=True,
 ):
     """Return the _work(p) closure to pass to StreamingTask.stream()."""
 
@@ -65,6 +66,7 @@ def build_work_fn(
                 p, X, _y, _algorithm, _selected_models, _tune, _n_trials,
                 transformers, num_cols, cat_cols,
                 XGBClassifier, LGBMClassifier, CatBoostClassifier,
+                use_smote=use_smote,
             )
             le               = _clf_result["le"]
             pipeline         = _clf_result["pipeline"]

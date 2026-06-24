@@ -242,6 +242,7 @@ async def train_model(
     tune:                bool       = Form(False),
     n_trials:            int        = Form(10),
     selected_models:     str        = Form('["Random Forest","XGBoost","LightGBM","CatBoost","Extra Trees"]'),
+    use_smote:           bool       = Form(True),
 ):
     import joblib as _jl  # noqa: PLC0415
     from sklearn.compose import ColumnTransformer as _CT  # noqa: PLC0415
@@ -345,7 +346,7 @@ async def train_model(
         fe_transformer=_fe_transformer, pre_fe_cols=_pre_fe_cols, pre_fe_sample=_pre_fe_sample,
         n_clusters=n_clusters, tune=tune, n_trials=_n_trials,
         selected_models=_selected_models, num_cols=num_cols, cat_cols=cat_cols,
-        transformers=transformers,
+        transformers=transformers, use_smote=use_smote,
     )
     return StreamingResponse(
         streaming_task.stream(_work),
