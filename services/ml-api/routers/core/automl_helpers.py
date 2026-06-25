@@ -203,7 +203,7 @@ def _optuna_tune(
         if _secondary_scoring:
             try:
                 from sklearn.model_selection import KFold as _KF2, StratifiedKFold as _SKF2  # noqa: PLC0415
-                _sec_cv = _SKF2(n_splits=2, shuffle=True, random_state=42) if hasattr(cv_split, "n_splits") and hasattr(y_cv, "value_counts") else _KF2(n_splits=2, shuffle=True, random_state=42)
+                _sec_cv = _SKF2(n_splits=2, shuffle=True, random_state=42) if task == "classification" else _KF2(n_splits=2, shuffle=True, random_state=42)
                 _sec = float(cross_val_score(pl, X_cv, y_cv, cv=_sec_cv, scoring=_secondary_scoring).mean())
                 trial.set_user_attr("secondary_score", _sec)
             except Exception:

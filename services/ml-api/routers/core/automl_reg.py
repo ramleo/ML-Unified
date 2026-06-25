@@ -172,26 +172,32 @@ def _fill_automl_reg_metrics(
         print(f"Learning curve failed: {_lc_err}", flush=True)
         automl_result["lc_skip_reason"] = "Could not generate — likely OOM or timeout on current resources"
 
-    p.update(84, "Extracting feature importances…")
-    automl_result["feature_importance"] = _extract_feature_importances(pipeline, num_cols, cat_cols)
-    rule_exp = _rule_explanation(
-        automl_result["winner"], automl_result["cv_results"], "regression",
-        "MAE", False, automl_result["feature_importance"], len(X),
-    )
-    app_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if app_key:
-        p.update(86, "Generating AI explanation…")
-        llm_exp = _llm_explanation(
-            app_key, automl_result["winner"], automl_result["cv_results"],
-            "regression", "MAE", False,
-            automl_result["feature_importance"], len(X),
+    try:
+        p.update(84, "Extracting feature importances…")
+        automl_result["feature_importance"] = _extract_feature_importances(pipeline, num_cols, cat_cols)
+        rule_exp = _rule_explanation(
+            automl_result["winner"], automl_result["cv_results"], "regression",
+            "MAE", False, automl_result["feature_importance"], len(X),
         )
-        automl_result["explanation"]        = llm_exp or {"why_won": rule_exp, "score_analysis": "", "key_drivers": "", "recommendations": []}
-        automl_result["explanation_source"] = "app_key" if llm_exp else "rule"
-    else:
-        automl_result["explanation"]        = {"why_won": rule_exp, "score_analysis": "", "key_drivers": "", "recommendations": []}
-        automl_result["explanation_source"] = "rule"
-    automl_result["can_upgrade"] = automl_result["explanation_source"] == "rule"
+        app_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if app_key:
+            p.update(86, "Generating AI explanation…")
+            llm_exp = _llm_explanation(
+                app_key, automl_result["winner"], automl_result["cv_results"],
+                "regression", "MAE", False,
+                automl_result["feature_importance"], len(X),
+            )
+            automl_result["explanation"]        = llm_exp or {"why_won": rule_exp, "score_analysis": "", "key_drivers": "", "recommendations": []}
+            automl_result["explanation_source"] = "app_key" if llm_exp else "rule"
+        else:
+            automl_result["explanation"]        = {"why_won": rule_exp, "score_analysis": "", "key_drivers": "", "recommendations": []}
+            automl_result["explanation_source"] = "rule"
+        automl_result["can_upgrade"] = automl_result["explanation_source"] == "rule"
+    except Exception as _exp_err:
+        print(f"[reg] explanation/importance failed: {_exp_err}", flush=True)
+        automl_result.setdefault("feature_importance", [])
+        automl_result.setdefault("explanation", {"why_won": "", "score_analysis": "", "key_drivers": "", "recommendations": []})
+        automl_result.setdefault("explanation_source", "rule")
 
 
 def _automl_reg(p, X, y_enc, selected_models, tune, n_trials, transformers,
