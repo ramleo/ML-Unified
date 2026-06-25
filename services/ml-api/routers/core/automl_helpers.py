@@ -172,7 +172,21 @@ def _optuna_tune(
 
         pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")), ("model", est)])
         try:
-            score = float(cross_val_score(pl, X_cv, y_cv, cv=_effective_cv, scoring=scoring, error_score="raise").mean())
+            if scoring in ("roc_auc", "roc_auc_ovr"):
+                # sklearn 1.4 roc_auc scorer uses is_classifier() type detection which
+                # fails for some estimators (CatBoost, XGBoost). Bypass it by calling
+                # cross_val_predict → predict_proba directly, then computing AUC manually.
+                from sklearn.model_selection import cross_val_predict as _cvp  # noqa: PLC0415
+                from sklearn.metrics import roc_auc_score as _roc_fn  # noqa: PLC0415
+                import numpy as _np_roc  # noqa: PLC0415
+                _probas = _cvp(pl, X_cv, y_cv, cv=_effective_cv, method="predict_proba")
+                _n_cls = _probas.shape[1]
+                if _n_cls == 2:
+                    score = float(_roc_fn(y_cv, _probas[:, 1]))
+                else:
+                    score = float(_roc_fn(y_cv, _probas, multi_class="ovr", average="macro"))
+            else:
+                score = float(cross_val_score(pl, X_cv, y_cv, cv=_effective_cv, scoring=scoring, error_score="raise").mean())
         except Exception as _cv_err:
             _msg = f"{type(_cv_err).__name__}: {_cv_err}"
             if not _first_error:
@@ -180,7 +194,7 @@ def _optuna_tune(
             print(f"[Optuna] trial {trial.number + 1} CV error: {_msg}", flush=True)
             raise optuna.TrialPruned()
         if score != score:  # NaN
-            _msg = f"cross_val_score returned NaN for scoring='{scoring}' — check class distribution or feature values"
+            _msg = f"scoring='{scoring}' returned NaN — check class distribution or feature values"
             if not _first_error:
                 _first_error.append(_msg)
             print(f"[Optuna] trial {trial.number + 1} NaN score", flush=True)
