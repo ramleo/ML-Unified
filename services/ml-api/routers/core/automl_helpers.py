@@ -88,7 +88,8 @@ def _optuna_tune(
         elif opt_metric == "f1_macro":
             scoring = "f1_macro"
         elif opt_metric == "roc_auc":
-            scoring = "roc_auc"
+            import numpy as _np  # noqa: PLC0415
+            scoring = "roc_auc" if len(_np.unique(y_cv)) == 2 else "roc_auc_ovr"
         else:  # "auto"
             scoring = "f1_macro" if is_imbal else "f1_weighted"
 
