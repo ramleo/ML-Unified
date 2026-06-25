@@ -100,6 +100,8 @@ def _optuna_tune(
         _sec_scoring_map = {"accuracy": "accuracy", "f1_weighted": "f1_weighted", "f1_macro": "f1_macro"}
     _secondary_scoring = _sec_scoring_map.get(secondary_metric) if secondary_metric != "none" else None
 
+    _first_error: list = []  # capture first trial error for user-facing message
+
     def objective(trial):
         cw = "balanced" if is_imbal else None
         if algorithm == "Random Forest":
@@ -153,8 +155,21 @@ def _optuna_tune(
                    if task == "classification"
                    else CatBoostRegressor(random_seed=42, verbose=0, **params))
 
-        pl    = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")), ("model", est)])
-        score = float(cross_val_score(pl, X_cv, y_cv, cv=cv_split, scoring=scoring).mean())
+        pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")), ("model", est)])
+        try:
+            score = float(cross_val_score(pl, X_cv, y_cv, cv=cv_split, scoring=scoring).mean())
+        except Exception as _cv_err:
+            _msg = f"{type(_cv_err).__name__}: {_cv_err}"
+            if not _first_error:
+                _first_error.append(_msg)
+            print(f"[Optuna] trial {trial.number + 1} CV error: {_msg}", flush=True)
+            raise optuna.TrialPruned()
+        if score != score:  # NaN
+            _msg = f"cross_val_score returned NaN for scoring='{scoring}' — check class distribution or feature values"
+            if not _first_error:
+                _first_error.append(_msg)
+            print(f"[Optuna] trial {trial.number + 1} NaN score", flush=True)
+            raise optuna.TrialPruned()
         on_trial(trial.number + 1, score)
         if _secondary_scoring:
             try:
@@ -200,11 +215,11 @@ def _optuna_tune(
         ]
 
     if not trial_history:
-        print(f"All Optuna trials failed for metric '{scoring}' — using default params", flush=True)
+        err_detail = _first_error[0] if _first_error else "unknown — check server logs"
+        print(f"All Optuna trials failed for metric '{scoring}': {err_detail}", flush=True)
         raise RuntimeError(
-            f"All {n_trials} Optuna trials failed with metric '{opt_metric}'. "
-            f"This usually means the metric is incompatible with your dataset "
-            f"(e.g. roc_auc requires all classes in every CV fold). "
+            f"All {n_trials} Optuna trials failed for metric '{opt_metric}'. "
+            f"Cause: {err_detail}. "
             f"Try switching to f1_weighted or accuracy."
         )
     return study.best_params, study.best_value, trial_history, param_importance, secondary_trials
