@@ -90,7 +90,7 @@ def run_regression(
     if automl_result:
         _fill_automl_reg_metrics(
             p, automl_result, pipeline, y_test, y_pred, mae, rmse, r2,
-            X, y_enc, transformers, num_cols, cat_cols, tune, n_trials,
+            X, y_enc, transformers, num_cols, cat_cols, tune, n_trials, opt_metric,
         )
 
     return {
@@ -102,7 +102,7 @@ def run_regression(
 
 def _fill_automl_reg_metrics(
     p, automl_result, pipeline, y_test, y_pred, mae, rmse, r2,
-    X, y_enc, transformers, num_cols, cat_cols, tune, n_trials,
+    X, y_enc, transformers, num_cols, cat_cols, tune, n_trials, opt_metric="auto",
 ):
     import numpy as np  # noqa: PLC0415
     y_test_arr = np.array(y_test)
