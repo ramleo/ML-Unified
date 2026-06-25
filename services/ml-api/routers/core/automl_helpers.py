@@ -102,6 +102,21 @@ def _optuna_tune(
 
     _first_error: list = []  # capture first trial error for user-facing message
 
+    # For roc_auc binary: if minority class has fewer samples than n_splits,
+    # StratifiedKFold can't guarantee both classes in every test fold → NaN/error.
+    # Reduce folds automatically to max(2, minority_count).
+    _effective_cv = cv_split
+    if scoring == "roc_auc" and task == "classification":
+        import numpy as _npcv  # noqa: PLC0415
+        _uniq, _cnts = _npcv.unique(y_cv, return_counts=True)
+        _min_cls = int(_cnts.min())
+        _n_sp = cv_split.n_splits if hasattr(cv_split, "n_splits") else 5
+        if _min_cls < _n_sp:
+            from sklearn.model_selection import StratifiedKFold as _SKFAdj  # noqa: PLC0415
+            _safe_splits = max(2, _min_cls)
+            _effective_cv = _SKFAdj(n_splits=_safe_splits, shuffle=True, random_state=42)
+            print(f"[Optuna] roc_auc: minority class has {_min_cls} samples — reduced to {_safe_splits}-fold CV", flush=True)
+
     def objective(trial):
         cw = "balanced" if is_imbal else None
         if algorithm == "Random Forest":
@@ -157,7 +172,7 @@ def _optuna_tune(
 
         pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")), ("model", est)])
         try:
-            score = float(cross_val_score(pl, X_cv, y_cv, cv=cv_split, scoring=scoring).mean())
+            score = float(cross_val_score(pl, X_cv, y_cv, cv=_effective_cv, scoring=scoring, error_score="raise").mean())
         except Exception as _cv_err:
             _msg = f"{type(_cv_err).__name__}: {_cv_err}"
             if not _first_error:
