@@ -149,19 +149,25 @@ def _fill_automl_reg_metrics(
     X_cv, y_cv = _cv_sample(X, y_enc)
     _lc_folds_r = 3 if len(X) > 5000 else 5
     automl_result["lc_cv_folds"] = _lc_folds_r
+    _lc_reg_map = {"mae": ("neg_mean_absolute_error", "MAE", False),
+                   "rmse": ("neg_root_mean_squared_error", "RMSE", False),
+                   "r2": ("r2", "R²", True)}
+    _lc_scoring_r, _lc_label_r, _lc_pos = _lc_reg_map.get(opt_metric, ("neg_mean_absolute_error", "MAE", False))
+    automl_result["optuna_primary_metric"] = opt_metric
     try:
         p.update(83, "Computing learning curve…")
         lc_sizes, lc_train_sc, lc_val_sc = learning_curve(
             clone(pipeline), X, y_enc,
             cv=KFold(n_splits=_lc_folds_r, shuffle=True, random_state=42),
             train_sizes=[0.2, 0.4, 0.6, 0.8, 1.0],
-            scoring="neg_mean_absolute_error", n_jobs=1,
+            scoring=_lc_scoring_r, n_jobs=1,
         )
+        _sign = 1.0 if _lc_pos else -1.0
         automl_result["learning_curve"] = {
             "train_sizes":  [int(s) for s in lc_sizes],
-            "train_scores": [round(-float(s.mean()), 4) for s in lc_train_sc],
-            "val_scores":   [round(-float(s.mean()), 4) for s in lc_val_sc],
-            "metric_label": "MAE", "cv_folds": _lc_folds_r,
+            "train_scores": [round(_sign * float(s.mean()), 4) for s in lc_train_sc],
+            "val_scores":   [round(_sign * float(s.mean()), 4) for s in lc_val_sc],
+            "metric_label": _lc_label_r, "cv_folds": _lc_folds_r,
         }
     except Exception as _lc_err:
         print(f"Learning curve failed: {_lc_err}", flush=True)

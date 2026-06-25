@@ -140,18 +140,22 @@ def run_classification(
         X_cv, y_cv = _cv_sample(X, y_enc)
         _lc_folds  = 3 if len(X) > 5000 else 5
         automl_result["lc_cv_folds"] = _lc_folds
+        _lc_score_map = {"accuracy": ("accuracy", "Accuracy"), "f1_weighted": ("f1_weighted", "F1 (weighted)"),
+                         "f1_macro": ("f1_macro", "F1-macro"), "roc_auc": ("roc_auc", "ROC-AUC")}
+        _lc_scoring, _lc_label = _lc_score_map.get(opt_metric, (sel_metric, sel_label))
+        automl_result["optuna_primary_metric"] = opt_metric
         try:
             p.update(83, "Computing learning curve…")
             lc_sizes, lc_train_sc, lc_val_sc = learning_curve(
                 clone(pipeline), X_cv, y_cv,
                 cv=StratifiedKFold(n_splits=_lc_folds, shuffle=True, random_state=42),
-                train_sizes=[0.2, 0.4, 0.6, 0.8, 1.0], scoring=sel_metric, n_jobs=1,
+                train_sizes=[0.2, 0.4, 0.6, 0.8, 1.0], scoring=_lc_scoring, n_jobs=1,
             )
             automl_result["learning_curve"] = {
                 "train_sizes":  [int(s) for s in lc_sizes],
                 "train_scores": [round(float(s.mean()), 4) for s in lc_train_sc],
                 "val_scores":   [round(float(s.mean()), 4) for s in lc_val_sc],
-                "metric_label": sel_label, "cv_folds": _lc_folds,
+                "metric_label": _lc_label, "cv_folds": _lc_folds,
             }
         except Exception as _lc_err:
             print(f"Learning curve failed: {_lc_err}", flush=True)
