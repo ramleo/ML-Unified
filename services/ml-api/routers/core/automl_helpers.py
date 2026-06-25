@@ -153,7 +153,12 @@ def _optuna_tune(
                    else CatBoostRegressor(random_seed=42, verbose=0, **params))
 
         pl    = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")), ("model", est)])
-        score = float(cross_val_score(pl, X_cv, y_cv, cv=cv_split, scoring=scoring).mean())
+        import math as _m  # noqa: PLC0415
+        try:
+            _raw = float(cross_val_score(pl, X_cv, y_cv, cv=cv_split, scoring=scoring).mean())
+            score = _raw if not _m.isnan(_raw) else (0.0 if task == "classification" else -1e9)
+        except Exception:
+            score = 0.0 if task == "classification" else -1e9
         on_trial(trial.number + 1, score)
         if _secondary_scoring:
             try:
@@ -199,7 +204,8 @@ def _optuna_tune(
         ]
 
     if not trial_history:
-        raise RuntimeError("All Optuna trials failed — no completed trials")
+        print("All Optuna trials produced NaN — returning default params", flush=True)
+        return {}, 0.0, [], {}, []
     return study.best_params, study.best_value, trial_history, param_importance, secondary_trials
 
 
