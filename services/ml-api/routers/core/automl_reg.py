@@ -112,12 +112,11 @@ def _fill_automl_reg_metrics(
     wm_reg = {
         "mae":       round(float(mae),  4),
         "rmse":      round(float(rmse), 4),
+        "r2":        round(float(r2),   4),
         "mape":      round(mape,         4),
         "max_error": round(max_err,      4),
         "median_ae": round(med_ae,       4),
     }
-    if r2 >= 0.60:
-        wm_reg["r2"] = round(float(r2), 4)
     automl_result["winner_metrics"] = wm_reg
 
     try:

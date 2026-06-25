@@ -128,6 +128,7 @@ def run_classification(
         wm = {
             "accuracy":    round(float(acc),    4),
             "f1_weighted": round(float(f1_w),   4),
+            "f1_macro":    round(float(f1_m),   4),
             "precision":   round(float(prec_w), 4),
             "recall":      round(float(rec_w),  4),
         }
