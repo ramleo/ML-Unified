@@ -163,10 +163,16 @@ def _optuna_tune(
                 pass
         return score
 
-    if sampler == "gp":
-        _sampler = optuna.samplers.GPSampler(seed=42)
+    if sampler == "cmaes":
+        try:
+            _sampler = optuna.samplers.CmaEsSampler(seed=42)
+        except Exception:
+            _sampler = optuna.samplers.TPESampler(seed=42, multivariate=True, n_startup_trials=10)
     elif sampler == "auto":
-        _sampler = optuna.samplers.AutoSampler()
+        try:
+            _sampler = optuna.samplers.AutoSampler()
+        except Exception:
+            _sampler = optuna.samplers.TPESampler(seed=42, multivariate=True, n_startup_trials=10)
     else:
         _sampler = optuna.samplers.TPESampler(seed=42, multivariate=True, n_startup_trials=10)
 
