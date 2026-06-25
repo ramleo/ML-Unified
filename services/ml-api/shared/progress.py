@@ -22,8 +22,30 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import threading
 from tqdm import tqdm
+
+
+def _sanitize(obj):
+    """Recursively replace NaN/Inf with None and convert numpy scalar types to Python natives."""
+    if isinstance(obj, float):
+        return None if (math.isnan(obj) or math.isinf(obj)) else obj
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(v) for v in obj]
+    # coerce numpy int/float types that slipped through
+    try:
+        import numpy as _np  # noqa: PLC0415
+        if isinstance(obj, (_np.integer,)):
+            return int(obj)
+        if isinstance(obj, (_np.floating,)):
+            v = float(obj)
+            return None if (math.isnan(v) or math.isinf(v)) else v
+    except ImportError:
+        pass
+    return obj
 
 
 class _Progress:
@@ -96,7 +118,7 @@ class StreamingTask:
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"  # SSE comment — ignored by browser, prevents proxy timeout
                     continue
-                yield f"data: {json.dumps(item)}\n\n"
+                yield f"data: {json.dumps(_sanitize(item))}\n\n"
                 if item.get("done"):
                     break
             t.join()

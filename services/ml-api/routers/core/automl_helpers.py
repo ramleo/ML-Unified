@@ -177,10 +177,11 @@ def _optuna_tune(
     )
     study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
 
+    import math as _math  # noqa: PLC0415
     trial_history = [
         {"trial": t.number + 1, "value": round(float(t.value), 4)}
         for t in study.trials
-        if t.value is not None
+        if t.value is not None and not _math.isnan(t.value)
     ]
 
     try:
@@ -194,7 +195,7 @@ def _optuna_tune(
         secondary_trials = [
             {"trial": t.number + 1, "value": round(float(t.user_attrs["secondary_score"]), 4)}
             for t in study.trials
-            if "secondary_score" in t.user_attrs
+            if "secondary_score" in t.user_attrs and not _math.isnan(t.user_attrs["secondary_score"])
         ]
 
     if not trial_history:
