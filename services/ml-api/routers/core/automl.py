@@ -247,6 +247,8 @@ async def train_model(
     use_smote:           str        = Form("true"),
     drop_cols_json:      str        = Form("[]"),
     opt_metric:          str        = Form("auto"),
+    sampler:             str        = Form("tpe"),
+    secondary_metric:    str        = Form("none"),
 ):
     import joblib as _jl  # noqa: PLC0415
     from sklearn.compose import ColumnTransformer as _CT  # noqa: PLC0415
@@ -365,6 +367,8 @@ async def train_model(
         selected_models=_selected_models, num_cols=num_cols, cat_cols=cat_cols,
         transformers=transformers, use_smote=use_smote,
         opt_metric=opt_metric,
+        sampler=sampler,
+        secondary_metric=secondary_metric,
     )
     return StreamingResponse(
         streaming_task.stream(_work),

@@ -31,8 +31,8 @@ def _build_optuna_prompt(winner, task, n_trials, best_score, optuna_params,
     )
 
 
-def _llm_explanation_raw(api_key: str, prompt: str, provider: str = "gemini-2.5"):
-    """Call LLM with a raw prompt string. Returns plain text or None on failure."""
+def _llm_explanation_raw(api_key: str, prompt: str, provider: str = "gemini-2.5") -> tuple[str | None, str | None]:
+    """Call LLM with a raw prompt string. Returns (text, error) tuple."""
     try:
         if provider in ("gemini-2.5", "gemini-3.5-flash"):
             _model = "gemini-2.5-flash" if provider == "gemini-2.5" else "gemini-3.5-flash"
@@ -44,7 +44,7 @@ def _llm_explanation_raw(api_key: str, prompt: str, provider: str = "gemini-2.5"
             _req = _ur.Request(_url, data=_body, headers={"Content-Type": "application/json"})
             with _ur.urlopen(_req, timeout=30) as _r:
                 _data = json.loads(_r.read())
-            return _data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            return _data["candidates"][0]["content"]["parts"][0]["text"].strip(), None
         if provider == "openai":
             import openai  # noqa: PLC0415
             client = openai.OpenAI(api_key=api_key)
@@ -52,7 +52,7 @@ def _llm_explanation_raw(api_key: str, prompt: str, provider: str = "gemini-2.5"
                 model="gpt-4o-mini", max_tokens=900,
                 messages=[{"role": "user", "content": prompt}],
             )
-            return resp.choices[0].message.content.strip()
+            return resp.choices[0].message.content.strip(), None
         if provider == "cohere":
             _url = "https://api.cohere.com/v2/chat"
             _body = json.dumps({
@@ -66,7 +66,7 @@ def _llm_explanation_raw(api_key: str, prompt: str, provider: str = "gemini-2.5"
             })
             with _ur.urlopen(_req, timeout=30) as _r:
                 _data = json.loads(_r.read())
-            return _data["message"]["content"][0]["text"].strip()
+            return _data["message"]["content"][0]["text"].strip(), None
         if provider == "groq":
             import openai  # noqa: PLC0415
             client = openai.OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
@@ -74,10 +74,10 @@ def _llm_explanation_raw(api_key: str, prompt: str, provider: str = "gemini-2.5"
                 model="llama-3.3-70b-versatile", max_tokens=900,
                 messages=[{"role": "user", "content": prompt}],
             )
-            return resp.choices[0].message.content.strip()
+            return resp.choices[0].message.content.strip(), None
     except Exception as _e:
         print(f"[optuna-explain LLM error] provider={provider} error={_e}", flush=True)
-    return None
+        return None, str(_e)
 
 
 @router.post("/optuna-explain")
@@ -115,5 +115,8 @@ async def optuna_explain(
         optuna_params=optuna_params, param_importance=param_importance,
         feature_importance=feature_importance, winner_metrics=winner_metrics,
     )
-    explanation = _llm_explanation_raw(api_key=api_key, prompt=prompt, provider=provider)
-    return {"explanation": explanation or "Could not generate explanation — check your API key and try again."}
+    explanation, llm_error = _llm_explanation_raw(api_key=api_key, prompt=prompt, provider=provider)
+    return {
+        "explanation": explanation,
+        "error": llm_error if not explanation else None,
+    }

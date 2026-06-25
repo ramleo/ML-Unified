@@ -65,7 +65,9 @@ def _optuna_tune(
     algorithm: str, task: str, X_cv, y_cv, transformers: list,
     cv_split, n_trials: int, is_imbal: bool, on_trial,
     opt_metric: str = "auto",
-) -> tuple[dict, float, list, dict]:
+    sampler: str = "tpe",
+    secondary_metric: str = "none",
+) -> tuple[dict, float, list, dict, list]:
     import optuna  # noqa: PLC0415
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     from xgboost import XGBClassifier, XGBRegressor          # noqa: PLC0415
@@ -89,6 +91,13 @@ def _optuna_tune(
             scoring = "roc_auc"
         else:  # "auto"
             scoring = "f1_macro" if is_imbal else "f1_weighted"
+
+    _sec_scoring_map = {}
+    if task == "regression":
+        _sec_scoring_map = {"mae": "neg_mean_absolute_error", "rmse": "neg_root_mean_squared_error", "r2": "r2"}
+    else:
+        _sec_scoring_map = {"accuracy": "accuracy", "f1_weighted": "f1_weighted", "f1_macro": "f1_macro"}
+    _secondary_scoring = _sec_scoring_map.get(secondary_metric) if secondary_metric != "none" else None
 
     def objective(trial):
         cw = "balanced" if is_imbal else None
@@ -146,11 +155,24 @@ def _optuna_tune(
         pl    = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")), ("model", est)])
         score = float(cross_val_score(pl, X_cv, y_cv, cv=cv_split, scoring=scoring).mean())
         on_trial(trial.number + 1, score)
+        if _secondary_scoring:
+            try:
+                _sec = float(cross_val_score(pl, X_cv, y_cv, cv=cv_split, scoring=_secondary_scoring).mean())
+                trial.set_user_attr("secondary_score", _sec)
+            except Exception:
+                pass
         return score
+
+    if sampler == "gp":
+        _sampler = optuna.samplers.GPSampler(seed=42)
+    elif sampler == "auto":
+        _sampler = optuna.samplers.AutoSampler()
+    else:
+        _sampler = optuna.samplers.TPESampler(seed=42, multivariate=True, n_startup_trials=10)
 
     study = optuna.create_study(
         direction="maximize",
-        sampler=optuna.samplers.TPESampler(seed=42, multivariate=True, n_startup_trials=10),
+        sampler=_sampler,
         pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=0),
     )
     study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
@@ -167,9 +189,17 @@ def _optuna_tune(
     except Exception:
         param_importance = {}
 
+    secondary_trials = []
+    if _secondary_scoring:
+        secondary_trials = [
+            {"trial": t.number + 1, "value": round(float(t.user_attrs["secondary_score"]), 4)}
+            for t in study.trials
+            if "secondary_score" in t.user_attrs
+        ]
+
     if not trial_history:
         raise RuntimeError("All Optuna trials failed — no completed trials")
-    return study.best_params, study.best_value, trial_history, param_importance
+    return study.best_params, study.best_value, trial_history, param_importance, secondary_trials
 
 
 def _build_tuned_estimator(algorithm: str, task: str, best_params: dict, is_imbal: bool):
