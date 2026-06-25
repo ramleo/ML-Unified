@@ -200,7 +200,7 @@ def _automl_clf(p, X, y_enc, selected_models, tune, n_trials, transformers,
     cv_split = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     X_cv, y_cv = _cv_sample(X, y_enc)
     cv_results = []
-    _pct_steps = [12, 26, 40, 55, 70]
+    _pct_steps = [12, 26, 40, 48, 55]
     _model_idx = 0
 
     _CLF_MAP = {
@@ -242,11 +242,11 @@ def _automl_clf(p, X, y_enc, selected_models, tune, n_trials, transformers,
     estimator = _CLF_MAP.get(winner, lambda: RandomForestClassifier(n_estimators=100, random_state=42, class_weight=cw))()
 
     if tune:
-        p.update(65, f"Winner: {winner}. Tuning with Optuna ({n_trials} trials)…")
+        p.update(58, f"Winner: {winner}. Tuning with Optuna ({n_trials} trials)…")
         try:
             _best_params, _best_val, _optuna_trials, _param_importance, _secondary_trials = _optuna_tune(
                 winner, "classification", X_cv, y_cv, transformers, cv_split, n_trials, is_imbal,
-                lambda t, s: p.update(65 + int(t / n_trials * 13), f"Optuna trial {t}/{n_trials} — best {sel_label}: {s:.4f}"),
+                lambda t, s: p.update(58 + int(t / n_trials * 22), f"Optuna trial {t}/{n_trials} — best {sel_label}: {'n/a' if s != s else f'{s:.4f}'}"),
                 opt_metric=opt_metric,
                 sampler=sampler,
                 secondary_metric=secondary_metric,
@@ -260,7 +260,7 @@ def _automl_clf(p, X, y_enc, selected_models, tune, n_trials, transformers,
             automl_result["optuna_sampler"] = sampler
             automl_result["optuna_secondary_metric"] = secondary_metric
             automl_result["optuna_secondary_trials"] = _secondary_trials
-            p.update(78, f"Tuning done. Training {winner} with best params…")
+            p.update(80, f"Tuning done. Training {winner} with best params…")
         except Exception as _oe:
             import traceback as _tb
             _err = f"{type(_oe).__name__}: {_oe}\n{_tb.format_exc()[-400:]}"

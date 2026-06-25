@@ -153,10 +153,12 @@ def build_work_fn(
             "output":      output_meta,
         }
 
-        p.update(93, "Saving model to disk…")
+        p.update(92, "Saving schema…")
         with open(os.path.join(SCHEMA_DIR, f"{_model_id}.json"), "w") as f:
             json.dump(schema, f, indent=2)
+        p.update(94, "Saving pipeline…")
         joblib.dump(pipeline, os.path.join(MODEL_DIR, f"{_model_id}_pipeline.pkl"))
+        p.update(97, "Finalizing…")
         joblib.dump(_fe_tfm, os.path.join(MODEL_DIR, f"{_model_id}_fe.pkl"))
         if le is not None:
             joblib.dump(le, os.path.join(MODEL_DIR, f"{_model_id}_labels.pkl"))

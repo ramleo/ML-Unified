@@ -202,7 +202,7 @@ def _automl_reg(p, X, y_enc, selected_models, tune, n_trials, transformers,
     cv_split = KFold(n_splits=5, shuffle=True, random_state=42)
     X_cv, y_cv = _cv_sample(X, y_enc)
     cv_results = []
-    _pct_steps_r = [12, 26, 40, 55, 70]
+    _pct_steps_r = [12, 26, 40, 48, 55]
     _model_idx_r = 0
 
     _REG_MAP = {
@@ -244,11 +244,11 @@ def _automl_reg(p, X, y_enc, selected_models, tune, n_trials, transformers,
     estimator = _REG_MAP.get(winner, lambda: RandomForestRegressor(n_estimators=100, random_state=42))()
 
     if tune:
-        p.update(65, f"Winner: {winner}. Tuning with Optuna ({n_trials} trials)…")
+        p.update(58, f"Winner: {winner}. Tuning with Optuna ({n_trials} trials)…")
         try:
             _best_params_r, _best_val_r, _optuna_trials_r, _param_importance_r, _secondary_trials_r = _optuna_tune(
                 winner, "regression", X_cv, y_cv, transformers, cv_split, n_trials, False,
-                lambda t, s: p.update(65 + int(t / n_trials * 13), f"Optuna trial {t}/{n_trials} — best MAE: {-s:.4f}"),
+                lambda t, s: p.update(58 + int(t / n_trials * 22), f"Optuna trial {t}/{n_trials} — best MAE: {'n/a' if s != s else f'{-s:.4f}'}"),
                 opt_metric=opt_metric,
                 sampler=sampler,
                 secondary_metric=secondary_metric,
@@ -262,7 +262,7 @@ def _automl_reg(p, X, y_enc, selected_models, tune, n_trials, transformers,
             automl_result["optuna_sampler"] = sampler
             automl_result["optuna_secondary_metric"] = secondary_metric
             automl_result["optuna_secondary_trials"] = _secondary_trials_r
-            p.update(78, f"Tuning done. Training {winner} with best params…")
+            p.update(80, f"Tuning done. Training {winner} with best params…")
         except Exception as _oe:
             print(f"Optuna tuning failed, using default params: {_oe}", flush=True)
             p.update(78, f"Tuning failed — using default {winner} params…")
