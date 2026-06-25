@@ -163,16 +163,8 @@ def _optuna_tune(
                 pass
         return score
 
-    if sampler == "cmaes":
-        try:
-            _sampler = optuna.samplers.CmaEsSampler(seed=42)
-        except Exception:
-            _sampler = optuna.samplers.TPESampler(seed=42, multivariate=True, n_startup_trials=10)
-    elif sampler == "auto":
-        try:
-            _sampler = optuna.samplers.AutoSampler()
-        except Exception:
-            _sampler = optuna.samplers.TPESampler(seed=42, multivariate=True, n_startup_trials=10)
+    if sampler == "qmc":
+        _sampler = optuna.samplers.QMCSampler(qmc_type="sobol", seed=42)
     else:
         _sampler = optuna.samplers.TPESampler(seed=42, multivariate=True, n_startup_trials=10)
 
