@@ -153,12 +153,7 @@ def _optuna_tune(
                    else CatBoostRegressor(random_seed=42, verbose=0, **params))
 
         pl    = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")), ("model", est)])
-        import math as _m  # noqa: PLC0415
-        try:
-            _raw = float(cross_val_score(pl, X_cv, y_cv, cv=cv_split, scoring=scoring).mean())
-            score = _raw if not _m.isnan(_raw) else (0.0 if task == "classification" else -1e9)
-        except Exception:
-            score = 0.0 if task == "classification" else -1e9
+        score = float(cross_val_score(pl, X_cv, y_cv, cv=cv_split, scoring=scoring).mean())
         on_trial(trial.number + 1, score)
         if _secondary_scoring:
             try:
@@ -204,8 +199,13 @@ def _optuna_tune(
         ]
 
     if not trial_history:
-        print("All Optuna trials produced NaN — returning default params", flush=True)
-        return {}, 0.0, [], {}, []
+        print(f"All Optuna trials failed for metric '{scoring}' — using default params", flush=True)
+        raise RuntimeError(
+            f"All {n_trials} Optuna trials failed with metric '{opt_metric}'. "
+            f"This usually means the metric is incompatible with your dataset "
+            f"(e.g. roc_auc requires all classes in every CV fold). "
+            f"Try switching to f1_weighted or accuracy."
+        )
     return study.best_params, study.best_value, trial_history, param_importance, secondary_trials
 
 
