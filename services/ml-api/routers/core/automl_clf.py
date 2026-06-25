@@ -145,6 +145,13 @@ def run_classification(
                          "f1_macro": ("f1_macro", "F1-macro"), "roc_auc": ("roc_auc", "ROC-AUC")}
         _lc_scoring, _lc_label = _lc_score_map.get(opt_metric, (sel_metric, sel_label))
         automl_result["optuna_primary_metric"] = opt_metric
+        # sklearn 1.4: roc_auc scorer uses is_classifier() type detection which fails for
+        # some estimators. Use a raw callable (estimator, X, y) → float to bypass it.
+        if _lc_scoring == "roc_auc":
+            def _lc_scoring(est, X, y):  # noqa: E306
+                _pr = est.predict_proba(X)
+                return roc_auc_score(y, _pr[:, 1] if _pr.shape[1] == 2 else _pr,
+                                     **({} if _pr.shape[1] == 2 else {"multi_class": "ovr", "average": "macro"}))
         try:
             p.update(83, "Computing learning curve…")
             lc_sizes, lc_train_sc, lc_val_sc = learning_curve(
