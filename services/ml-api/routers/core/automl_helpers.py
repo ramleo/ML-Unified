@@ -157,7 +157,9 @@ def _optuna_tune(
         on_trial(trial.number + 1, score)
         if _secondary_scoring:
             try:
-                _sec = float(cross_val_score(pl, X_cv, y_cv, cv=cv_split, scoring=_secondary_scoring).mean())
+                from sklearn.model_selection import KFold as _KF2, StratifiedKFold as _SKF2  # noqa: PLC0415
+                _sec_cv = _SKF2(n_splits=2, shuffle=True, random_state=42) if hasattr(cv_split, "n_splits") and hasattr(y_cv, "value_counts") else _KF2(n_splits=2, shuffle=True, random_state=42)
+                _sec = float(cross_val_score(pl, X_cv, y_cv, cv=_sec_cv, scoring=_secondary_scoring).mean())
                 trial.set_user_attr("secondary_score", _sec)
             except Exception:
                 pass
@@ -300,12 +302,13 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
                      feature_importance: list, n_rows: int, provider: str = "gemini-2.5",
                      custom_base_url: str = "", custom_model: str = ""):
     import json as _json  # noqa: PLC0415
+    import concurrent.futures as _cf  # noqa: PLC0415
     prompt = _build_prompt(winner, cv_results, task, selection_metric, is_imbalanced, feature_importance, n_rows)
     raw_text = None
     try:
         if provider == "openai":
             import openai  # noqa: PLC0415
-            client = openai.OpenAI(api_key=api_key)
+            client = openai.OpenAI(api_key=api_key, timeout=45)
             resp = client.chat.completions.create(
                 model=custom_model or "gpt-4o-mini", max_tokens=1200,
                 messages=[{"role": "user", "content": prompt}],
@@ -313,7 +316,7 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
             raw_text = resp.choices[0].message.content.strip()
         elif provider in ("groq", "groq-mixtral"):
             import openai  # noqa: PLC0415
-            client = openai.OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+            client = openai.OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1", timeout=45)
             default_model = "llama-3.1-8b-instant" if provider == "groq-mixtral" else "llama-3.3-70b-versatile"
             resp = client.chat.completions.create(
                 model=custom_model or default_model, max_tokens=1200,
@@ -324,7 +327,7 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
             import openai  # noqa: PLC0415
             if not custom_base_url or not custom_model:
                 return None
-            client = openai.OpenAI(api_key=api_key or "none", base_url=custom_base_url)
+            client = openai.OpenAI(api_key=api_key or "none", base_url=custom_base_url, timeout=45)
             resp = client.chat.completions.create(
                 model=custom_model, max_tokens=1200,
                 messages=[{"role": "user", "content": prompt}],
@@ -342,14 +345,21 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
                 _data = _json2.loads(_r.read())
             raw_text = _data["candidates"][0]["content"]["parts"][0]["text"].strip()
         else:
-            import anthropic  # noqa: PLC0415
-            client = anthropic.Anthropic(api_key=api_key)
-            msg = client.messages.create(
-                model=custom_model or "claude-haiku-4-5-20251001",
-                max_tokens=1200,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            raw_text = msg.content[0].text.strip()
+            def _call_anthropic():
+                import anthropic as _ant  # noqa: PLC0415
+                client = _ant.Anthropic(api_key=api_key)
+                msg = client.messages.create(
+                    model=custom_model or "claude-haiku-4-5-20251001",
+                    max_tokens=1200,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                return msg.content[0].text.strip()
+            with _cf.ThreadPoolExecutor(max_workers=1) as _ex:
+                try:
+                    raw_text = _ex.submit(_call_anthropic).result(timeout=45)
+                except _cf.TimeoutError:
+                    print("[LLM error] Anthropic call timed out after 45s", flush=True)
+                    return None
     except Exception as e:
         print(f"[LLM error] provider={provider} error={e}")
         return None

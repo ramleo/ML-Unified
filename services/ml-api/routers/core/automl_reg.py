@@ -146,7 +146,7 @@ def _fill_automl_reg_metrics(
     automl_result["scatter_predicted"] = [round(float(v), 4) for v in y_pred[idxs]]
 
     X_cv, y_cv = _cv_sample(X, y_enc)
-    _lc_folds_r = 3 if len(X) > 5000 else 5
+    _lc_folds_r = 3
     automl_result["lc_cv_folds"] = _lc_folds_r
     _lc_reg_map = {"mae": ("neg_mean_absolute_error", "MAE", False),
                    "rmse": ("neg_root_mean_squared_error", "RMSE", False),
@@ -156,9 +156,9 @@ def _fill_automl_reg_metrics(
     try:
         p.update(83, "Computing learning curve…")
         lc_sizes, lc_train_sc, lc_val_sc = learning_curve(
-            clone(pipeline), X, y_enc,
+            clone(pipeline), X_cv, y_cv,
             cv=KFold(n_splits=_lc_folds_r, shuffle=True, random_state=42),
-            train_sizes=[0.2, 0.4, 0.6, 0.8, 1.0],
+            train_sizes=[0.4, 0.7, 1.0],
             scoring=_lc_scoring_r, n_jobs=1,
         )
         _sign = 1.0 if _lc_pos else -1.0
