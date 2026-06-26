@@ -14,7 +14,7 @@ from routers.core.shared import (
 from routers.core.automl_helpers import FeatureEngineeringTransformer
 from routers.core.automl_train_work import build_work_fn
 from routers.core.automl_preprocess_helpers import (
-    apply_imputation, apply_encoding, apply_feature_selection,
+    apply_imputation, apply_encoding, apply_feature_selection, build_cat_transformers,
 )
 from shared.progress import StreamingTask
 from routers.core import automl_fe as _fe_router
@@ -249,6 +249,7 @@ async def train_model(
     opt_metric:          str        = Form("auto"),
     sampler:             str        = Form("tpe"),
     secondary_metric:    str        = Form("none"),
+    col_encoding_json:   str        = Form("{}"),
 ):
     import joblib as _jl  # noqa: PLC0415
     from sklearn.compose import ColumnTransformer as _CT  # noqa: PLC0415
@@ -339,14 +340,15 @@ async def train_model(
     num_cols = X.select_dtypes(include="number").columns.tolist()
     cat_cols = X.select_dtypes(exclude="number").columns.tolist()
 
+    try:
+        col_enc = json.loads(col_encoding_json or "{}")
+    except Exception:
+        col_enc = {}
+
     transformers = []
     if num_cols:
         transformers.append(("num", _PL([("imp", _SI(strategy="median")), ("scaler", _SS())]), num_cols))
-    if cat_cols:
-        transformers.append(("cat", _PL([
-            ("imp", _SI(strategy="most_frequent")),
-            ("enc", _OHE(handle_unknown="ignore", sparse_output=False)),
-        ]), cat_cols))
+    transformers.extend(build_cat_transformers(cat_cols, col_enc))
 
     if not transformers:
         raise HTTPException(400, "No usable feature columns found after cleaning")

@@ -128,6 +128,51 @@ def _apply_target_encoding(df_feat, cat_cols, target_series):
         df_feat[c] = encoded
 
 
+def build_cat_transformers(cat_cols, col_enc):
+    """Return a list of (name, pipeline, cols) transformer tuples for categorical columns."""
+    import numpy as _np_freq  # noqa: PLC0415
+    from sklearn.base import BaseEstimator, TransformerMixin  # noqa: PLC0415
+    from sklearn.impute import SimpleImputer as _SI  # noqa: PLC0415
+    from sklearn.pipeline import Pipeline as _PL  # noqa: PLC0415
+    from sklearn.preprocessing import OneHotEncoder as _OHE, OrdinalEncoder as _OE  # noqa: PLC0415
+
+    _ohe_cols  = [c for c in cat_cols if col_enc.get(c, "onehot") == "onehot"]
+    _ord_cols  = [c for c in cat_cols if col_enc.get(c) == "ordinal"]
+    _freq_cols = [c for c in cat_cols if col_enc.get(c) == "frequency"]
+
+    class _FreqEnc(BaseEstimator, TransformerMixin):
+        def fit(self, X, y=None):
+            self.maps_ = []
+            for i in range(X.shape[1]):
+                col = X[:, i].astype(str)
+                vals, counts = _np_freq.unique(col, return_counts=True)
+                self.maps_.append(dict(zip(vals, counts / len(col))))
+            return self
+        def transform(self, X, y=None):
+            out = _np_freq.zeros((len(X), X.shape[1]))
+            for i in range(X.shape[1]):
+                out[:, i] = [self.maps_[i].get(str(v), 0.0) for v in X[:, i]]
+            return out
+
+    result = []
+    if _ohe_cols:
+        result.append(("cat_ohe", _PL([
+            ("imp", _SI(strategy="most_frequent")),
+            ("enc", _OHE(handle_unknown="ignore", sparse_output=False)),
+        ]), _ohe_cols))
+    if _ord_cols:
+        result.append(("cat_ord", _PL([
+            ("imp", _SI(strategy="most_frequent")),
+            ("enc", _OE(handle_unknown="use_encoded_value", unknown_value=-1)),
+        ]), _ord_cols))
+    if _freq_cols:
+        result.append(("cat_freq", _PL([
+            ("imp", _SI(strategy="most_frequent")),
+            ("enc", _FreqEnc()),
+        ]), _freq_cols))
+    return result
+
+
 def apply_feature_selection(df_feat, target_series, fs_method, top_k):
     """Run feature selection; returns df_feat with columns pruned."""
     import numpy as _np  # noqa: PLC0415
