@@ -1,9 +1,28 @@
 """Helper functions for /automl/preprocess — imputation, encoding, feature selection."""
 import logging
 
+import numpy as np
 import pandas as pd
+from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import LabelEncoder, StandardScaler
+
+
+class FrequencyEncoder(BaseEstimator, TransformerMixin):
+    """Frequency encoding transformer — replaces each category with its frequency ratio."""
+    def fit(self, X, y=None):
+        self.maps_ = []
+        for i in range(X.shape[1]):
+            col = X[:, i].astype(str)
+            vals, counts = np.unique(col, return_counts=True)
+            self.maps_.append(dict(zip(vals, counts / len(col))))
+        return self
+
+    def transform(self, X, y=None):
+        out = np.zeros((len(X), X.shape[1]))
+        for i in range(X.shape[1]):
+            out[:, i] = [self.maps_[i].get(str(v), 0.0) for v in X[:, i]]
+        return out
 
 
 def apply_imputation(df_feat, target_series, mv_num, mv_cat, num_cols, cat_cols):
@@ -130,9 +149,6 @@ def _apply_target_encoding(df_feat, cat_cols, target_series):
 
 def build_cat_transformers(cat_cols, col_enc):
     """Return a list of (name, pipeline, cols) transformer tuples for categorical columns."""
-    import numpy as _np_freq  # noqa: PLC0415
-    from sklearn.base import BaseEstimator, TransformerMixin  # noqa: PLC0415
-    from sklearn.impute import SimpleImputer as _SI  # noqa: PLC0415
     from sklearn.pipeline import Pipeline as _PL  # noqa: PLC0415
     from sklearn.preprocessing import OneHotEncoder as _OHE, OrdinalEncoder as _OE  # noqa: PLC0415
 
@@ -140,35 +156,21 @@ def build_cat_transformers(cat_cols, col_enc):
     _ord_cols  = [c for c in cat_cols if col_enc.get(c) == "ordinal"]
     _freq_cols = [c for c in cat_cols if col_enc.get(c) == "frequency"]
 
-    class _FreqEnc(BaseEstimator, TransformerMixin):
-        def fit(self, X, y=None):
-            self.maps_ = []
-            for i in range(X.shape[1]):
-                col = X[:, i].astype(str)
-                vals, counts = _np_freq.unique(col, return_counts=True)
-                self.maps_.append(dict(zip(vals, counts / len(col))))
-            return self
-        def transform(self, X, y=None):
-            out = _np_freq.zeros((len(X), X.shape[1]))
-            for i in range(X.shape[1]):
-                out[:, i] = [self.maps_[i].get(str(v), 0.0) for v in X[:, i]]
-            return out
-
     result = []
     if _ohe_cols:
         result.append(("cat_ohe", _PL([
-            ("imp", _SI(strategy="most_frequent")),
+            ("imp", SimpleImputer(strategy="most_frequent")),
             ("enc", _OHE(handle_unknown="ignore", sparse_output=False)),
         ]), _ohe_cols))
     if _ord_cols:
         result.append(("cat_ord", _PL([
-            ("imp", _SI(strategy="most_frequent")),
+            ("imp", SimpleImputer(strategy="most_frequent")),
             ("enc", _OE(handle_unknown="use_encoded_value", unknown_value=-1)),
         ]), _ord_cols))
     if _freq_cols:
         result.append(("cat_freq", _PL([
-            ("imp", _SI(strategy="most_frequent")),
-            ("enc", _FreqEnc()),
+            ("imp", SimpleImputer(strategy="most_frequent")),
+            ("enc", FrequencyEncoder()),
         ]), _freq_cols))
     return result
 
