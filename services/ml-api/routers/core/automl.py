@@ -359,7 +359,7 @@ async def train_model(
         _selected_models = {"Random Forest", "XGBoost", "LightGBM", "CatBoost", "Extra Trees",
                             "Decision Tree", "KNN", "Logistic Regression", "Ridge"}
 
-    _n_trials = max(5, min(50, n_trials))
+    _n_trials = max(5, min(200, n_trials))
     streaming_task = StreamingTask()
     _work = build_work_fn(
         X=X, y=y, task=task, algorithm=algorithm, accent=accent,
