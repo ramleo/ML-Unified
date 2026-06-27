@@ -15,6 +15,7 @@ from routers import drift as _drift_router
 from routers.core import inference as inference_router
 from routers.core import automl as automl_router
 from routers.core import monitoring as monitoring_router
+from routers.pipeline_builder import router as _pb_router
 
 from routers.core.shared import (
     _detect_gpu, MODELS, _fetch_hf_models, _load,
@@ -124,6 +125,7 @@ app.include_router(_shap_router.router)
 app.include_router(_pipeline_router.router)
 app.include_router(_training_router.router)
 app.include_router(_drift_router.router)
+app.include_router(_pb_router)
 
 
 if __name__ == "__main__":
