@@ -308,42 +308,41 @@ def run_ensemble(req: EnsembleRequest):
         y_enc = _encode_y(df[req.target], req.task_type)
         scoring, cv = _scoring_and_cv(req.task_type, 5)
 
-        from sklearn.base import clone
+        # Preprocess once — VotingClassifier/VotingRegressor don't accept Pipeline
+        # sub-estimators because sklearn can't determine their estimator type at init time.
         preprocessor = _build_preprocessor(X)
-        estimators_list = [(algo, _get_estimator(algo, req.task_type)) for algo in req.config.models]
+        X_pre = preprocessor.fit_transform(X)
 
+        good_estimators = []
         individual_scores = {}
-        for algo, est in estimators_list:
+        for algo in req.config.models:
             try:
-                pipe = Pipeline([("pre", clone(preprocessor)), ("est", est)])
-                sc = float(cross_val_score(pipe, X, y_enc, cv=cv, scoring=scoring).mean())
+                est = _get_estimator(algo, req.task_type)
+                sc = float(cross_val_score(est, X_pre, y_enc, cv=cv, scoring=scoring).mean())
                 individual_scores[algo] = -sc if req.task_type == "regression" else sc
+                good_estimators.append((algo, _get_estimator(algo, req.task_type)))
             except Exception:
                 individual_scores[algo] = -999.0
 
-        wrapped = [(algo, Pipeline([("pre", clone(preprocessor)), ("est", clone(est))]))
-                   for (algo, est), sc in zip(estimators_list, individual_scores.values())
-                   if sc != -999.0]
-
-        if not wrapped:
+        if not good_estimators:
             raise HTTPException(status_code=500, detail="All models failed during individual evaluation")
 
         if req.task_type == "classification":
             from sklearn.ensemble import VotingClassifier
             try:
-                ensemble = VotingClassifier(estimators=wrapped, voting="soft")
-                scores = cross_val_score(ensemble, X, y_enc, cv=cv, scoring=scoring)
+                ensemble = VotingClassifier(estimators=good_estimators, voting="soft")
+                scores = cross_val_score(ensemble, X_pre, y_enc, cv=cv, scoring=scoring)
             except Exception:
                 try:
-                    ensemble = VotingClassifier(estimators=wrapped, voting="hard")
-                    scores = cross_val_score(ensemble, X, y_enc, cv=cv, scoring=scoring)
+                    ensemble = VotingClassifier(estimators=good_estimators, voting="hard")
+                    scores = cross_val_score(ensemble, X_pre, y_enc, cv=cv, scoring=scoring)
                 except Exception as e:
                     raise HTTPException(status_code=500, detail=f"Ensemble failed: {e}")
         else:
             from sklearn.ensemble import VotingRegressor
             try:
-                ensemble = VotingRegressor(estimators=wrapped)
-                scores = cross_val_score(ensemble, X, y_enc, cv=cv, scoring=scoring)
+                ensemble = VotingRegressor(estimators=good_estimators)
+                scores = cross_val_score(ensemble, X_pre, y_enc, cv=cv, scoring=scoring)
             except Exception as e:
                 raise HTTPException(status_code=500, detail=f"Ensemble failed: {e}")
 
