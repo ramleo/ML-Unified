@@ -300,26 +300,35 @@ def run_shap(req: SHAPRequest):
 @router.post("/ensemble")
 def run_ensemble(req: EnsembleRequest):
     try:
+        from sklearn.model_selection import cross_val_predict
+        from sklearn.metrics import f1_score, mean_absolute_error
+
         df = _decode_csv(req.csv_b64)
         if req.target not in df.columns:
             raise HTTPException(status_code=400, detail=f"Target column '{req.target}' not found")
 
         X = df.drop(columns=[req.target])
         y_enc = _encode_y(df[req.target], req.task_type)
-        scoring, cv = _scoring_and_cv(req.task_type, 5)
+        _, cv = _scoring_and_cv(req.task_type, 5)
 
-        # Preprocess once — VotingClassifier/VotingRegressor don't accept Pipeline
-        # sub-estimators because sklearn can't determine their estimator type at init time.
+        # Preprocess once so estimators receive a plain numpy array.
+        # VotingClassifier/VotingRegressor reject Pipeline sub-estimators on some
+        # sklearn builds because is_classifier/is_regressor fails for third-party
+        # estimators wrapped in Pipeline. We avoid those classes entirely and average
+        # cross_val_predict outputs ourselves — same result, no type-check issues.
         preprocessor = _build_preprocessor(X)
         X_pre = preprocessor.fit_transform(X)
 
         good_estimators = []
-        individual_scores = {}
+        individual_scores: dict = {}
         for algo in req.config.models:
             try:
                 est = _get_estimator(algo, req.task_type)
-                sc = float(cross_val_score(est, X_pre, y_enc, cv=cv, scoring=scoring).mean())
-                individual_scores[algo] = -sc if req.task_type == "regression" else sc
+                oof = cross_val_predict(est, X_pre, y_enc, cv=cv)
+                if req.task_type == "classification":
+                    individual_scores[algo] = float(f1_score(y_enc, oof, average="weighted"))
+                else:
+                    individual_scores[algo] = float(mean_absolute_error(y_enc, oof))
                 good_estimators.append((algo, _get_estimator(algo, req.task_type)))
             except Exception:
                 individual_scores[algo] = -999.0
@@ -327,28 +336,22 @@ def run_ensemble(req: EnsembleRequest):
         if not good_estimators:
             raise HTTPException(status_code=500, detail="All models failed during individual evaluation")
 
+        # Average OOF predictions across all good models.
         if req.task_type == "classification":
-            from sklearn.ensemble import VotingClassifier
             try:
-                ensemble = VotingClassifier(estimators=good_estimators, voting="soft")
-                scores = cross_val_score(ensemble, X_pre, y_enc, cv=cv, scoring=scoring)
+                probas = [cross_val_predict(est, X_pre, y_enc, cv=cv, method="predict_proba")
+                          for _, est in good_estimators]
+                ens_preds = np.argmax(np.mean(probas, axis=0), axis=1)
             except Exception:
-                try:
-                    ensemble = VotingClassifier(estimators=good_estimators, voting="hard")
-                    scores = cross_val_score(ensemble, X_pre, y_enc, cv=cv, scoring=scoring)
-                except Exception as e:
-                    raise HTTPException(status_code=500, detail=f"Ensemble failed: {e}")
+                hard = np.array([cross_val_predict(est, X_pre, y_enc, cv=cv)
+                                 for _, est in good_estimators])
+                ens_preds = np.array([np.bincount(hard[:, i].astype(int)).argmax()
+                                      for i in range(hard.shape[1])])
+            ensemble_score = float(f1_score(y_enc, ens_preds, average="weighted"))
         else:
-            from sklearn.ensemble import VotingRegressor
-            try:
-                ensemble = VotingRegressor(estimators=good_estimators)
-                scores = cross_val_score(ensemble, X_pre, y_enc, cv=cv, scoring=scoring)
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=f"Ensemble failed: {e}")
-
-        ensemble_score = float(scores.mean())
-        if req.task_type == "regression":
-            ensemble_score = -ensemble_score
+            reg_preds = np.array([cross_val_predict(est, X_pre, y_enc, cv=cv)
+                                  for _, est in good_estimators])
+            ensemble_score = float(mean_absolute_error(y_enc, np.mean(reg_preds, axis=0)))
 
         return {
             "ensemble_score": ensemble_score,
