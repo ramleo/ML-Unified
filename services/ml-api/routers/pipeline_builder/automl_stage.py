@@ -220,9 +220,9 @@ def run_optuna(req: OptunaRequest):
         study = optuna.create_study(direction="maximize")
         study.optimize(objective, n_trials=min(30, req.config.n_trials))
         best_params = study.best_params
+        # objective returns -val for regression (where val = neg_mae, so -val = +MAE).
+        # study.best_value is therefore already a positive MAE for regression.
         score_after = study.best_value
-        if req.task_type == "regression":
-            score_after = -score_after
 
         final_pipe = Pipeline([("pre", _build_preprocessor(X)),
                                ("est", _get_estimator(algo, req.task_type, best_params))])
@@ -233,10 +233,14 @@ def run_optuna(req: OptunaRequest):
             "pipeline": final_pipe, "target": req.target, "task": req.task_type,
             "cols": list(X.columns), "pb": True, "algo": algo, "score": score_after,
         }
+        # For regression: improvement = how much MAE decreased (positive = better).
+        # For classification: improvement = how much F1 increased (positive = better).
+        improvement = (stored["score"] - score_after if req.task_type == "regression"
+                       else score_after - stored["score"])
         return {
             "score_before": stored["score"],
             "score_after": score_after,
-            "improvement": score_after - stored["score"],
+            "improvement": improvement,
             "best_params": best_params,
             "new_model_id": new_model_id,
         }
@@ -318,7 +322,11 @@ def run_ensemble(req: EnsembleRequest):
                 individual_scores[algo] = -999.0
 
         wrapped = [(algo, Pipeline([("pre", clone(preprocessor)), ("est", clone(est))]))
-                   for algo, est in estimators_list]
+                   for (algo, est), sc in zip(estimators_list, individual_scores.values())
+                   if sc != -999.0]
+
+        if not wrapped:
+            raise HTTPException(status_code=500, detail="All models failed during individual evaluation")
 
         if req.task_type == "classification":
             from sklearn.ensemble import VotingClassifier
@@ -326,19 +334,25 @@ def run_ensemble(req: EnsembleRequest):
                 ensemble = VotingClassifier(estimators=wrapped, voting="soft")
                 scores = cross_val_score(ensemble, X, y_enc, cv=cv, scoring=scoring)
             except Exception:
-                ensemble = VotingClassifier(estimators=wrapped, voting="hard")
-                scores = cross_val_score(ensemble, X, y_enc, cv=cv, scoring=scoring)
+                try:
+                    ensemble = VotingClassifier(estimators=wrapped, voting="hard")
+                    scores = cross_val_score(ensemble, X, y_enc, cv=cv, scoring=scoring)
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=f"Ensemble failed: {e}")
         else:
             from sklearn.ensemble import VotingRegressor
-            ensemble = VotingRegressor(estimators=wrapped)
-            scores = cross_val_score(ensemble, X, y_enc, cv=cv, scoring=scoring)
+            try:
+                ensemble = VotingRegressor(estimators=wrapped)
+                scores = cross_val_score(ensemble, X, y_enc, cv=cv, scoring=scoring)
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"Ensemble failed: {e}")
 
         ensemble_score = float(scores.mean())
         if req.task_type == "regression":
             ensemble_score = -ensemble_score
 
         return {
-            "score": ensemble_score,
+            "ensemble_score": ensemble_score,
             "ensemble_type": req.config.type,
             "individual_scores": individual_scores,
         }
