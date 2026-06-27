@@ -176,16 +176,22 @@ def preprocess(req: PreprocessRequest):
         missing_after = int(df_out.isna().sum().sum())
         missing_filled = max(0, missing_before - missing_after)
 
-        return PreprocessResponse(
-            rows_before=rows_before,
-            rows_after=len(df_out),
-            cols_before=cols_before,
-            cols_after=len(df_out.columns),
-            missing_filled=missing_filled,
-            duplicates_removed=duplicates_removed,
-            outliers_removed=outliers_removed,
-            processed_csv_b64=_encode_csv(df_out),
-        )
+        return {
+            "rows_before": rows_before,
+            "rows_after": len(df_out),
+            "cols_before": cols_before,
+            "cols_after": len(df_out.columns),
+            "missing_filled": missing_filled,
+            "duplicates_removed": duplicates_removed,
+            "outliers_removed": outliers_removed,
+            "processed_csv_b64": _encode_csv(df_out),
+            "stats": {
+                "rows_before": int(rows_before),
+                "rows_after": int(len(df_out)),
+                "cols_before": int(cols_before),
+                "cols_after": int(len(df_out.columns)),
+            },
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -309,12 +315,17 @@ def feature_eng(req: FERequest):
                 pass
 
         features_added = len(new_columns)
-        return FEResponse(
-            features_before=cols_before,
-            features_added=features_added,
-            new_columns=new_columns,
-            processed_csv_b64=_encode_csv(df),
-        )
+        df_out = df
+        return {
+            "features_before": cols_before,
+            "features_added": features_added,
+            "new_columns": new_columns,
+            "processed_csv_b64": _encode_csv(df_out),
+            "stats": {
+                "cols_before": int(cols_before),
+                "cols_after": int(len(df_out.columns)),
+            },
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -328,7 +339,8 @@ def feature_select(req: FSRequest):
         if req.target not in df.columns:
             raise HTTPException(status_code=400, detail=f"Target column '{req.target}' not found")
 
-        features_before = len(df.columns) - 1
+        cols_before = len(df.columns)
+        features_before = cols_before - 1
         X = df.drop(columns=[req.target])
         y = df[req.target]
         cols_before_set = set(X.columns)
@@ -340,13 +352,17 @@ def feature_select(req: FSRequest):
         df_out = X_out.copy()
         df_out[req.target] = y.reindex(X_out.index).values
 
-        return FSResponse(
-            features_before=features_before,
-            features_after=len(kept_features),
-            dropped_features=dropped_features,
-            kept_features=kept_features,
-            processed_csv_b64=_encode_csv(df_out),
-        )
+        return {
+            "features_before": features_before,
+            "features_after": len(kept_features),
+            "dropped_features": dropped_features,
+            "kept_features": kept_features,
+            "processed_csv_b64": _encode_csv(df_out),
+            "stats": {
+                "cols_before": int(cols_before),
+                "cols_after": int(len(df_out.columns)),
+            },
+        }
     except HTTPException:
         raise
     except Exception as e:
