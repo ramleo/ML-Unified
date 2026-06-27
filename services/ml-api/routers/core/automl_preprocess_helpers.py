@@ -176,29 +176,26 @@ def build_cat_transformers(cat_cols, col_enc):
 
 
 def apply_feature_selection(df_feat, target_series, fs_method, top_k):
-    """Run feature selection; returns df_feat with columns pruned."""
-    import numpy as _np  # noqa: PLC0415
+    """Run feature selection; returns df_feat with columns pruned.
+    Categorical columns are always preserved — selection only operates on numeric columns."""
+    if fs_method == "none":
+        return df_feat
+
     try:
-        leftover_non_num = df_feat.select_dtypes(exclude="number").columns.tolist()
-        if leftover_non_num:
-            df_feat = df_feat.drop(columns=leftover_non_num)
+        cat_cols = df_feat.select_dtypes(exclude="number").columns.tolist()
         num_X = df_feat.select_dtypes(include="number").fillna(0)
         k = min(top_k, len(num_X.columns))
         y_fs = target_series.reindex(df_feat.index) if target_series is not None else None
+        selected = list(num_X.columns)  # default: keep all numeric
 
         if fs_method == "variance" and len(num_X.columns) > k:
-            keep = num_X.var().nlargest(k).index.tolist()
-            df_feat = df_feat[keep]
+            selected = num_X.var().nlargest(k).index.tolist()
 
         elif fs_method == "correlation" and len(num_X.columns) > 1:
-            corr  = num_X.corr().abs()
-            upper = corr.where(_np.triu(_np.ones(corr.shape), k=1).astype(bool))
-            to_drop = [c for c in upper.columns if any(upper[c] > 0.90)]
-            df_feat = df_feat.drop(columns=to_drop, errors="ignore")
-            remaining_num = df_feat.select_dtypes(include="number")
-            if len(remaining_num.columns) > k:
-                keep = remaining_num.var().nlargest(k).index.tolist()
-                df_feat = df_feat[keep]
+            corr = num_X.corr().abs()
+            upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
+            remaining = [c for c in num_X.columns if not any(upper[c] > 0.90)]
+            selected = num_X[remaining].var().nlargest(k).index.tolist() if len(remaining) > k else remaining
 
         elif fs_method == "rfe" and y_fs is not None and len(num_X.columns) >= k:
             from sklearn.feature_selection import RFE  # noqa: PLC0415
@@ -208,8 +205,7 @@ def apply_feature_selection(df_feat, target_series, fs_method, top_k):
             y_fit = LabelEncoder().fit_transform(y_fs.astype(str)) if is_clf else pd.to_numeric(y_fs, errors="coerce").fillna(0)
             rfe = RFE(estimator, n_features_to_select=k)
             rfe.fit(num_X, y_fit)
-            keep = num_X.columns[rfe.support_].tolist()
-            df_feat = df_feat[keep]
+            selected = num_X.columns[rfe.support_].tolist()
 
         elif fs_method == "kbest" and y_fs is not None and len(num_X.columns) >= k:
             from sklearn.feature_selection import SelectKBest, mutual_info_classif, mutual_info_regression  # noqa: PLC0415
@@ -218,10 +214,11 @@ def apply_feature_selection(df_feat, target_series, fs_method, top_k):
             y_fit = LabelEncoder().fit_transform(y_fs.astype(str)) if is_clf else pd.to_numeric(y_fs, errors="coerce").fillna(0)
             sel = SelectKBest(score_fn, k=k)
             sel.fit(num_X, y_fit)
-            keep = num_X.columns[sel.get_support()].tolist()
-            df_feat = df_feat[keep]
+            selected = num_X.columns[sel.get_support()].tolist()
+
+        # Recombine: selected numeric cols + all categorical cols (preserve dtypes)
+        return df_feat[selected + cat_cols]
 
     except Exception as _fs_err:
         logging.warning("Feature selection failed: %s", _fs_err)
-
-    return df_feat
+        return df_feat

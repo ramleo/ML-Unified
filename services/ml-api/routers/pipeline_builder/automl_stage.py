@@ -90,6 +90,19 @@ def _get_estimator(algo: str, task_type: str, params: dict | None = None):
     raise ValueError(f"Unknown algorithm: {algo}")
 
 
+def _maybe_sample(X: pd.DataFrame, y: np.ndarray, cap: int, task: str):
+    """Stratified row sampling to cap compute time on large datasets."""
+    if len(X) <= cap:
+        return X, y, 0
+    from sklearn.utils import resample
+    stratify = y if task == "classification" else None
+    try:
+        Xs, ys = resample(X, y, n_samples=cap, stratify=stratify, random_state=42, replace=False)
+    except Exception:
+        Xs, ys = resample(X, y, n_samples=cap, random_state=42, replace=False)
+    return Xs, ys, len(X)
+
+
 # ── Request / Response models ──────────────────────────────────────────────────
 
 class AutoMLConfig(BaseModel):
@@ -145,6 +158,7 @@ def run_automl(req: AutoMLRequest):
 
         X = df.drop(columns=[req.target])
         y_enc = _encode_y(df[req.target], req.task_type)
+        X, y_enc, original_rows = _maybe_sample(X, y_enc, 15_000, req.task_type)
         scoring, cv = _scoring_and_cv(req.task_type, req.config.n_folds)
 
         leaderboard = []
@@ -174,6 +188,7 @@ def run_automl(req: AutoMLRequest):
             "leaderboard": leaderboard,
             "winner": {"algo": winner["algo"], "score": winner["score"], "metric": metric},
             "model_id": model_id,
+            "sampled_from": original_rows if original_rows else None,
         }
     except HTTPException:
         raise
@@ -195,6 +210,7 @@ def run_optuna(req: OptunaRequest):
 
         X = df.drop(columns=[req.target])
         y_enc = _encode_y(df[req.target], req.task_type)
+        X, y_enc, _ = _maybe_sample(X, y_enc, 10_000, req.task_type)
         scoring, _ = _scoring_and_cv(req.task_type, 5)
         cv_opt = (StratifiedKFold(3, shuffle=True, random_state=42)
                   if req.task_type == "classification"
@@ -310,12 +326,11 @@ def run_ensemble(req: EnsembleRequest):
 
         X = df.drop(columns=[req.target])
         y_enc = _encode_y(df[req.target], req.task_type)
+        X, y_enc, _ = _maybe_sample(X, y_enc, 15_000, req.task_type)
         _, cv = _scoring_and_cv(req.task_type, 5)
         is_clf = req.task_type == "classification"
 
-        # Preprocess once — avoids VotingClassifier/VotingRegressor type-check issues
-        # (sklearn rejects third-party estimators like XGBRegressor as "not a regressor"
-        # on the HF Space sklearn build). We implement voting and stacking manually.
+        # Preprocess once — manual voting/stacking avoids sklearn VotingClassifier type-check issues with XGB/LGB.
         preprocessor = _build_preprocessor(X)
         X_pre = preprocessor.fit_transform(X)
 
