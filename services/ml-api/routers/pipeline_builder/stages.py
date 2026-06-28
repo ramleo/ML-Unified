@@ -46,6 +46,10 @@ class PreprocessResponse(BaseModel):
     duplicates_removed: int
     outliers_removed: int
     processed_csv_b64: str
+    dropped_cols: List[str] = []
+    imputed_cols: Dict[str, int] = {}
+    skewed_cols: List[str] = []
+    outlier_clipped_cols: List[str] = []
 
 
 class FEConfig(BaseModel):
@@ -133,11 +137,21 @@ def preprocess(req: PreprocessRequest):
         num_cols = df_feat.select_dtypes(include="number").columns.tolist()
         cat_cols = df_feat.select_dtypes(exclude="number").columns.tolist()
 
+        # Capture per-column NaN counts before imputation
+        missing_per_col = df_feat.isna().sum()
+
         # Imputation
         df_feat, y, cat_cols = apply_imputation(df_feat, y, cfg.mv_num, cfg.mv_cat, num_cols, cat_cols)
 
+        imputed_cols = {
+            col: int(missing_per_col[col])
+            for col in missing_per_col.index
+            if missing_per_col[col] > 0
+        }
+
         # Outlier handling (clip — no rows removed)
         outliers_removed = 0
+        outlier_clipped_cols: List[str] = []
         if cfg.remove_outliers:
             num_now = df_feat.select_dtypes(include="number").columns.tolist()
             thresh = cfg.outlier_thresh
@@ -146,25 +160,31 @@ def preprocess(req: PreprocessRequest):
                     q1 = df_feat[col].quantile(0.25)
                     q3 = df_feat[col].quantile(0.75)
                     iqr = q3 - q1
-                    lo = q1 - thresh * iqr
-                    hi = q3 + thresh * iqr
+                    lo, hi = q1 - thresh * iqr, q3 + thresh * iqr
+                    before = df_feat[col].copy()
                     df_feat[col] = df_feat[col].clip(lo, hi)
+                    if (df_feat[col] != before).any():
+                        outlier_clipped_cols.append(col)
             elif cfg.outlier_method == "zscore":
                 for col in num_now:
                     mean_v = float(df_feat[col].mean())
                     std_v = float(df_feat[col].std())
                     if std_v > 0:
-                        lo = mean_v - thresh * std_v
-                        hi = mean_v + thresh * std_v
+                        lo, hi = mean_v - thresh * std_v, mean_v + thresh * std_v
+                        before = df_feat[col].copy()
                         df_feat[col] = df_feat[col].clip(lo, hi)
+                        if (df_feat[col] != before).any():
+                            outlier_clipped_cols.append(col)
 
-        # Fix skewness
+        # Fix skewness — track which columns were corrected
+        skewed_cols: List[str] = []
         if cfg.fix_skewness:
             num_now = df_feat.select_dtypes(include="number").columns.tolist()
             for col in num_now:
                 try:
                     if df_feat[col].skew() > 0.75:
                         df_feat[col] = np.log1p(np.maximum(df_feat[col], 0))
+                        skewed_cols.append(col)
                 except Exception:
                     pass
 
@@ -184,6 +204,10 @@ def preprocess(req: PreprocessRequest):
             "missing_filled": missing_filled,
             "duplicates_removed": duplicates_removed,
             "outliers_removed": outliers_removed,
+            "dropped_cols": cfg.drop_cols or [],
+            "imputed_cols": imputed_cols,
+            "skewed_cols": skewed_cols,
+            "outlier_clipped_cols": outlier_clipped_cols,
             "processed_csv_b64": _encode_csv(df_out),
             "stats": {
                 "rows_before": int(rows_before),
