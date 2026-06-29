@@ -36,6 +36,7 @@ def run_classification(
     opt_metric: str = "auto",
     sampler: str = "tpe",
     secondary_metric: str = "none",
+    preset_params=None,
 ):
     from sklearn.preprocessing import LabelEncoder as _LE
     le    = _LE()
@@ -59,6 +60,7 @@ def run_classification(
             opt_metric=opt_metric,
             sampler=sampler,
             secondary_metric=secondary_metric,
+            preset_params=preset_params or {},
         )
     else:
         estimator = _single_clf_estimator(
@@ -203,7 +205,8 @@ def _automl_clf(p, X, y_enc, selected_models, tune, n_trials, transformers,
                 XGBClassifier, LGBMClassifier, CatBoostClassifier,
                 opt_metric: str = "auto",
                 sampler: str = "tpe",
-                secondary_metric: str = "none"):
+                secondary_metric: str = "none",
+                preset_params=None):
     cv_split = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     X_cv, y_cv = _cv_sample(X, y_enc)
     cv_results = []
@@ -247,6 +250,15 @@ def _automl_clf(p, X, y_enc, selected_models, tune, n_trials, transformers,
         "task": "classification", "gpu": _detect_gpu(),
     }
     estimator = _CLF_MAP.get(winner, lambda: RandomForestClassifier(n_estimators=100, random_state=42, class_weight=cw))()
+
+    # Use preset params if provided and tune is disabled
+    if preset_params and not tune:
+        try:
+            estimator = _build_tuned_estimator(winner, "classification", preset_params, is_imbal)
+            automl_result["optuna_params"] = preset_params
+            automl_result["used_preset_params"] = True
+        except Exception as _pp_err:
+            print(f"preset_params failed (skipped): {_pp_err}", flush=True)
 
     if tune:
         p.update(58, f"Winner: {winner}. Tuning with Optuna ({n_trials} trials)…")

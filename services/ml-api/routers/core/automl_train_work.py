@@ -23,9 +23,11 @@ def build_work_fn(
     opt_metric: str = "auto",
     sampler: str = "tpe",
     secondary_metric: str = "none",
+    preset_params=None,
 ):
     """Return the _work(p) closure to pass to StreamingTask.stream()."""
 
+    _preset_params = preset_params or {}
     _task        = task
     _algorithm   = algorithm
     _accent      = accent
@@ -76,6 +78,7 @@ def build_work_fn(
                 opt_metric=_opt_metric,
                 sampler=_sampler,
                 secondary_metric=_sec_metric,
+                preset_params=_preset_params,
             )
             le               = _clf_result["le"]
             pipeline         = _clf_result["pipeline"]
@@ -94,6 +97,7 @@ def build_work_fn(
                 opt_metric=_opt_metric,
                 sampler=_sampler,
                 secondary_metric=_sec_metric,
+                preset_params=_preset_params,
             )
             le               = None
             pipeline         = _reg_result["pipeline"]

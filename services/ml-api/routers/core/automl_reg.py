@@ -32,6 +32,7 @@ def run_regression(
     opt_metric: str = "auto",
     sampler: str = "tpe",
     secondary_metric: str = "none",
+    preset_params=None,
 ):
     import numpy as np  # noqa: PLC0415
     y_num = pd.to_numeric(y, errors="coerce")
@@ -47,6 +48,7 @@ def run_regression(
             opt_metric=opt_metric,
             sampler=sampler,
             secondary_metric=secondary_metric,
+            preset_params=preset_params or {},
         )
     else:
         estimator = _single_reg_estimator(algorithm, XGBRegressor, LGBMRegressor, CatBoostRegressor)
@@ -204,7 +206,8 @@ def _automl_reg(p, X, y_enc, selected_models, tune, n_trials, transformers,
                 XGBRegressor, LGBMRegressor, CatBoostRegressor,
                 opt_metric: str = "auto",
                 sampler: str = "tpe",
-                secondary_metric: str = "none"):
+                secondary_metric: str = "none",
+                preset_params=None):
     cv_split = KFold(n_splits=5, shuffle=True, random_state=42)
     X_cv, y_cv = _cv_sample(X, y_enc)
     cv_results = []
@@ -248,6 +251,15 @@ def _automl_reg(p, X, y_enc, selected_models, tune, n_trials, transformers,
         "task": "regression", "gpu": _detect_gpu(),
     }
     estimator = _REG_MAP.get(winner, lambda: RandomForestRegressor(n_estimators=100, random_state=42))()
+
+    # Use preset params if provided and tune is disabled
+    if preset_params and not tune:
+        try:
+            estimator = _build_tuned_estimator(winner, "regression", preset_params, False)
+            automl_result["optuna_params"] = preset_params
+            automl_result["used_preset_params"] = True
+        except Exception as _pp_err:
+            print(f"preset_params failed (skipped): {_pp_err}", flush=True)
 
     if tune:
         p.update(58, f"Winner: {winner}. Tuning with Optuna ({n_trials} trials)…")

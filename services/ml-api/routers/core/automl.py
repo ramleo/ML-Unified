@@ -250,6 +250,7 @@ async def train_model(
     sampler:             str        = Form("tpe"),
     secondary_metric:    str        = Form("none"),
     col_encoding_json:   str        = Form("{}"),
+    preset_params_json:  str        = Form("{}"),
 ):
     import joblib as _jl  # noqa: PLC0415
     from sklearn.compose import ColumnTransformer as _CT  # noqa: PLC0415
@@ -278,9 +279,11 @@ async def train_model(
         raise HTTPException(400, "Invalid model name — use letters, numbers, or spaces")
 
     try:
-        _fe_config = json.loads(feature_engineering or "{}")
+        _preset_params: dict = json.loads(preset_params_json or "{}")
     except Exception:
-        _fe_config = {}
+        _preset_params = {}
+    try: _fe_config = json.loads(feature_engineering or "{}")
+    except Exception: _fe_config = {}
     try:
         _pre_fe_cols_from_prep = json.loads(pre_fe_cols_json or "[]")
     except Exception:
@@ -371,6 +374,7 @@ async def train_model(
         opt_metric=opt_metric,
         sampler=sampler,
         secondary_metric=secondary_metric,
+        preset_params=_preset_params,
     )
     return StreamingResponse(
         streaming_task.stream(_work),
