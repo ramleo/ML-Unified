@@ -16,6 +16,8 @@ from routers.core import inference as inference_router
 from routers.core import automl as automl_router
 from routers.core import monitoring as monitoring_router
 from routers.pipeline_builder import router as _pb_router
+from routers.rag.query import router as rag_router
+from routers.rag import initialize_rag
 
 from routers.core.shared import (
     _detect_gpu, MODELS, _fetch_hf_models, _load,
@@ -37,6 +39,7 @@ async def _lifespan(app: FastAPI):
             print("ERROR: _load() failed:", exc, flush=True)
             traceback.print_exc()
     threading.Thread(target=_bg, daemon=True).start()
+    threading.Thread(target=initialize_rag, args=("data/knowledge_base",), daemon=True).start()
     yield  # server binds and accepts requests immediately; models load in background
 
 
@@ -126,6 +129,7 @@ app.include_router(_pipeline_router.router)
 app.include_router(_training_router.router)
 app.include_router(_drift_router.router)
 app.include_router(_pb_router)
+app.include_router(rag_router, prefix="/rag", tags=["rag"])
 
 
 if __name__ == "__main__":
