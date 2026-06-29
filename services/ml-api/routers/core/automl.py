@@ -379,4 +379,18 @@ async def train_model(
     )
 
 
+@router.get("/model/{model_id}/download")
+async def download_model(model_id: str):
+    from fastapi.responses import FileResponse
+    import os
+    pkl_path = os.path.join(MODEL_DIR, f"{model_id}_pipeline.pkl")
+    if not os.path.exists(pkl_path):
+        raise HTTPException(404, f"Model file not found for id: {model_id}")
+    return FileResponse(
+        path=pkl_path,
+        media_type="application/octet-stream",
+        filename=f"{model_id}_pipeline.pkl",
+    )
+
+
 # /feature-engineer is served by _fe_router (automl_fe.py)

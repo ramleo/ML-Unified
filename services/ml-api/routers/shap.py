@@ -169,13 +169,15 @@ async def compute_shap(model_id: str, request: Request):
     if schema["task"] == "clustering":
         raise HTTPException(400, "SHAP is not available for unsupervised models")
 
-    data = await request.json()
-    df   = _prep_df(data, schema)
+    data        = await request.json()
+    model_params = data.get("model_params")  # dict or None — tuned params from Optuna
+    df          = _prep_df(data, schema)
 
-    _m      = m
-    _schema = schema
-    _data   = data
-    _df     = df
+    _m           = m
+    _schema      = schema
+    _data        = data
+    _df          = df
+    _model_params = model_params
 
     task = StreamingTask()
 
@@ -211,6 +213,8 @@ async def compute_shap(model_id: str, request: Request):
             orig_fields  = [f["name"]  for f in _schema.get("fields", [])]
             field_labels = {f["name"]: f.get("label", f["name"]) for f in _schema.get("fields", [])}
             result = _build_response(shap_1d, base_value, feat_names_out, orig_fields, field_labels, _data, _schema["task"], pred_class)
+            if _model_params:
+                result["used_params"] = _model_params
             p.finish(result=result)
 
         except Exception as exc:
