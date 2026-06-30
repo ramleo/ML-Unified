@@ -7,8 +7,13 @@ import math
 logger = logging.getLogger(__name__)
 
 # Below this sigmoid-normalized relevance score, a chunk is treated as noise
-# (off-topic match pulled in by lexical overlap) and dropped entirely.
+# (off-topic match pulled in by lexical overlap) and dropped — but only once
+# _MIN_RESULTS chunks have already been kept. Meta-questions like "what is
+# this document about?" score low against any single chunk via cross-encoder
+# even when retrieval found the right document, so a hard floor with no
+# minimum can zero out sources entirely and leave the LLM nothing to ground on.
 _RELEVANCE_FLOOR = 0.3
+_MIN_RESULTS = 2
 
 
 def _sigmoid(x: float) -> float:
@@ -47,7 +52,7 @@ def rerank(query: str, chunks: list[dict], state, top_k: int = 8) -> list[dict]:
 
     reranked: list[dict] = []
     for chunk, score in scored[:top_k]:
-        if score < _RELEVANCE_FLOOR:
+        if score < _RELEVANCE_FLOOR and len(reranked) >= _MIN_RESULTS:
             break  # scored is sorted descending — everything after this is worse
         entry = dict(chunk)
         entry["score"] = score
