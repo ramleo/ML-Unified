@@ -98,6 +98,8 @@ def get_schema(model_id: str):
 
 @router.delete("/models/{model_id}")
 def delete_model(model_id: str):
+    if model_id in _BUILTIN_IDS:
+        raise HTTPException(400, "Cannot delete a built-in demo model.")
     if model_id not in MODELS:
         raise HTTPException(404, "Model not found")
     MODELS.pop(model_id)
@@ -108,11 +110,17 @@ def delete_model(model_id: str):
         f"{model_id}_actuals.json",
     ]:
         _p = os.path.join(MODEL_DIR, fname)
-        if os.path.exists(_p):
-            os.remove(_p)
+        try:
+            if os.path.exists(_p):
+                os.remove(_p)
+        except OSError as exc:
+            print(f"WARNING: could not remove local file {_p}: {exc}", flush=True)
     _sp = os.path.join(SCHEMA_DIR, f"{model_id}.json")
-    if os.path.exists(_sp):
-        os.remove(_sp)
+    try:
+        if os.path.exists(_sp):
+            os.remove(_sp)
+    except OSError as exc:
+        print(f"WARNING: could not remove local file {_sp}: {exc}", flush=True)
     _delete_model_from_hf(model_id)
     return {"deleted": model_id}
 

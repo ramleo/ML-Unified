@@ -16,8 +16,8 @@ COPY app.py .
 COPY routers/ routers/
 COPY shared/ shared/
 COPY frontend/ frontend/
-COPY models/ models/
-COPY schemas/ schemas/
+COPY --chown=appuser:appuser models/ models/
+COPY --chown=appuser:appuser schemas/ schemas/
 COPY --chown=appuser:appuser data/ data/
 
 USER appuser
