@@ -18,7 +18,7 @@ COPY shared/ shared/
 COPY frontend/ frontend/
 COPY models/ models/
 COPY schemas/ schemas/
-COPY data/ data/
+COPY --chown=appuser:appuser data/ data/
 
 USER appuser
 EXPOSE ${PORT:-8000}
