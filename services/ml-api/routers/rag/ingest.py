@@ -10,6 +10,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import JSONResponse
 
+from routers.rag.text import tokenize
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -88,12 +90,21 @@ def chunk_document(
 
 # ── Indexing ───────────────────────────────────────────────────────────────────
 
-def index_chunks(chunks: list[dict], state) -> None:
-    """Embed chunks, add to ChromaDB collection, rebuild BM25 index in-place."""
+def _rebuild_bm25(state) -> None:
+    from rank_bm25 import BM25Okapi
+    tokenized = [tokenize(t) for t in state.corpus_chunks] or [[""]]
+    state.bm25 = BM25Okapi(tokenized)
+
+
+def index_chunks(chunks: list[dict], state, uploaded: bool = False) -> None:
+    """Embed chunks, add to ChromaDB collection, rebuild BM25 index in-place.
+
+    uploaded=True tags chunks as user-uploaded (deletable via /rag/uploads);
+    pre-seeded KB docs indexed at startup leave this False so they can't be
+    removed through the same path.
+    """
     if not chunks:
         return
-
-    from rank_bm25 import BM25Okapi
 
     texts = [c["text"] for c in chunks]
     sources = [c["source"] for c in chunks]
@@ -109,18 +120,38 @@ def index_chunks(chunks: list[dict], state) -> None:
             ids=ids[i : i + batch_size],
             embeddings=embeddings[i : i + batch_size],
             documents=texts[i : i + batch_size],
-            metadatas=[{"source": s} for s in sources[i : i + batch_size]],
+            metadatas=[{"source": s, "uploaded": uploaded} for s in sources[i : i + batch_size]],
         )
 
     # Extend in-memory corpus
     state.corpus_chunks.extend(texts)
     state.chunk_sources.extend(sources)
+    if uploaded:
+        state.uploaded_sources.update(sources)
 
-    # Rebuild BM25 over full corpus
-    tokenized = [t.lower().split() for t in state.corpus_chunks]
-    state.bm25 = BM25Okapi(tokenized)
+    _rebuild_bm25(state)
 
     logger.info("index_chunks: added %d chunks; corpus now %d", len(chunks), len(state.corpus_chunks))
+
+
+def delete_source(source: str, state) -> int:
+    """Remove all chunks for a given uploaded source from ChromaDB + BM25 corpus.
+
+    Returns the number of chunks removed. Only intended for sources in
+    state.uploaded_sources — callers should check membership before calling.
+    """
+    state.collection.delete(where={"source": source})
+
+    keep_idx = [i for i, s in enumerate(state.chunk_sources) if s != source]
+    removed = len(state.chunk_sources) - len(keep_idx)
+    state.corpus_chunks = [state.corpus_chunks[i] for i in keep_idx]
+    state.chunk_sources = [state.chunk_sources[i] for i in keep_idx]
+    state.uploaded_sources.discard(source)
+
+    _rebuild_bm25(state)
+
+    logger.info("delete_source: removed %d chunks for '%s'; corpus now %d", removed, source, len(state.corpus_chunks))
+    return removed
 
 
 # ── /ingest endpoint ───────────────────────────────────────────────────────────
@@ -176,6 +207,38 @@ async def ingest_document(file: UploadFile = File(...)) -> JSONResponse:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     chunks = chunk_document(text, source=fname)
-    index_chunks(chunks, state)
+    index_chunks(chunks, state, uploaded=True)
 
     return JSONResponse({"status": "ok", "chunks_added": len(chunks), "source": fname})
+
+
+# ── Manage uploaded documents ───────────────────────────────────────────────────
+
+@router.get("/uploads")
+def list_uploads() -> JSONResponse:
+    """List user-uploaded document filenames (excludes the pre-seeded KB)."""
+    from routers.rag import get_rag_state
+
+    try:
+        state = get_rag_state()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return JSONResponse({"sources": sorted(state.uploaded_sources)})
+
+
+@router.delete("/uploads/{source}")
+def delete_upload(source: str) -> JSONResponse:
+    """Remove a previously uploaded document and its chunks from the knowledge base."""
+    from routers.rag import get_rag_state
+
+    try:
+        state = get_rag_state()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    if source not in state.uploaded_sources:
+        raise HTTPException(status_code=404, detail=f"No uploaded document named '{source}'.")
+
+    removed = delete_source(source, state)
+    return JSONResponse({"status": "ok", "removed": removed, "source": source})

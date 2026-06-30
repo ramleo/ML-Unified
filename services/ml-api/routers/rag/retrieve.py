@@ -4,6 +4,8 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 
+from routers.rag.text import tokenize
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,7 +60,7 @@ def bm25_retrieve(query: str, state, k: int = 50) -> list[dict]:
     if not state.corpus_chunks:
         return []
 
-    tokenized_query = query.lower().split()
+    tokenized_query = tokenize(query)
     scores = state.bm25.get_scores(tokenized_query)
 
     # Pair with index for ranking

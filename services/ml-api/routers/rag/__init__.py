@@ -17,6 +17,7 @@ class RagState:
     reranker: object = None            # sentence_transformers.CrossEncoder
     corpus_chunks: list[str] = field(default_factory=list)
     chunk_sources: list[str] = field(default_factory=list)
+    uploaded_sources: set[str] = field(default_factory=set)  # user-uploaded filenames, deletable
     initialized: bool = False
 
 
