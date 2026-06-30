@@ -140,3 +140,22 @@ def hybrid_retrieve(query: str, state, top_k: int = 8) -> list[dict]:
 
     fused = reciprocal_rank_fusion(ranked_lists)
     return fused[:top_k]
+
+
+def multi_query_retrieve(queries: list[str], state, top_k: int = 50) -> list[dict]:
+    """Run hybrid_retrieve for each query variant, then RRF-merge across all
+    variants' result lists. A chunk surfaced by multiple phrasings of the
+    same question ranks higher than one found by only the original wording.
+    """
+    if not state.initialized or not queries:
+        return []
+
+    per_query_lists = [hybrid_retrieve(q, state, top_k=top_k) for q in queries]
+    per_query_lists = [lst for lst in per_query_lists if lst]
+
+    if not per_query_lists:
+        return []
+    if len(per_query_lists) == 1:
+        return per_query_lists[0]
+
+    return reciprocal_rank_fusion(per_query_lists)[:top_k]

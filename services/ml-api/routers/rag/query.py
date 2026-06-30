@@ -11,8 +11,10 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from routers.rag import get_rag_state
-from routers.rag.retrieve import hybrid_retrieve
+from routers.rag.retrieve import multi_query_retrieve
 from routers.rag.rerank import rerank
+from routers.rag.expand import expand_query
+from routers.rag.llm import stream_groq_openai, stream_claude, stream_gemini, stream_cohere
 
 logger = logging.getLogger(__name__)
 
@@ -73,114 +75,6 @@ def _build_system_prompt(tool_context: str, chunks: list[dict]) -> str:
     return "\n\n".join(parts) if parts else "You are a helpful AI assistant."
 
 
-# ── LLM streaming helpers ──────────────────────────────────────────────────────
-
-def _stream_groq_openai(provider: str, model: str, key: str, messages: list[dict]):
-    import openai
-    base_url = "https://api.groq.com/openai/v1" if provider == "groq" else None
-    client = openai.OpenAI(api_key=key, **({"base_url": base_url} if base_url else {}))
-    with client.chat.completions.create(
-        model=model, messages=messages, stream=True
-    ) as stream:
-        for chunk in stream:
-            delta = chunk.choices[0].delta
-            content = getattr(delta, "content", None)
-            if content:
-                yield content
-
-
-def _stream_claude(model: str, key: str, messages: list[dict], system: str):
-    import anthropic
-    client = anthropic.Anthropic(api_key=key)
-    with client.messages.stream(
-        model=model,
-        max_tokens=2048,
-        system=system,
-        messages=messages,
-    ) as stream:
-        for text in stream.text_stream:
-            yield text
-
-
-def _stream_gemini(model: str, key: str, messages: list[dict], system: str):
-    import urllib.request
-    import urllib.error
-
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{model}:streamGenerateContent?key={key}&alt=sse"
-    )
-    contents = []
-    if system:
-        contents.append({"role": "user", "parts": [{"text": f"[System]: {system}"}]})
-        contents.append({"role": "model", "parts": [{"text": "Understood."}]})
-    for m in messages:
-        role = "model" if m["role"] == "assistant" else "user"
-        contents.append({"role": role, "parts": [{"text": m["content"]}]})
-
-    body = json.dumps({"contents": contents}).encode()
-    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req) as resp:
-            for raw_line in resp:
-                line = raw_line.decode("utf-8", errors="replace").strip()
-                if not line.startswith("data:"):
-                    continue
-                payload = line[5:].strip()
-                if payload in ("", "[DONE]"):
-                    continue
-                try:
-                    obj = json.loads(payload)
-                    for cand in obj.get("candidates", []):
-                        for part in cand.get("content", {}).get("parts", []):
-                            if "text" in part:
-                                yield part["text"]
-                except json.JSONDecodeError:
-                    continue
-    except urllib.error.HTTPError as exc:
-        logger.error("Gemini HTTP error: %s %s", exc.code, exc.reason)
-        yield f"[Gemini error {exc.code}]"
-
-
-def _stream_cohere(model: str, key: str, messages: list[dict], system: str):
-    import urllib.request
-    import urllib.error
-
-    formatted = []
-    if system:
-        formatted.append({"role": "system", "content": system})
-    for m in messages:
-        role = "assistant" if m["role"] == "assistant" else "user"
-        formatted.append({"role": role, "content": m["content"]})
-
-    body = json.dumps({"model": model, "messages": formatted, "stream": True}).encode()
-    req = urllib.request.Request(
-        "https://api.cohere.ai/v2/chat",
-        data=body,
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"},
-    )
-    try:
-        with urllib.request.urlopen(req) as resp:
-            for raw_line in resp:
-                line = raw_line.decode("utf-8", errors="replace").strip()
-                if not line.startswith("data:"):
-                    continue
-                payload = line[5:].strip()
-                if payload in ("", "[DONE]"):
-                    continue
-                try:
-                    obj = json.loads(payload)
-                    if obj.get("type") == "content-delta":
-                        text = obj.get("delta", {}).get("message", {}).get("content", {}).get("text", "")
-                        if text:
-                            yield text
-                except json.JSONDecodeError:
-                    continue
-    except urllib.error.HTTPError as exc:
-        logger.error("Cohere HTTP error: %s %s", exc.code, exc.reason)
-        yield f"[Cohere error {exc.code}]"
-
-
 # ── SSE generator ──────────────────────────────────────────────────────────────
 
 def _sse_generator(req: QueryRequest):
@@ -190,8 +84,19 @@ def _sse_generator(req: QueryRequest):
         yield _sse({"type": "error", "message": str(exc)})
         return
 
-    # 1. Retrieve top-50 candidates, then rerank down to top-8
-    candidates = hybrid_retrieve(req.query, state, top_k=50)
+    provider = (req.provider or _DEFAULT_PROVIDER).lower()
+    model = req.model or _DEFAULT_MODEL
+    key = _resolve_key(provider, req.user_key)
+
+    if not key:
+        yield _sse({"type": "error", "message": f"No API key for provider '{provider}'."})
+        return
+
+    # 1. Expand the query into a couple of alternate phrasings, retrieve
+    #    top-50 candidates per variant (RRF-merged across variants), then
+    #    rerank against the ORIGINAL query down to top-8
+    queries = expand_query(req.query, provider, model, key)
+    candidates = multi_query_retrieve(queries, state, top_k=50)
     chunks = rerank(req.query, candidates, state, top_k=8)
 
     # 2. Stream source events
@@ -214,24 +119,16 @@ def _sse_generator(req: QueryRequest):
     messages: list[dict] = list(req.history or [])
     messages.append({"role": "user", "content": req.query})
 
-    provider = (req.provider or _DEFAULT_PROVIDER).lower()
-    model = req.model or _DEFAULT_MODEL
-    key = _resolve_key(provider, req.user_key)
-
-    if not key:
-        yield _sse({"type": "error", "message": f"No API key for provider '{provider}'."})
-        return
-
     # 4. Stream token events
     try:
         if provider in ("groq", "openai"):
-            token_iter = _stream_groq_openai(provider, model, key, messages)
+            token_iter = stream_groq_openai(provider, model, key, messages)
         elif provider == "claude":
-            token_iter = _stream_claude(model, key, messages, system_prompt)
+            token_iter = stream_claude(model, key, messages, system_prompt)
         elif provider == "gemini":
-            token_iter = _stream_gemini(model, key, messages, system_prompt)
+            token_iter = stream_gemini(model, key, messages, system_prompt)
         elif provider == "cohere":
-            token_iter = _stream_cohere(model, key, messages, system_prompt)
+            token_iter = stream_cohere(model, key, messages, system_prompt)
         else:
             yield _sse({"type": "error", "message": f"Unknown provider '{provider}'."})
             return
