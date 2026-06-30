@@ -108,6 +108,7 @@ def _sse_generator(req: QueryRequest):
                 "text": chunk["text"],
                 "source": chunk.get("source", ""),
                 "score": round(chunk.get("score", 0.0), 4),
+                "display_score": round(chunk.get("display_score", chunk.get("score", 0.0)), 4),
             },
         })
         src = chunk.get("source", "")

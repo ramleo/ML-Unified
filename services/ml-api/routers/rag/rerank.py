@@ -6,11 +6,14 @@ import math
 
 logger = logging.getLogger(__name__)
 
-# Below this sigmoid-normalized relevance score (30%), a chunk is treated as
-# noise — off-topic content pulled in by lexical overlap — and dropped
-# entirely. No minimum-results fallback: it's better to show zero sources
-# than a confidently-wrong one.
-_RELEVANCE_FLOOR = 0.3
+# Real calibration data (RERANK DEBUG logs) showed genuinely relevant chunks
+# scoring as low as 0.028 absolute sigmoid, while noise scored 0.000 — an
+# absolute floor like 0.3 rejected the correct answer outright. This model's
+# scores for our content (long technical chunks vs. casual questions) don't
+# map onto an intuitive 0-100% scale, so filtering uses the RELATIVE gap
+# between the top match and the rest instead of a fixed absolute cutoff.
+_ABS_FLOOR = 0.01     # top chunk must clear this bare minimum, or return nothing
+_RELATIVE_RATIO = 0.3  # keep additional chunks scoring >= 30% of the top score
 
 
 def _sigmoid(x: float) -> float:
@@ -22,9 +25,10 @@ def rerank(query: str, chunks: list[dict], state, top_k: int = 8) -> list[dict]:
     """Re-score candidate chunks with a cross-encoder, drop irrelevant ones, return top_k.
 
     Falls back to the input order (already RRF-ranked) if no reranker is loaded.
-    Each output dict keeps {text, source, id} and overwrites score with a
-    sigmoid-normalized relevance probability (0-1). Chunks scoring below
-    _RELEVANCE_FLOOR are excluded unconditionally.
+    Each output dict keeps {text, source, id}; "score" becomes the raw 0-1
+    sigmoid relevance, "display_score" becomes that score relative to the top
+    match (top match = 1.0) — display_score is what the UI should render as a
+    percentage, since absolute scores for this model rarely look intuitive.
     """
     if not chunks:
         return []
@@ -46,18 +50,22 @@ def rerank(query: str, chunks: list[dict], state, top_k: int = 8) -> list[dict]:
         reverse=True,
     )
 
-    # TEMP DEBUG (remove once _RELEVANCE_FLOOR is calibrated): log the top 10
-    # pre-filter scores so we can see where genuinely relevant chunks actually
-    # land, instead of guessing the floor. Check HF Space "Logs" tab.
     top_debug = ", ".join(f"{c.get('source','?')}={s:.3f}" for c, s in scored[:10])
     logger.info("RERANK DEBUG query=%r top10=[%s]", query, top_debug)
 
+    if not scored or scored[0][1] < _ABS_FLOOR:
+        return []
+
+    top_score = scored[0][1]
+    min_keep = top_score * _RELATIVE_RATIO
+
     reranked: list[dict] = []
     for chunk, score in scored[:top_k]:
-        if score < _RELEVANCE_FLOOR:
+        if score < min_keep:
             break  # scored is sorted descending — everything after this is worse
         entry = dict(chunk)
         entry["score"] = score
+        entry["display_score"] = score / top_score
         reranked.append(entry)
 
     return reranked
