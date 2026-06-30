@@ -176,23 +176,27 @@ def _load():
     for fname in sorted(os.listdir(SCHEMA_DIR)):
         if not fname.endswith(".json"):
             continue
-        mid    = fname[:-5]
-        schema = json.load(open(os.path.join(SCHEMA_DIR, fname)))
-        pkl_path = os.path.join(MODEL_DIR, f"{mid}_pipeline.pkl")
-        if not os.path.exists(pkl_path):
+        mid = fname[:-5]
+        try:
+            schema = json.load(open(os.path.join(SCHEMA_DIR, fname)))
+            pkl_path = os.path.join(MODEL_DIR, f"{mid}_pipeline.pkl")
+            if not os.path.exists(pkl_path):
+                continue
+            pipeline = joblib.load(pkl_path)
+            le_path  = os.path.join(MODEL_DIR, f"{mid}_labels.pkl")
+            le       = joblib.load(le_path) if os.path.exists(le_path) else None
+            _fe_pkl  = os.path.join(MODEL_DIR, f"{mid}_fe.pkl")
+            _fe_loaded = joblib.load(_fe_pkl) if os.path.exists(_fe_pkl) else FeatureEngineeringTransformer({})
+            _act_pkl = os.path.join(MODEL_DIR, f"{mid}_actuals.json")
+            _actuals_loaded = json.load(open(_act_pkl)) if os.path.exists(_act_pkl) else None
+            MODELS[mid] = {
+                "pipeline": pipeline,
+                "le":       le,
+                "classes":  le.classes_.tolist() if le is not None else None,
+                "schema":   schema,
+                "fe":       _fe_loaded,
+                "actuals":  _actuals_loaded,
+            }
+        except Exception as exc:
+            print(f"WARNING: skipping model '{mid}' — failed to load: {exc}", flush=True)
             continue
-        pipeline = joblib.load(pkl_path)
-        le_path  = os.path.join(MODEL_DIR, f"{mid}_labels.pkl")
-        le       = joblib.load(le_path) if os.path.exists(le_path) else None
-        _fe_pkl  = os.path.join(MODEL_DIR, f"{mid}_fe.pkl")
-        _fe_loaded = joblib.load(_fe_pkl) if os.path.exists(_fe_pkl) else FeatureEngineeringTransformer({})
-        _act_pkl = os.path.join(MODEL_DIR, f"{mid}_actuals.json")
-        _actuals_loaded = json.load(open(_act_pkl)) if os.path.exists(_act_pkl) else None
-        MODELS[mid] = {
-            "pipeline": pipeline,
-            "le":       le,
-            "classes":  le.classes_.tolist() if le is not None else None,
-            "schema":   schema,
-            "fe":       _fe_loaded,
-            "actuals":  _actuals_loaded,
-        }
