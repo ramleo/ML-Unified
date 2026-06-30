@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from routers.rag import get_rag_state
 from routers.rag.retrieve import hybrid_retrieve
+from routers.rag.rerank import rerank
 
 logger = logging.getLogger(__name__)
 
@@ -189,8 +190,9 @@ def _sse_generator(req: QueryRequest):
         yield _sse({"type": "error", "message": str(exc)})
         return
 
-    # 1. Retrieve
-    chunks = hybrid_retrieve(req.query, state, top_k=8)
+    # 1. Retrieve top-50 candidates, then rerank down to top-8
+    candidates = hybrid_retrieve(req.query, state, top_k=50)
+    chunks = rerank(req.query, candidates, state, top_k=8)
 
     # 2. Stream source events
     seen_sources: list[str] = []

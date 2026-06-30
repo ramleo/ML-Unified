@@ -14,6 +14,7 @@ class RagState:
     collection: object = None          # chromadb.Collection
     embedding_fn: Optional[Callable] = None
     bm25: object = None                # BM25Okapi
+    reranker: object = None            # sentence_transformers.CrossEncoder
     corpus_chunks: list[str] = field(default_factory=list)
     chunk_sources: list[str] = field(default_factory=list)
     initialized: bool = False
@@ -38,7 +39,7 @@ def initialize_rag(kb_dir: str) -> None:
 
     try:
         import chromadb
-        from sentence_transformers import SentenceTransformer
+        from sentence_transformers import SentenceTransformer, CrossEncoder
         from rank_bm25 import BM25Okapi
     except ImportError as exc:
         logger.error("RAG deps missing: %s — pip install sentence-transformers chromadb rank-bm25 pypdf", exc)
@@ -51,6 +52,14 @@ def initialize_rag(kb_dir: str) -> None:
     _state.embedding_fn = lambda texts: model.encode(
         texts, batch_size=32, show_progress_bar=False, convert_to_numpy=True
     ).tolist()
+
+    # ── Reranker (cross-encoder) ───────────────────────────────────────────────
+    logger.info("Loading CrossEncoder ms-marco-MiniLM-L-6-v2 …")
+    try:
+        _state.reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device="cpu")
+    except Exception as exc:
+        logger.warning("Reranker load failed, falling back to RRF-only ranking: %s", exc)
+        _state.reranker = None
 
     # ── ChromaDB ───────────────────────────────────────────────────────────────
     persist_dir = "data/chroma_db"
