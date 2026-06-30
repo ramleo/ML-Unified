@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """Slim FastAPI entry point — all logic lives in routers/core/."""
+import logging
 import os
 import time
 from contextlib import asynccontextmanager
+
+# uvicorn only configures its own loggers (uvicorn, uvicorn.access) — without
+# this, every logger.info() in routers/ is silently dropped and never shows
+# up in HF Space logs.
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware

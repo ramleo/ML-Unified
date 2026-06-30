@@ -46,6 +46,12 @@ def rerank(query: str, chunks: list[dict], state, top_k: int = 8) -> list[dict]:
         reverse=True,
     )
 
+    # TEMP DEBUG (remove once _RELEVANCE_FLOOR is calibrated): log the top 10
+    # pre-filter scores so we can see where genuinely relevant chunks actually
+    # land, instead of guessing the floor. Check HF Space "Logs" tab.
+    top_debug = ", ".join(f"{c.get('source','?')}={s:.3f}" for c, s in scored[:10])
+    logger.info("RERANK DEBUG query=%r top10=[%s]", query, top_debug)
+
     reranked: list[dict] = []
     for chunk, score in scored[:top_k]:
         if score < _RELEVANCE_FLOOR:
