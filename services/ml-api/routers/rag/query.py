@@ -19,6 +19,7 @@ from routers.rag.retrieve import multi_query_retrieve
 from routers.rag.rerank import rerank
 from routers.rag.expand import expand_query
 from routers.rag.llm import stream_groq_openai, stream_claude, stream_gemini, stream_cohere
+from routers.rag.crag import web_search_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -172,9 +173,18 @@ def _sse_generator(req: QueryRequest):
     chunks = rerank(req.query, candidates, state, top_k=8)
 
     top_raw = chunks[0].get("score", 0.0) if chunks else 0.0
-    low_confidence = not chunks or top_raw < 0.10
+    low_confidence = not chunks or top_raw < 0.05
 
-    # 2. Stream source events
+    # 2a. CRAG: if confidence is low, supplement with web search before streaming
+    web_fallback_used = False
+    if low_confidence:
+        web_chunks = web_search_fallback(req.query)
+        if web_chunks:
+            chunks = chunks + web_chunks
+            web_fallback_used = True
+            low_confidence = False  # we now have something to work with
+
+    # 2b. Stream source events
     seen_sources: list[str] = []
     for chunk in chunks:
         yield _sse({
@@ -240,6 +250,7 @@ def _sse_generator(req: QueryRequest):
         "chunks_retrieved": len(chunks),
         "rerank_scores": [round(c.get("score", 0.0), 4) for c in chunks],
         "cache_hit": False,
+        "web_fallback_used": web_fallback_used,
     })
 
 
