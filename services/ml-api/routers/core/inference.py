@@ -6,7 +6,7 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 
 from routers.core.shared import MODELS, ACCENT_PALETTE
-from routers.core.automl_helpers import _llm_explanation, _rule_explanation
+from routers.core.automl_explain import _llm_explanation, _rule_explanation
 from routers import drift as _drift_router
 
 router = APIRouter()

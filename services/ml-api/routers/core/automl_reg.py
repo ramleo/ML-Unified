@@ -20,8 +20,8 @@ from sklearn.tree import DecisionTreeRegressor
 
 from routers.core.automl_helpers import (
     _cv_sample, _extract_feature_importances, _optuna_tune, _build_tuned_estimator,
-    _rule_explanation, _llm_explanation,
 )
+from routers.core.automl_explain import _rule_explanation, _llm_explanation
 from routers.core.shared import _detect_gpu
 
 
