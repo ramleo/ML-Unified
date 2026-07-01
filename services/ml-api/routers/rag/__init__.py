@@ -44,6 +44,16 @@ def initialize_jina(state: RagState) -> None:
         from sentence_transformers import SentenceTransformer
         import chromadb
 
+        # Use persistent volume for cache so model survives Space restarts.
+        # Fall back to home dir if /data isn't mounted/writable.
+        _persistent_cache = "/data/hf_cache"
+        try:
+            os.makedirs(_persistent_cache, exist_ok=True)
+            os.environ["HF_HOME"] = _persistent_cache
+            logger.info("Jina cache dir: %s", _persistent_cache)
+        except Exception:
+            logger.info("Jina cache dir: falling back to default (~/.cache)")
+
         logger.info("Loading jinaai/jina-embeddings-v3 (~570 MB) …")
         model = SentenceTransformer("jinaai/jina-embeddings-v3", trust_remote_code=True, device="cpu")
         state.jina_query_fn = lambda texts: model.encode(
