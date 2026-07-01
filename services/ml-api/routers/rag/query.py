@@ -4,8 +4,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from typing import Any, Optional
 
+import numpy as np
 import threading
 
 from fastapi import APIRouter
@@ -78,9 +80,43 @@ def _build_system_prompt(tool_context: str, chunks: list[dict]) -> str:
     return "\n\n".join(parts) if parts else "You are a helpful AI assistant."
 
 
+# ── Semantic cache ─────────────────────────────────────────────────────────────
+
+_CACHE_THRESHOLD = 0.95
+_CACHE_MAX = 100
+
+
+def _cosine_sim(a: list[float], b: list[float]) -> float:
+    va, vb = np.array(a, dtype=np.float32), np.array(b, dtype=np.float32)
+    denom = np.linalg.norm(va) * np.linalg.norm(vb)
+    return float(np.dot(va, vb) / denom) if denom > 0 else 0.0
+
+
+def _cache_lookup(query_emb: list[float], state) -> dict | None:
+    best_score, best = 0.0, None
+    for entry in state.semantic_cache:
+        sim = _cosine_sim(query_emb, entry["embedding"])
+        if sim > best_score:
+            best_score, best = sim, entry
+    return best if best_score >= _CACHE_THRESHOLD else None
+
+
+def _cache_store(query_emb: list[float], full_text: str, sources: list[str], chunks: list[dict], state) -> None:
+    if len(state.semantic_cache) >= _CACHE_MAX:
+        state.semantic_cache.pop(0)
+    state.semantic_cache.append({
+        "embedding": query_emb,
+        "full_text": full_text,
+        "sources": sources,
+        "chunks": chunks,
+    })
+
+
 # ── SSE generator ──────────────────────────────────────────────────────────────
 
 def _sse_generator(req: QueryRequest):
+    t0 = time.time()
+
     try:
         state = get_rag_state()
     except RuntimeError as exc:
@@ -95,9 +131,41 @@ def _sse_generator(req: QueryRequest):
         yield _sse({"type": "error", "message": f"No API key for provider '{provider}'."})
         return
 
-    # 1. Expand the query into a couple of alternate phrasings, retrieve
-    #    top-50 candidates per variant (RRF-merged across variants), then
-    #    rerank against the ORIGINAL query down to top-8
+    # 0. Semantic cache check (embed with MiniLM regardless of embedding_model setting)
+    try:
+        query_emb = state.embedding_fn([req.query])[0]
+        cached = _cache_lookup(query_emb, state)
+    except Exception:
+        query_emb = None
+        cached = None
+
+    if cached:
+        for chunk in cached["chunks"]:
+            yield _sse({
+                "type": "source",
+                "doc": {
+                    "text": chunk["text"],
+                    "source": chunk.get("source", ""),
+                    "score": round(chunk.get("score", 0.0), 4),
+                    "display_score": round(chunk.get("display_score", chunk.get("score", 0.0)), 4),
+                },
+            })
+        yield _sse({"type": "token", "text": cached["full_text"]})
+        jina_status = "ready" if state.jina_ready else ("loading" if state.jina_loading else "idle")
+        yield _sse({
+            "type": "done",
+            "sources": cached["sources"],
+            "low_confidence": False,
+            "jina_status": jina_status,
+            "embedding_used": "cache",
+            "latency_ms": round((time.time() - t0) * 1000),
+            "chunks_retrieved": len(cached["chunks"]),
+            "rerank_scores": [round(c.get("score", 0.0), 4) for c in cached["chunks"]],
+            "cache_hit": True,
+        })
+        return
+
+    # 1. Expand query, retrieve top-50 candidates per variant (RRF-merged), rerank to top-8
     use_jina = req.embedding_model == "jina" and state.jina_ready
     queries = expand_query(req.query, provider, model, key)
     candidates = multi_query_retrieve(queries, state, top_k=50, use_jina=use_jina)
@@ -127,7 +195,8 @@ def _sse_generator(req: QueryRequest):
     messages: list[dict] = list(req.history or [])
     messages.append({"role": "user", "content": req.query})
 
-    # 4. Stream token events
+    # 4. Stream token events; collect full text for cache
+    full_text_parts: list[str] = []
     try:
         if provider in ("groq", "openai"):
             token_iter = stream_groq_openai(provider, model, key, messages)
@@ -143,6 +212,7 @@ def _sse_generator(req: QueryRequest):
 
         for token in token_iter:
             if token:
+                full_text_parts.append(token)
                 yield _sse({"type": "token", "text": token})
 
     except Exception as exc:
@@ -150,7 +220,15 @@ def _sse_generator(req: QueryRequest):
         yield _sse({"type": "error", "message": f"LLM error: {exc}"})
         return
 
-    # 5. Done event
+    # 5. Store in semantic cache
+    full_text = "".join(full_text_parts)
+    if query_emb is not None and full_text:
+        try:
+            _cache_store(query_emb, full_text, seen_sources, chunks, state)
+        except Exception as exc:
+            logger.warning("Cache store failed: %s", exc)
+
+    # 6. Done event with metadata
     jina_status = "ready" if state.jina_ready else ("loading" if state.jina_loading else "idle")
     yield _sse({
         "type": "done",
@@ -158,6 +236,10 @@ def _sse_generator(req: QueryRequest):
         "low_confidence": low_confidence,
         "jina_status": jina_status,
         "embedding_used": "jina" if use_jina else "minilm",
+        "latency_ms": round((time.time() - t0) * 1000),
+        "chunks_retrieved": len(chunks),
+        "rerank_scores": [round(c.get("score", 0.0), 4) for c in chunks],
+        "cache_hit": False,
     })
 
 

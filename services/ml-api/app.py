@@ -19,6 +19,7 @@ from routers.core import monitoring as monitoring_router
 from routers.pipeline_builder import router as _pb_router
 from routers.rag.query import router as rag_router
 from routers.rag.ingest import router as rag_ingest_router
+from routers.rag.evaluate import router as rag_eval_router
 from routers.rag import initialize_rag
 
 from routers.core.shared import (
@@ -137,6 +138,7 @@ app.include_router(_drift_router.router)
 app.include_router(_pb_router)
 app.include_router(rag_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_ingest_router, prefix="/rag", tags=["rag"])
+app.include_router(rag_eval_router, prefix="/rag", tags=["rag"])
 
 
 if __name__ == "__main__":

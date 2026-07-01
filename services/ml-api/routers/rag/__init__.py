@@ -27,6 +27,8 @@ class RagState:
     jina_loading: bool = False
     jina_error: Optional[str] = None
     init_error: Optional[str] = None
+    # Semantic cache — list of {embedding, full_text, sources, chunks}
+    semantic_cache: list[dict] = field(default_factory=list)
 
 
 _state = RagState()
