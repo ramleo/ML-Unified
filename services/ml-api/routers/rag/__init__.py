@@ -44,17 +44,6 @@ def initialize_jina(state: RagState) -> None:
         from sentence_transformers import SentenceTransformer
         import chromadb
 
-        # jina-embeddings-v3's custom XLMRobertaModel predates the
-        # all_tied_weights_keys attribute added in transformers>=4.49.
-        # Setting a plain list (not a property) on nn.Module gives a default
-        # value while still allowing post_init() to overwrite it per-instance.
-        try:
-            import torch.nn as nn
-            if not hasattr(nn.Module, "all_tied_weights_keys"):
-                nn.Module.all_tied_weights_keys = []
-        except Exception:
-            pass
-
         logger.info("Loading jinaai/jina-embeddings-v3 (~570 MB) …")
         model = SentenceTransformer("jinaai/jina-embeddings-v3", trust_remote_code=True, device="cpu")
         state.jina_query_fn = lambda texts: model.encode(
