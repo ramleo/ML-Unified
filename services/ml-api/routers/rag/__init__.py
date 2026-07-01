@@ -11,17 +11,71 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class RagState:
-    collection: object = None          # chromadb.Collection
+    collection: object = None          # chromadb.Collection (MiniLM)
     embedding_fn: Optional[Callable] = None
     bm25: object = None                # BM25Okapi
     reranker: object = None            # sentence_transformers.CrossEncoder
     corpus_chunks: list[str] = field(default_factory=list)
     chunk_sources: list[str] = field(default_factory=list)
-    uploaded_sources: set[str] = field(default_factory=set)  # user-uploaded filenames, deletable
+    uploaded_sources: set[str] = field(default_factory=set)
     initialized: bool = False
+    # Jina v3 — lazy-loaded on first user request
+    jina_collection: object = None
+    jina_query_fn: Optional[Callable] = None
+    jina_passage_fn: Optional[Callable] = None
+    jina_ready: bool = False
+    jina_loading: bool = False
 
 
 _state = RagState()
+
+
+def initialize_jina(state: RagState) -> None:
+    """Lazy-load Jina v3 and re-index all corpus chunks in a separate ChromaDB collection.
+
+    Designed to run in a background thread. Sets state.jina_ready=True on success.
+    """
+    if state.jina_ready or state.jina_loading:
+        return
+    state.jina_loading = True
+    try:
+        from sentence_transformers import SentenceTransformer
+        import chromadb
+        logger.info("Loading jinaai/jina-embeddings-v3 (~570 MB) …")
+        model = SentenceTransformer("jinaai/jina-embeddings-v3", trust_remote_code=True, device="cpu")
+        state.jina_query_fn = lambda texts: model.encode(
+            texts, task="retrieval.query", batch_size=16,
+            show_progress_bar=False, convert_to_numpy=True,
+        ).tolist()
+        state.jina_passage_fn = lambda texts: model.encode(
+            texts, task="retrieval.passage", batch_size=16,
+            show_progress_bar=False, convert_to_numpy=True,
+        ).tolist()
+        persist_dir = "data/chroma_db"
+        client = chromadb.PersistentClient(path=persist_dir)
+        try:
+            client.delete_collection("rag_kb_jina")
+        except Exception:
+            pass
+        state.jina_collection = client.create_collection(
+            name="rag_kb_jina",
+            metadata={"hnsw:space": "cosine"},
+        )
+        if state.corpus_chunks:
+            logger.info("Re-indexing %d chunks with Jina v3 …", len(state.corpus_chunks))
+            embeddings = state.jina_passage_fn(state.corpus_chunks)
+            state.jina_collection.add(
+                documents=state.corpus_chunks,
+                embeddings=embeddings,
+                ids=[f"jina_{i}" for i in range(len(state.corpus_chunks))],
+                metadatas=[{"source": src} for src in state.chunk_sources],
+            )
+            logger.info("Jina collection ready — %d chunks indexed.", len(state.corpus_chunks))
+        state.jina_ready = True
+    except Exception as exc:
+        logger.exception("Jina initialization failed: %s", exc)
+    finally:
+        state.jina_loading = False
 
 
 def get_rag_state() -> RagState:

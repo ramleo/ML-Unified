@@ -11,23 +11,24 @@ logger = logging.getLogger(__name__)
 
 # ── Query embedding ────────────────────────────────────────────────────────────
 
-def embed_query(query: str, state) -> list[float]:
-    """Embed a single query string using the state's embedding function."""
-    result = state.embedding_fn([query])
-    return result[0]
+def embed_query(query: str, state, use_jina: bool = False) -> list[float]:
+    """Embed a single query string; uses Jina query encoder when available and requested."""
+    fn = state.jina_query_fn if (use_jina and state.jina_ready) else state.embedding_fn
+    return fn([query])[0]
 
 
 # ── Dense retrieval ────────────────────────────────────────────────────────────
 
-def dense_retrieve(query_embedding: list[float], state, k: int = 50) -> list[dict]:
+def dense_retrieve(query_embedding: list[float], state, k: int = 50, use_jina: bool = False) -> list[dict]:
     """Query ChromaDB for the top-k nearest neighbours.
 
     Returns list of {text, source, score, id}.
     score is cosine similarity (1 - distance for cosine space).
     """
-    n_results = min(k, max(state.collection.count(), 1))
+    collection = state.jina_collection if (use_jina and state.jina_ready) else state.collection
+    n_results = min(k, max(collection.count(), 1))
 
-    results = state.collection.query(
+    results = collection.query(
         query_embeddings=[query_embedding],
         n_results=n_results,
         include=["documents", "metadatas", "distances"],
@@ -113,7 +114,7 @@ def reciprocal_rank_fusion(
 
 # ── Hybrid retrieval ───────────────────────────────────────────────────────────
 
-def hybrid_retrieve(query: str, state, top_k: int = 8) -> list[dict]:
+def hybrid_retrieve(query: str, state, top_k: int = 8, use_jina: bool = False) -> list[dict]:
     """Run dense + BM25 retrieval, fuse with RRF, return top_k results.
 
     Returns list of {text, source, score, id}.
@@ -121,11 +122,12 @@ def hybrid_retrieve(query: str, state, top_k: int = 8) -> list[dict]:
     if not state.initialized:
         return []
 
-    query_embedding = embed_query(query, state)
+    query_embedding = embed_query(query, state, use_jina=use_jina)
+    collection = state.jina_collection if (use_jina and state.jina_ready) else state.collection
 
     dense_hits = []
-    if state.collection.count() > 0:
-        dense_hits = dense_retrieve(query_embedding, state, k=50)
+    if collection.count() > 0:
+        dense_hits = dense_retrieve(query_embedding, state, k=50, use_jina=use_jina)
 
     bm25_hits = bm25_retrieve(query, state, k=50)
 
@@ -142,7 +144,7 @@ def hybrid_retrieve(query: str, state, top_k: int = 8) -> list[dict]:
     return fused[:top_k]
 
 
-def multi_query_retrieve(queries: list[str], state, top_k: int = 50) -> list[dict]:
+def multi_query_retrieve(queries: list[str], state, top_k: int = 50, use_jina: bool = False) -> list[dict]:
     """Run hybrid_retrieve for each query variant, then RRF-merge across all
     variants' result lists. A chunk surfaced by multiple phrasings of the
     same question ranks higher than one found by only the original wording.
@@ -150,7 +152,7 @@ def multi_query_retrieve(queries: list[str], state, top_k: int = 50) -> list[dic
     if not state.initialized or not queries:
         return []
 
-    per_query_lists = [hybrid_retrieve(q, state, top_k=top_k) for q in queries]
+    per_query_lists = [hybrid_retrieve(q, state, top_k=top_k, use_jina=use_jina) for q in queries]
     per_query_lists = [lst for lst in per_query_lists if lst]
 
     if not per_query_lists:

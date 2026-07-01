@@ -6,11 +6,13 @@ import logging
 import os
 from typing import Any, Optional
 
+import threading
+
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from routers.rag import get_rag_state
+from routers.rag import get_rag_state, initialize_jina
 from routers.rag.retrieve import multi_query_retrieve
 from routers.rag.rerank import rerank
 from routers.rag.expand import expand_query
@@ -43,6 +45,7 @@ class QueryRequest(BaseModel):
     provider: str = _DEFAULT_PROVIDER
     model: str = _DEFAULT_MODEL
     user_key: Optional[str] = None
+    embedding_model: str = "minilm"  # "minilm" | "jina"
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -95,9 +98,13 @@ def _sse_generator(req: QueryRequest):
     # 1. Expand the query into a couple of alternate phrasings, retrieve
     #    top-50 candidates per variant (RRF-merged across variants), then
     #    rerank against the ORIGINAL query down to top-8
+    use_jina = req.embedding_model == "jina" and state.jina_ready
     queries = expand_query(req.query, provider, model, key)
-    candidates = multi_query_retrieve(queries, state, top_k=50)
+    candidates = multi_query_retrieve(queries, state, top_k=50, use_jina=use_jina)
     chunks = rerank(req.query, candidates, state, top_k=8)
+
+    top_raw = chunks[0].get("score", 0.0) if chunks else 0.0
+    low_confidence = not chunks or top_raw < 0.10
 
     # 2. Stream source events
     seen_sources: list[str] = []
@@ -144,7 +151,14 @@ def _sse_generator(req: QueryRequest):
         return
 
     # 5. Done event
-    yield _sse({"type": "done", "sources": seen_sources})
+    jina_status = "ready" if state.jina_ready else ("loading" if state.jina_loading else "idle")
+    yield _sse({
+        "type": "done",
+        "sources": seen_sources,
+        "low_confidence": low_confidence,
+        "jina_status": jina_status,
+        "embedding_used": "jina" if use_jina else "minilm",
+    })
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
@@ -158,6 +172,8 @@ def rag_health():
             "status": "ok",
             "chunks_indexed": state.collection.count(),
             "embedding_model": "all-MiniLM-L6-v2",
+            "jina_ready": state.jina_ready,
+            "jina_loading": state.jina_loading,
             "initialized": state.initialized,
         }
     except RuntimeError:
@@ -165,8 +181,25 @@ def rag_health():
             "status": "initializing",
             "chunks_indexed": 0,
             "embedding_model": "all-MiniLM-L6-v2",
+            "jina_ready": False,
+            "jina_loading": False,
             "initialized": False,
         }
+
+
+@router.post("/prepare-jina")
+def prepare_jina():
+    """Trigger lazy loading of Jina v3 in a background thread."""
+    try:
+        state = get_rag_state()
+    except RuntimeError as exc:
+        return {"status": "error", "message": str(exc)}
+    if state.jina_ready:
+        return {"status": "ready"}
+    if state.jina_loading:
+        return {"status": "loading"}
+    threading.Thread(target=initialize_jina, args=(state,), daemon=True).start()
+    return {"status": "loading"}
 
 
 @router.post("/query")
