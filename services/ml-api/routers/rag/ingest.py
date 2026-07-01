@@ -131,6 +131,22 @@ def index_chunks(chunks: list[dict], state, uploaded: bool = False) -> None:
 
     _rebuild_bm25(state)
 
+    # Keep Jina collection in sync if it's already loaded
+    if state.jina_ready and state.jina_collection is not None and state.jina_passage_fn is not None:
+        try:
+            jina_embeddings = state.jina_passage_fn(texts)
+            jina_ids = [f"jina_new_{str(uuid.uuid4())}" for _ in chunks]
+            for i in range(0, len(chunks), batch_size):
+                state.jina_collection.add(
+                    ids=jina_ids[i : i + batch_size],
+                    embeddings=jina_embeddings[i : i + batch_size],
+                    documents=texts[i : i + batch_size],
+                    metadatas=[{"source": s, "uploaded": uploaded} for s in sources[i : i + batch_size]],
+                )
+            logger.info("index_chunks: also indexed %d chunks into Jina collection.", len(chunks))
+        except Exception as exc:
+            logger.warning("Failed to sync chunks into Jina collection: %s", exc)
+
     logger.info("index_chunks: added %d chunks; corpus now %d", len(chunks), len(state.corpus_chunks))
 
 
@@ -141,6 +157,11 @@ def delete_source(source: str, state) -> int:
     state.uploaded_sources — callers should check membership before calling.
     """
     state.collection.delete(where={"source": source})
+    if state.jina_ready and state.jina_collection is not None:
+        try:
+            state.jina_collection.delete(where={"source": source})
+        except Exception:
+            pass
 
     keep_idx = [i for i, s in enumerate(state.chunk_sources) if s != source]
     removed = len(state.chunk_sources) - len(keep_idx)

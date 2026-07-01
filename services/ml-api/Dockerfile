@@ -20,6 +20,9 @@ COPY --chown=appuser:appuser models/ models/
 COPY --chown=appuser:appuser schemas/ schemas/
 COPY --chown=appuser:appuser data/ data/
 
+# Cache HF models in the persistent /data volume so they survive Space restarts
+ENV HF_HOME=/data/hf_cache
+
 USER appuser
 EXPOSE ${PORT:-8000}
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
