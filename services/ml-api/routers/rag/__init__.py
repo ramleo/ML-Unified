@@ -25,6 +25,7 @@ class RagState:
     jina_passage_fn: Optional[Callable] = None
     jina_ready: bool = False
     jina_loading: bool = False
+    jina_error: Optional[str] = None
 
 
 _state = RagState()
@@ -74,6 +75,7 @@ def initialize_jina(state: RagState) -> None:
         state.jina_ready = True
     except Exception as exc:
         logger.exception("Jina initialization failed: %s", exc)
+        state.jina_error = str(exc)
     finally:
         state.jina_loading = False
 

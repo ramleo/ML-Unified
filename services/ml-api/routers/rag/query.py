@@ -174,6 +174,7 @@ def rag_health():
             "embedding_model": "all-MiniLM-L6-v2",
             "jina_ready": state.jina_ready,
             "jina_loading": state.jina_loading,
+            "jina_error": state.jina_error,
             "initialized": state.initialized,
         }
     except RuntimeError:
