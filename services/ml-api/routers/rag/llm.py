@@ -37,8 +37,7 @@ def stream_claude(model: str, key: str, messages: list[dict], system: str):
 
 
 def stream_gemini(model: str, key: str, messages: list[dict], system: str):
-    import urllib.request
-    import urllib.error
+    import httpx
 
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
@@ -52,33 +51,31 @@ def stream_gemini(model: str, key: str, messages: list[dict], system: str):
         role = "model" if m["role"] == "assistant" else "user"
         contents.append({"role": role, "parts": [{"text": m["content"]}]})
 
-    body = json.dumps({"contents": contents}).encode()
-    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req) as resp:
-            for raw_line in resp:
-                line = raw_line.decode("utf-8", errors="replace").strip()
-                if not line.startswith("data:"):
-                    continue
-                payload = line[5:].strip()
-                if payload in ("", "[DONE]"):
-                    continue
-                try:
-                    obj = json.loads(payload)
-                    for cand in obj.get("candidates", []):
-                        for part in cand.get("content", {}).get("parts", []):
-                            if "text" in part:
-                                yield part["text"]
-                except json.JSONDecodeError:
-                    continue
-    except urllib.error.HTTPError as exc:
-        logger.error("Gemini HTTP error: %s %s", exc.code, exc.reason)
-        yield f"[Gemini error {exc.code}]"
+        with httpx.Client(timeout=120) as client:
+            with client.stream("POST", url, json={"contents": contents}) as resp:
+                resp.raise_for_status()
+                for line in resp.iter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    payload = line[5:].strip()
+                    if payload in ("", "[DONE]"):
+                        continue
+                    try:
+                        obj = json.loads(payload)
+                        for cand in obj.get("candidates", []):
+                            for part in cand.get("content", {}).get("parts", []):
+                                if "text" in part:
+                                    yield part["text"]
+                    except json.JSONDecodeError:
+                        continue
+    except httpx.HTTPStatusError as exc:
+        logger.error("Gemini HTTP error: %s", exc.response.status_code)
+        yield f"[Gemini error {exc.response.status_code}]"
 
 
 def stream_cohere(model: str, key: str, messages: list[dict], system: str):
-    import urllib.request
-    import urllib.error
+    import httpx
 
     formatted = []
     if system:
@@ -87,32 +84,37 @@ def stream_cohere(model: str, key: str, messages: list[dict], system: str):
         role = "assistant" if m["role"] == "assistant" else "user"
         formatted.append({"role": role, "content": m["content"]})
 
-    body = json.dumps({"model": model, "messages": formatted, "stream": True}).encode()
-    req = urllib.request.Request(
-        "https://api.cohere.ai/v2/chat",
-        data=body,
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {key}"},
-    )
     try:
-        with urllib.request.urlopen(req) as resp:
-            for raw_line in resp:
-                line = raw_line.decode("utf-8", errors="replace").strip()
-                if not line.startswith("data:"):
-                    continue
-                payload = line[5:].strip()
-                if payload in ("", "[DONE]"):
-                    continue
-                try:
-                    obj = json.loads(payload)
-                    if obj.get("type") == "content-delta":
-                        text = obj.get("delta", {}).get("message", {}).get("content", {}).get("text", "")
-                        if text:
-                            yield text
-                except json.JSONDecodeError:
-                    continue
-    except urllib.error.HTTPError as exc:
-        logger.error("Cohere HTTP error: %s %s", exc.code, exc.reason)
-        yield f"[Cohere error {exc.code}]"
+        with httpx.Client(timeout=120) as client:
+            with client.stream(
+                "POST",
+                "https://api.cohere.ai/v2/chat",
+                headers={"Authorization": f"Bearer {key}"},
+                json={"model": model, "messages": formatted, "stream": True},
+            ) as resp:
+                resp.raise_for_status()
+                for line in resp.iter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    payload = line[5:].strip()
+                    if payload in ("", "[DONE]"):
+                        continue
+                    try:
+                        obj = json.loads(payload)
+                        if obj.get("type") == "content-delta":
+                            text = (
+                                obj.get("delta", {})
+                                .get("message", {})
+                                .get("content", {})
+                                .get("text", "")
+                            )
+                            if text:
+                                yield text
+                    except json.JSONDecodeError:
+                        continue
+    except httpx.HTTPStatusError as exc:
+        logger.error("Cohere HTTP error: %s", exc.response.status_code)
+        yield f"[Cohere error {exc.response.status_code}]"
 
 
 def complete(provider: str, model: str, key: str, messages: list[dict], system: str = "") -> str:
