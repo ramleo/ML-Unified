@@ -44,13 +44,14 @@ def initialize_jina(state: RagState) -> None:
         from sentence_transformers import SentenceTransformer
         import chromadb
 
-        # jina-embeddings-v3's XLMRobertaLoRA custom class predates the
-        # all_tied_weights_keys property added in transformers>=4.49; patch it
-        # onto nn.Module so any subclass (including XLMRobertaLoRA) gets it
+        # jina-embeddings-v3's custom XLMRobertaModel predates the
+        # all_tied_weights_keys attribute added in transformers>=4.49.
+        # Setting a plain list (not a property) on nn.Module gives a default
+        # value while still allowing post_init() to overwrite it per-instance.
         try:
             import torch.nn as nn
             if not hasattr(nn.Module, "all_tied_weights_keys"):
-                nn.Module.all_tied_weights_keys = property(lambda self: [])
+                nn.Module.all_tied_weights_keys = []
         except Exception:
             pass
 
