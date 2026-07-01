@@ -172,8 +172,7 @@ def _sse_generator(req: QueryRequest):
     candidates = multi_query_retrieve(queries, state, top_k=50, use_jina=use_jina)
     chunks = rerank(req.query, candidates, state, top_k=8)
 
-    top_raw = chunks[0].get("score", 0.0) if chunks else 0.0
-    low_confidence = not chunks or top_raw < 0.05
+    low_confidence = not chunks  # reranker returned nothing (top < ABS_FLOOR 0.01)
 
     # 2a. CRAG: if confidence is low, supplement with web search before streaming
     web_fallback_used = False
