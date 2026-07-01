@@ -186,7 +186,7 @@ async def explain_automl(request: Request):
     rule_exp = _rule_explanation(winner, cv_results, task, sel_metric,
                                  is_imbal, feat_imp, n_rows)
     return {
-        "explanation": {"why_won": rule_exp, "score_analysis": "", "key_dirs": "", "recommendations": []},
+        "explanation": {"why_won": rule_exp, "score_analysis": "", "key_drivers": "", "recommendations": []},
         "source": "rule",
         **({"llm_error": llm_error} if llm_error else {}),
     }
