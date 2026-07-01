@@ -192,6 +192,7 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
             "recommendations":     parsed.get("recommendations", []),
             "model_comparison":    parsed.get("model_comparison", []),
             "actionable_insights": parsed.get("actionable_insights", []),
+            "rag_used":            bool(rag_context),
         }
     except (_json.JSONDecodeError, Exception):
         return {"why_won": raw_text, "score_analysis": "", "key_drivers": "", "recommendations": []}

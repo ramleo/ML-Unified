@@ -181,7 +181,8 @@ async def explain_automl(request: Request):
             llm_exp = None
             llm_error = str(e)
         if llm_exp:
-            return {"explanation": llm_exp, "source": provider}
+            rag_used = bool(llm_exp.pop("rag_used", False))
+            return {"explanation": llm_exp, "source": provider, "rag_used": rag_used}
 
     rule_exp = _rule_explanation(winner, cv_results, task, sel_metric,
                                  is_imbal, feat_imp, n_rows)
