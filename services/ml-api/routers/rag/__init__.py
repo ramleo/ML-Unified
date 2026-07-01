@@ -43,6 +43,17 @@ def initialize_jina(state: RagState) -> None:
     try:
         from sentence_transformers import SentenceTransformer
         import chromadb
+
+        # jina-embeddings-v3's XLMRobertaLoRA custom class predates the
+        # all_tied_weights_keys property added in transformers>=4.49; patch it
+        # onto nn.Module so any subclass (including XLMRobertaLoRA) gets it
+        try:
+            import torch.nn as nn
+            if not hasattr(nn.Module, "all_tied_weights_keys"):
+                nn.Module.all_tied_weights_keys = property(lambda self: [])
+        except Exception:
+            pass
+
         logger.info("Loading jinaai/jina-embeddings-v3 (~570 MB) …")
         model = SentenceTransformer("jinaai/jina-embeddings-v3", trust_remote_code=True, device="cpu")
         state.jina_query_fn = lambda texts: model.encode(
