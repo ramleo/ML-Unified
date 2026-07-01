@@ -26,6 +26,7 @@ class RagState:
     jina_ready: bool = False
     jina_loading: bool = False
     jina_error: Optional[str] = None
+    init_error: Optional[str] = None
 
 
 _state = RagState()
@@ -93,6 +94,16 @@ def initialize_rag(kb_dir: str) -> None:
     regardless of whether kb_dir exists — callers can always ingest later via /rag/ingest.
     """
     global _state
+    try:
+        _initialize_rag_inner(kb_dir)
+    except Exception as exc:
+        logger.exception("initialize_rag failed: %s", exc)
+        _state.init_error = str(exc)
+        _state.initialized = True  # unblock health checks so error is visible
+
+
+def _initialize_rag_inner(kb_dir: str) -> None:
+    global _state
 
     try:
         import chromadb
@@ -100,6 +111,7 @@ def initialize_rag(kb_dir: str) -> None:
         from rank_bm25 import BM25Okapi
     except ImportError as exc:
         logger.error("RAG deps missing: %s — pip install sentence-transformers chromadb rank-bm25 pypdf", exc)
+        _state.init_error = str(exc)
         _state.initialized = True
         return
 

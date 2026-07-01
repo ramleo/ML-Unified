@@ -175,6 +175,7 @@ def rag_health():
             "jina_ready": state.jina_ready,
             "jina_loading": state.jina_loading,
             "jina_error": state.jina_error,
+            "init_error": state.init_error,
             "initialized": state.initialized,
         }
     except RuntimeError:
