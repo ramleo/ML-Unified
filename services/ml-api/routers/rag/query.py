@@ -169,8 +169,8 @@ def rag_health():
     try:
         state = get_rag_state()
         return {
-            "status": "ok",
-            "chunks_indexed": state.collection.count(),
+            "status": "ok" if not state.init_error else "error",
+            "chunks_indexed": state.collection.count() if state.collection is not None else 0,
             "embedding_model": "all-MiniLM-L6-v2",
             "jina_ready": state.jina_ready,
             "jina_loading": state.jina_loading,

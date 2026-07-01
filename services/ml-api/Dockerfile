@@ -20,8 +20,8 @@ COPY --chown=appuser:appuser models/ models/
 COPY --chown=appuser:appuser schemas/ schemas/
 COPY --chown=appuser:appuser data/ data/
 
-# Cache HF models in the persistent /data volume so they survive Space restarts
-ENV HF_HOME=/data/hf_cache
+# /home/appuser is always writable; /data persistent volume may not exist on all Spaces
+ENV HF_HOME=/home/appuser/.cache/huggingface
 
 USER appuser
 EXPOSE ${PORT:-8000}
