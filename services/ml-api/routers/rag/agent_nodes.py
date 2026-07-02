@@ -114,7 +114,7 @@ def node_retrieve(state: dict) -> dict:
         rs = get_rag_state()
         q = state.get("final_query") or state["query"]
         raw = multi_query_retrieve([q], rs, top_k=20, session_id=state.get("session_id", ""))
-        chunks = rerank(q, raw, rs, top_k=5, abs_floor=0.0)
+        chunks = rerank(q, raw, rs, top_k=5)
         logger.debug("retrieve: %r → %d chunks", q[:50], len(chunks))
         return {"chunks": chunks}
     except Exception as exc:
