@@ -227,16 +227,17 @@ async def ingest_document(file: UploadFile = File(...)) -> JSONResponse:
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    if fname in state.uploaded_sources:
+    tagged_source = f"user:{fname}"
+    if tagged_source in state.uploaded_sources:
         raise HTTPException(
             status_code=409,
             detail=f"'{fname}' is already uploaded. Remove it first (manage documents) before re-uploading.",
         )
 
-    chunks = chunk_document(text, source=fname)
+    chunks = chunk_document(text, source=tagged_source)
     index_chunks(chunks, state, uploaded=True)
 
-    return JSONResponse({"status": "ok", "chunks_added": len(chunks), "source": fname})
+    return JSONResponse({"status": "ok", "chunks_added": len(chunks), "source": tagged_source})
 
 
 # ── Manage uploaded documents ───────────────────────────────────────────────────

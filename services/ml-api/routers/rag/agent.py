@@ -163,9 +163,9 @@ def _agent_generator(
                 web_used = True
         except Exception as exc:
             logger.warning("web fallback failed: %s", exc)
-        if not web_used:
-            # Web blocked/failed — only keep KB chunks that cleared the original floor
-            chunks = [c for c in kb_chunks if float(c.get("score", 0)) >= 0.01]
+    # Always filter KB chunks by minimum score before display
+    if not web_used:
+        chunks = [c for c in chunks if float(c.get("score", 0)) >= 0.01]
 
     # ── Emit sources ──────────────────────────────────────────────────────────
     seen_sources: list[str] = []
