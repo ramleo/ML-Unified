@@ -122,7 +122,7 @@ def _agent_generator(
     # ── Run LangGraph ─────────────────────────────────────────────────────────
     if _LANGGRAPH_OK and _compiled:
         try:
-            for event in _compiled.stream(initial):
+            for event in _compiled.stream(initial, stream_mode="updates"):
                 for node_name, state_update in event.items():
                     step = _STEP_MAP.get(node_name, node_name)
                     yield _sse({
