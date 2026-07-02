@@ -171,7 +171,7 @@ def _sse_generator(req: QueryRequest):
     use_jina = req.embedding_model == "jina" and state.jina_ready
     queries = expand_query(req.query, provider, model, key)
     candidates = multi_query_retrieve(queries, state, top_k=50, use_jina=use_jina, session_id=req.session_id)
-    chunks = rerank(req.query, candidates, state, top_k=8)
+    chunks = rerank(req.query, candidates, state, top_k=5)
 
     top_raw = chunks[0].get("score", 0.0) if chunks else 0.0
     low_confidence = not chunks or top_raw < 0.05

@@ -159,7 +159,7 @@ def rag_evaluate(req: EvalRequest) -> JSONResponse:
     for pair in req.qa_pairs:
         t0 = time.time()
         chunks = hybrid_retrieve(pair.question, state, top_k=8)
-        chunks = rerank(pair.question, chunks, state, top_k=8)
+        chunks = rerank(pair.question, chunks, state, top_k=5)
 
         ctx_prec = _context_precision(pair.question, chunks, provider, req.model, key)
         ctx_rec  = _context_recall(pair.question, chunks, pair.ground_truth, provider, req.model, key)
