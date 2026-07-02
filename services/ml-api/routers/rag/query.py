@@ -49,6 +49,7 @@ class QueryRequest(BaseModel):
     model: str = _DEFAULT_MODEL
     user_key: Optional[str] = None
     embedding_model: str = "minilm"  # "minilm" | "jina"
+    session_id: str = ""
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -169,7 +170,7 @@ def _sse_generator(req: QueryRequest):
     # 1. Expand query, retrieve top-50 candidates per variant (RRF-merged), rerank to top-8
     use_jina = req.embedding_model == "jina" and state.jina_ready
     queries = expand_query(req.query, provider, model, key)
-    candidates = multi_query_retrieve(queries, state, top_k=50, use_jina=use_jina)
+    candidates = multi_query_retrieve(queries, state, top_k=50, use_jina=use_jina, session_id=req.session_id)
     chunks = rerank(req.query, candidates, state, top_k=8)
 
     top_raw = chunks[0].get("score", 0.0) if chunks else 0.0

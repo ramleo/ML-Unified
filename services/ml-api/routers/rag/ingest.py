@@ -96,12 +96,12 @@ def _rebuild_bm25(state) -> None:
     state.bm25 = BM25Okapi(tokenized)
 
 
-def index_chunks(chunks: list[dict], state, uploaded: bool = False) -> None:
+def index_chunks(chunks: list[dict], state, uploaded: bool = False, session_id: str = "") -> None:
     """Embed chunks, add to ChromaDB collection, rebuild BM25 index in-place.
 
-    uploaded=True tags chunks as user-uploaded (deletable via /rag/uploads);
-    pre-seeded KB docs indexed at startup leave this False so they can't be
-    removed through the same path.
+    uploaded=True tags chunks as user-uploaded (deletable via /rag/uploads).
+    session_id isolates uploaded chunks so they only appear in queries from the
+    same upload session.
     """
     if not chunks:
         return
@@ -120,7 +120,8 @@ def index_chunks(chunks: list[dict], state, uploaded: bool = False) -> None:
             ids=ids[i : i + batch_size],
             embeddings=embeddings[i : i + batch_size],
             documents=texts[i : i + batch_size],
-            metadatas=[{"source": s, "uploaded": uploaded} for s in sources[i : i + batch_size]],
+            metadatas=[{"source": s, "uploaded": uploaded, "session_id": session_id}
+                       for s in sources[i : i + batch_size]],
         )
 
     # Extend in-memory corpus
@@ -128,6 +129,9 @@ def index_chunks(chunks: list[dict], state, uploaded: bool = False) -> None:
     state.chunk_sources.extend(sources)
     if uploaded:
         state.uploaded_sources.update(sources)
+        if session_id:
+            for s in sources:
+                state.source_sessions[s] = session_id
 
     _rebuild_bm25(state)
 
@@ -141,7 +145,8 @@ def index_chunks(chunks: list[dict], state, uploaded: bool = False) -> None:
                     ids=jina_ids[i : i + batch_size],
                     embeddings=jina_embeddings[i : i + batch_size],
                     documents=texts[i : i + batch_size],
-                    metadatas=[{"source": s, "uploaded": uploaded} for s in sources[i : i + batch_size]],
+                    metadatas=[{"source": s, "uploaded": uploaded, "session_id": session_id}
+                               for s in sources[i : i + batch_size]],
                 )
             logger.info("index_chunks: also indexed %d chunks into Jina collection.", len(chunks))
         except Exception as exc:
@@ -168,6 +173,7 @@ def delete_source(source: str, state) -> int:
     state.corpus_chunks = [state.corpus_chunks[i] for i in keep_idx]
     state.chunk_sources = [state.chunk_sources[i] for i in keep_idx]
     state.uploaded_sources.discard(source)
+    state.source_sessions.pop(source, None)
 
     _rebuild_bm25(state)
 
@@ -227,6 +233,7 @@ async def ingest_document(file: UploadFile = File(...)) -> JSONResponse:
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
+    import uuid as _uuid
     tagged_source = f"user:{fname}"
     if tagged_source in state.uploaded_sources:
         raise HTTPException(
@@ -234,10 +241,11 @@ async def ingest_document(file: UploadFile = File(...)) -> JSONResponse:
             detail=f"'{fname}' is already uploaded. Remove it first (manage documents) before re-uploading.",
         )
 
+    session_id = str(_uuid.uuid4())
     chunks = chunk_document(text, source=tagged_source)
-    index_chunks(chunks, state, uploaded=True)
+    index_chunks(chunks, state, uploaded=True, session_id=session_id)
 
-    return JSONResponse({"status": "ok", "chunks_added": len(chunks), "source": tagged_source})
+    return JSONResponse({"status": "ok", "chunks_added": len(chunks), "source": tagged_source, "session_id": session_id})
 
 
 # ── Manage uploaded documents ───────────────────────────────────────────────────

@@ -1,16 +1,16 @@
-"""RAG evaluation — POST /rag/evaluate endpoint.
+"""RAG evaluation — POST /rag/evaluate with LLM-judged RAGAS-style metrics.
 
-Computes retrieval and generation quality metrics without external deps:
-  context_relevance  — avg cosine(embed(question), embed(chunk)) for retrieved chunks
-  answer_coverage    — keyword recall of answer against ground_truth
-  faithfulness_proxy — cosine(embed(answer), mean(embed(top-4 chunks)))
-
-All metrics are in [0, 1]. Higher is better.
+Metrics (all 0–1, higher is better):
+  faithfulness        — LLM judges: does answer only contain claims in context?
+  answer_relevancy    — LLM judges: is answer relevant and complete?
+  context_precision   — fraction of chunks the LLM deems relevant to the question
+  context_recall      — LLM judges: fraction of ground-truth info covered by contexts
 """
 from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from typing import Optional
 
@@ -23,7 +23,6 @@ from routers.rag import get_rag_state
 from routers.rag.retrieve import hybrid_retrieve, embed_query
 from routers.rag.rerank import rerank
 from routers.rag.llm import complete
-from routers.rag.text import tokenize
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -54,50 +53,87 @@ class EvalRequest(BaseModel):
     generate_answers: bool = True
 
 
-# ── Metric helpers ─────────────────────────────────────────────────────────────
+# ── LLM judge helpers ──────────────────────────────────────────────────────────
 
-def _cosine(a: list[float], b: list[float]) -> float:
-    va, vb = np.array(a, dtype=np.float32), np.array(b, dtype=np.float32)
-    denom = np.linalg.norm(va) * np.linalg.norm(vb)
-    return float(np.dot(va, vb) / denom) if denom > 0 else 0.0
-
-
-def _keyword_recall(answer: str, ground_truth: str) -> float:
-    """Fraction of ground_truth tokens that appear in the answer (case-insensitive)."""
-    gt_tokens = set(tokenize(ground_truth.lower()))
-    ans_tokens = set(tokenize(answer.lower()))
-    if not gt_tokens:
-        return 1.0
-    return len(gt_tokens & ans_tokens) / len(gt_tokens)
+def _parse_score(text: str) -> float:
+    """Extract first number from LLM response; normalize to [0, 1]."""
+    m = re.search(r'\d+(?:\.\d+)?', text or "")
+    if not m:
+        return 0.5
+    v = float(m.group())
+    return min(v / 10.0, 1.0) if v > 1 else v
 
 
-def _context_relevance(question: str, chunks: list[dict], state) -> float:
-    """Avg cosine similarity between question embedding and each retrieved chunk."""
+def _judge(prompt: str, provider: str, model: str, key: str) -> str:
+    try:
+        return complete(provider, model, key, [{"role": "user", "content": prompt}])
+    except Exception as exc:
+        logger.warning("eval judge call failed: %s", exc)
+        return ""
+
+
+def _faithfulness(question: str, answer: str, chunks: list[dict],
+                  provider: str, model: str, key: str) -> float:
+    ctx = "\n\n".join(c["text"][:400] for c in chunks[:5])
+    prompt = (
+        f"Context:\n{ctx}\n\n"
+        f"Answer: {answer}\n\n"
+        "Score 0-10: how faithful is the answer to the context only? "
+        "10 = every claim is grounded in the context, 0 = pure hallucination. "
+        "Reply with only a number."
+    )
+    return _parse_score(_judge(prompt, provider, model, key))
+
+
+def _answer_relevancy(question: str, answer: str,
+                      provider: str, model: str, key: str) -> float:
+    prompt = (
+        f"Question: {question}\nAnswer: {answer}\n\n"
+        "Score 0-10: how relevant and complete is the answer to the question? "
+        "10 = perfectly answers the question, 0 = completely off-topic. "
+        "Reply with only a number."
+    )
+    return _parse_score(_judge(prompt, provider, model, key))
+
+
+def _context_precision(question: str, chunks: list[dict],
+                       provider: str, model: str, key: str) -> float:
     if not chunks:
         return 0.0
-    q_emb = embed_query(question, state)
-    sims = [_cosine(q_emb, state.embedding_fn([c["text"]])[0]) for c in chunks]
-    return float(np.mean(sims))
+    relevant = 0
+    for c in chunks:
+        prompt = (
+            f"Question: {question}\n"
+            f"Chunk: {c['text'][:300]}\n"
+            "Is this chunk useful for answering the question? Reply Yes or No."
+        )
+        resp = _judge(prompt, provider, model, key).lower()
+        if "yes" in resp:
+            relevant += 1
+    return relevant / len(chunks)
 
 
-def _faithfulness_proxy(answer: str, chunks: list[dict], state) -> float:
-    """Cosine similarity between answer embedding and mean of top-4 chunk embeddings."""
-    if not answer or not chunks:
-        return 0.0
-    ans_emb = state.embedding_fn([answer])[0]
-    ctx_embs = state.embedding_fn([c["text"] for c in chunks[:4]])
-    ctx_mean = np.mean(ctx_embs, axis=0).tolist()
-    return _cosine(ans_emb, ctx_mean)
+def _context_recall(question: str, chunks: list[dict], ground_truth: str,
+                    provider: str, model: str, key: str) -> float:
+    ctx = "\n\n".join(c["text"][:300] for c in chunks[:5])
+    prompt = (
+        f"Ground truth answer: {ground_truth}\n\n"
+        f"Retrieved contexts:\n{ctx}\n\n"
+        "Score 0-10: what fraction of the ground truth information is present in "
+        "the retrieved contexts? 10 = all key facts covered, 0 = nothing covered. "
+        "Reply with only a number."
+    )
+    return _parse_score(_judge(prompt, provider, model, key))
 
 
 # ── Endpoint ───────────────────────────────────────────────────────────────────
 
 @router.post("/evaluate")
 def rag_evaluate(req: EvalRequest) -> JSONResponse:
-    """Evaluate retrieval + generation quality on held-out QA pairs.
+    """Evaluate retrieval + generation with LLM-judged RAGAS-style metrics.
 
-    Returns per-question metrics and aggregate averages.
-    Set generate_answers=false to skip LLM calls and measure retrieval only.
+    Set generate_answers=false to evaluate retrieval only (skips faithfulness,
+    answer_relevancy, and generation calls).
     """
     try:
         state = get_rag_state()
@@ -110,9 +146,9 @@ def rag_evaluate(req: EvalRequest) -> JSONResponse:
     provider = req.provider.lower()
     key = req.user_key or os.environ.get(_ENV_KEYS.get(provider, ""), "")
 
-    if req.generate_answers and not key:
+    if not key:
         return JSONResponse(
-            {"error": f"No API key for provider '{provider}'. Pass user_key or set env var."},
+            {"error": f"No API key for provider '{provider}'."},
             status_code=400,
         )
 
@@ -122,9 +158,13 @@ def rag_evaluate(req: EvalRequest) -> JSONResponse:
         chunks = hybrid_retrieve(pair.question, state, top_k=8)
         chunks = rerank(pair.question, chunks, state, top_k=8)
 
-        ctx_rel = _context_relevance(pair.question, chunks, state)
+        ctx_prec = _context_precision(pair.question, chunks, provider, req.model, key)
+        ctx_rec  = _context_recall(pair.question, chunks, pair.ground_truth, provider, req.model, key)
 
         answer = ""
+        faith = None
+        ans_rel = None
+
         if req.generate_answers:
             ctx_text = "\n\n".join(c["text"] for c in chunks[:6])
             answer = complete(
@@ -135,33 +175,35 @@ def rag_evaluate(req: EvalRequest) -> JSONResponse:
                     + ctx_text
                 ),
             )
-
-        coverage = _keyword_recall(answer, pair.ground_truth) if answer else None
-        faith = _faithfulness_proxy(answer, chunks, state) if answer else None
+            if answer:
+                faith   = _faithfulness(pair.question, answer, chunks, provider, req.model, key)
+                ans_rel = _answer_relevancy(pair.question, answer, provider, req.model, key)
 
         results.append({
-            "question": pair.question,
-            "answer": answer,
-            "ground_truth": pair.ground_truth,
-            "sources": sorted({c.get("source", "") for c in chunks}),
+            "question":       pair.question,
+            "answer":         answer,
+            "ground_truth":   pair.ground_truth,
+            "sources":        sorted({c.get("source", "") for c in chunks}),
             "chunks_retrieved": len(chunks),
             "metrics": {
-                "context_relevance": round(ctx_rel, 4),
-                "answer_coverage": round(coverage, 4) if coverage is not None else None,
-                "faithfulness_proxy": round(faith, 4) if faith is not None else None,
+                "context_precision":  round(ctx_prec, 4),
+                "context_recall":     round(ctx_rec, 4),
+                "faithfulness":       round(faith, 4) if faith is not None else None,
+                "answer_relevancy":   round(ans_rel, 4) if ans_rel is not None else None,
             },
             "latency_ms": round((time.time() - t0) * 1000),
         })
 
-    ctx_scores = [r["metrics"]["context_relevance"] for r in results]
-    cov_scores = [r["metrics"]["answer_coverage"] for r in results if r["metrics"]["answer_coverage"] is not None]
-    faith_scores = [r["metrics"]["faithfulness_proxy"] for r in results if r["metrics"]["faithfulness_proxy"] is not None]
+    def _avg(key: str):
+        vals = [r["metrics"][key] for r in results if r["metrics"][key] is not None]
+        return round(float(np.mean(vals)), 4) if vals else None
 
     aggregate = {
         "n": len(results),
-        "avg_context_relevance": round(float(np.mean(ctx_scores)), 4) if ctx_scores else 0.0,
-        "avg_answer_coverage": round(float(np.mean(cov_scores)), 4) if cov_scores else None,
-        "avg_faithfulness_proxy": round(float(np.mean(faith_scores)), 4) if faith_scores else None,
+        "avg_context_precision":  _avg("context_precision"),
+        "avg_context_recall":     _avg("context_recall"),
+        "avg_faithfulness":       _avg("faithfulness"),
+        "avg_answer_relevancy":   _avg("answer_relevancy"),
     }
 
     return JSONResponse({"aggregate": aggregate, "results": results})

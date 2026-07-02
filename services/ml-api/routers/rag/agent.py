@@ -40,6 +40,7 @@ class AgentState(TypedDict):
     provider:     str
     model:        str
     user_key:     str
+    session_id:   str
 
 # ── Compile graph (once at import) ────────────────────────────────────────────
 
@@ -100,7 +101,7 @@ def _sse(obj: dict) -> str:
 
 def _agent_generator(
     query: str, tool_context: str, history: list,
-    provider: str, model: str, user_key: str,
+    provider: str, model: str, user_key: str, session_id: str = "",
 ):
     t0 = time.time()
 
@@ -116,6 +117,7 @@ def _agent_generator(
         "provider":     provider,
         "model":        model,
         "user_key":     user_key,
+        "session_id":   session_id,
     }
     final_state: dict = dict(initial)
 
@@ -279,6 +281,7 @@ class AgentRequest(BaseModel):
     provider:     str = "gemini"
     model:        str = "gemini-2.5-flash"
     user_key:     Optional[str] = None
+    session_id:   str = ""
 
 
 @router.post("/agent")
@@ -303,6 +306,7 @@ def rag_agent(req: AgentRequest):
             provider=req.provider.lower(),
             model=req.model,
             user_key=user_key,
+            session_id=req.session_id,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},

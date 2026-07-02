@@ -19,7 +19,7 @@ def embed_query(query: str, state, use_jina: bool = False) -> list[float]:
 
 # ── Dense retrieval ────────────────────────────────────────────────────────────
 
-def dense_retrieve(query_embedding: list[float], state, k: int = 50, use_jina: bool = False) -> list[dict]:
+def dense_retrieve(query_embedding: list[float], state, k: int = 50, use_jina: bool = False, where: dict | None = None) -> list[dict]:
     """Query ChromaDB for the top-k nearest neighbours.
 
     Returns list of {text, source, score, id}.
@@ -32,6 +32,7 @@ def dense_retrieve(query_embedding: list[float], state, k: int = 50, use_jina: b
         query_embeddings=[query_embedding],
         n_results=n_results,
         include=["documents", "metadatas", "distances"],
+        **({"where": where} if where else {}),
     )
 
     docs = results.get("documents", [[]])[0]
@@ -53,7 +54,7 @@ def dense_retrieve(query_embedding: list[float], state, k: int = 50, use_jina: b
 
 # ── Sparse retrieval ───────────────────────────────────────────────────────────
 
-def bm25_retrieve(query: str, state, k: int = 50) -> list[dict]:
+def bm25_retrieve(query: str, state, k: int = 50, session_id: str = "") -> list[dict]:
     """Score all corpus chunks with BM25Okapi and return top-k.
 
     Returns list of {text, source, score, id}.
@@ -71,9 +72,13 @@ def bm25_retrieve(query: str, state, k: int = 50) -> list[dict]:
     hits: list[dict] = []
     for idx, score in top:
         if idx < len(state.corpus_chunks):
+            src = state.chunk_sources[idx] if idx < len(state.chunk_sources) else ""
+            if session_id and src in state.uploaded_sources:
+                if state.source_sessions.get(src, "") != session_id:
+                    continue
             hits.append({
                 "text": state.corpus_chunks[idx],
-                "source": state.chunk_sources[idx] if idx < len(state.chunk_sources) else "",
+                "source": src,
                 "score": float(score),
                 "id": f"bm25_{idx}",
             })
@@ -114,7 +119,7 @@ def reciprocal_rank_fusion(
 
 # ── Hybrid retrieval ───────────────────────────────────────────────────────────
 
-def hybrid_retrieve(query: str, state, top_k: int = 8, use_jina: bool = False) -> list[dict]:
+def hybrid_retrieve(query: str, state, top_k: int = 8, use_jina: bool = False, session_id: str = "") -> list[dict]:
     """Run dense + BM25 retrieval, fuse with RRF, return top_k results.
 
     Returns list of {text, source, score, id}.
@@ -125,11 +130,18 @@ def hybrid_retrieve(query: str, state, top_k: int = 8, use_jina: bool = False) -
     query_embedding = embed_query(query, state, use_jina=use_jina)
     collection = state.jina_collection if (use_jina and state.jina_ready) else state.collection
 
+    where = None
+    if session_id:
+        where = {"$or": [
+            {"uploaded": {"$eq": False}},
+            {"session_id": {"$eq": session_id}},
+        ]}
+
     dense_hits = []
     if collection.count() > 0:
-        dense_hits = dense_retrieve(query_embedding, state, k=50, use_jina=use_jina)
+        dense_hits = dense_retrieve(query_embedding, state, k=50, use_jina=use_jina, where=where)
 
-    bm25_hits = bm25_retrieve(query, state, k=50)
+    bm25_hits = bm25_retrieve(query, state, k=50, session_id=session_id)
 
     if not dense_hits and not bm25_hits:
         return []
@@ -144,7 +156,7 @@ def hybrid_retrieve(query: str, state, top_k: int = 8, use_jina: bool = False) -
     return fused[:top_k]
 
 
-def multi_query_retrieve(queries: list[str], state, top_k: int = 50, use_jina: bool = False) -> list[dict]:
+def multi_query_retrieve(queries: list[str], state, top_k: int = 50, use_jina: bool = False, session_id: str = "") -> list[dict]:
     """Run hybrid_retrieve for each query variant, then RRF-merge across all
     variants' result lists. A chunk surfaced by multiple phrasings of the
     same question ranks higher than one found by only the original wording.
@@ -152,7 +164,7 @@ def multi_query_retrieve(queries: list[str], state, top_k: int = 50, use_jina: b
     if not state.initialized or not queries:
         return []
 
-    per_query_lists = [hybrid_retrieve(q, state, top_k=top_k, use_jina=use_jina) for q in queries]
+    per_query_lists = [hybrid_retrieve(q, state, top_k=top_k, use_jina=use_jina, session_id=session_id) for q in queries]
     per_query_lists = [lst for lst in per_query_lists if lst]
 
     if not per_query_lists:

@@ -18,6 +18,7 @@ class RagState:
     corpus_chunks: list[str] = field(default_factory=list)
     chunk_sources: list[str] = field(default_factory=list)
     uploaded_sources: set[str] = field(default_factory=set)
+    source_sessions: dict[str, str] = field(default_factory=dict)  # source → session_id
     initialized: bool = False
     # Jina v3 — lazy-loaded on first user request
     jina_collection: object = None
@@ -83,7 +84,11 @@ def initialize_jina(state: RagState) -> None:
                 documents=state.corpus_chunks,
                 embeddings=embeddings,
                 ids=[f"jina_{i}" for i in range(len(state.corpus_chunks))],
-                metadatas=[{"source": src} for src in state.chunk_sources],
+                metadatas=[{
+                    "source": src,
+                    "uploaded": src in state.uploaded_sources,
+                    "session_id": state.source_sessions.get(src, ""),
+                } for src in state.chunk_sources],
             )
             logger.info("Jina collection ready — %d chunks indexed.", len(state.corpus_chunks))
         state.jina_ready = True
