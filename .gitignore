@@ -10,6 +10,7 @@ build/
 .mcp.json
 vision_cache/
 services/ml-api/data/*.json
+!services/ml-api/data/rag_eval_qa.json
 
 # Local artifacts
 .playwright-mcp/

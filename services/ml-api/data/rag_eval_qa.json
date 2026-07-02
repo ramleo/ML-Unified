@@ -1,0 +1,82 @@
+[
+  {
+    "question": "What is the difference between XGBoost and LightGBM?",
+    "ground_truth": "XGBoost grows trees level-wise (breadth-first) while LightGBM grows leaf-wise (best-first), which makes LightGBM faster and more accurate on large datasets but more prone to overfitting on small ones. LightGBM uses num_leaves as the main complexity control rather than max_depth."
+  },
+  {
+    "question": "How do I handle imbalanced classification data?",
+    "ground_truth": "Common approaches include setting class_weight='balanced', using SMOTE to oversample the minority class, undersampling the majority class, adjusting the decision threshold, and using metrics like F1 and AUC-ROC instead of accuracy."
+  },
+  {
+    "question": "What is SHAP and how do I interpret SHAP values?",
+    "ground_truth": "SHAP (SHapley Additive exPlanations) assigns each feature a contribution value for a specific prediction. Positive SHAP values push the prediction higher than the base value; negative values push it lower. The magnitude indicates feature importance for that prediction."
+  },
+  {
+    "question": "What learning rate should I use for XGBoost?",
+    "ground_truth": "Typical learning rates for XGBoost range from 0.01 to 0.3. Start around 0.05 to 0.1 and use early stopping to find the optimal number of trees. Lower learning rates need more trees but often generalize better."
+  },
+  {
+    "question": "What is data leakage and how do I prevent it?",
+    "ground_truth": "Data leakage occurs when information from outside the training distribution (from the target or future time periods) is used as a feature. Prevent it by fitting all preprocessing only on training data, using sklearn Pipelines, using chronological splits for time series, and checking that features are available at prediction time."
+  },
+  {
+    "question": "When should I use stratified k-fold cross-validation?",
+    "ground_truth": "Use stratified k-fold for classification tasks, especially with imbalanced classes. It ensures each fold has the same class distribution as the full dataset, preventing folds where the minority class is absent."
+  },
+  {
+    "question": "How do I choose the number of clusters for K-Means?",
+    "ground_truth": "Use the elbow method (plot inertia vs K and look for the elbow) or the silhouette score (try K from 2 to 10, pick the K with the highest average silhouette score). Silhouette score is more reliable as the elbow can be ambiguous."
+  },
+  {
+    "question": "What is CatBoost and when does it outperform XGBoost?",
+    "ground_truth": "CatBoost is a gradient boosting library that natively handles categorical features via ordered target statistics, without requiring manual encoding. It often outperforms XGBoost on datasets with many high-cardinality categorical columns."
+  },
+  {
+    "question": "How do I tune hyperparameters with Optuna?",
+    "ground_truth": "Define an objective function that takes a trial object, use trial.suggest_int/float/categorical to define the search space, and call optuna.create_study().optimize(). Optuna uses TPE (Tree-structured Parzen Estimator) by default, which is more efficient than grid search."
+  },
+  {
+    "question": "What is the difference between bagging and boosting?",
+    "ground_truth": "Bagging trains multiple models in parallel on bootstrap samples and averages their predictions (e.g., Random Forest). Boosting trains models sequentially, where each model corrects the errors of the previous one (e.g., XGBoost, LightGBM). Boosting typically achieves higher accuracy but is more prone to overfitting."
+  },
+  {
+    "question": "What RMSE vs MAE - when should I use each?",
+    "ground_truth": "RMSE penalizes large errors more heavily than MAE due to squaring. Use RMSE when large errors are particularly undesirable (e.g., demand forecasting where a big miss is costly). Use MAE when all errors matter equally or when outliers are present in the target and shouldn't dominate the metric."
+  },
+  {
+    "question": "What feature engineering techniques work well for tabular data?",
+    "ground_truth": "Common techniques include label encoding and one-hot encoding for categoricals, standardization and normalization for numerics, polynomial features for nonlinear interactions, log transforms for skewed distributions, binning for continuous variables, and datetime decomposition (hour, day of week, month) for temporal features."
+  },
+  {
+    "question": "How do I select the most important features?",
+    "ground_truth": "Options include ANOVA F-test and mutual information for filter methods, Recursive Feature Elimination (RFE) for wrapper methods, and SHAP values or permutation importance for model-based selection. Start with correlation analysis to remove redundant features, then use tree-based feature importances or SHAP for ranking."
+  },
+  {
+    "question": "What is DBSCAN and when should I use it over K-Means?",
+    "ground_truth": "DBSCAN is a density-based clustering algorithm that finds arbitrarily shaped clusters and automatically identifies noise points. Use it over K-Means when you don't know K in advance, clusters are non-spherical, or you have outliers you want to exclude."
+  },
+  {
+    "question": "How do I prevent overfitting in gradient boosting?",
+    "ground_truth": "Use early stopping with a validation set, reduce learning rate (and increase n_estimators accordingly), limit max_depth (3-6 is typical), increase min_child_weight, add subsample and colsample_bytree row/column sampling, and add L1/L2 regularization via reg_alpha and reg_lambda."
+  },
+  {
+    "question": "What is the AUC-ROC score and how do I interpret it?",
+    "ground_truth": "AUC-ROC measures the area under the ROC curve, which plots true positive rate vs false positive rate at all classification thresholds. A score of 0.5 means random performance, 1.0 means perfect classification. Values above 0.8 are generally considered good. It is threshold-independent and works well for imbalanced datasets."
+  },
+  {
+    "question": "When should I use Random Forest vs XGBoost?",
+    "ground_truth": "Random Forest is easier to tune (less sensitive to hyperparameters), more robust to outliers, and faster to train. XGBoost typically achieves higher accuracy with proper tuning. Start with Random Forest as a strong baseline, then try XGBoost if you need better performance and have time to tune."
+  },
+  {
+    "question": "What is train-test contamination in preprocessing?",
+    "ground_truth": "Train-test contamination occurs when preprocessing steps that depend on the full dataset (like scaling or imputation) are applied before the train-test split. This leaks test set statistics into training. Fix it by fitting all preprocessors only on training data and using sklearn Pipelines."
+  },
+  {
+    "question": "What is silhouette score in clustering?",
+    "ground_truth": "Silhouette score measures how similar each point is to its own cluster compared to the nearest other cluster. It ranges from -1 (wrong cluster) to 1 (perfect separation). Values above 0.5 indicate good cluster structure. It can be used to select the optimal number of clusters K."
+  },
+  {
+    "question": "How should I handle missing values in a machine learning pipeline?",
+    "ground_truth": "Common strategies include mean/median imputation for numeric features (median is more robust to outliers), mode imputation for categoricals, and model-based imputation for more accuracy. Always fit imputers only on training data to avoid leakage. Tree-based models can handle missing values natively without imputation."
+  }
+]

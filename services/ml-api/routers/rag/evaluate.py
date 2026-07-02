@@ -8,10 +8,13 @@ Metrics (all 0–1, higher is better):
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 import time
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -207,3 +210,63 @@ def rag_evaluate(req: EvalRequest) -> JSONResponse:
     }
 
     return JSONResponse({"aggregate": aggregate, "results": results})
+
+
+# ── Held-out eval-run endpoint ─────────────────────────────────────────────────
+
+_QA_PATH  = Path("/data/rag_eval_qa.json")
+_LOG_PATH = Path("/data/rag_eval_log.jsonl")
+_QA_LOCAL = Path(__file__).parent.parent.parent / "data" / "rag_eval_qa.json"
+
+
+class EvalRunRequest(BaseModel):
+    provider: str = _DEFAULT_PROVIDER
+    model: str = _DEFAULT_MODEL
+    user_key: Optional[str] = None
+    generate_answers: bool = True
+
+
+@router.post("/eval-run")
+def rag_eval_run(req: EvalRunRequest) -> JSONResponse:
+    """Run evaluation against the held-out QA set and append results to the log.
+
+    Loads rag_eval_qa.json from /data/ (HF Space) or falls back to the local
+    data/ directory. Appends a timestamped aggregate to rag_eval_log.jsonl.
+    """
+    qa_path = _QA_PATH if _QA_PATH.exists() else _QA_LOCAL
+    if not qa_path.exists():
+        return JSONResponse({"error": "rag_eval_qa.json not found."}, status_code=404)
+
+    try:
+        raw = json.loads(qa_path.read_text())
+        qa_pairs = [QAPair(**item) for item in raw]
+    except Exception as exc:
+        return JSONResponse({"error": f"Failed to load QA file: {exc}"}, status_code=500)
+
+    inner_req = EvalRequest(
+        qa_pairs=qa_pairs,
+        provider=req.provider,
+        model=req.model,
+        user_key=req.user_key,
+        generate_answers=req.generate_answers,
+    )
+    result: JSONResponse = rag_evaluate(inner_req)
+    data = json.loads(result.body)
+
+    log_entry = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "provider": req.provider,
+        "model": req.model,
+        "generate_answers": req.generate_answers,
+        **data.get("aggregate", {}),
+    }
+    try:
+        log_path = _LOG_PATH if _LOG_PATH.parent.exists() else (
+            _QA_LOCAL.parent / "rag_eval_log.jsonl"
+        )
+        with open(log_path, "a") as f:
+            f.write(json.dumps(log_entry) + "\n")
+    except Exception as exc:
+        logger.warning("Could not write eval log: %s", exc)
+
+    return JSONResponse({"aggregate": data.get("aggregate"), "logged": log_entry["ts"]})
