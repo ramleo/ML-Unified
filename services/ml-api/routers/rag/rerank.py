@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 # map onto an intuitive 0-100% scale, so filtering uses the RELATIVE gap
 # between the top match and the rest instead of a fixed absolute cutoff.
 _ABS_FLOOR = 0.01     # top chunk must clear this bare minimum, or return nothing
-_RELATIVE_RATIO = 0.5  # keep additional chunks scoring >= 50% of the top score
+_RELATIVE_RATIO = 0.3  # keep additional chunks scoring >= 30% of the top score
 
 
 def _sigmoid(x: float) -> float:
