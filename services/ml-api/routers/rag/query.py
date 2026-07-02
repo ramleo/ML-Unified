@@ -259,6 +259,16 @@ def _sse_generator(req: QueryRequest):
 @router.get("/health")
 def rag_health():
     """Return RAG subsystem status."""
+    import os
+    tavily_key = os.environ.get("TAVILY_API_KEY", "")
+    tavily_status = "not_set"
+    if tavily_key:
+        try:
+            from tavily import TavilyClient
+            TavilyClient(api_key=tavily_key).search("test", max_results=1)
+            tavily_status = "ok"
+        except Exception as exc:
+            tavily_status = f"error: {exc}"
     try:
         state = get_rag_state()
         return {
@@ -270,6 +280,7 @@ def rag_health():
             "jina_error": state.jina_error,
             "init_error": state.init_error,
             "initialized": state.initialized,
+            "tavily": tavily_status,
         }
     except RuntimeError:
         return {
@@ -279,6 +290,7 @@ def rag_health():
             "jina_ready": False,
             "jina_loading": False,
             "initialized": False,
+            "tavily": tavily_status,
         }
 
 

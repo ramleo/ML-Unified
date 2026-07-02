@@ -167,6 +167,18 @@ def _agent_generator(
     if not web_used:
         chunks = [c for c in chunks if float(c.get("score", 0)) >= 0.01]
 
+    # Grader may say "good" yet all chunks score below floor — try web as second chance
+    if not chunks and not web_fallback_tried:
+        web_fallback_tried = True
+        try:
+            from routers.rag.crag import web_search_fallback
+            web_chunks = web_search_fallback(final_state.get("final_query") or query)
+            if web_chunks:
+                chunks = web_chunks
+                web_used = True
+        except Exception as exc:
+            logger.warning("web fallback (post-filter) failed: %s", exc)
+
     # ── Emit sources ──────────────────────────────────────────────────────────
     seen_sources: list[str] = []
     for c in chunks:
@@ -180,6 +192,12 @@ def _agent_generator(
         }})
         if src and src not in seen_sources:
             seen_sources.append(src)
+
+    # No sources at all → emit Model placeholder so UI can render the badge
+    if not seen_sources:
+        yield _sse({"type": "source", "doc": {
+            "source": "", "text": "Response from model training knowledge.", "score": 0, "display_score": 0,
+        }})
 
     yield _sse({"type": "agent_step", "step": "generating"})
 
