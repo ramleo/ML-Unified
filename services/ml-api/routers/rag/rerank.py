@@ -21,7 +21,7 @@ def _sigmoid(x: float) -> float:
     return 1.0 / (1.0 + math.exp(-x))
 
 
-def rerank(query: str, chunks: list[dict], state, top_k: int = 8) -> list[dict]:
+def rerank(query: str, chunks: list[dict], state, top_k: int = 8, abs_floor: float | None = None) -> list[dict]:
     """Re-score candidate chunks with a cross-encoder, drop irrelevant ones, return top_k.
 
     Falls back to the input order (already RRF-ranked) if no reranker is loaded.
@@ -53,7 +53,8 @@ def rerank(query: str, chunks: list[dict], state, top_k: int = 8) -> list[dict]:
     top_debug = ", ".join(f"{c.get('source','?')}={s:.3f}" for c, s in scored[:10])
     logger.info("RERANK DEBUG query=%r top10=[%s]", query, top_debug)
 
-    if not scored or scored[0][1] < _ABS_FLOOR:
+    floor = _ABS_FLOOR if abs_floor is None else abs_floor
+    if not scored or scored[0][1] < floor:
         return []
 
     top_score = scored[0][1]

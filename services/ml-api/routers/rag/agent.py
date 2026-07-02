@@ -147,9 +147,12 @@ def _agent_generator(
         final_state.update(node_retrieve(final_state))
 
     # ── Web fallback (no chunks or grader said websearch) ─────────────────────
-    chunks = final_state.get("chunks", [])
+    kb_chunks = final_state.get("chunks", [])
     web_used = False
-    if not chunks or final_state.get("grade") == "websearch":
+    web_fallback_tried = False
+    chunks = kb_chunks
+    if not kb_chunks or final_state.get("grade") == "websearch":
+        web_fallback_tried = True
         try:
             from routers.rag.crag import web_search_fallback
             web_chunks = web_search_fallback(
@@ -242,6 +245,7 @@ def _agent_generator(
         "loops":            final_state.get("loop_count", 0),
         "rewritten":        final_state.get("final_query") != query,
         "web_fallback_used": web_used,
+        "low_confidence":   web_fallback_tried and not web_used,
         "latency_ms":       round((time.time() - t0) * 1000),
     })
 
