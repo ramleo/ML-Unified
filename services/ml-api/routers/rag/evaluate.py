@@ -214,8 +214,9 @@ def rag_evaluate(req: EvalRequest) -> JSONResponse:
 
 # ── Held-out eval-run endpoint ─────────────────────────────────────────────────
 
-_QA_PATH  = Path("/data/rag_eval_qa.json")
-_LOG_PATH = Path("/data/rag_eval_log.jsonl")
+_DATA_DIR = os.environ.get("DATA_DIR", "/data")
+_QA_PATH  = Path(_DATA_DIR) / "rag_eval_qa.json"
+_LOG_PATH = Path(_DATA_DIR) / "rag_eval_log.jsonl"
 _QA_LOCAL = Path(__file__).parent.parent.parent / "data" / "rag_eval_qa.json"
 
 

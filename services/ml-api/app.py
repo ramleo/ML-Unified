@@ -47,7 +47,8 @@ async def _lifespan(app: FastAPI):
             print("ERROR: _load() failed:", exc, flush=True)
             traceback.print_exc()
     threading.Thread(target=_bg, daemon=True).start()
-    threading.Thread(target=initialize_rag, args=("data/knowledge_base",), daemon=True).start()
+    kb_dir = os.path.join(os.environ.get("DATA_DIR", "/data"), "knowledge_base")
+    threading.Thread(target=initialize_rag, args=(kb_dir,), daemon=True).start()
     yield  # server binds and accepts requests immediately; models load in background
 
 

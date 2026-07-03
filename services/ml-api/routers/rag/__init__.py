@@ -8,6 +8,8 @@ from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
+_DATA_DIR = os.environ.get("DATA_DIR", "/data")
+
 
 @dataclass
 class RagState:
@@ -49,7 +51,7 @@ def initialize_jina(state: RagState) -> None:
 
         # Use persistent volume for cache so model survives Space restarts.
         # Fall back to home dir if /data isn't mounted/writable.
-        _persistent_cache = "/data/hf_cache"
+        _persistent_cache = os.path.join(_DATA_DIR, "hf_cache")
         try:
             os.makedirs(_persistent_cache, exist_ok=True)
             os.environ["HF_HOME"] = _persistent_cache
@@ -67,7 +69,7 @@ def initialize_jina(state: RagState) -> None:
             texts, task="retrieval.passage", batch_size=16,
             show_progress_bar=False, convert_to_numpy=True,
         ).tolist()
-        persist_dir = "data/chroma_db"
+        persist_dir = os.path.join(_DATA_DIR, "chroma_db")
         client = chromadb.PersistentClient(path=persist_dir)
         try:
             client.delete_collection("rag_kb_jina")
