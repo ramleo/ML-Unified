@@ -78,5 +78,125 @@
   {
     "question": "How should I handle missing values in a machine learning pipeline?",
     "ground_truth": "Common strategies include mean/median imputation for numeric features (median is more robust to outliers), mode imputation for categoricals, and model-based imputation for more accuracy. Always fit imputers only on training data to avoid leakage. Tree-based models can handle missing values natively without imputation."
+  },
+  {
+    "question": "What is the difference between stacking and voting ensembles?",
+    "ground_truth": "Voting combines predictions by majority vote (classification) or averaging (regression) with equal or weighted contributions. Stacking trains a meta-learner on the out-of-fold predictions of base models, allowing it to learn which models to trust for which inputs. Stacking is more powerful but harder to tune and more prone to overfitting."
+  },
+  {
+    "question": "How does Ridge regression differ from Lasso?",
+    "ground_truth": "Ridge (L2) adds a squared penalty on coefficients, shrinking them toward zero but never to exactly zero — it keeps all features. Lasso (L1) adds an absolute value penalty, which can shrink coefficients to exactly zero and performs automatic feature selection. ElasticNet combines both penalties."
+  },
+  {
+    "question": "When should I use SVM for classification?",
+    "ground_truth": "SVM works well on high-dimensional data with a clear margin of separation, such as text classification. It is less suitable for very large datasets (training is O(n²) to O(n³)) or when features need probabilistic outputs. Use the RBF kernel for non-linear problems and linear kernel for high-dimensional sparse data."
+  },
+  {
+    "question": "What is R-squared and when is it misleading?",
+    "ground_truth": "R-squared measures the proportion of variance in the target explained by the model. It ranges from 0 to 1 (can be negative for very bad models). It is misleading when comparing models with different numbers of features (use adjusted R²), or when the target has low variance (high R² does not mean low absolute error)."
+  },
+  {
+    "question": "What is the F1 score and when should I use it instead of accuracy?",
+    "ground_truth": "F1 is the harmonic mean of precision and recall. Use it instead of accuracy when classes are imbalanced, because accuracy can be high even if the minority class is always predicted wrong. F1-macro averages F1 per class equally; F1-weighted averages by class frequency."
+  },
+  {
+    "question": "What is target leakage in machine learning?",
+    "ground_truth": "Target leakage occurs when a feature that is directly derived from or causally influenced by the target variable is included in training. For example, using a post-event flag (like 'claim_filed') to predict whether a claim will be filed. These features are unavailable at prediction time and cause inflated training scores."
+  },
+  {
+    "question": "What is nested cross-validation and why is it used?",
+    "ground_truth": "Nested cross-validation uses an outer loop for unbiased performance estimation and an inner loop for hyperparameter tuning. The outer loop prevents leaking test set information into model selection. It is the correct approach when both tuning and evaluation must be done on the same dataset, at the cost of higher compute."
+  },
+  {
+    "question": "How do I choose eps for DBSCAN?",
+    "ground_truth": "Plot the k-nearest-neighbor distances (sorted) and look for the elbow — the point where distances jump sharply. Set eps just above the elbow. A good starting value for k is 2 * number_of_features. Too small eps creates many noise points; too large eps merges all clusters into one."
+  },
+  {
+    "question": "What is LightGBM's num_leaves parameter and how does it control complexity?",
+    "ground_truth": "num_leaves controls the maximum number of leaves in each tree. Because LightGBM grows leaf-wise, num_leaves is the primary complexity control rather than max_depth. A higher num_leaves increases model capacity but raises overfitting risk. Typical values are 31 (default) to 128; for small datasets keep it below 64."
+  },
+  {
+    "question": "What is SMOTE and how does it work?",
+    "ground_truth": "SMOTE (Synthetic Minority Over-sampling Technique) creates synthetic minority class samples by interpolating between existing minority samples and their k nearest neighbors. It is more effective than random oversampling because it adds new information rather than duplicating existing points. Always apply SMOTE only on the training set, never on the test set."
+  },
+  {
+    "question": "What is group k-fold cross-validation?",
+    "ground_truth": "Group k-fold ensures that all samples from the same group (e.g., same patient, same user, same store) appear in either training or validation, never both. This prevents data leakage when multiple samples from one entity are correlated. Use it when rows are not independent due to grouping structure."
+  },
+  {
+    "question": "What is the difference between precision and recall?",
+    "ground_truth": "Precision is the fraction of positive predictions that are actually positive (TP / (TP + FP)). Recall is the fraction of actual positives that were correctly identified (TP / (TP + FN)). High precision means few false alarms; high recall means few missed positives. There is typically a precision-recall tradeoff controlled by the classification threshold."
+  },
+  {
+    "question": "What is the Davies-Bouldin index in clustering?",
+    "ground_truth": "Davies-Bouldin index measures the average ratio of within-cluster scatter to between-cluster separation. Lower values indicate better clustering (more compact and well-separated clusters). Unlike silhouette score, it is cheaper to compute and does not require pairwise distances. Values close to 0 are ideal."
+  },
+  {
+    "question": "How does CatBoost handle categorical features internally?",
+    "ground_truth": "CatBoost uses ordered target statistics (a form of target encoding that prevents leakage by using only prior rows to compute statistics). It randomly permutes the dataset and computes the running mean of the target for each category. This avoids the target leakage that naive mean target encoding causes."
+  },
+  {
+    "question": "What is time series cross-validation and why can't I use standard k-fold?",
+    "ground_truth": "Standard k-fold shuffles data randomly, which causes future data to appear in training when past data is in validation — a form of temporal leakage. Time series CV uses an expanding or sliding window where training always precedes validation chronologically. sklearn's TimeSeriesSplit implements this correctly."
+  },
+  {
+    "question": "What is Gaussian Mixture Model clustering?",
+    "ground_truth": "GMM is a probabilistic clustering model that assumes data is generated from a mixture of Gaussian distributions. Unlike K-Means, it produces soft cluster assignments (probabilities) and can model elliptical clusters of different sizes and orientations. The number of components is selected using BIC or AIC. GMM is slower than K-Means but more flexible."
+  },
+  {
+    "question": "What subsample and colsample_bytree values should I use in XGBoost?",
+    "ground_truth": "subsample controls the fraction of training rows used per tree (typical range 0.6–0.9); colsample_bytree controls the fraction of features used per tree (typical range 0.6–0.9). Both add randomness that reduces overfitting, similar to Random Forest's bootstrapping. Values below 0.5 often hurt performance."
+  },
+  {
+    "question": "What is the Calinski-Harabasz score?",
+    "ground_truth": "The Calinski-Harabasz score (also called Variance Ratio Criterion) is the ratio of between-cluster dispersion to within-cluster dispersion. Higher values indicate better-defined, more compact and well-separated clusters. It is fast to compute and works well for convex clusters but may mislead for non-convex shapes."
+  },
+  {
+    "question": "When should I use repeated k-fold cross-validation?",
+    "ground_truth": "Use repeated k-fold when the dataset is small and a single k-fold run has high variance in the estimated score. Repeated k-fold runs standard k-fold multiple times with different random splits and averages the results. It gives a more stable performance estimate at the cost of more computation."
+  },
+  {
+    "question": "What is XGBoost's min_child_weight parameter?",
+    "ground_truth": "min_child_weight sets the minimum sum of instance weights (hessian) needed in a child node. Higher values prevent the algorithm from learning overly specific patterns — effectively pruning splits that cover too few samples. It is one of the most important regularization parameters in XGBoost, with typical values between 1 and 10."
+  },
+  {
+    "question": "How do I read a SHAP beeswarm plot?",
+    "ground_truth": "A beeswarm plot shows one dot per sample per feature. The x-axis is the SHAP value (impact on model output). Color indicates the feature value (red=high, blue=low). Features are sorted by mean absolute SHAP value. A spread of points far from zero means the feature has high impact; the color gradient shows the direction of that impact."
+  },
+  {
+    "question": "What are the typical hyperparameter ranges for LightGBM?",
+    "ground_truth": "Key LightGBM ranges: num_leaves 20–300, learning_rate 0.005–0.3, n_estimators 100–1000, min_child_samples 5–100, subsample 0.5–1.0, colsample_bytree 0.5–1.0, reg_alpha 0–5, reg_lambda 0–5. Start with num_leaves=31 and learning_rate=0.05, then tune num_leaves first as it has the largest impact."
+  },
+  {
+    "question": "What is hierarchical clustering and what linkage types are available?",
+    "ground_truth": "Hierarchical clustering builds a dendrogram by successively merging (agglomerative) or splitting (divisive) clusters. Linkage types: single (min distance between any two points — prone to chaining), complete (max distance — compact clusters), average (mean distance — balanced), Ward (minimizes total within-cluster variance — most commonly used for globular clusters)."
+  },
+  {
+    "question": "What is feature leakage through aggregation?",
+    "ground_truth": "Feature leakage via aggregation occurs when aggregate statistics (mean, count, etc.) computed over the full dataset are used as features. For example, computing mean purchase value per customer using all historical data and then joining it onto individual transactions — future transactions leak into past rows. Fix by computing aggregates using only data available up to each row's timestamp."
+  },
+  {
+    "question": "How does Optuna's TPE sampler differ from random search?",
+    "ground_truth": "TPE (Tree-structured Parzen Estimator) builds probabilistic models of good and bad hyperparameter regions based on past trials, and samples from the promising region more frequently. Random search samples uniformly regardless of past results. TPE typically finds better configurations in fewer trials, especially when the hyperparameter space has a small high-performance region."
+  },
+  {
+    "question": "What is the confusion matrix and how do I read it?",
+    "ground_truth": "A confusion matrix is a table comparing predicted vs actual class labels. For binary classification: true positives (predicted positive, actually positive), true negatives, false positives (predicted positive, actually negative), and false negatives. From it you derive precision (TP/(TP+FP)), recall (TP/(TP+FN)), and F1. Rows are actual, columns are predicted (or vice versa depending on convention)."
+  },
+  {
+    "question": "What is Extra Trees and how does it differ from Random Forest?",
+    "ground_truth": "Extra Trees (Extremely Randomized Trees) selects both the feature and the split threshold randomly rather than finding the optimal split threshold like Random Forest. This adds more randomness, which reduces variance further but increases bias slightly. Extra Trees trains faster than Random Forest and sometimes generalizes better on noisy datasets."
+  },
+  {
+    "question": "What is the log transform and when should I apply it?",
+    "ground_truth": "The log transform compresses right-skewed distributions (long positive tail) by taking log(x) or log(1+x) for zero-inclusive features. Apply it when a numeric feature spans several orders of magnitude or has a highly skewed histogram. It helps linear models but tree-based models are generally invariant to monotonic transforms."
+  },
+  {
+    "question": "What does subsample do in LightGBM vs XGBoost?",
+    "ground_truth": "In both LightGBM and XGBoost, subsample (also called bagging_fraction in LightGBM) controls the fraction of training samples randomly selected per tree. Values below 1.0 add randomness that reduces overfitting. In LightGBM you must also set bagging_freq > 0 to activate subsampling. The effect is similar across both frameworks."
+  },
+  {
+    "question": "What is mutual information for feature selection?",
+    "ground_truth": "Mutual information measures how much knowing a feature reduces uncertainty about the target. Unlike correlation, it captures non-linear relationships. sklearn's mutual_info_classif and mutual_info_regression implement it. It is a filter method — computed independently of any model — and works well as a first pass to eliminate irrelevant features before more expensive wrapper methods."
   }
 ]
