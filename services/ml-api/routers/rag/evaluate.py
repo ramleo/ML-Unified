@@ -317,7 +317,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 <p class="sub">Each point = one /rag/eval-run call &nbsp;|&nbsp; metrics 0–1, higher is better</p>
 <div class="wrap"><canvas id="ch"></canvas></div>
 <table id="tbl">
-  <thead><tr><th>#</th><th>Timestamp</th><th>N</th><th>precision</th><th>recall</th><th>faithfulness</th><th>relevancy</th></tr></thead>
+  <thead><tr><th>#</th><th>Timestamp</th><th>Model</th><th>N</th><th>precision</th><th>recall</th><th>faithfulness</th><th>relevancy</th></tr></thead>
   <tbody></tbody>
 </table>
 <script>
@@ -335,7 +335,7 @@ fetch("/rag/eval-history").then(r=>r.json()).then(data=>{
   const c=v=>v==null?"—":`<span class="${v>=.7?"good":v>=.4?"warn":"bad"}">${v.toFixed(3)}</span>`;
   const tb=document.querySelector("#tbl tbody");
   data.forEach((d,i)=>{
-    tb.innerHTML+=`<tr><td>${i+1}</td><td>${(d.ts||"").slice(0,19).replace("T"," ")}</td><td>${d.n??"-"}</td><td>${c(d.avg_context_precision)}</td><td>${c(d.avg_context_recall)}</td><td>${c(d.avg_faithfulness)}</td><td>${c(d.avg_answer_relevancy)}</td></tr>`;
+    tb.innerHTML+=`<tr><td>${i+1}</td><td>${(d.ts||"").slice(0,19).replace("T"," ")}</td><td style="color:#aaa;font-size:.72rem">${d.model??"-"}</td><td>${d.n??"-"}</td><td>${c(d.avg_context_precision)}</td><td>${c(d.avg_context_recall)}</td><td>${c(d.avg_faithfulness)}</td><td>${c(d.avg_answer_relevancy)}</td></tr>`;
   });
 });
 </script>
