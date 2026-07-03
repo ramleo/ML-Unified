@@ -19,7 +19,7 @@ from typing import Optional
 
 import numpy as np
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from routers.rag import get_rag_state
@@ -270,3 +270,80 @@ def rag_eval_run(req: EvalRunRequest) -> JSONResponse:
         logger.warning("Could not write eval log: %s", exc)
 
     return JSONResponse({"aggregate": data.get("aggregate"), "logged": log_entry["ts"]})
+
+
+# ── Eval history + dashboard ───────────────────────────────────────────────────
+
+def _read_log() -> list[dict]:
+    log_path = _LOG_PATH if _LOG_PATH.exists() else (_QA_LOCAL.parent / "rag_eval_log.jsonl")
+    if not log_path.exists():
+        return []
+    entries = []
+    for line in log_path.read_text().splitlines():
+        line = line.strip()
+        if line:
+            try:
+                entries.append(json.loads(line))
+            except Exception:
+                pass
+    return entries
+
+
+@router.get("/eval-history")
+def rag_eval_history() -> JSONResponse:
+    """Return all logged eval runs as JSON."""
+    return JSONResponse(_read_log())
+
+
+_DASHBOARD_HTML = """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>RAG Eval Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<style>
+  body{font-family:system-ui,sans-serif;background:#0f1117;color:#e0e0e0;margin:0;padding:24px}
+  h1{font-size:1.2rem;color:#a0c4ff;margin-bottom:4px}
+  p.sub{font-size:.8rem;color:#666;margin:0 0 24px}
+  .wrap{background:#1a1d27;border-radius:8px;padding:16px;max-width:860px}
+  table{border-collapse:collapse;font-size:.78rem;margin-top:24px;max-width:860px;width:100%}
+  th{text-align:left;color:#888;border-bottom:1px solid #333;padding:4px 10px}
+  td{padding:4px 10px;border-bottom:1px solid #222}
+  .good{color:#6fcf97}.warn{color:#f2c94c}.bad{color:#eb5757}
+</style>
+</head>
+<body>
+<h1>RAG Eval Dashboard</h1>
+<p class="sub">Each point = one /rag/eval-run call &nbsp;|&nbsp; metrics 0–1, higher is better</p>
+<div class="wrap"><canvas id="ch"></canvas></div>
+<table id="tbl">
+  <thead><tr><th>#</th><th>Timestamp</th><th>N</th><th>precision</th><th>recall</th><th>faithfulness</th><th>relevancy</th></tr></thead>
+  <tbody></tbody>
+</table>
+<script>
+const C={precision:"#eb5757",recall:"#6fcf97",faithfulness:"#a0c4ff",relevancy:"#f2c94c"};
+fetch("/rag/eval-history").then(r=>r.json()).then(data=>{
+  if(!data.length){document.querySelector(".wrap").textContent="No eval runs yet.";return;}
+  const labels=data.map((_,i)=>"Run "+(i+1));
+  const mk=(label,key,color)=>({label,data:data.map(d=>d[key]),borderColor:color,fill:false,borderWidth:2,tension:.3,pointRadius:4});
+  new Chart(document.getElementById("ch"),{type:"line",data:{labels,datasets:[
+    mk("context_precision","avg_context_precision",C.precision),
+    mk("context_recall","avg_context_recall",C.recall),
+    mk("faithfulness","avg_faithfulness",C.faithfulness),
+    mk("answer_relevancy","avg_answer_relevancy",C.relevancy),
+  ]},options:{scales:{y:{min:0,max:1,ticks:{color:"#888"},grid:{color:"#222"}},x:{ticks:{color:"#888"},grid:{color:"#222"}}},plugins:{legend:{labels:{color:"#ccc"}}}}});
+  const c=v=>v==null?"—":`<span class="${v>=.7?"good":v>=.4?"warn":"bad"}">${v.toFixed(3)}</span>`;
+  const tb=document.querySelector("#tbl tbody");
+  data.forEach((d,i)=>{
+    tb.innerHTML+=`<tr><td>${i+1}</td><td>${(d.ts||"").slice(0,19).replace("T"," ")}</td><td>${d.n??"-"}</td><td>${c(d.avg_context_precision)}</td><td>${c(d.avg_context_recall)}</td><td>${c(d.avg_faithfulness)}</td><td>${c(d.avg_answer_relevancy)}</td></tr>`;
+  });
+});
+</script>
+</body>
+</html>"""
+
+
+@router.get("/eval-dashboard", response_class=HTMLResponse)
+def rag_eval_dashboard():
+    """Render a Chart.js line chart of all eval runs."""
+    return HTMLResponse(_DASHBOARD_HTML)
