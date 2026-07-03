@@ -252,6 +252,8 @@ def _sse_generator(req: QueryRequest):
         "rerank_scores": [round(c.get("score", 0.0), 4) for c in chunks],
         "cache_hit": False,
         "web_fallback_used": web_fallback_used,
+        "expanded_queries": queries[1:],
+        "candidates_retrieved": len(candidates),
     })
 
 
