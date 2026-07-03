@@ -141,9 +141,9 @@ def _initialize_rag_inner(kb_dir: str) -> None:
     ).tolist()
 
     # ── Reranker (cross-encoder) ───────────────────────────────────────────────
-    logger.info("Loading CrossEncoder ms-marco-MiniLM-L-6-v2 …")
+    logger.info("Loading CrossEncoder ms-marco-MiniLM-L-12-v2 …")
     try:
-        _state.reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2", device="cpu")
+        _state.reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-12-v2", device="cpu")
     except Exception as exc:
         logger.warning("Reranker load failed, falling back to RRF-only ranking: %s", exc)
         _state.reranker = None
