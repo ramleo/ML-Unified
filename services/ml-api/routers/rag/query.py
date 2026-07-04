@@ -141,6 +141,10 @@ def _sse_generator(req: QueryRequest):
         query_emb = None
         cached = None
 
+    # Discard any stale cache entry that contains an error string
+    if cached and cached.get("full_text", "").startswith("[") and "error" in cached.get("full_text", "").lower():
+        cached = None
+
     if cached:
         for chunk in cached["chunks"]:
             yield _sse({
