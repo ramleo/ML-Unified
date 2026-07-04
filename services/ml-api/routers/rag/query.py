@@ -208,6 +208,7 @@ def _sse_generator(req: QueryRequest):
 
     # 4. Stream token events; collect full text for cache
     full_text_parts: list[str] = []
+    generation_failed = False
     try:
         if provider in ("groq", "openai"):
             token_iter = stream_groq_openai(provider, model, key, messages)
@@ -223,17 +224,20 @@ def _sse_generator(req: QueryRequest):
 
         for token in token_iter:
             if token:
+                # Provider error strings (e.g. "[Cohere error 429]") must not be cached
+                if token.startswith("[") and "error" in token.lower():
+                    generation_failed = True
                 full_text_parts.append(token)
                 yield _sse({"type": "token", "text": token})
 
     except Exception as exc:
         logger.exception("LLM streaming error: %s", exc)
-        yield _sse({"type": "error", "message": f"LLM error: {exc}"})
+        yield _sse({"type": "error", "message": f"Generation failed ({provider}/{model}): {exc}"})
         return
 
-    # 5. Store in semantic cache
+    # 5. Store in semantic cache — skip on provider errors to avoid caching error strings
     full_text = "".join(full_text_parts)
-    if query_emb is not None and full_text:
+    if query_emb is not None and full_text and not generation_failed:
         try:
             _cache_store(query_emb, full_text, seen_sources, chunks, state)
         except Exception as exc:
