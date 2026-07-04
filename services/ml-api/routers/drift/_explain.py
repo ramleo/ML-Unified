@@ -8,7 +8,7 @@ from typing import Any
 _PROVIDER_MODELS = {
     "groq":   "llama-3.3-70b-versatile",
     "gemini": "gemini-2.0-flash",
-    "cohere": "command-r-plus",
+    "cohere": "command-r-plus-08-2024",
 }
 
 _ENV_KEYS = {
