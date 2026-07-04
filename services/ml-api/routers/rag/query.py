@@ -94,16 +94,26 @@ def _cosine_sim(a: list[float], b: list[float]) -> float:
     return float(np.dot(va, vb) / denom) if denom > 0 else 0.0
 
 
-def _cache_lookup(query_emb: list[float], state) -> dict | None:
+def _ctx_hash(tool_context: str) -> str:
+    """Short hash of tool_context so cache entries are dataset-specific."""
+    import hashlib
+    return hashlib.md5(tool_context.strip().encode(), usedforsecurity=False).hexdigest()[:8] if tool_context.strip() else ""
+
+
+def _cache_lookup(query_emb: list[float], state, provider: str, ctx_hash: str) -> dict | None:
     best_score, best = 0.0, None
     for entry in state.semantic_cache:
+        if entry.get("provider") != provider:
+            continue
+        if entry.get("ctx_hash", "") != ctx_hash:
+            continue
         sim = _cosine_sim(query_emb, entry["embedding"])
         if sim > best_score:
             best_score, best = sim, entry
     return best if best_score >= _CACHE_THRESHOLD else None
 
 
-def _cache_store(query_emb: list[float], full_text: str, sources: list[str], chunks: list[dict], state) -> None:
+def _cache_store(query_emb: list[float], full_text: str, sources: list[str], chunks: list[dict], state, provider: str, ctx_hash: str = "") -> None:
     if len(state.semantic_cache) >= _CACHE_MAX:
         state.semantic_cache.pop(0)
     state.semantic_cache.append({
@@ -111,6 +121,8 @@ def _cache_store(query_emb: list[float], full_text: str, sources: list[str], chu
         "full_text": full_text,
         "sources": sources,
         "chunks": chunks,
+        "provider": provider,
+        "ctx_hash": ctx_hash,
     })
 
 
@@ -134,9 +146,10 @@ def _sse_generator(req: QueryRequest):
         return
 
     # 0. Semantic cache check (embed with MiniLM regardless of embedding_model setting)
+    ctx_hash = _ctx_hash(req.tool_context)
     try:
         query_emb = state.embedding_fn([req.query])[0]
-        cached = _cache_lookup(query_emb, state)
+        cached = _cache_lookup(query_emb, state, provider, ctx_hash)
     except Exception:
         query_emb = None
         cached = None
@@ -215,7 +228,8 @@ def _sse_generator(req: QueryRequest):
     generation_failed = False
     try:
         if provider in ("groq", "openai"):
-            token_iter = stream_groq_openai(provider, model, key, messages)
+            full_messages = [{"role": "system", "content": system_prompt}] + messages if system_prompt else messages
+            token_iter = stream_groq_openai(provider, model, key, full_messages)
         elif provider == "claude":
             token_iter = stream_claude(model, key, messages, system_prompt)
         elif provider == "gemini":
@@ -243,7 +257,7 @@ def _sse_generator(req: QueryRequest):
     full_text = "".join(full_text_parts)
     if query_emb is not None and full_text and not generation_failed:
         try:
-            _cache_store(query_emb, full_text, seen_sources, chunks, state)
+            _cache_store(query_emb, full_text, seen_sources, chunks, state, provider, ctx_hash)
         except Exception as exc:
             logger.warning("Cache store failed: %s", exc)
 
