@@ -74,6 +74,7 @@ def record_snapshot(model_id: str, result: dict, label: str | None = None) -> No
         "features": [
             {
                 "name":        f["name"],
+                "label":       f.get("label", f["name"]),
                 "drift_score": f["drift_score"],
                 "drift_level": f["drift_level"],
                 "psi":         f.get("psi", 0.0),

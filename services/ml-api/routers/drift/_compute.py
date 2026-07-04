@@ -20,6 +20,7 @@ def compute_drift(
 
     features: list[dict] = []
     used_pipeline_baseline = False
+    _corr_vals: dict[str, tuple] = {}
 
     for field in schema.get("fields", []):
         name  = field["name"]
@@ -32,12 +33,15 @@ def compute_drift(
             if feat["name"] in baseline:
                 used_pipeline_baseline = True
             features.append(feat)
+            cv = [float(r[name]) for r in rows if name in r and r[name] is not None and is_number(r[name])]
+            if len(cv) >= 5:
+                _corr_vals[name] = (field.get("label", name), cv)
 
         elif ftype == "select":
             features.append(_process_categorical(field, name, rows, n_recent))
 
     overall = max((f["drift_score"] for f in features), default=0.0)
-    return {
+    result = {
         "n_recent":      n_recent,
         "overall_score": round(overall, 4),
         "overall_level": level(overall, 0.35, 0.65),
@@ -45,6 +49,9 @@ def compute_drift(
         "source":        "predictions",
         "features":      features,
     }
+    if len(_corr_vals) >= 2:
+        result["correlation"] = _build_correlation(_corr_vals)
+    return result
 
 
 def _process_numeric(
@@ -108,7 +115,25 @@ def _process_numeric(
         feat["ks_pvalue"] = round(float(ks_pval), 4)
     if hist:
         feat["histogram"] = hist
+    if len(vals) >= 5:
+        _pcts = [5, 25, 50, 75, 95]
+        feat["recent_pct"] = [round(float(np.percentile(vals, p)), 4) for p in _pcts]
+        _z = [-1.6449, -0.6745, 0.0, 0.6745, 1.6449]
+        feat["ref_pct"] = [round(ref_mean + z * ref_std, 4) for z in _z]
     return feat
+
+
+def _build_correlation(vals_map: dict) -> dict:
+    keys = list(vals_map.keys())
+    labels = [vals_map[k][0] for k in keys]
+    seqs = [np.array(vals_map[k][1], dtype=float) for k in keys]
+    min_n = min(len(s) for s in seqs)
+    data = np.stack([s[:min_n] for s in seqs])
+    corr = np.corrcoef(data)
+    return {
+        "features": labels,
+        "matrix": [[round(float(corr[i][j]), 3) for j in range(len(keys))] for i in range(len(keys))],
+    }
 
 
 def _process_categorical(
