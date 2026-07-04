@@ -71,7 +71,7 @@ def stream_gemini(model: str, key: str, messages: list[dict], system: str):
                         continue
     except httpx.HTTPStatusError as exc:
         logger.error("Gemini HTTP error: %s", exc.response.status_code)
-        yield f"[Gemini error {exc.response.status_code}]"
+        raise
 
 
 def stream_cohere(model: str, key: str, messages: list[dict], system: str):
@@ -114,7 +114,7 @@ def stream_cohere(model: str, key: str, messages: list[dict], system: str):
                         continue
     except httpx.HTTPStatusError as exc:
         logger.error("Cohere HTTP error: %s", exc.response.status_code)
-        yield f"[Cohere error {exc.response.status_code}]"
+        raise
 
 
 def complete(provider: str, model: str, key: str, messages: list[dict], system: str = "") -> str:
