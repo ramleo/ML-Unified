@@ -5,7 +5,8 @@ import io
 from typing import Optional
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, File
+from fastapi.responses import StreamingResponse
 
 from routers.drift._state import (
     record_input, record_snapshot,
@@ -76,3 +77,23 @@ def get_drift_history(model_id: str):
     if model_id not in MODELS:
         raise HTTPException(404, "Model not found")
     return {"history": get_history(model_id)}
+
+
+@router.post("/{model_id}/explain")
+async def explain_drift(
+    model_id: str,
+    request: Request,
+    provider: str = Query(default="groq", description="LLM provider: groq | gemini | cohere"),
+):
+    from app import MODELS  # noqa: PLC0415
+    if model_id not in MODELS:
+        raise HTTPException(404, "Model not found")
+
+    body = await request.json()
+
+    from routers.drift._explain import explain_stream  # noqa: PLC0415
+    return StreamingResponse(
+        explain_stream(body, provider),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
