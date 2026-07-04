@@ -6,9 +6,11 @@ import os
 from typing import Any
 
 _PROVIDER_MODELS = {
-    "groq":   "llama-3.3-70b-versatile",
-    "gemini": "gemini-2.0-flash",
-    "cohere": "command-a-03-2025",
+    "groq":             "llama-3.3-70b-versatile",
+    "gemini":           "gemini-2.5-flash",
+    "gemini-2.5-flash": "gemini-2.5-flash",
+    "gemini-3.5-flash": "gemini-3.5-flash",
+    "cohere":           "command-a-03-2025",
 }
 
 _ENV_KEYS = {
@@ -84,7 +86,8 @@ def explain_stream(result: dict, provider: str):
 
     provider = (provider or "groq").lower()
     model    = _PROVIDER_MODELS.get(provider, "llama-3.3-70b-versatile")
-    env_var  = _ENV_KEYS.get(provider, "")
+    family   = "gemini" if provider.startswith("gemini") else provider
+    env_var  = _ENV_KEYS.get(family, "")
     key      = os.environ.get(env_var, "")
 
     if not key:
@@ -99,11 +102,11 @@ def explain_stream(result: dict, provider: str):
     messages = [{"role": "user", "content": prompt}]
 
     try:
-        if provider == "gemini":
+        if family == "gemini":
             gen = stream_gemini(model, key, messages, _SYSTEM)
-        elif provider == "cohere":
+        elif family == "cohere":
             gen = stream_cohere(model, key, messages, _SYSTEM)
-        else:
+        else:  # groq
             full_msgs = [{"role": "system", "content": _SYSTEM}] + messages
             gen = stream_groq_openai("groq", model, key, full_msgs)
 
