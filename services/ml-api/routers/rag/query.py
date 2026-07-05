@@ -139,10 +139,17 @@ def _determine_answer_source(chunks: list[dict], web_fallback_used: bool, has_da
     return "knowledge_base"
 
 
-def _determine_confidence(chunks: list[dict], answer_source: str) -> str:
+def _determine_confidence(chunks: list[dict], answer_source: str, has_dataset: bool = False) -> str:
     if answer_source in ("dataset", "none"):
         return "high"
     top_score = chunks[0].get("score", 0.0) if chunks else 0.0
+    # When dataset is also loaded, LLM has extra grounding — bump one tier
+    if has_dataset:
+        if top_score >= 0.3:
+            return "high"
+        if top_score >= 0.05:
+            return "medium"
+        return "medium"
     if top_score >= 0.5:
         return "high"
     if top_score >= 0.15:
@@ -232,7 +239,7 @@ def _sse_generator(req: QueryRequest):
             low_confidence = False  # we now have something to work with
 
     answer_source = _determine_answer_source(chunks, web_fallback_used, has_dataset)
-    confidence = _determine_confidence(chunks, answer_source)
+    confidence = _determine_confidence(chunks, answer_source, has_dataset)
 
     # 2b. Stream source events
     seen_sources: list[str] = []

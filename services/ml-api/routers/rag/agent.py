@@ -209,7 +209,8 @@ def _agent_generator(
                     "loops": final_state.get("loop_count", 0),
                     "rewritten": final_state.get("final_query") != query,
                     "web_fallback_used": web_used,
-                    "latency_ms": round((time.time() - t0) * 1000)})
+                    "latency_ms": round((time.time() - t0) * 1000),
+                    "answer_source": "none", "confidence": "low"})
         return
 
     # ── Stream LLM response ───────────────────────────────────────────────────
@@ -262,14 +263,25 @@ def _agent_generator(
                     "message": f"Generation failed ({provider}/{model}): {exc}"})
         return
 
+    has_dataset = bool(tool_context.strip())
+    from routers.rag.query import _determine_answer_source, _determine_confidence
+    answer_source = _determine_answer_source(chunks, web_used, has_dataset)
+    confidence = _determine_confidence(chunks, answer_source, has_dataset)
+    final_q = final_state.get("final_query") or query
+    expanded = [final_q] if final_q != query else []
+
     yield _sse({
-        "type":             "done",
-        "sources":          seen_sources,
-        "loops":            final_state.get("loop_count", 0),
-        "rewritten":        final_state.get("final_query") != query,
-        "web_fallback_used": web_used,
-        "low_confidence":   web_fallback_tried and not web_used,
-        "latency_ms":       round((time.time() - t0) * 1000),
+        "type":               "done",
+        "sources":            seen_sources,
+        "loops":              final_state.get("loop_count", 0),
+        "rewritten":          final_state.get("final_query") != query,
+        "web_fallback_used":  web_used,
+        "low_confidence":     web_fallback_tried and not web_used,
+        "latency_ms":         round((time.time() - t0) * 1000),
+        "expanded_queries":   expanded,
+        "candidates_retrieved": len(chunks),
+        "answer_source":      answer_source,
+        "confidence":         confidence,
     })
 
 # ── Request schema + endpoint ──────────────────────────────────────────────────
