@@ -101,7 +101,7 @@ def _sse(obj: dict) -> str:
 
 def _agent_generator(
     query: str, tool_context: str, history: list,
-    provider: str, model: str, user_key: str, session_id: str = "",
+    provider: str, model: str, user_key: str, session_id: str = "", force_web: bool = False,
 ):
     t0 = time.time()
 
@@ -153,7 +153,7 @@ def _agent_generator(
     web_used = False
     web_fallback_tried = False
     chunks = kb_chunks
-    if not kb_chunks or final_state.get("grade") == "websearch":
+    if not kb_chunks or final_state.get("grade") == "websearch" or force_web:
         web_fallback_tried = True
         try:
             from routers.rag.crag import web_search_fallback
@@ -294,6 +294,7 @@ class AgentRequest(BaseModel):
     model:        str = "gemini-2.5-flash"
     user_key:     Optional[str] = None
     session_id:   str = ""
+    force_web:    bool = False
 
 
 @router.post("/agent")
@@ -319,6 +320,7 @@ def rag_agent(req: AgentRequest):
             model=req.model,
             user_key=user_key,
             session_id=req.session_id,
+            force_web=req.force_web,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},

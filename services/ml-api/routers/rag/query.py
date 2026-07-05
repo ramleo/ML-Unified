@@ -50,6 +50,7 @@ class QueryRequest(BaseModel):
     user_key: Optional[str] = None
     embedding_model: str = "minilm"  # "minilm" | "jina"
     session_id: str = ""
+    force_web: bool = False
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -228,10 +229,9 @@ def _sse_generator(req: QueryRequest):
     top_raw = chunks[0].get("score", 0.0) if chunks else 0.0
     low_confidence = not chunks or top_raw < 0.05
 
-    # 2a. CRAG: if confidence is low AND no dataset loaded, supplement with web search
-    # When a dataset is loaded, tool_context already gives the LLM exact data — don't override with web.
+    # 2a. CRAG: fire when confidence is low and no dataset, OR when user forces web override.
     web_fallback_used = False
-    if low_confidence and not has_dataset:
+    if (low_confidence and not has_dataset) or req.force_web:
         web_chunks = web_search_fallback(req.query)
         if web_chunks:
             chunks = chunks + web_chunks
