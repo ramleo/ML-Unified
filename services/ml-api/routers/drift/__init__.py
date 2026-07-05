@@ -64,8 +64,7 @@ async def upload_drift(
 
     file_hash = hashlib.sha256(content).hexdigest()
     prev_hash = get_previous_version_hash(model_id)
-    if prev_hash and prev_hash == file_hash:
-        raise HTTPException(409, "Identical file already uploaded as the previous version — no new version created.")
+    is_duplicate = prev_hash and prev_hash == file_hash
 
     m    = MODELS[model_id]
     rows = df.to_dict(orient="records")
@@ -93,8 +92,12 @@ async def upload_drift(
 
     # Save this batch as a new version
     batch_stats = extract_batch_stats(m["schema"], rows)
-    version_entry = save_version(model_id, label, batch_stats, file_hash=file_hash)
-    result["version_num"] = version_entry["version"]
+    if not is_duplicate:
+        version_entry = save_version(model_id, label, batch_stats, file_hash=file_hash)
+        result["version_num"] = version_entry["version"]
+    else:
+        vers = get_versions(model_id)
+        result["version_num"] = vers[-1]["version"] if vers else None
 
     record_snapshot(model_id, result, label=label)
     return result
