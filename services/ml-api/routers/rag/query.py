@@ -130,15 +130,14 @@ def _cache_store(query_emb: list[float], full_text: str, sources: list[str], chu
 
 
 def _determine_answer_source(chunks: list[dict], web_fallback_used: bool, has_dataset: bool) -> str:
+    if web_fallback_used:
+        return "web"
     if not chunks:
         return "dataset" if has_dataset else "none"
-    top = chunks[0]
-    if str(top.get("source", "")).startswith("web:"):
-        return "web"
-    if top.get("uploaded"):
+    if chunks[0].get("uploaded"):
         return "uploaded_doc"
     if has_dataset:
-        return "dataset"  # dataset is primary; KB chunks were supplementary context
+        return "dataset"
     return "knowledge_base"
 
 
@@ -238,7 +237,7 @@ def _sse_generator(req: QueryRequest):
     if (low_confidence and not has_dataset) or req.force_web:
         web_chunks = web_search_fallback(req.query)
         if web_chunks:
-            chunks = chunks + web_chunks
+            chunks = web_chunks if req.force_web else chunks + web_chunks
             web_fallback_used = True
             low_confidence = False  # we now have something to work with
 
