@@ -6,14 +6,17 @@ import os
 import time
 from collections import defaultdict, deque
 
-_DATA_DIR     = os.path.join(os.path.dirname(__file__), "..", "..", "data")
-_BUFFER_FILE  = os.path.join(_DATA_DIR, "drift_buffer.json")
-_HISTORY_FILE = os.path.join(_DATA_DIR, "drift_history.json")
-_HISTORY_MAX  = 100
-_TREND_WINDOW = 20
+_DATA_DIR        = os.path.join(os.path.dirname(__file__), "..", "..", "data")
+_BUFFER_FILE     = os.path.join(_DATA_DIR, "drift_buffer.json")
+_HISTORY_FILE    = os.path.join(_DATA_DIR, "drift_history.json")
+_VERSIONS_FILE   = os.path.join(_DATA_DIR, "drift_versions.json")
+_HISTORY_MAX     = 100
+_TREND_WINDOW    = 20
 
 _recent:          dict[str, deque] = defaultdict(lambda: deque(maxlen=200))
 _history:         dict[str, list]  = defaultdict(list)
+# versions[model_id] = list of {version, ts, label, stats:{col->{mean,std,source}}}
+_versions:        dict[str, list]  = defaultdict(list)
 
 
 def _ensure_data_dir() -> None:
@@ -39,6 +42,14 @@ def load_all() -> None:
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         pass
 
+    try:
+        with open(_VERSIONS_FILE) as f:
+            raw = json.load(f)
+        for mid, vers in raw.items():
+            _versions[mid] = vers
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        pass
+
 
 def save_buffer() -> None:
     try:
@@ -56,6 +67,41 @@ def save_history() -> None:
             json.dump(dict(_history), f)
     except OSError:
         pass
+
+
+def save_versions() -> None:
+    try:
+        _ensure_data_dir()
+        with open(_VERSIONS_FILE, "w") as f:
+            json.dump(dict(_versions), f)
+    except OSError:
+        pass
+
+
+def save_version(model_id: str, label: str | None, stats: dict) -> dict:
+    """Append a new batch version for model_id. Returns the saved version entry."""
+    existing = _versions.get(model_id, [])
+    # V1 is reserved for training baseline (version_num=1); batches start at 2
+    next_num = max((v["version"] for v in existing), default=1) + 1
+    entry = {
+        "version":  next_num,
+        "ts":       int(time.time()),
+        "label":    label or f"Batch {next_num - 1}",
+        "stats":    stats,
+    }
+    _versions[model_id].append(entry)
+    save_versions()
+    return entry
+
+
+def get_versions(model_id: str) -> list:
+    return list(_versions.get(model_id, []))
+
+
+def get_previous_version_stats(model_id: str) -> dict | None:
+    """Return stats of the most recent saved version, or None if none exist."""
+    vers = _versions.get(model_id, [])
+    return vers[-1]["stats"] if vers else None
 
 
 def record_input(model_id: str, fields: dict) -> None:

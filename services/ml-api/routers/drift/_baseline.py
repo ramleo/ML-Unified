@@ -1,5 +1,7 @@
-"""Extract training baseline stats from fitted sklearn pipeline."""
+"""Extract training baseline stats from fitted sklearn pipeline, and batch stats for versioning."""
 from __future__ import annotations
+
+import numpy as np
 
 _baseline_cache: dict[str, dict] = {}
 
@@ -67,3 +69,30 @@ def _step(transformer, name):
     if hasattr(transformer, "named_steps"):
         return transformer.named_steps.get(name)
     return None
+
+
+def extract_batch_stats(schema: dict, rows: list[dict]) -> dict:
+    """Compute mean/std per numeric column from a batch of rows (for version storage)."""
+    stats: dict = {}
+    skip = set(schema.get("id_cols", [])) | set(schema.get("ensure_cols", []))
+    for field in schema.get("fields", []):
+        name  = field["name"]
+        ftype = field.get("type")
+        if name in skip or ftype != "number":
+            continue
+        vals = [float(r[name]) for r in rows if name in r and r[name] is not None]
+        if len(vals) < 2:
+            continue
+        arr = np.array(vals, dtype=np.float32)
+        stats[name] = {
+            "mean":   float(arr.mean()),
+            "std":    max(float(arr.std()), 1e-9),
+            "source": "batch",
+        }
+    return stats
+
+
+def baseline_from_version_stats(version_stats: dict) -> dict:
+    """Convert stored version stats into the same format as get_baseline() output."""
+    return {col: {"mean": s["mean"], "std": s["std"], "source": s["source"]}
+            for col, s in version_stats.items()}
