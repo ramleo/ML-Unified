@@ -113,7 +113,7 @@ def _cache_lookup(query_emb: list[float], state, provider: str, ctx_hash: str) -
     return best if best_score >= _CACHE_THRESHOLD else None
 
 
-def _cache_store(query_emb: list[float], full_text: str, sources: list[str], chunks: list[dict], state, provider: str, ctx_hash: str = "") -> None:
+def _cache_store(query_emb: list[float], full_text: str, sources: list[str], chunks: list[dict], state, provider: str, ctx_hash: str = "", answer_source: str = "knowledge_base", confidence: str = "medium") -> None:
     if len(state.semantic_cache) >= _CACHE_MAX:
         state.semantic_cache.pop(0)
     state.semantic_cache.append({
@@ -123,7 +123,31 @@ def _cache_store(query_emb: list[float], full_text: str, sources: list[str], chu
         "chunks": chunks,
         "provider": provider,
         "ctx_hash": ctx_hash,
+        "answer_source": answer_source,
+        "confidence": confidence,
     })
+
+
+def _determine_answer_source(chunks: list[dict], web_fallback_used: bool, has_dataset: bool) -> str:
+    if not chunks:
+        return "dataset" if has_dataset else "none"
+    top = chunks[0]
+    if str(top.get("source", "")).startswith("web:"):
+        return "web"
+    if top.get("uploaded"):
+        return "uploaded_doc"
+    return "knowledge_base"
+
+
+def _determine_confidence(chunks: list[dict], answer_source: str) -> str:
+    if answer_source in ("dataset", "none"):
+        return "high"
+    top_score = chunks[0].get("score", 0.0) if chunks else 0.0
+    if top_score >= 0.5:
+        return "high"
+    if top_score >= 0.15:
+        return "medium"
+    return "low"
 
 
 # ── SSE generator ──────────────────────────────────────────────────────────────
@@ -144,6 +168,8 @@ def _sse_generator(req: QueryRequest):
     if not key:
         yield _sse({"type": "error", "message": f"No API key for provider '{provider}'."})
         return
+
+    has_dataset = bool(req.tool_context.strip())
 
     # 0. Semantic cache check (embed with MiniLM regardless of embedding_model setting)
     ctx_hash = _ctx_hash(req.tool_context)
@@ -181,6 +207,8 @@ def _sse_generator(req: QueryRequest):
             "chunks_retrieved": len(cached["chunks"]),
             "rerank_scores": [round(c.get("score", 0.0), 4) for c in cached["chunks"]],
             "cache_hit": True,
+            "answer_source": cached.get("answer_source", "knowledge_base"),
+            "confidence": cached.get("confidence", "medium"),
         })
         return
 
@@ -193,14 +221,18 @@ def _sse_generator(req: QueryRequest):
     top_raw = chunks[0].get("score", 0.0) if chunks else 0.0
     low_confidence = not chunks or top_raw < 0.05
 
-    # 2a. CRAG: if confidence is low, supplement with web search before streaming
+    # 2a. CRAG: if confidence is low AND no dataset loaded, supplement with web search
+    # When a dataset is loaded, tool_context already gives the LLM exact data — don't override with web.
     web_fallback_used = False
-    if low_confidence:
+    if low_confidence and not has_dataset:
         web_chunks = web_search_fallback(req.query)
         if web_chunks:
             chunks = chunks + web_chunks
             web_fallback_used = True
             low_confidence = False  # we now have something to work with
+
+    answer_source = _determine_answer_source(chunks, web_fallback_used, has_dataset)
+    confidence = _determine_confidence(chunks, answer_source)
 
     # 2b. Stream source events
     seen_sources: list[str] = []
@@ -257,7 +289,7 @@ def _sse_generator(req: QueryRequest):
     full_text = "".join(full_text_parts)
     if query_emb is not None and full_text and not generation_failed:
         try:
-            _cache_store(query_emb, full_text, seen_sources, chunks, state, provider, ctx_hash)
+            _cache_store(query_emb, full_text, seen_sources, chunks, state, provider, ctx_hash, answer_source, confidence)
         except Exception as exc:
             logger.warning("Cache store failed: %s", exc)
 
@@ -276,6 +308,8 @@ def _sse_generator(req: QueryRequest):
         "web_fallback_used": web_fallback_used,
         "expanded_queries": queries[1:],
         "candidates_retrieved": len(candidates),
+        "answer_source": answer_source,
+        "confidence": confidence,
     })
 
 
