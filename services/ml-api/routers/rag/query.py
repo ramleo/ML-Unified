@@ -137,6 +137,8 @@ def _determine_answer_source(chunks: list[dict], web_fallback_used: bool, has_da
         return "web"
     if top.get("uploaded"):
         return "uploaded_doc"
+    if has_dataset:
+        return "dataset"  # dataset is primary; KB chunks were supplementary context
     return "knowledge_base"
 
 
@@ -188,8 +190,10 @@ def _sse_generator(req: QueryRequest):
         query_emb = None
         cached = None
 
-    # Discard any stale cache entry that contains an error string
+    # Discard stale error entries or bypass cache when force_web is active
     if cached and cached.get("full_text", "").startswith("[") and "error" in cached.get("full_text", "").lower():
+        cached = None
+    if req.force_web:
         cached = None
 
     if cached:
