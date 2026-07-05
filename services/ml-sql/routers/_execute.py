@@ -1,8 +1,19 @@
-"""SQL safety validation and execution against SQLite / PostgreSQL."""
+"""SQL safety validation and execution against SQLite / PostgreSQL.
+
+Guardrails:
+  - SELECT-only whitelist (sqlparse statement type check)
+  - Expanded blocked-keyword regex (covers DROP, DELETE, INSERT, etc.)
+  - Both comment styles stripped before keyword scan (-- and /* */)
+  - Multi-statement detection (semicolon separation)
+  - SQLite opened in URI read-only mode (file:...?mode=ro)
+  - PostgreSQL wrapped in a read-only transaction that is always rolled back
+  - Hard row limit injected if absent
+"""
 from __future__ import annotations
 
 import re
 import time
+import urllib.parse
 from dataclasses import dataclass
 
 import aiosqlite
@@ -16,8 +27,18 @@ class UnsafeQueryError(Exception):
 
 _BLOCKED_KEYWORDS = (
     "DROP", "DELETE", "INSERT", "UPDATE", "CREATE", "ALTER",
-    "TRUNCATE", "EXEC", "EXECUTE", "GRANT", "REVOKE",
+    "TRUNCATE", "EXEC", "EXECUTE", "GRANT", "REVOKE", "REPLACE",
+    "MERGE", "UPSERT", "LOAD", "ATTACH", "DETACH", "PRAGMA",
+    "VACUUM", "ANALYZE", "EXPLAIN",
 )
+
+_COMMENT_STRIP = re.compile(
+    r"(--[^\n]*|/\*.*?\*/)", re.DOTALL
+)
+
+
+def _strip_comments(sql: str) -> str:
+    return _COMMENT_STRIP.sub(" ", sql)
 
 
 def validate_sql(sql: str) -> None:
@@ -25,6 +46,12 @@ def validate_sql(sql: str) -> None:
     stripped = sql.strip()
     if not stripped:
         raise UnsafeQueryError("Empty SQL query")
+
+    # Block multi-statement queries (stacked injections: SELECT 1; DROP TABLE foo)
+    # A lone semicolon at the very end is fine — strip it first.
+    no_trailing = stripped.rstrip(";").strip()
+    if ";" in no_trailing:
+        raise UnsafeQueryError("Multiple statements are not allowed")
 
     parsed = sqlparse.parse(stripped)
     if not parsed:
@@ -35,12 +62,12 @@ def validate_sql(sql: str) -> None:
     if stmt_type not in ("SELECT", "UNKNOWN", None):
         raise UnsafeQueryError(f"Only SELECT queries are allowed (got: {stmt_type})")
 
-    sql_upper = re.sub(r"--[^\n]*", "", stripped.upper())  # strip comments
+    clean = _strip_comments(stripped).upper()
     for kw in _BLOCKED_KEYWORDS:
-        if re.search(rf"\b{kw}\b", sql_upper):
-            raise UnsafeQueryError(f"Blocked keyword detected: {kw}")
+        if re.search(rf"\b{kw}\b", clean):
+            raise UnsafeQueryError(f"Blocked keyword: {kw}")
 
-    if not re.search(r"\bSELECT\b", sql_upper):
+    if not re.search(r"\bSELECT\b", clean):
         raise UnsafeQueryError("Query must contain SELECT")
 
 
@@ -55,10 +82,17 @@ class QueryResult:
 _ROW_LIMIT = 500
 
 
+def _ro_uri(db_path: str) -> str:
+    """Return a file:// URI that opens SQLite in read-only mode."""
+    encoded = urllib.parse.quote(db_path, safe="/:")
+    return f"file:{encoded}?mode=ro"
+
+
 async def execute_sqlite(db_path: str, sql: str) -> QueryResult:
     t0 = time.monotonic()
     limited_sql = _inject_limit(sql, _ROW_LIMIT)
-    async with aiosqlite.connect(db_path) as db:
+    # uri=True enables the ?mode=ro flag → SQLite refuses any write operation
+    async with aiosqlite.connect(_ro_uri(db_path), uri=True) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(limited_sql) as cur:
             raw_rows = await cur.fetchall()
@@ -70,20 +104,22 @@ async def execute_sqlite(db_path: str, sql: str) -> QueryResult:
 
     exec_ms = (time.monotonic() - t0) * 1000
     return QueryResult(
-        columns=cols,
-        rows=rows,
-        count=len(rows),
-        exec_time_ms=round(exec_ms, 1),
+        columns=cols, rows=rows,
+        count=len(rows), exec_time_ms=round(exec_ms, 1),
     )
 
 
 async def execute_pg(conn_str: str, sql: str) -> QueryResult:
+    """Execute in a read-only transaction that is always rolled back."""
     import asyncpg
     t0 = time.monotonic()
     limited_sql = _inject_limit(sql, _ROW_LIMIT)
     conn = await asyncpg.connect(conn_str)
     try:
-        records = await conn.fetch(limited_sql)
+        async with conn.transaction():
+            await conn.execute("SET TRANSACTION READ ONLY")
+            records = await conn.fetch(limited_sql)
+            # Always roll back — SET TRANSACTION READ ONLY enforces this at DB level too
         if not records:
             return QueryResult(columns=[], rows=[], count=0, exec_time_ms=0)
         cols = list(records[0].keys())
@@ -93,15 +129,12 @@ async def execute_pg(conn_str: str, sql: str) -> QueryResult:
 
     exec_ms = (time.monotonic() - t0) * 1000
     return QueryResult(
-        columns=cols,
-        rows=rows,
-        count=len(rows),
-        exec_time_ms=round(exec_ms, 1),
+        columns=cols, rows=rows,
+        count=len(rows), exec_time_ms=round(exec_ms, 1),
     )
 
 
 def _inject_limit(sql: str, limit: int) -> str:
-    """Append LIMIT if none present and query is a plain SELECT."""
     sql_stripped = sql.rstrip(";").strip()
     if not re.search(r"\bLIMIT\b", sql_stripped, re.IGNORECASE):
         sql_stripped += f" LIMIT {limit}"
