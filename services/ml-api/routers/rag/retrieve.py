@@ -47,6 +47,7 @@ def dense_retrieve(query_embedding: list[float], state, k: int = 50, use_jina: b
             "source": meta.get("source", ""),
             "score": float(1.0 - dist),   # cosine similarity
             "id": rid,
+            "uploaded": bool(meta.get("uploaded", False)),
         })
 
     return hits
@@ -54,10 +55,16 @@ def dense_retrieve(query_embedding: list[float], state, k: int = 50, use_jina: b
 
 # ── Sparse retrieval ───────────────────────────────────────────────────────────
 
-def bm25_retrieve(query: str, state, k: int = 50, session_id: str = "") -> list[dict]:
+def bm25_retrieve(
+    query: str, state, k: int = 50, session_id: str = "",
+    uploaded_only: bool = False, kb_only: bool = False,
+) -> list[dict]:
     """Score all corpus chunks with BM25Okapi and return top-k.
 
-    Returns list of {text, source, score, id}.
+    uploaded_only=True  → only session-uploaded chunks.
+    kb_only=True        → only KB (non-uploaded) chunks.
+    Default             → KB + session's own uploaded chunks.
+    Returns list of {text, source, score, id, uploaded}.
     """
     if not state.corpus_chunks:
         return []
@@ -65,23 +72,33 @@ def bm25_retrieve(query: str, state, k: int = 50, session_id: str = "") -> list[
     tokenized_query = tokenize(query)
     scores = state.bm25.get_scores(tokenized_query)
 
-    # Pair with index for ranking
     indexed = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)
     top = indexed[:k]
 
     hits: list[dict] = []
     for idx, score in top:
-        if idx < len(state.corpus_chunks):
-            src = state.chunk_sources[idx] if idx < len(state.chunk_sources) else ""
-            if session_id and src in state.uploaded_sources:
-                if state.source_sessions.get(src, "") != session_id:
-                    continue
-            hits.append({
-                "text": state.corpus_chunks[idx],
-                "source": src,
-                "score": float(score),
-                "id": f"bm25_{idx}",
-            })
+        if idx >= len(state.corpus_chunks):
+            continue
+        src = state.chunk_sources[idx] if idx < len(state.chunk_sources) else ""
+        is_uploaded = src in state.uploaded_sources
+
+        if uploaded_only:
+            if not is_uploaded or state.source_sessions.get(src, "") != session_id:
+                continue
+        elif kb_only:
+            if is_uploaded:
+                continue
+        elif session_id and is_uploaded:
+            if state.source_sessions.get(src, "") != session_id:
+                continue
+
+        hits.append({
+            "text": state.corpus_chunks[idx],
+            "source": src,
+            "score": float(score),
+            "id": f"bm25_{idx}",
+            "uploaded": is_uploaded,
+        })
 
     return hits
 
@@ -156,6 +173,48 @@ def hybrid_retrieve(query: str, state, top_k: int = 8, use_jina: bool = False, s
     return fused[:top_k]
 
 
+def tiered_hybrid_retrieve(
+    query: str, state, top_k: int = 8, use_jina: bool = False, session_id: str = ""
+) -> list[dict]:
+    """Two-tier retrieval: session-uploaded docs first, KB fallback if weak match.
+
+    Tier 1 — uploaded docs for this session only.
+    If top score ≥ 0.15 → return those.
+    Tier 2 — KB-only retrieval; merge with any tier-1 results via RRF.
+    Falls through to standard hybrid_retrieve when no uploads exist for session.
+    """
+    has_uploads = session_id and any(
+        state.source_sessions.get(s) == session_id for s in state.uploaded_sources
+    )
+    if not has_uploads:
+        return hybrid_retrieve(query, state, top_k=top_k, use_jina=use_jina, session_id=session_id)
+
+    query_emb = embed_query(query, state, use_jina=use_jina)
+    collection = state.jina_collection if (use_jina and state.jina_ready) else state.collection
+    count = collection.count() if collection else 0
+
+    # Tier 1: uploaded docs for this session
+    where_up = {"$and": [{"uploaded": {"$eq": True}}, {"session_id": {"$eq": session_id}}]}
+    dense_up = dense_retrieve(query_emb, state, k=20, use_jina=use_jina, where=where_up) if count > 0 else []
+    bm25_up = bm25_retrieve(query, state, k=20, session_id=session_id, uploaded_only=True)
+    tier1 = reciprocal_rank_fusion([l for l in [dense_up, bm25_up] if l]) if (dense_up or bm25_up) else []
+    for c in tier1:
+        c["uploaded"] = True
+
+    if tier1 and tier1[0].get("score", 0.0) >= 0.15:
+        return tier1[:top_k]
+
+    # Tier 2: KB-only
+    where_kb = {"uploaded": {"$eq": False}}
+    dense_kb = dense_retrieve(query_emb, state, k=50, use_jina=use_jina, where=where_kb) if count > 0 else []
+    bm25_kb = bm25_retrieve(query, state, k=50, kb_only=True)
+    tier2 = reciprocal_rank_fusion([l for l in [dense_kb, bm25_kb] if l]) if (dense_kb or bm25_kb) else []
+
+    if not tier1:
+        return tier2[:top_k]
+    return reciprocal_rank_fusion([tier1, tier2])[:top_k]
+
+
 def multi_query_retrieve(queries: list[str], state, top_k: int = 50, use_jina: bool = False, session_id: str = "") -> list[dict]:
     """Run hybrid_retrieve for each query variant, then RRF-merge across all
     variants' result lists. A chunk surfaced by multiple phrasings of the
@@ -164,7 +223,8 @@ def multi_query_retrieve(queries: list[str], state, top_k: int = 50, use_jina: b
     if not state.initialized or not queries:
         return []
 
-    per_query_lists = [hybrid_retrieve(q, state, top_k=top_k, use_jina=use_jina, session_id=session_id) for q in queries]
+    retrieve_fn = tiered_hybrid_retrieve if session_id else hybrid_retrieve
+    per_query_lists = [retrieve_fn(q, state, top_k=top_k, use_jina=use_jina, session_id=session_id) for q in queries]
     per_query_lists = [lst for lst in per_query_lists if lst]
 
     if not per_query_lists:
