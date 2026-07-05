@@ -9154,7 +9154,14 @@ function _renderEDA(d, filename) {
       <div class="eda-section-title" style="display:flex;align-items:center;gap:0.5rem">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         AI Feature Suggestions
-        <button id="eda-suggest-btn" onclick="_runEdaSuggest()" style="margin-left:auto;padding:0.25rem 0.9rem;border-radius:20px;font-size:0.72rem;font-weight:600;cursor:pointer;background:rgba(129,140,248,0.14);color:#818cf8;border:1px solid rgba(129,140,248,0.35);transition:all 0.15s">Generate</button>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:0.5rem">
+          <select id="eda-suggest-provider" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:7px;color:var(--text);font-size:0.7rem;padding:0.2rem 0.5rem;cursor:pointer;outline:none">
+            <option value="groq">Groq</option>
+            <option value="gemini">Gemini</option>
+            <option value="cohere">Cohere</option>
+          </select>
+          <button id="eda-suggest-btn" onclick="_runEdaSuggest()" style="padding:0.25rem 0.9rem;border-radius:20px;font-size:0.72rem;font-weight:600;cursor:pointer;background:rgba(129,140,248,0.14);color:#818cf8;border:1px solid rgba(129,140,248,0.35);transition:all 0.15s">Generate</button>
+        </div>
       </div>
       <div style="font-size:0.78rem;color:var(--text3);margin-bottom:0.75rem">LLM-powered recommendations based on your dataset's statistics, distributions, and ML readiness flags.</div>
       <div id="eda-suggest-output"></div>
@@ -9163,10 +9170,39 @@ function _renderEDA(d, filename) {
   return overviewHTML + narrativeHTML + readinessHTML + insightsHTML + suggestHTML + navHTML + sampleHTML + colsHTML + statsHTML + distHTML + boxHTML + miHTML + pcaHTML + splomHTML + corrHTML;
 }
 
+function _inlineMd(text) {
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code style="background:rgba(255,255,255,0.08);border-radius:3px;padding:0 4px;font-size:0.78rem;font-family:monospace">$1</code>')
+    .replace(/\n/g, '<br>');
+}
+function _mdToHtml(text) {
+  const blocks = text.trim().split(/\n\n+/);
+  let html = '';
+  for (const block of blocks) {
+    const t = block.trim();
+    if (!t) continue;
+    const numMatch = t.match(/^(\d+)\.\s+\*\*(.+?)\*\*\n?([\s\S]*)/);
+    if (numMatch) {
+      const [, num, title, body] = numMatch;
+      html += `<div style="margin-bottom:1.1rem;padding:0.75rem 1rem;background:rgba(129,140,248,0.06);border-left:3px solid rgba(129,140,248,0.4);border-radius:0 8px 8px 0">
+        <div style="font-size:0.83rem;font-weight:700;color:var(--text);margin-bottom:0.3rem">${num}. ${_inlineMd(title)}</div>
+        <div style="font-size:0.79rem;color:var(--text2);line-height:1.65">${_inlineMd(body.trim())}</div>
+      </div>`;
+    } else {
+      html += `<p style="font-size:0.8rem;color:var(--text2);line-height:1.65;margin-bottom:0.6rem">${_inlineMd(t)}</p>`;
+    }
+  }
+  return html;
+}
+
 async function _runEdaSuggest() {
   if (!EDA_API || !_edaCurrentData) return;
-  const btn = document.getElementById('eda-suggest-btn');
-  const out = document.getElementById('eda-suggest-output');
+  const btn      = document.getElementById('eda-suggest-btn');
+  const out      = document.getElementById('eda-suggest-output');
+  const provider = (document.getElementById('eda-suggest-provider') || {}).value || 'groq';
   if (!btn || !out) return;
   btn.disabled = true;
   btn.textContent = 'Generating…';
@@ -9184,16 +9220,14 @@ async function _runEdaSuggest() {
         readiness:         _edaCurrentData.readiness || [],
         narrative:         _edaCurrentData.narrative || '',
         low_variance_cols: _edaCurrentData.low_variance_cols || [],
+        provider,
       }),
     });
     if (!res.ok) throw new Error(await res.text());
     out.innerHTML = '';
-    const pre = document.createElement('div');
-    pre.style.cssText = 'font-size:0.82rem;line-height:1.75;color:var(--text2);white-space:pre-wrap;word-break:break-word';
-    out.appendChild(pre);
     const reader  = res.body.getReader();
     const decoder = new TextDecoder();
-    let buffer = '';
+    let buffer = '', fullText = '';
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -9205,11 +9239,13 @@ async function _runEdaSuggest() {
         const chunk = line.slice(5).trim();
         try {
           const ev = JSON.parse(chunk);
-          if (ev.type === 'token') pre.textContent += ev.text;
-          else if (ev.type === 'error') { pre.style.color = '#f87171'; pre.textContent += ev.text; }
+          if (ev.type === 'token') { fullText += ev.text; out.innerHTML = `<div style="font-size:0.8rem;color:var(--text2);white-space:pre-wrap;line-height:1.65">${fullText}</div>`; }
+          else if (ev.type === 'done') { out.innerHTML = _mdToHtml(fullText); }
+          else if (ev.type === 'error') { out.innerHTML = `<div style="color:#f87171;font-size:0.78rem">${ev.text}</div>`; }
         } catch {}
       }
     }
+    if (fullText && out.innerHTML.includes('white-space:pre-wrap')) out.innerHTML = _mdToHtml(fullText);
   } catch (e) {
     out.innerHTML = `<div style="color:#f87171;font-size:0.78rem">${e.message}</div>`;
   } finally {

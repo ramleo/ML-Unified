@@ -6,37 +6,40 @@ import os
 from typing import AsyncGenerator
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 router = APIRouter()
 
-_GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
-_GROQ_MODEL = "llama-3.3-70b-versatile"
+_PROVIDERS = {
+    "groq":   {"env": "GROQ_API_KEY",    "model": "llama-3.3-70b-versatile"},
+    "gemini": {"env": "GEMINI_API_KEY",  "model": "gemini-2.0-flash"},
+    "cohere": {"env": "COHERE_API_KEY",  "model": "command-r-plus-08-2024"},
+}
 
 
 class SuggestRequest(BaseModel):
-    overview:      dict
-    columns:       list
-    stats:         dict
-    correlations:  dict | None = None
-    insights:      list        = []
-    readiness:     list        = []
-    narrative:     str         = ""
-    low_variance_cols: list    = []
+    overview:          dict
+    columns:           list
+    stats:             dict
+    correlations:      dict | None = None
+    insights:          list        = []
+    readiness:         list        = []
+    narrative:         str         = ""
+    low_variance_cols: list        = []
+    provider:          str         = "groq"
 
 
 def _build_prompt(req: SuggestRequest) -> str:
-    num_cols = [c for c in req.columns if c["is_numeric"]]
-    cat_cols = [c for c in req.columns if not c["is_numeric"]]
-
-    skewed   = [c["name"] for c in req.columns if c["is_numeric"]
-                and c["name"] in req.stats and abs(req.stats[c["name"]]["skew"]) > 1.5]
+    num_cols     = [c for c in req.columns if c["is_numeric"]]
+    cat_cols     = [c for c in req.columns if not c["is_numeric"]]
+    skewed       = [c["name"] for c in req.columns if c["is_numeric"]
+                    and c["name"] in req.stats and abs(req.stats[c["name"]]["skew"]) > 1.5]
     outlier_cols = [col for col, s in req.stats.items()
                     if req.overview["rows"] > 0 and s["outliers"] / req.overview["rows"] > 0.05]
-    high_card = [c["name"] for c in req.columns if not c["is_numeric"] and c["nunique"] > 20]
-    corr_pairs = []
+    high_card    = [c["name"] for c in req.columns if not c["is_numeric"] and c["nunique"] > 20]
+    corr_pairs   = []
     if req.correlations:
         lbls, mat = req.correlations["labels"], req.correlations["matrix"]
         for i in range(len(lbls)):
@@ -52,7 +55,7 @@ def _build_prompt(req: SuggestRequest) -> str:
         f"Dataset: {req.overview['rows']:,} rows × {req.overview['cols']} columns",
         f"Numeric columns ({len(num_cols)}): {', '.join(c['name'] for c in num_cols) or 'none'}",
         f"Categorical columns ({len(cat_cols)}): {', '.join(c['name'] for c in cat_cols) or 'none'}",
-        f"Data quality score: {req.overview.get('missing_pct', 0):.1f}% missing overall",
+        f"Missing values: {req.overview.get('missing_pct', 0):.1f}% overall",
     ]
     if skewed:
         lines.append(f"Highly skewed columns (|skew| > 1.5): {', '.join(skewed)}")
@@ -68,7 +71,6 @@ def _build_prompt(req: SuggestRequest) -> str:
         lines.append(f"ML readiness issues: {'; '.join(readiness_warns[:6])}")
     if req.narrative:
         lines.append(f"\nAuto-narrative: {req.narrative}")
-
     lines += [
         "",
         "Suggest 6–8 specific feature engineering steps. For each:",
@@ -76,52 +78,121 @@ def _build_prompt(req: SuggestRequest) -> str:
         "- Explain WHY it would improve model performance",
         "- Note any risk or caveat",
         "",
-        "Format each suggestion as a numbered item. Be concrete and dataset-specific — no generic advice.",
+        "Format each suggestion as a numbered item with a bold title. Be concrete and dataset-specific.",
     ]
     return "\n".join(lines)
 
 
-async def _stream_groq(prompt: str) -> AsyncGenerator[str, None]:
-    api_key = os.environ.get("GROQ_API_KEY", "")
-    if not api_key:
-        yield f"data: {json.dumps({'type': 'error', 'text': 'GROQ_API_KEY not configured on server.'})}\n\n"
-        return
+def _sse(payload: dict) -> str:
+    return f"data: {json.dumps(payload)}\n\n"
 
+
+async def _stream_groq(prompt: str, model: str, key: str) -> AsyncGenerator[str, None]:
     payload = {
-        "model":  _GROQ_MODEL,
-        "stream": True,
+        "model": model, "stream": True,
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 1024,
-        "temperature": 0.4,
+        "max_tokens": 1024, "temperature": 0.4,
     }
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
     async with httpx.AsyncClient(timeout=60) as client:
-        async with client.stream("POST", _GROQ_URL, json=payload, headers=headers) as resp:
+        async with client.stream("POST", "https://api.groq.com/openai/v1/chat/completions",
+                                 json=payload, headers=headers) as resp:
             if resp.status_code != 200:
-                body = await resp.aread()
-                yield f"data: {json.dumps({'type': 'error', 'text': body.decode()})}\n\n"
+                yield _sse({"type": "error", "text": (await resp.aread()).decode()})
                 return
             async for line in resp.aiter_lines():
                 if not line.startswith("data:"):
                     continue
                 chunk = line[5:].strip()
                 if chunk == "[DONE]":
-                    yield f"data: {json.dumps({'type': 'done'})}\n\n"
-                    return
+                    break
                 try:
                     delta = json.loads(chunk)["choices"][0]["delta"].get("content", "")
                     if delta:
-                        yield f"data: {json.dumps({'type': 'token', 'text': delta})}\n\n"
+                        yield _sse({"type": "token", "text": delta})
                 except Exception:
                     continue
+    yield _sse({"type": "done"})
+
+
+async def _stream_gemini(prompt: str, model: str, key: str) -> AsyncGenerator[str, None]:
+    url      = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{model}:streamGenerateContent?key={key}&alt=sse")
+    contents = [{"role": "user", "parts": [{"text": prompt}]}]
+    async with httpx.AsyncClient(timeout=60) as client:
+        async with client.stream("POST", url, json={"contents": contents}) as resp:
+            if resp.status_code != 200:
+                yield _sse({"type": "error", "text": (await resp.aread()).decode()})
+                return
+            async for line in resp.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                payload = line[5:].strip()
+                if payload in ("", "[DONE]"):
+                    continue
+                try:
+                    obj = json.loads(payload)
+                    for cand in obj.get("candidates", []):
+                        for part in cand.get("content", {}).get("parts", []):
+                            if "text" in part:
+                                yield _sse({"type": "token", "text": part["text"]})
+                except Exception:
+                    continue
+    yield _sse({"type": "done"})
+
+
+async def _stream_cohere(prompt: str, model: str, key: str) -> AsyncGenerator[str, None]:
+    messages = [{"role": "user", "content": prompt}]
+    async with httpx.AsyncClient(timeout=60) as client:
+        async with client.stream(
+            "POST", "https://api.cohere.ai/v2/chat",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"model": model, "messages": messages, "stream": True},
+        ) as resp:
+            if resp.status_code != 200:
+                yield _sse({"type": "error", "text": (await resp.aread()).decode()})
+                return
+            async for line in resp.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                payload = line[5:].strip()
+                if payload in ("", "[DONE]"):
+                    continue
+                try:
+                    obj = json.loads(payload)
+                    if obj.get("type") == "content-delta":
+                        text = (obj.get("delta", {}).get("message", {})
+                                .get("content", {}).get("text", ""))
+                        if text:
+                            yield _sse({"type": "token", "text": text})
+                except Exception:
+                    continue
+    yield _sse({"type": "done"})
+
+
+async def _stream(req: SuggestRequest) -> AsyncGenerator[str, None]:
+    provider = req.provider if req.provider in _PROVIDERS else "groq"
+    cfg      = _PROVIDERS[provider]
+    key      = os.environ.get(cfg["env"], "")
+    if not key:
+        yield _sse({"type": "error", "text": f"{cfg['env']} not configured on server."})
+        return
+    prompt = _build_prompt(req)
+    if provider == "groq":
+        async for chunk in _stream_groq(prompt, cfg["model"], key):
+            yield chunk
+    elif provider == "gemini":
+        async for chunk in _stream_gemini(prompt, cfg["model"], key):
+            yield chunk
+    elif provider == "cohere":
+        async for chunk in _stream_cohere(prompt, cfg["model"], key):
+            yield chunk
 
 
 @router.post("/eda/suggest")
 async def suggest_features(req: SuggestRequest):
-    prompt = _build_prompt(req)
     return StreamingResponse(
-        _stream_groq(prompt),
+        _stream(req),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
