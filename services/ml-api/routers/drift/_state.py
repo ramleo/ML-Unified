@@ -78,16 +78,23 @@ def save_versions() -> None:
         pass
 
 
-def save_version(model_id: str, label: str | None, stats: dict) -> dict:
+def get_previous_version_hash(model_id: str) -> str | None:
+    """Return file_hash of the most recent saved version, or None if none exist."""
+    vers = _versions.get(model_id, [])
+    return vers[-1].get("file_hash") if vers else None
+
+
+def save_version(model_id: str, label: str | None, stats: dict, file_hash: str = "") -> dict:
     """Append a new batch version for model_id. Returns the saved version entry."""
     existing = _versions.get(model_id, [])
     # V1 is reserved for training baseline (version_num=1); batches start at 2
     next_num = max((v["version"] for v in existing), default=1) + 1
     entry = {
-        "version":  next_num,
-        "ts":       int(time.time()),
-        "label":    label or f"Batch {next_num - 1}",
-        "stats":    stats,
+        "version":   next_num,
+        "ts":        int(time.time()),
+        "label":     label or f"Batch {next_num - 1}",
+        "stats":     stats,
+        "file_hash": file_hash,
     }
     _versions[model_id].append(entry)
     save_versions()

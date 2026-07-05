@@ -8,10 +8,12 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 
+import hashlib
+
 from routers.drift._state import (
     record_input, record_snapshot,
     get_recent, get_trend, get_history,
-    save_version, get_versions, get_previous_version_stats,
+    save_version, get_versions, get_previous_version_stats, get_previous_version_hash,
 )
 from routers.drift._baseline import get_baseline, extract_batch_stats, baseline_from_version_stats
 from routers.drift._compute import compute_drift
@@ -60,6 +62,11 @@ async def upload_drift(
     if df.empty:
         raise HTTPException(400, "CSV is empty")
 
+    file_hash = hashlib.sha256(content).hexdigest()
+    prev_hash = get_previous_version_hash(model_id)
+    if prev_hash and prev_hash == file_hash:
+        raise HTTPException(409, "Identical file already uploaded as the previous version — no new version created.")
+
     m    = MODELS[model_id]
     rows = df.to_dict(orient="records")
 
@@ -86,7 +93,7 @@ async def upload_drift(
 
     # Save this batch as a new version
     batch_stats = extract_batch_stats(m["schema"], rows)
-    version_entry = save_version(model_id, label, batch_stats)
+    version_entry = save_version(model_id, label, batch_stats, file_hash=file_hash)
     result["version_num"] = version_entry["version"]
 
     record_snapshot(model_id, result, label=label)
