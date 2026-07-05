@@ -9149,7 +9149,73 @@ function _renderEDA(d, filename) {
       <div id="eda-corr-hm" class="eda-corr-plot"></div>
     </div>` : '';
 
-  return overviewHTML + narrativeHTML + readinessHTML + insightsHTML + navHTML + sampleHTML + colsHTML + statsHTML + distHTML + boxHTML + miHTML + pcaHTML + splomHTML + corrHTML;
+  const suggestHTML = `
+    <div class="eda-section-card" id="eda-s-suggest">
+      <div class="eda-section-title" style="display:flex;align-items:center;gap:0.5rem">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        AI Feature Suggestions
+        <button id="eda-suggest-btn" onclick="_runEdaSuggest()" style="margin-left:auto;padding:0.25rem 0.9rem;border-radius:20px;font-size:0.72rem;font-weight:600;cursor:pointer;background:rgba(129,140,248,0.14);color:#818cf8;border:1px solid rgba(129,140,248,0.35);transition:all 0.15s">Generate</button>
+      </div>
+      <div style="font-size:0.78rem;color:var(--text3);margin-bottom:0.75rem">LLM-powered recommendations based on your dataset's statistics, distributions, and ML readiness flags.</div>
+      <div id="eda-suggest-output"></div>
+    </div>`;
+
+  return overviewHTML + narrativeHTML + readinessHTML + insightsHTML + suggestHTML + navHTML + sampleHTML + colsHTML + statsHTML + distHTML + boxHTML + miHTML + pcaHTML + splomHTML + corrHTML;
+}
+
+async function _runEdaSuggest() {
+  if (!EDA_API || !_edaCurrentData) return;
+  const btn = document.getElementById('eda-suggest-btn');
+  const out = document.getElementById('eda-suggest-output');
+  if (!btn || !out) return;
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+  out.innerHTML = '<div style="font-size:0.78rem;color:var(--text3);padding:0.5rem 0">Analysing dataset structure and computing suggestions…</div>';
+  try {
+    const res = await fetch(`${EDA_API}/eda/suggest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        overview:          _edaCurrentData.overview,
+        columns:           _edaCurrentData.columns,
+        stats:             _edaCurrentData.stats,
+        correlations:      _edaCurrentData.correlations,
+        insights:          _edaCurrentData.insights || [],
+        readiness:         _edaCurrentData.readiness || [],
+        narrative:         _edaCurrentData.narrative || '',
+        low_variance_cols: _edaCurrentData.low_variance_cols || [],
+      }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    out.innerHTML = '';
+    const pre = document.createElement('div');
+    pre.style.cssText = 'font-size:0.82rem;line-height:1.75;color:var(--text2);white-space:pre-wrap;word-break:break-word';
+    out.appendChild(pre);
+    const reader  = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        const chunk = line.slice(5).trim();
+        try {
+          const ev = JSON.parse(chunk);
+          if (ev.type === 'token') pre.textContent += ev.text;
+          else if (ev.type === 'error') { pre.style.color = '#f87171'; pre.textContent += ev.text; }
+        } catch {}
+      }
+    }
+  } catch (e) {
+    out.innerHTML = `<div style="color:#f87171;font-size:0.78rem">${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Regenerate';
+  }
 }
 
 function _renderEDAPlots(d) {

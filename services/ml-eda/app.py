@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from routers import eda as _eda_router
+from routers._suggest import router as _suggest_router
 import collections
 import time
 from typing import Dict
@@ -76,3 +77,4 @@ def get_metrics():
 
 
 app.include_router(_eda_router.router)
+app.include_router(_suggest_router)
