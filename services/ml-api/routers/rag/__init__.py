@@ -8,7 +8,7 @@ from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
-_DATA_DIR = os.environ.get("DATA_DIR", "/data")
+_DATA_DIR = os.environ.get("DATA_DIR", "data")
 
 
 @dataclass
