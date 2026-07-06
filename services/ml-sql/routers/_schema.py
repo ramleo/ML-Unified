@@ -134,16 +134,62 @@ async def load_pg_schema(conn_str: str) -> DBSchema:
     return DBSchema(tables=tables, db_type="postgresql")
 
 
+def _tokenize(text: str) -> set[str]:
+    return set(re.sub(r"[^a-z0-9 ]", " ", text.lower()).split())
+
+_STOPWORDS = {"the","a","an","is","in","of","for","to","and","or","by","all",
+              "what","which","how","many","show","me","get","list","find","give",
+              "with","from","per","each","top","average","total","count","number"}
+
+
+def link_tables(schema: DBSchema, question: str, top_k: int = 6) -> list[str]:
+    """Score tables by keyword overlap with question, expand via FK relationships.
+
+    Scoring:
+      +3  per question word matching the table name
+      +2  per question word matching a column name
+      +1  per question word matching a sample cell value
+    After picking top_k, add every directly FK-linked table so JOINs work.
+    """
+    q_words = _tokenize(question) - _STOPWORDS
+    if not q_words:
+        return list(schema.tables.keys())
+
+    scores: dict[str, float] = {}
+    for tname, t in schema.tables.items():
+        score = 0.0
+        score += 3 * len(q_words & _tokenize(tname))
+        for col in t.columns:
+            score += 2 * len(q_words & _tokenize(col.name))
+        for row in t.sample_rows:
+            for val in row.values():
+                if val is not None:
+                    score += len(q_words & _tokenize(str(val)))
+        scores[tname] = score
+
+    ranked = sorted(scores, key=lambda n: scores[n], reverse=True)
+    selected = set(ranked[:top_k])
+
+    # FK expansion: include tables directly linked to any selected table
+    for tname in list(selected):
+        for fk in schema.tables[tname].foreign_keys:
+            selected.add(fk["to_table"])
+        for other, t in schema.tables.items():
+            if any(fk["to_table"] == tname for fk in t.foreign_keys):
+                selected.add(other)
+
+    return [n for n in ranked if n in selected] + [
+        n for n in schema.tables if n in selected and n not in ranked[:top_k]
+    ]
+
+
 def schema_to_prompt_text(schema: DBSchema, question: str = "", max_tables: int = 30) -> str:
-    """Compact schema text for LLM prompt; filters relevant tables if question given."""
-    tables = list(schema.tables.values())
-    if len(tables) > max_tables and question:
-        q_words = set(re.sub(r"[^a-z0-9 ]", " ", question.lower()).split())
-        def relevance(t: TableSchema) -> int:
-            name_words = set(re.sub(r"[^a-z0-9 ]", " ", t.name.lower()).split())
-            col_words = {w for c in t.columns for w in c.name.lower().split("_")}
-            return len(q_words & (name_words | col_words))
-        tables = sorted(tables, key=relevance, reverse=True)[:max_tables]
+    """Compact schema text for LLM prompt; links relevant tables when question given."""
+    if question:
+        linked = link_tables(schema, question, top_k=min(6, len(schema.tables)))
+        tables = [schema.tables[n] for n in linked if n in schema.tables]
+    else:
+        tables = list(schema.tables.values())[:max_tables]
 
     lines: list[str] = [f"Database type: {schema.db_type}, total tables: {len(schema.tables)}\n"]
     for t in tables:
