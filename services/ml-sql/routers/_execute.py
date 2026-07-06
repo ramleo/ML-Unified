@@ -147,16 +147,23 @@ async def execute_sqlite(db_path: str, sql: str) -> QueryResult:
 
 
 async def execute_pg(conn_str: str, sql: str) -> QueryResult:
-    """Execute in a read-only transaction that is always rolled back."""
+    """Execute against PostgreSQL with explicit rollback after fetch.
+
+    Two independent read-only layers:
+    1. SET TRANSACTION READ ONLY — PostgreSQL rejects any write attempt at engine level.
+    2. Explicit tr.rollback() — transaction is never committed regardless, so even if
+       layer 1 were somehow bypassed the changes would not persist.
+    """
     import asyncpg
     t0 = time.monotonic()
     limited_sql = _inject_limit(sql, _ROW_LIMIT)
     conn = await asyncpg.connect(conn_str)
     try:
-        async with conn.transaction():
-            await conn.execute("SET TRANSACTION READ ONLY")
-            records = await conn.fetch(limited_sql)
-            # Always roll back — SET TRANSACTION READ ONLY enforces this at DB level too
+        tr = conn.transaction()
+        await tr.start()
+        await conn.execute("SET TRANSACTION READ ONLY")
+        records = await conn.fetch(limited_sql)
+        await tr.rollback()  # explicit — never commits, even on clean exit
         if not records:
             return QueryResult(columns=[], rows=[], count=0, exec_time_ms=0)
         cols = list(records[0].keys())
