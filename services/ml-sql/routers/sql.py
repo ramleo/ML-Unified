@@ -24,11 +24,13 @@ from ._schema import (
 
 router = APIRouter()
 
-CHINOOK_PATH = Path(__file__).parent.parent / "data" / "chinook.db"
-_UPLOAD_DIR  = Path("/tmp/ml_sql_sessions")
+CHINOOK_PATH  = Path(__file__).parent.parent / "data" / "chinook.db"
+_UPLOAD_DIR   = Path("/tmp/ml_sql_sessions")
+_SESSION_FILE = _UPLOAD_DIR / "index.json"
+_SESSION_TTL  = 86_400  # 24 hours
 _UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# in-memory session store: db_ref → {type, path|conn_str, schema}
+# in-memory session store: db_ref → {type, path|conn_str, schema, created_at}
 _sessions: dict[str, dict] = {}
 
 # Global rate limiter — sliding window of query timestamps
@@ -46,10 +48,47 @@ def _check_rate_limit() -> bool:
     return True
 
 
+def _save_session_index() -> None:
+    """Persist SQLite session metadata to disk so they survive in-process resets."""
+    index = {
+        ref: {"type": s["type"], "path": s.get("path", ""), "created_at": s.get("created_at", 0)}
+        for ref, s in _sessions.items()
+        if s["type"] == "sqlite" and ref != "chinook"
+    }
+    try:
+        _SESSION_FILE.write_text(json.dumps(index))
+    except OSError:
+        pass
+
+
+async def _restore_sessions() -> None:
+    """On startup, reload SQLite sessions from the index whose files still exist."""
+    if not _SESSION_FILE.exists():
+        return
+    try:
+        index = json.loads(_SESSION_FILE.read_text())
+    except (OSError, json.JSONDecodeError):
+        return
+    cutoff = time.time() - _SESSION_TTL
+    for ref, meta in index.items():
+        if meta.get("created_at", 0) < cutoff:
+            continue  # TTL expired
+        path = meta.get("path", "")
+        if path and Path(path).exists() and ref not in _sessions:
+            try:
+                schema = await load_sqlite_schema(path)
+                _sessions[ref] = {"type": "sqlite", "path": path,
+                                  "schema": schema, "created_at": meta["created_at"]}
+            except Exception:
+                pass
+
+
 async def _preload_chinook() -> None:
     if "chinook" not in _sessions and CHINOOK_PATH.exists():
         schema = await load_sqlite_schema(str(CHINOOK_PATH))
-        _sessions["chinook"] = {"type": "sqlite", "path": str(CHINOOK_PATH), "schema": schema}
+        _sessions["chinook"] = {"type": "sqlite", "path": str(CHINOOK_PATH),
+                                "schema": schema, "created_at": time.time()}
+    await _restore_sessions()
 
 
 # ── Health ────────────────────────────────────────────────────────────────────
@@ -88,7 +127,9 @@ async def upload_db(file: UploadFile = File(...)):
     except Exception as e:
         db_path.unlink(missing_ok=True)
         return JSONResponse({"error": f"Could not read DB: {e}"}, status_code=422)
-    _sessions[db_ref] = {"type": "sqlite", "path": str(db_path), "schema": schema}
+    _sessions[db_ref] = {"type": "sqlite", "path": str(db_path),
+                         "schema": schema, "created_at": time.time()}
+    _save_session_index()
     return {"db_ref": db_ref, "schema": schema_to_dict(schema)}
 
 
@@ -105,7 +146,8 @@ async def connect_pg(req: ConnectRequest):
     except Exception as e:
         return JSONResponse({"error": f"Connection failed: {e}"}, status_code=422)
     db_ref = f"pg_{uuid.uuid4().hex[:8]}"
-    _sessions[db_ref] = {"type": "postgresql", "conn_str": req.conn_str, "schema": schema}
+    _sessions[db_ref] = {"type": "postgresql", "conn_str": req.conn_str,
+                         "schema": schema, "created_at": time.time()}
     return {"db_ref": db_ref, "schema": schema_to_dict(schema)}
 
 
@@ -135,7 +177,13 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
     await _preload_chinook()
     session = _sessions.get(req.db_ref)
     if not session:
-        yield _sse({"type": "error", "text": f"Unknown db_ref: {req.db_ref}"})
+        if req.db_ref.startswith("pg_"):
+            msg = "PostgreSQL session expired (server restarted). Please reconnect using the PostgreSQL tab."
+        elif req.db_ref.startswith("upload_"):
+            msg = "Uploaded DB session expired (server restarted). Please re-upload your file."
+        else:
+            msg = f"Unknown db_ref: {req.db_ref}"
+        yield _sse({"type": "error", "text": msg})
         yield _sse({"type": "done"})
         return
 
