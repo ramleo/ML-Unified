@@ -26,6 +26,17 @@ def _is_numeric(vals: list) -> bool:
         return False
 
 
+_ID_COL_RE = re.compile(
+    r"(^id$|_id$|Id$|^id_|_key$|Key$|_no$|No$|_code$|Code$|_num$|Num$)",
+    re.IGNORECASE,
+)
+
+
+def _is_id_col(col: str) -> bool:
+    """True for columns that are IDs/keys — numeric but not meaningful metrics."""
+    return bool(_ID_COL_RE.search(col))
+
+
 def detect_visualization(columns: list[str], rows: list[list]) -> dict | None:
     """Return chart spec dict or None if no suitable chart detected.
 
@@ -42,7 +53,8 @@ def detect_visualization(columns: list[str], rows: list[list]) -> dict | None:
         return None
 
     col_vals = {col: [row[i] for row in rows] for i, col in enumerate(columns)}
-    numeric_cols = [c for c in columns if _is_numeric(col_vals[c])]
+    # Exclude ID/key columns from metric detection — they're numeric but not chart-worthy
+    numeric_cols = [c for c in columns if _is_numeric(col_vals[c]) and not _is_id_col(c)]
     text_cols    = [c for c in columns if c not in numeric_cols]
 
     def sf(v):

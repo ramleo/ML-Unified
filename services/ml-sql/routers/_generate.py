@@ -94,6 +94,7 @@ def _build_sql_prompt(
         "- Use proper JOIN syntax when combining tables",
         "- Limit results to 100 rows unless the question asks for all",
         "- Use double-quotes for identifiers with spaces",
+        "- Do NOT select ID/key columns (e.g. CustomerId, TrackId) unless the question asks for them",
         "- Return ONLY the SQL query, nothing else",
     ]
     return "\n".join(lines)
