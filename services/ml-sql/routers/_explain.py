@@ -77,17 +77,20 @@ def detect_visualization(columns: list[str], rows: list[list]) -> dict | None:
 
     if len(columns) == 2:
         if text_cols and numeric_cols:
-            labels = [str(v) for v in col_vals[text_cols[0]][:20]]
-            values = [sf(v) for v in col_vals[numeric_cols[0]][:20]]
+            labels = [str(v) for v in col_vals[text_cols[0]][:50]]
+            values = [sf(v) for v in col_vals[numeric_cols[0]][:50]]
             avg_len = sum(len(l) for l in labels) / max(len(labels), 1)
 
             if len(rows) <= 7:
                 return {"chart_type": "donut", "labels": labels, "values": values,
                         "x_label": numeric_cols[0], "y_label": text_cols[0]}
+            if len(rows) > 12:
+                return {"chart_type": "treemap", "labels": labels, "values": values,
+                        "x_label": text_cols[0], "y_label": numeric_cols[0]}
             if avg_len > 12:
-                return {"chart_type": "bar_h", "labels": labels, "values": values,
+                return {"chart_type": "bar_h", "labels": labels[:20], "values": values[:20],
                         "x_label": numeric_cols[0], "y_label": text_cols[0]}
-            return {"chart_type": "bar", "labels": labels, "values": values,
+            return {"chart_type": "bar", "labels": labels[:20], "values": values[:20],
                     "x_label": text_cols[0], "y_label": numeric_cols[0]}
 
         if len(numeric_cols) == 2:
