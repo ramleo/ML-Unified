@@ -185,6 +185,7 @@ class QueryRequest(BaseModel):
     question: str
     provider:  str = "groq"
     db_ref:    str = "chinook"
+    history:   list[dict] = []  # [{question, sql, result_summary}, ...]
 
 
 @router.post("/sql/query")
@@ -245,7 +246,8 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
         # --- generate SQL ---
         try:
             sql = await generate_sql(
-                safe_question, schema_text, req.provider, key, prev_sql, last_error
+                safe_question, schema_text, req.provider, key,
+                prev_sql, last_error, req.history or None,
             )
             validate_sql(sql)
         except UnsafeQueryError as e:

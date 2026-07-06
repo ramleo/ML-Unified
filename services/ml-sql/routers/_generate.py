@@ -49,6 +49,7 @@ def _build_sql_prompt(
     schema_text: str,
     prev_sql: str | None = None,
     error: str | None = None,
+    history: list[dict] | None = None,
 ) -> str:
     lines = [
         "SECURITY RULES — follow always, no exceptions:",
@@ -62,12 +63,26 @@ def _build_sql_prompt(
         _FEW_SHOT,
         "",
         f"Schema:\n{schema_text}",
-        f"Question: {question}",
     ]
+
+    if history:
+        lines.append(
+            "\nConversation so far — use for context when the current question "
+            "references previous results (e.g. 'that', 'those', 'same', 'instead'):"
+        )
+        for turn in history[-3:]:  # last 3 turns keep prompt compact
+            lines.append(f"Q: {turn['question']}")
+            lines.append(f"SQL: {turn['sql']}")
+            if turn.get("result_summary"):
+                lines.append(f"Result: {turn['result_summary']}")
+            lines.append("")
+
+    lines.append(f"Current question: {question}")
+
     if prev_sql and error:
         lines += [
             "",
-            f"Previous attempt failed:",
+            "Previous attempt failed:",
             f"SQL: {prev_sql}",
             f"Error: {error}",
             "Fix the SQL query. Check column names against the schema above.",
@@ -152,12 +167,13 @@ async def generate_sql(
     key: str,
     prev_sql: str | None = None,
     error: str | None = None,
+    history: list[dict] | None = None,
 ) -> str:
     """Call LLM (non-streaming) and return extracted SQL string.
 
     Tries the requested provider first; falls back to others if it fails.
     """
-    prompt = _build_sql_prompt(question, schema_text, prev_sql, error)
+    prompt = _build_sql_prompt(question, schema_text, prev_sql, error, history)
 
     # Build ordered provider list: primary first, then fallbacks with available keys
     providers_to_try: list[tuple[str, str]] = [(provider, key)]
