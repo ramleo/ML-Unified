@@ -93,7 +93,22 @@ def detect_visualization(columns: list[str], rows: list[list]) -> dict | None:
     # Multi-column
     if text_cols and numeric_cols:
         labels = [str(v) for v in col_vals[text_cols[0]][:20]]
-        if len(numeric_cols) >= 2:
+        if len(numeric_cols) == 2:
+            # If the two numeric columns have wildly different scales (e.g. milliseconds
+            # vs unit price), a scatter plot is more honest than a grouped bar chart.
+            vals0 = [sf(v) for v in col_vals[numeric_cols[0]][:20]]
+            vals1 = [sf(v) for v in col_vals[numeric_cols[1]][:20]]
+            m0, m1 = max(vals0, default=1), max(vals1, default=1)
+            scale_ratio = max(m0, m1) / max(min(m0, m1), 1e-6)
+            if scale_ratio > 100:
+                return {"chart_type": "scatter",
+                        "x": vals0, "y": vals1, "labels": labels,
+                        "x_label": numeric_cols[0], "y_label": numeric_cols[1]}
+            return {"chart_type": "multibar", "labels": labels,
+                    "series": [{"name": nc, "values": [sf(v) for v in col_vals[nc][:20]]}
+                                for nc in numeric_cols[:4]],
+                    "x_label": text_cols[0], "y_label": ""}
+        if len(numeric_cols) > 2:
             return {"chart_type": "multibar", "labels": labels,
                     "series": [{"name": nc, "values": [sf(v) for v in col_vals[nc][:20]]}
                                 for nc in numeric_cols[:4]],
