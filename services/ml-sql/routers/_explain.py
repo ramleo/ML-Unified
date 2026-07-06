@@ -122,7 +122,25 @@ def detect_visualization(columns: list[str], rows: list[list]) -> dict | None:
 
     # Multi-column
     if text_cols and numeric_cols:
-        labels = [str(v) for v in col_vals[text_cols[0]][:20]]
+        labels = [str(v) for v in col_vals[text_cols[0]][:50]]
+
+        # 2 text + 1 numeric → heatmap grid (e.g. Genre × Country → Sales)
+        if len(text_cols) == 2 and len(numeric_cols) == 1:
+            row_vals = [str(v) for v in col_vals[text_cols[0]]]
+            col_vals2 = [str(v) for v in col_vals[text_cols[1]]]
+            unique_rows = list(dict.fromkeys(row_vals))[:20]
+            unique_cols = list(dict.fromkeys(col_vals2))[:15]
+            if len(unique_rows) >= 2 and len(unique_cols) >= 2:
+                data = [
+                    {"row": row_vals[i], "col": col_vals2[i],
+                     "value": sf(col_vals[numeric_cols[0]][i])}
+                    for i in range(len(rows))
+                ]
+                return {"chart_type": "heatmap",
+                        "rows": unique_rows, "cols": unique_cols, "data": data,
+                        "x_label": text_cols[1], "y_label": text_cols[0],
+                        "v_label": numeric_cols[0]}
+
         if len(numeric_cols) == 2:
             # If the two numeric columns have wildly different scales (e.g. milliseconds
             # vs unit price), a scatter plot is more honest than a grouped bar chart.
@@ -143,12 +161,16 @@ def detect_visualization(columns: list[str], rows: list[list]) -> dict | None:
                     "series": [{"name": nc, "values": [sf(v) for v in col_vals[nc][:20]]}
                                 for nc in numeric_cols[:4]],
                     "x_label": text_cols[0], "y_label": ""}
-        values = [sf(v) for v in col_vals[numeric_cols[0]][:20]]
+        values = [sf(v) for v in col_vals[numeric_cols[0]][:50]]
+        # Treemap for large label sets (crowded bar chart becomes unreadable)
+        if len(rows) > 12:
+            return {"chart_type": "treemap", "labels": labels, "values": values,
+                    "x_label": text_cols[0], "y_label": numeric_cols[0]}
         avg_len = sum(len(l) for l in labels) / max(len(labels), 1)
         if avg_len > 12:
-            return {"chart_type": "bar_h", "labels": labels, "values": values,
+            return {"chart_type": "bar_h", "labels": labels[:20], "values": values[:20],
                     "x_label": numeric_cols[0], "y_label": text_cols[0]}
-        return {"chart_type": "bar", "labels": labels, "values": values,
+        return {"chart_type": "bar", "labels": labels[:20], "values": values[:20],
                 "x_label": text_cols[0], "y_label": numeric_cols[0]}
 
     return None

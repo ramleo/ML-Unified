@@ -50,6 +50,7 @@ def _build_sql_prompt(
     prev_sql: str | None = None,
     error: str | None = None,
     history: list[dict] | None = None,
+    glossary: str = "",
 ) -> str:
     lines = [
         "SECURITY RULES — follow always, no exceptions:",
@@ -64,6 +65,9 @@ def _build_sql_prompt(
         "",
         f"Schema:\n{schema_text}",
     ]
+
+    if glossary.strip():
+        lines.append(f"\nBusiness glossary (use these definitions for ambiguous terms/columns):\n{glossary.strip()[:800]}\n")
 
     if history:
         lines.append(
@@ -169,12 +173,13 @@ async def generate_sql(
     prev_sql: str | None = None,
     error: str | None = None,
     history: list[dict] | None = None,
+    glossary: str = "",
 ) -> str:
     """Call LLM (non-streaming) and return extracted SQL string.
 
     Tries the requested provider first; falls back to others if it fails.
     """
-    prompt = _build_sql_prompt(question, schema_text, prev_sql, error, history)
+    prompt = _build_sql_prompt(question, schema_text, prev_sql, error, history, glossary)
 
     # Build ordered provider list: primary first, then fallbacks with available keys
     providers_to_try: list[tuple[str, str]] = [(provider, key)]
