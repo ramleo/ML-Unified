@@ -16,10 +16,11 @@ from pydantic import BaseModel
 from ._explain import (
     _sse, build_explain_prompt, detect_visualization, stream_explanation,
 )
-from ._execute import UnsafeQueryError, execute_pg, execute_sqlite, validate_sql, result_to_dict, mask_sensitive_columns
+from ._execute import UnsafeQueryError, execute_pg, execute_sqlite, execute_mysql, execute_duckdb, validate_sql, result_to_dict, mask_sensitive_columns
 from ._generate import generate_sql, get_provider_cfg, sanitize_question
 from ._schema import (
-    DBSchema, load_pg_schema, load_sqlite_schema, schema_to_dict, schema_to_prompt_text,
+    DBSchema, load_pg_schema, load_sqlite_schema, load_mysql_schema, load_duckdb_schema,
+    schema_to_dict, schema_to_prompt_text,
 )
 
 router = APIRouter()
@@ -49,11 +50,11 @@ def _check_rate_limit() -> bool:
 
 
 def _save_session_index() -> None:
-    """Persist SQLite session metadata to disk so they survive in-process resets."""
+    """Persist file-based session metadata to disk so they survive in-process resets."""
     index = {
         ref: {"type": s["type"], "path": s.get("path", ""), "created_at": s.get("created_at", 0)}
         for ref, s in _sessions.items()
-        if s["type"] == "sqlite" and ref != "chinook"
+        if s["type"] in ("sqlite", "duckdb") and ref != "chinook"
     }
     try:
         _SESSION_FILE.write_text(json.dumps(index))
@@ -76,8 +77,12 @@ async def _restore_sessions() -> None:
         path = meta.get("path", "")
         if path and Path(path).exists() and ref not in _sessions:
             try:
-                schema = await load_sqlite_schema(path)
-                _sessions[ref] = {"type": "sqlite", "path": path,
+                stype = meta.get("type", "sqlite")
+                if stype == "duckdb":
+                    schema = await load_duckdb_schema(path)
+                else:
+                    schema = await load_sqlite_schema(path)
+                _sessions[ref] = {"type": stype, "path": path,
                                   "schema": schema, "created_at": meta["created_at"]}
             except Exception:
                 pass
@@ -114,20 +119,36 @@ async def get_schema(db_ref: str = "chinook"):
 
 # ── Upload SQLite ─────────────────────────────────────────────────────────────
 
+_SQLITE_EXTS = {".db", ".sqlite", ".sqlite3"}
+_DUCKDB_EXTS = {".duckdb", ".parquet", ".csv"}
+
+
 @router.post("/sql/upload")
 async def upload_db(file: UploadFile = File(...)):
-    if not file.filename or not file.filename.endswith((".db", ".sqlite", ".sqlite3")):
-        return JSONResponse({"error": "Upload a .db / .sqlite file"}, status_code=400)
+    fname = file.filename or ""
+    ext   = Path(fname).suffix.lower()
+    if ext in _SQLITE_EXTS:
+        stype = "sqlite"
+    elif ext in _DUCKDB_EXTS:
+        stype = "duckdb"
+    else:
+        return JSONResponse(
+            {"error": "Upload a .db / .sqlite / .sqlite3 / .duckdb / .parquet / .csv file"},
+            status_code=400,
+        )
     db_ref  = f"upload_{uuid.uuid4().hex[:8]}"
-    db_path = _UPLOAD_DIR / f"{db_ref}.db"
+    db_path = _UPLOAD_DIR / f"{db_ref}{ext}"
     with db_path.open("wb") as f:
         shutil.copyfileobj(file.file, f)
     try:
-        schema = await load_sqlite_schema(str(db_path))
+        if stype == "duckdb":
+            schema = await load_duckdb_schema(str(db_path))
+        else:
+            schema = await load_sqlite_schema(str(db_path))
     except Exception as e:
         db_path.unlink(missing_ok=True)
-        return JSONResponse({"error": f"Could not read DB: {e}"}, status_code=422)
-    _sessions[db_ref] = {"type": "sqlite", "path": str(db_path),
+        return JSONResponse({"error": f"Could not read file: {e}"}, status_code=422)
+    _sessions[db_ref] = {"type": stype, "path": str(db_path),
                          "schema": schema, "created_at": time.time()}
     _save_session_index()
     return {"db_ref": db_ref, "schema": schema_to_dict(schema)}
@@ -137,16 +158,23 @@ async def upload_db(file: UploadFile = File(...)):
 
 class ConnectRequest(BaseModel):
     conn_str: str
+    db_type: str = "postgresql"  # "postgresql" | "mysql"
 
 
 @router.post("/sql/connect")
-async def connect_pg(req: ConnectRequest):
+async def connect_db(req: ConnectRequest):
     try:
-        schema = await load_pg_schema(req.conn_str)
+        if req.db_type == "mysql":
+            schema = await load_mysql_schema(req.conn_str)
+            db_ref = f"mysql_{uuid.uuid4().hex[:8]}"
+            stype  = "mysql"
+        else:
+            schema = await load_pg_schema(req.conn_str)
+            db_ref = f"pg_{uuid.uuid4().hex[:8]}"
+            stype  = "postgresql"
     except Exception as e:
         return JSONResponse({"error": f"Connection failed: {e}"}, status_code=422)
-    db_ref = f"pg_{uuid.uuid4().hex[:8]}"
-    _sessions[db_ref] = {"type": "postgresql", "conn_str": req.conn_str,
+    _sessions[db_ref] = {"type": stype, "conn_str": req.conn_str,
                          "schema": schema, "created_at": time.time()}
     return {"db_ref": db_ref, "schema": schema_to_dict(schema)}
 
@@ -178,7 +206,9 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
     session = _sessions.get(req.db_ref)
     if not session:
         if req.db_ref.startswith("pg_"):
-            msg = "PostgreSQL session expired (server restarted). Please reconnect using the PostgreSQL tab."
+            msg = "PostgreSQL session expired (server restarted). Please reconnect."
+        elif req.db_ref.startswith("mysql_"):
+            msg = "MySQL session expired (server restarted). Please reconnect."
         elif req.db_ref.startswith("upload_"):
             msg = "Uploaded DB session expired (server restarted). Please re-upload your file."
         else:
@@ -231,8 +261,13 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
 
         # --- execute ---
         try:
-            if session["type"] == "sqlite":
+            stype = session["type"]
+            if stype == "sqlite":
                 result = await execute_sqlite(session["path"], sql)
+            elif stype == "duckdb":
+                result = await execute_duckdb(session["path"], sql)
+            elif stype == "mysql":
+                result = await execute_mysql(session["conn_str"], sql)
             else:
                 result = await execute_pg(session["conn_str"], sql)
             break  # success

@@ -140,6 +140,17 @@ def _trim_oversized(rows: list[list]) -> list[list]:
     return rows
 
 
+def _parse_mysql_url(conn_str: str) -> dict:
+    p = urllib.parse.urlparse(conn_str)
+    return {
+        "host": p.hostname or "localhost",
+        "port": p.port or 3306,
+        "user": p.username or "",
+        "password": p.password or "",
+        "db": (p.path or "").lstrip("/"),
+    }
+
+
 _ROW_LIMIT = 500
 
 
@@ -207,6 +218,54 @@ def _inject_limit(sql: str, limit: int) -> str:
     if not re.search(r"\bLIMIT\b", sql_stripped, re.IGNORECASE):
         sql_stripped += f" LIMIT {limit}"
     return sql_stripped
+
+
+async def execute_mysql(conn_str: str, sql: str) -> QueryResult:
+    import asyncmy
+    params = _parse_mysql_url(conn_str)
+    t0 = time.monotonic()
+    conn = await asyncmy.connect(**params)
+    try:
+        limited_sql = _inject_limit(sql, _ROW_LIMIT)
+        async with conn.cursor() as cur:
+            await cur.execute("SET SESSION TRANSACTION READ ONLY")
+            await cur.execute(limited_sql)
+            raw = await cur.fetchall()
+            cols = [d[0] for d in (cur.description or [])]
+        rows = _trim_oversized([list(r) for r in raw])
+    finally:
+        conn.close()
+    exec_ms = (time.monotonic() - t0) * 1000
+    return QueryResult(columns=cols, rows=rows, count=len(rows), exec_time_ms=round(exec_ms, 1))
+
+
+async def execute_duckdb(db_path: str, sql: str) -> QueryResult:
+    import asyncio
+    from pathlib import Path as _Path
+
+    ext = _Path(db_path).suffix.lower()
+
+    def _exec():
+        import duckdb
+        if ext == ".duckdb":
+            con = duckdb.connect(db_path, read_only=True)
+        else:
+            con = duckdb.connect()
+            if ext == ".parquet":
+                con.execute(f"CREATE VIEW data AS SELECT * FROM read_parquet('{db_path}')")
+            elif ext == ".csv":
+                con.execute(f"CREATE VIEW data AS SELECT * FROM read_csv_auto('{db_path}')")
+        rel = con.execute(_inject_limit(sql, _ROW_LIMIT))
+        cols = [d[0] for d in rel.description]
+        rows = [list(r) for r in rel.fetchall()]
+        con.close()
+        return cols, rows
+
+    t0 = time.monotonic()
+    cols, rows = await asyncio.to_thread(_exec)
+    exec_ms = (time.monotonic() - t0) * 1000
+    rows = _trim_oversized(rows)
+    return QueryResult(columns=cols, rows=rows, count=len(rows), exec_time_ms=round(exec_ms, 1))
 
 
 def result_to_dict(result: QueryResult) -> dict:

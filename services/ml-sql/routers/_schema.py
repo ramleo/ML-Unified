@@ -72,6 +72,113 @@ async def load_sqlite_schema(db_path: str) -> DBSchema:
     return DBSchema(tables=tables, db_type="sqlite")
 
 
+async def load_mysql_schema(conn_str: str) -> DBSchema:
+    import asyncmy
+    from urllib.parse import urlparse
+    p = urlparse(conn_str)
+    params = {
+        "host": p.hostname or "localhost",
+        "port": p.port or 3306,
+        "user": p.username or "",
+        "password": p.password or "",
+        "db": (p.path or "").lstrip("/"),
+    }
+    conn = await asyncmy.connect(**params)
+    tables: dict[str, TableSchema] = {}
+    try:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = DATABASE() ORDER BY table_name"
+            )
+            table_names = [r[0] for r in await cur.fetchall()]
+
+        for tname in table_names:
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    "SELECT column_name, data_type, is_nullable, column_key "
+                    "FROM information_schema.columns "
+                    "WHERE table_schema = DATABASE() AND table_name = %s "
+                    "ORDER BY ordinal_position",
+                    (tname,),
+                )
+                columns = [
+                    ColumnInfo(name=r[0], type=r[1], not_null=(r[2] == "NO"), pk=(r[3] == "PRI"))
+                    for r in await cur.fetchall()
+                ]
+                await cur.execute(
+                    "SELECT kcu.column_name, kcu.referenced_table_name, kcu.referenced_column_name "
+                    "FROM information_schema.key_column_usage kcu "
+                    "JOIN information_schema.referential_constraints rc "
+                    "  ON kcu.constraint_name = rc.constraint_name "
+                    "WHERE kcu.table_schema = DATABASE() AND kcu.table_name = %s",
+                    (tname,),
+                )
+                fks = [
+                    {"from_col": r[0], "to_table": r[1], "to_col": r[2]}
+                    for r in await cur.fetchall() if r[1]
+                ]
+                await cur.execute(f"SELECT COUNT(*) FROM `{tname}`")
+                row_count = (await cur.fetchone())[0]
+                await cur.execute(f"SELECT * FROM `{tname}` LIMIT 3")
+                raw = await cur.fetchall()
+                col_names = [d[0] for d in cur.description]
+                sample = [dict(zip(col_names, r)) for r in raw]
+            tables[tname] = TableSchema(
+                name=tname, columns=columns,
+                sample_rows=sample, row_count=row_count, foreign_keys=fks,
+            )
+    finally:
+        conn.close()
+    return DBSchema(tables=tables, db_type="mysql")
+
+
+async def load_duckdb_schema(db_path: str) -> DBSchema:
+    import asyncio
+    from pathlib import Path as _Path
+
+    def _load() -> DBSchema:
+        import duckdb
+        ext = _Path(db_path).suffix.lower()
+        if ext == ".duckdb":
+            con = duckdb.connect(db_path, read_only=True)
+        else:
+            con = duckdb.connect()
+            if ext == ".parquet":
+                con.execute(f"CREATE VIEW data AS SELECT * FROM read_parquet('{db_path}')")
+            elif ext == ".csv":
+                con.execute(f"CREATE VIEW data AS SELECT * FROM read_csv_auto('{db_path}')")
+
+        table_names = [r[0] for r in con.execute("SHOW TABLES").fetchall()]
+        tables: dict[str, TableSchema] = {}
+        for tname in table_names:
+            cols_raw = con.execute(
+                "SELECT column_name, data_type, is_nullable FROM information_schema.columns "
+                f"WHERE table_name = '{tname}' ORDER BY ordinal_position"
+            ).fetchall()
+            columns = [
+                ColumnInfo(name=r[0], type=r[1], not_null=(r[2] == "NO"), pk=False)
+                for r in cols_raw
+            ]
+            try:
+                row_count = con.execute(f'SELECT COUNT(*) FROM "{tname}"').fetchone()[0]
+            except Exception:
+                row_count = 0
+            try:
+                sample_df = con.execute(f'SELECT * FROM "{tname}" LIMIT 3').fetchdf()
+                sample = sample_df.to_dict(orient="records")
+            except Exception:
+                sample = []
+            tables[tname] = TableSchema(
+                name=tname, columns=columns,
+                sample_rows=sample, row_count=row_count, foreign_keys=[],
+            )
+        con.close()
+        return DBSchema(tables=tables, db_type="duckdb")
+
+    return await asyncio.to_thread(_load)
+
+
 async def load_pg_schema(conn_str: str) -> DBSchema:
     import asyncpg
     tables: dict[str, TableSchema] = {}
