@@ -27,57 +27,84 @@ def _is_numeric(vals: list) -> bool:
 
 
 def detect_visualization(columns: list[str], rows: list[list]) -> dict | None:
-    """Return chart spec dict or None if no suitable chart detected."""
-    if len(rows) < 2 or len(columns) < 2:
+    """Return chart spec dict or None if no suitable chart detected.
+
+    Chart type priority:
+      stat      — single aggregate row (1 numeric value)
+      donut     — 1 text + 1 numeric, ≤ 7 rows
+      bar_h     — 1 text + 1 numeric, avg label length > 12
+      area      — 2 cols, time pattern + numeric
+      scatter   — 2 numeric cols
+      multibar  — 1 text + 2-4 numeric cols
+      bar       — 1 text + 1 numeric (default)
+    """
+    if not rows or not columns:
         return None
 
     col_vals = {col: [row[i] for row in rows] for i, col in enumerate(columns)}
     numeric_cols = [c for c in columns if _is_numeric(col_vals[c])]
     text_cols    = [c for c in columns if c not in numeric_cols]
 
-    def safe_float(v):
+    def sf(v):
         try:
             return float(v) if v is not None else 0.0
         except (TypeError, ValueError):
             return 0.0
 
+    # 1. Single aggregate row → stat card
+    if len(rows) == 1 and numeric_cols:
+        return {
+            "chart_type": "stat",
+            "value": str(col_vals[numeric_cols[0]][0]),
+            "label": numeric_cols[0],
+            "x_label": numeric_cols[0], "y_label": "",
+        }
+
+    if len(rows) < 2:
+        return None
+
     if len(columns) == 2:
-        if len(text_cols) == 1 and len(numeric_cols) == 1:
+        if text_cols and numeric_cols:
             labels = [str(v) for v in col_vals[text_cols[0]][:20]]
-            values = [safe_float(v) for v in col_vals[numeric_cols[0]][:20]]
-            return {
-                "chart_type": "bar",
-                "x_label": text_cols[0], "y_label": numeric_cols[0],
-                "labels": labels, "values": values,
-            }
+            values = [sf(v) for v in col_vals[numeric_cols[0]][:20]]
+            avg_len = sum(len(l) for l in labels) / max(len(labels), 1)
+
+            if len(rows) <= 7:
+                return {"chart_type": "donut", "labels": labels, "values": values,
+                        "x_label": numeric_cols[0], "y_label": text_cols[0]}
+            if avg_len > 12:
+                return {"chart_type": "bar_h", "labels": labels, "values": values,
+                        "x_label": numeric_cols[0], "y_label": text_cols[0]}
+            return {"chart_type": "bar", "labels": labels, "values": values,
+                    "x_label": text_cols[0], "y_label": numeric_cols[0]}
 
         if len(numeric_cols) == 2:
-            first_vals = [str(v) for v in col_vals[columns[0]][:5]]
-            is_time = any(re.search(r"\d{4}[-/]\d{2}", v) for v in first_vals)
-            if is_time:
-                labels = [str(v) for v in col_vals[columns[0]][:30]]
-                values = [safe_float(v) for v in col_vals[columns[1]][:30]]
-                return {
-                    "chart_type": "line",
-                    "x_label": columns[0], "y_label": columns[1],
-                    "labels": labels, "values": values,
-                }
-            x_vals = [safe_float(v) for v in col_vals[columns[0]][:100]]
-            y_vals = [safe_float(v) for v in col_vals[columns[1]][:100]]
-            return {
-                "chart_type": "scatter",
-                "x_label": columns[0], "y_label": columns[1],
-                "x": x_vals, "y": y_vals,
-            }
+            sample = [str(v) for v in col_vals[columns[0]][:5]]
+            if any(re.search(r"\d{4}[-/]\d{2}", v) for v in sample):
+                return {"chart_type": "area",
+                        "labels": [str(v) for v in col_vals[columns[0]][:50]],
+                        "values": [sf(v) for v in col_vals[columns[1]][:50]],
+                        "x_label": columns[0], "y_label": columns[1]}
+            return {"chart_type": "scatter",
+                    "x": [sf(v) for v in col_vals[columns[0]][:100]],
+                    "y": [sf(v) for v in col_vals[columns[1]][:100]],
+                    "x_label": columns[0], "y_label": columns[1]}
 
+    # Multi-column
     if text_cols and numeric_cols:
         labels = [str(v) for v in col_vals[text_cols[0]][:20]]
-        values = [safe_float(v) for v in col_vals[numeric_cols[0]][:20]]
-        return {
-            "chart_type": "bar",
-            "x_label": text_cols[0], "y_label": numeric_cols[0],
-            "labels": labels, "values": values,
-        }
+        if len(numeric_cols) >= 2:
+            return {"chart_type": "multibar", "labels": labels,
+                    "series": [{"name": nc, "values": [sf(v) for v in col_vals[nc][:20]]}
+                                for nc in numeric_cols[:4]],
+                    "x_label": text_cols[0], "y_label": ""}
+        values = [sf(v) for v in col_vals[numeric_cols[0]][:20]]
+        avg_len = sum(len(l) for l in labels) / max(len(labels), 1)
+        if avg_len > 12:
+            return {"chart_type": "bar_h", "labels": labels, "values": values,
+                    "x_label": numeric_cols[0], "y_label": text_cols[0]}
+        return {"chart_type": "bar", "labels": labels, "values": values,
+                "x_label": text_cols[0], "y_label": numeric_cols[0]}
 
     return None
 
