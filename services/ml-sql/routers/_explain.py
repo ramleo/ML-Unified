@@ -80,7 +80,8 @@ def detect_visualization(columns: list[str], rows: list[list]) -> dict | None:
 
         if len(numeric_cols) == 2:
             sample = [str(v) for v in col_vals[columns[0]][:5]]
-            if any(re.search(r"\d{4}[-/]\d{2}", v) for v in sample):
+            # Match YYYY-MM, YYYY/MM, or plain YYYY (years 1900-2099)
+            if any(re.search(r"\b(19|20)\d{2}([-/]\d{1,2})?\b", v) for v in sample):
                 return {"chart_type": "area",
                         "labels": [str(v) for v in col_vals[columns[0]][:50]],
                         "values": [sf(v) for v in col_vals[columns[1]][:50]],
@@ -89,6 +90,23 @@ def detect_visualization(columns: list[str], rows: list[list]) -> dict | None:
                     "x": [sf(v) for v in col_vals[columns[0]][:100]],
                     "y": [sf(v) for v in col_vals[columns[1]][:100]],
                     "x_label": columns[0], "y_label": columns[1]}
+
+    # 3-col time series: year + month + value → area with combined "YYYY-MM" labels
+    if len(columns) == 3 and not text_cols:
+        year_sample  = [str(v) for v in col_vals[columns[0]][:5] if v is not None]
+        month_sample = [str(v) for v in col_vals[columns[1]][:5] if v is not None]
+        try:
+            year_ok  = all(re.match(r"^(19|20)\d{2}$", y) for y in year_sample)
+            month_ok = all(re.match(r"^\d{1,2}$", m) and 1 <= int(m) <= 12
+                           for m in month_sample)
+        except (ValueError, TypeError):
+            year_ok = month_ok = False
+        if year_ok and month_ok:
+            combined = [f"{y}-{str(m).zfill(2)}"
+                        for y, m in zip(col_vals[columns[0]][:50], col_vals[columns[1]][:50])]
+            return {"chart_type": "area", "labels": combined,
+                    "values": [sf(v) for v in col_vals[columns[2]][:50]],
+                    "x_label": f"{columns[0]}-{columns[1]}", "y_label": columns[2]}
 
     # Multi-column
     if text_cols and numeric_cols:
@@ -100,7 +118,7 @@ def detect_visualization(columns: list[str], rows: list[list]) -> dict | None:
             vals1 = [sf(v) for v in col_vals[numeric_cols[1]][:20]]
             m0, m1 = max(vals0, default=1), max(vals1, default=1)
             scale_ratio = max(m0, m1) / max(min(m0, m1), 1e-6)
-            if scale_ratio > 100:
+            if scale_ratio > 10:
                 return {"chart_type": "scatter",
                         "x": vals0, "y": vals1, "labels": labels,
                         "x_label": numeric_cols[0], "y_label": numeric_cols[1]}
