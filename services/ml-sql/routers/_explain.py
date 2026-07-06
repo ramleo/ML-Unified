@@ -84,11 +84,21 @@ def detect_visualization(columns: list[str], rows: list[list]) -> dict | None:
 
 # ── Explanation prompt ────────────────────────────────────────────────────────
 
+def _safe_cell(value: object) -> str:
+    """Truncate and flatten a cell value so it cannot carry multi-line injection."""
+    s = str(value) if value is not None else "null"
+    # Collapse newlines / control chars, cap at 80 chars
+    s = re.sub(r"[\r\n\t]+", " ", s)
+    return s[:80]
+
+
 def build_explain_prompt(
     question: str, sql: str, columns: list[str], rows_preview: list[list]
 ) -> str:
+    # Sanitize each cell — prevents prompt injection via malicious DB values
     rows_text = "\n".join(
-        str(dict(zip(columns, row))) for row in rows_preview[:10]
+        str({col: _safe_cell(val) for col, val in zip(columns, row)})
+        for row in rows_preview[:10]
     )
     return (
         f"Question asked: {question}\n\n"

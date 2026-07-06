@@ -29,8 +29,17 @@ _BLOCKED_KEYWORDS = (
     "DROP", "DELETE", "INSERT", "UPDATE", "CREATE", "ALTER",
     "TRUNCATE", "EXEC", "EXECUTE", "GRANT", "REVOKE", "REPLACE",
     "MERGE", "UPSERT", "LOAD", "ATTACH", "DETACH", "PRAGMA",
-    "VACUUM", "ANALYZE", "EXPLAIN",
+    "VACUUM", "ANALYZE", "EXPLAIN", "SET",
 )
+
+# Sensitive column names — values are masked in results sent to client + LLM
+_SENSITIVE_COL_RE = re.compile(
+    r"\b(password|passwd|secret|token|api_key|apikey|ssn|credit_card|cvv|"
+    r"private_key|salt|hash|otp|pin)\b",
+    re.IGNORECASE,
+)
+
+_MAX_RESULT_BYTES = 5_000_000  # 5 MB cap on raw result data
 
 _COMMENT_STRIP = re.compile(
     r"(--[^\n]*|/\*.*?\*/)", re.DOTALL
@@ -79,6 +88,34 @@ class QueryResult:
     exec_time_ms: float
 
 
+def mask_sensitive_columns(result: "QueryResult") -> "QueryResult":
+    """Replace cell values in sensitive columns with *** before returning to client or LLM."""
+    sensitive_idx = [
+        i for i, col in enumerate(result.columns)
+        if _SENSITIVE_COL_RE.search(col)
+    ]
+    if not sensitive_idx:
+        return result
+    masked = [
+        [("***" if j in sensitive_idx else cell) for j, cell in enumerate(row)]
+        for row in result.rows
+    ]
+    return QueryResult(
+        columns=result.columns, rows=masked,
+        count=result.count, exec_time_ms=result.exec_time_ms,
+    )
+
+
+def _trim_oversized(rows: list[list]) -> list[list]:
+    """Trim rows if total serialized size exceeds _MAX_RESULT_BYTES."""
+    total = 0
+    for i, row in enumerate(rows):
+        total += sum(len(str(c)) for c in row)
+        if total > _MAX_RESULT_BYTES:
+            return rows[:max(i, 1)]
+    return rows
+
+
 _ROW_LIMIT = 500
 
 
@@ -100,7 +137,7 @@ async def execute_sqlite(db_path: str, sql: str) -> QueryResult:
                 cols = [d[0] for d in (cur.description or [])]
                 return QueryResult(columns=cols, rows=[], count=0, exec_time_ms=0)
             cols = list(raw_rows[0].keys())
-            rows = [list(r) for r in raw_rows]
+            rows = _trim_oversized([list(r) for r in raw_rows])
 
     exec_ms = (time.monotonic() - t0) * 1000
     return QueryResult(
@@ -123,7 +160,7 @@ async def execute_pg(conn_str: str, sql: str) -> QueryResult:
         if not records:
             return QueryResult(columns=[], rows=[], count=0, exec_time_ms=0)
         cols = list(records[0].keys())
-        rows = [list(r.values()) for r in records]
+        rows = _trim_oversized([list(r.values()) for r in records])
     finally:
         await conn.close()
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import time
 import uuid
 from pathlib import Path
 from typing import AsyncGenerator
@@ -15,8 +16,8 @@ from pydantic import BaseModel
 from ._explain import (
     _sse, build_explain_prompt, detect_visualization, stream_explanation,
 )
-from ._execute import UnsafeQueryError, execute_pg, execute_sqlite, validate_sql, result_to_dict
-from ._generate import generate_sql, get_provider_cfg
+from ._execute import UnsafeQueryError, execute_pg, execute_sqlite, validate_sql, result_to_dict, mask_sensitive_columns
+from ._generate import generate_sql, get_provider_cfg, sanitize_question
 from ._schema import (
     DBSchema, load_pg_schema, load_sqlite_schema, schema_to_dict, schema_to_prompt_text,
 )
@@ -29,6 +30,20 @@ _UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # in-memory session store: db_ref → {type, path|conn_str, schema}
 _sessions: dict[str, dict] = {}
+
+# Global rate limiter — sliding window of query timestamps
+_recent_queries: list[float] = []
+_RATE_LIMIT = 30  # max queries per 60 seconds globally
+
+
+def _check_rate_limit() -> bool:
+    now = time.time()
+    cutoff = now - 60.0
+    _recent_queries[:] = [t for t in _recent_queries if t > cutoff]
+    if len(_recent_queries) >= _RATE_LIMIT:
+        return False
+    _recent_queries.append(now)
+    return True
 
 
 async def _preload_chinook() -> None:
@@ -112,6 +127,11 @@ async def query_sql(req: QueryRequest):
 
 
 async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
+    if not _check_rate_limit():
+        yield _sse({"type": "error", "text": "Rate limit reached. Please wait a moment and try again."})
+        yield _sse({"type": "done"})
+        return
+
     await _preload_chinook()
     session = _sessions.get(req.db_ref)
     if not session:
@@ -126,8 +146,11 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
         yield _sse({"type": "done"})
         return
 
+    # Sanitize user question — strip prompt injection attempts
+    safe_question = sanitize_question(req.question)
+
     schema: DBSchema = session["schema"]
-    schema_text = schema_to_prompt_text(schema, req.question)
+    schema_text = schema_to_prompt_text(schema, safe_question)
     yield _sse({"type": "schema_loaded", "tables": len(schema.tables),
                 "columns": sum(len(t.columns) for t in schema.tables.values())})
 
@@ -144,7 +167,7 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
         # --- generate SQL ---
         try:
             sql = await generate_sql(
-                req.question, schema_text, req.provider, key, prev_sql, last_error
+                safe_question, schema_text, req.provider, key, prev_sql, last_error
             )
             validate_sql(sql)
         except UnsafeQueryError as e:
@@ -176,14 +199,17 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
         yield _sse({"type": "done"})
         return
 
-    yield _sse({"type": "results", **result_to_dict(result)})
+    # Mask sensitive columns before sending to client or LLM
+    safe_result = mask_sensitive_columns(result)
+
+    yield _sse({"type": "results", **result_to_dict(safe_result)})
 
     # --- visualization ---
-    viz = detect_visualization(result.columns, result.rows)
+    viz = detect_visualization(safe_result.columns, safe_result.rows)
     if viz:
         yield _sse({"type": "visualization", **viz})
 
     # --- explanation (streaming) ---
-    prompt = build_explain_prompt(req.question, sql, result.columns, result.rows[:10])
+    prompt = build_explain_prompt(safe_question, sql, safe_result.columns, safe_result.rows[:10])
     async for chunk in stream_explanation(prompt, req.provider, key):
         yield chunk
