@@ -133,7 +133,10 @@ def detect_visualization(columns: list[str], rows: list[list]) -> dict | None:
             col_vals2 = [str(v) for v in col_vals[text_cols[1]]]
             unique_rows = list(dict.fromkeys(row_vals))[:20]
             unique_cols = list(dict.fromkeys(col_vals2))[:15]
-            if len(unique_rows) >= 2 and len(unique_cols) >= 2:
+            # Skip heatmap when every (row, col) pair is unique — it's a 1:1 record
+            # set (e.g. FirstName × LastName), not a real cross-tabulation grid.
+            is_diagonal = (len(unique_rows) == len(rows) and len(unique_cols) == len(rows))
+            if len(unique_rows) >= 2 and len(unique_cols) >= 2 and not is_diagonal:
                 data = [
                     {"row": row_vals[i], "col": col_vals2[i],
                      "value": sf(col_vals[numeric_cols[0]][i])}
@@ -143,6 +146,8 @@ def detect_visualization(columns: list[str], rows: list[list]) -> dict | None:
                         "rows": unique_rows, "cols": unique_cols, "data": data,
                         "x_label": text_cols[1], "y_label": text_cols[0],
                         "v_label": numeric_cols[0]}
+            # Fallback: concatenate the two text cols as one label → bar_h
+            labels = [f"{r} {c}" for r, c in zip(row_vals, col_vals2)]
 
         if len(numeric_cols) == 2:
             # If the two numeric columns have wildly different scales (e.g. milliseconds
