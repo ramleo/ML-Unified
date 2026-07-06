@@ -79,6 +79,30 @@ def validate_sql(sql: str) -> None:
     if not re.search(r"\bSELECT\b", clean):
         raise UnsafeQueryError("Query must contain SELECT")
 
+    # Structural pre-validation — catch malformed LLM output before hitting the DB
+
+    # 1. FROM clause required (subqueries with no outer FROM are rare and suspicious)
+    if not re.search(r"\bFROM\b", clean):
+        raise UnsafeQueryError("Query must contain a FROM clause")
+
+    # 2. Balanced parentheses
+    if stripped.count("(") != stripped.count(")"):
+        raise UnsafeQueryError("Unbalanced parentheses in query")
+
+    # 3. Unmatched single quotes (odd count means an open string literal)
+    # Strip escaped quotes ('') before counting
+    no_escaped = stripped.replace("''", "")
+    if no_escaped.count("'") % 2 != 0:
+        raise UnsafeQueryError("Unmatched single quote in query")
+
+    # 4. Truncated query — ends on a dangling keyword (LLM cut off mid-generation)
+    _DANGLING = re.compile(
+        r"\b(WHERE|AND|OR|ON|JOIN|LEFT|RIGHT|INNER|OUTER|HAVING|GROUP|ORDER|BY|FROM|SELECT|BETWEEN|NOT|IN|LIKE|AS|CASE|WHEN|THEN|ELSE)\s*$",
+        re.IGNORECASE,
+    )
+    if _DANGLING.search(stripped.rstrip(";")):
+        raise UnsafeQueryError("Query appears truncated (ends on a keyword)")
+
 
 @dataclass
 class QueryResult:
