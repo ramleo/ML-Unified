@@ -110,6 +110,28 @@ class QueryResult:
     rows: list[list]
     count: int
     exec_time_ms: float
+    total_count: int = -1  # -1 = unknown; set when count query is run
+
+
+def paginate_sql(sql: str, page: int, page_size: int) -> str:
+    """Wrap sql with LIMIT/OFFSET for the given 1-indexed page."""
+    inner = re.sub(r"\bLIMIT\s+\d+(\s+OFFSET\s+\d+)?\s*$", "", sql.rstrip(";").strip(), flags=re.IGNORECASE).strip()
+    return f"SELECT * FROM ({inner}) AS _paged LIMIT {page_size} OFFSET {(page - 1) * page_size}"
+
+
+def _count_sql(sql: str) -> str:
+    inner = re.sub(r"\bLIMIT\s+\d+(\s+OFFSET\s+\d+)?\s*$", "", sql.rstrip(";").strip(), flags=re.IGNORECASE).strip()
+    return f"SELECT COUNT(*) FROM ({inner}) AS _cnt"
+
+
+async def count_rows_sqlite(db_path: str, sql: str) -> int:
+    try:
+        async with aiosqlite.connect(_ro_uri(db_path), uri=True) as db:
+            async with db.execute(_count_sql(sql)) as cur:
+                row = await cur.fetchone()
+                return int(row[0]) if row else 0
+    except Exception:
+        return -1
 
 
 def mask_sensitive_columns(result: "QueryResult") -> "QueryResult":
@@ -269,9 +291,7 @@ async def execute_duckdb(db_path: str, sql: str) -> QueryResult:
 
 
 def result_to_dict(result: QueryResult) -> dict:
-    return {
-        "columns": result.columns,
-        "rows": result.rows,
-        "count": result.count,
-        "exec_time_ms": result.exec_time_ms,
-    }
+    d = {"columns": result.columns, "rows": result.rows, "count": result.count, "exec_time_ms": result.exec_time_ms}
+    if result.total_count >= 0:
+        d["total_count"] = result.total_count
+    return d

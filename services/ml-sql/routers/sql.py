@@ -16,7 +16,11 @@ from pydantic import BaseModel
 from ._explain import (
     _sse, build_explain_prompt, detect_visualization, stream_explanation,
 )
-from ._execute import UnsafeQueryError, execute_pg, execute_sqlite, execute_mysql, execute_duckdb, validate_sql, result_to_dict, mask_sensitive_columns
+from ._execute import (
+    UnsafeQueryError, execute_pg, execute_sqlite, execute_mysql, execute_duckdb,
+    validate_sql, result_to_dict, mask_sensitive_columns,
+    paginate_sql, count_rows_sqlite,
+)
 from ._generate import generate_sql, get_provider_cfg, sanitize_question
 from ._schema import (
     DBSchema, load_pg_schema, load_sqlite_schema, load_mysql_schema, load_duckdb_schema,
@@ -185,8 +189,47 @@ class QueryRequest(BaseModel):
     question: str
     provider:  str = "groq"
     db_ref:    str = "chinook"
-    history:   list[dict] = []       # [{question, sql, result_summary}, ...]
-    glossary:  str = ""              # user-supplied business glossary text
+    history:   list[dict] = []
+    glossary:  str = ""
+
+
+class PageRequest(BaseModel):
+    sql:       str
+    db_ref:    str = "chinook"
+    page:      int = 1
+    page_size: int = 50
+
+
+@router.post("/sql/page")
+async def page_results(req: PageRequest):
+    await _preload_chinook()
+    session = _sessions.get(req.db_ref)
+    if not session:
+        return JSONResponse({"error": "Session expired or unknown"}, status_code=404)
+    try:
+        validate_sql(req.sql)
+    except UnsafeQueryError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    page      = max(1, req.page)
+    page_size = min(max(10, req.page_size), 200)
+    paged     = paginate_sql(req.sql, page, page_size)
+    try:
+        stype = session["type"]
+        if stype == "sqlite":
+            result = await execute_sqlite(session["path"], paged)
+            total  = await count_rows_sqlite(session["path"], req.sql)
+        elif stype == "duckdb":
+            result = await execute_duckdb(session["path"], paged); total = -1
+        elif stype == "mysql":
+            result = await execute_mysql(session["conn_str"], paged); total = -1
+        else:
+            result = await execute_pg(session["conn_str"], paged); total = -1
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    safe = mask_sensitive_columns(result)
+    d = result_to_dict(safe)
+    d.update({"total_count": total, "page": page, "page_size": page_size})
+    return d
 
 
 @router.post("/sql/query")
@@ -262,17 +305,18 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
 
         yield _sse({"type": "sql_generated", "sql": sql})
 
-        # --- execute ---
+        # --- execute (page 1 of 50) ---
         try:
+            paged = paginate_sql(sql, 1, 50)
             stype = session["type"]
             if stype == "sqlite":
-                result = await execute_sqlite(session["path"], sql)
+                result = await execute_sqlite(session["path"], paged)
             elif stype == "duckdb":
-                result = await execute_duckdb(session["path"], sql)
+                result = await execute_duckdb(session["path"], paged)
             elif stype == "mysql":
-                result = await execute_mysql(session["conn_str"], sql)
+                result = await execute_mysql(session["conn_str"], paged)
             else:
-                result = await execute_pg(session["conn_str"], sql)
+                result = await execute_pg(session["conn_str"], paged)
             break  # success
         except Exception as e:
             last_error = f"Execution error: {e}"
@@ -288,7 +332,13 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
     # Mask sensitive columns before sending to client or LLM
     safe_result = mask_sensitive_columns(result)
 
-    yield _sse({"type": "results", **result_to_dict(safe_result)})
+    # Total count for pagination (SQLite only; -1 = unknown for other backends)
+    total_count = await count_rows_sqlite(session["path"], sql) if session["type"] == "sqlite" else -1
+    result_dict = result_to_dict(safe_result)
+    result_dict["total_count"] = total_count
+    result_dict["page"] = 1
+    result_dict["page_size"] = 50
+    yield _sse({"type": "results", **result_dict})
 
     # --- visualization ---
     viz = detect_visualization(safe_result.columns, safe_result.rows)
