@@ -261,6 +261,39 @@ async def execute_mysql(conn_str: str, sql: str) -> QueryResult:
     return QueryResult(columns=cols, rows=rows, count=len(rows), exec_time_ms=round(exec_ms, 1))
 
 
+def paginate_mssql_sql(sql: str, page: int, page_size: int) -> str:
+    """Wrap sql with MSSQL OFFSET/FETCH pagination (strips ORDER BY for subquery compat)."""
+    inner = re.sub(r"\bORDER\s+BY\s+.+$", "", sql.rstrip(";").strip(), flags=re.IGNORECASE | re.DOTALL).strip()
+    inner = re.sub(r"\bTOP\s+\d+\b", "", inner, flags=re.IGNORECASE).strip()
+    offset = (page - 1) * page_size
+    return (
+        f"SELECT * FROM ({inner}) AS _q "
+        f"ORDER BY (SELECT NULL) OFFSET {offset} ROWS FETCH NEXT {page_size} ROWS ONLY"
+    )
+
+
+async def execute_mssql(conn_str: str, sql: str) -> QueryResult:
+    import aiomssql
+    from urllib.parse import urlparse
+    p = urlparse(conn_str)
+    conn = await aiomssql.connect(
+        host=p.hostname, port=p.port or 1433,
+        user=p.username, password=p.password,
+        database=(p.path or "").lstrip("/"),
+    )
+    t0 = time.monotonic()
+    try:
+        cur = await conn.cursor()
+        await cur.execute(sql)
+        raw = await cur.fetchall()
+        cols = [d[0] for d in (cur.description or [])]
+        rows = _trim_oversized([list(r) for r in raw])
+    finally:
+        conn.close()
+    exec_ms = (time.monotonic() - t0) * 1000
+    return QueryResult(columns=cols, rows=rows, count=len(rows), exec_time_ms=round(exec_ms, 1))
+
+
 async def execute_duckdb(db_path: str, sql: str) -> QueryResult:
     import asyncio
     from pathlib import Path as _Path

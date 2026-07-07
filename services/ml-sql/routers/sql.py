@@ -17,15 +17,16 @@ from ._explain import (
     _sse, build_explain_prompt, detect_visualization, stream_explanation,
 )
 from ._execute import (
-    UnsafeQueryError, execute_pg, execute_sqlite, execute_mysql, execute_duckdb,
+    UnsafeQueryError, execute_pg, execute_sqlite, execute_mysql, execute_duckdb, execute_mssql,
     validate_sql, result_to_dict, mask_sensitive_columns,
-    paginate_sql, count_rows_sqlite,
+    paginate_sql, paginate_mssql_sql, count_rows_sqlite,
 )
 from ._generate import generate_sql, get_provider_cfg, sanitize_question
 from ._schema import (
     DBSchema, load_pg_schema, load_sqlite_schema, load_mysql_schema, load_duckdb_schema,
     schema_to_dict, schema_to_prompt_text,
 )
+from ._schema_mssql import load_mssql_schema
 
 router = APIRouter()
 
@@ -172,6 +173,10 @@ async def connect_db(req: ConnectRequest):
             schema = await load_mysql_schema(req.conn_str)
             db_ref = f"mysql_{uuid.uuid4().hex[:8]}"
             stype  = "mysql"
+        elif req.db_type == "mssql":
+            schema = await load_mssql_schema(req.conn_str)
+            db_ref = f"mssql_{uuid.uuid4().hex[:8]}"
+            stype  = "mssql"
         else:
             schema = await load_pg_schema(req.conn_str)
             db_ref = f"pg_{uuid.uuid4().hex[:8]}"
@@ -212,9 +217,9 @@ async def page_results(req: PageRequest):
         return JSONResponse({"error": str(e)}, status_code=400)
     page      = max(1, req.page)
     page_size = min(max(10, req.page_size), 200)
-    paged     = paginate_sql(req.sql, page, page_size)
+    stype     = session["type"]
+    paged     = paginate_mssql_sql(req.sql, page, page_size) if stype == "mssql" else paginate_sql(req.sql, page, page_size)
     try:
-        stype = session["type"]
         if stype == "sqlite":
             result = await execute_sqlite(session["path"], paged)
             total  = await count_rows_sqlite(session["path"], req.sql)
@@ -222,6 +227,8 @@ async def page_results(req: PageRequest):
             result = await execute_duckdb(session["path"], paged); total = -1
         elif stype == "mysql":
             result = await execute_mysql(session["conn_str"], paged); total = -1
+        elif stype == "mssql":
+            result = await execute_mssql(session["conn_str"], paged); total = -1
         else:
             result = await execute_pg(session["conn_str"], paged); total = -1
     except Exception as e:
@@ -254,6 +261,8 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
             msg = "PostgreSQL session expired (server restarted). Please reconnect."
         elif req.db_ref.startswith("mysql_"):
             msg = "MySQL session expired (server restarted). Please reconnect."
+        elif req.db_ref.startswith("mssql_"):
+            msg = "SQL Server session expired (server restarted). Please reconnect."
         elif req.db_ref.startswith("upload_"):
             msg = "Uploaded DB session expired (server restarted). Please re-upload your file."
         else:
@@ -307,14 +316,16 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
 
         # --- execute (page 1 of 50) ---
         try:
-            paged = paginate_sql(sql, 1, 50)
             stype = session["type"]
+            paged = paginate_mssql_sql(sql, 1, 50) if stype == "mssql" else paginate_sql(sql, 1, 50)
             if stype == "sqlite":
                 result = await execute_sqlite(session["path"], paged)
             elif stype == "duckdb":
                 result = await execute_duckdb(session["path"], paged)
             elif stype == "mysql":
                 result = await execute_mysql(session["conn_str"], paged)
+            elif stype == "mssql":
+                result = await execute_mssql(session["conn_str"], paged)
             else:
                 result = await execute_pg(session["conn_str"], paged)
             break  # success
