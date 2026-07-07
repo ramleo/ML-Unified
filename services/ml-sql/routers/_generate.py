@@ -165,6 +165,37 @@ async def _call_cohere(prompt: str, model: str, key: str) -> str:
         return resp.json()["message"]["content"][0]["text"]
 
 
+def _build_filter_prompt(filter_text: str, columns: list[str]) -> str:
+    cols = ", ".join(columns) if columns else "(unknown)"
+    return (
+        f"Available columns: {cols}\n"
+        f"Filter request: \"{filter_text}\"\n"
+        "Output ONLY the SQL WHERE clause condition — no WHERE keyword, no semicolons, no markdown.\n"
+        "Use exact column names from the list above.\n"
+        "Examples:\n"
+        "  'revenue greater than 1000' → Revenue > 1000\n"
+        "  'country is USA' → Country = 'USA'\n"
+        "  'name starts with A' → Name LIKE 'A%'\n"
+        "Condition:"
+    )
+
+
+async def generate_filter_expr(
+    filter_text: str, columns: list[str], provider: str, key: str,
+) -> str:
+    """Convert a plain-English filter request into a SQL WHERE expression."""
+    prompt = _build_filter_prompt(filter_text, columns)
+    cfg = get_provider_cfg(provider)
+    if provider == "gemini":
+        raw = await _call_gemini(prompt, cfg["model"], key)
+    elif provider == "cohere":
+        raw = await _call_cohere(prompt, cfg["model"], key)
+    else:
+        raw = await _call_groq(prompt, cfg["model"], key)
+    expr = re.sub(r"```.*?```", "", raw, flags=re.DOTALL).strip()
+    return expr.lstrip("WHERE ").rstrip(";").strip()
+
+
 async def generate_sql(
     question: str,
     schema_text: str,

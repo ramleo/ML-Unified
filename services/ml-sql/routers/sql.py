@@ -21,7 +21,7 @@ from ._execute import (
     validate_sql, result_to_dict, mask_sensitive_columns,
     paginate_sql, paginate_mssql_sql, count_rows_sqlite,
 )
-from ._generate import generate_sql, get_provider_cfg, sanitize_question
+from ._generate import generate_sql, generate_filter_expr, get_provider_cfg, sanitize_question
 from ._schema import (
     DBSchema, load_pg_schema, load_sqlite_schema, load_mysql_schema, load_duckdb_schema,
     schema_to_dict, schema_to_prompt_text,
@@ -91,6 +91,15 @@ async def _restore_sessions() -> None:
                                   "schema": schema, "created_at": meta["created_at"]}
             except Exception:
                 pass
+
+
+async def _exec_session(session: dict, sql: str):
+    stype = session["type"]
+    if stype == "sqlite":   return await execute_sqlite(session["path"], sql)
+    elif stype == "duckdb": return await execute_duckdb(session["path"], sql)
+    elif stype == "mysql":  return await execute_mysql(session["conn_str"], sql)
+    elif stype == "mssql":  return await execute_mssql(session["conn_str"], sql)
+    else:                   return await execute_pg(session["conn_str"], sql)
 
 
 async def _preload_chinook() -> None:
@@ -220,22 +229,58 @@ async def page_results(req: PageRequest):
     stype     = session["type"]
     paged     = paginate_mssql_sql(req.sql, page, page_size) if stype == "mssql" else paginate_sql(req.sql, page, page_size)
     try:
-        if stype == "sqlite":
-            result = await execute_sqlite(session["path"], paged)
-            total  = await count_rows_sqlite(session["path"], req.sql)
-        elif stype == "duckdb":
-            result = await execute_duckdb(session["path"], paged); total = -1
-        elif stype == "mysql":
-            result = await execute_mysql(session["conn_str"], paged); total = -1
-        elif stype == "mssql":
-            result = await execute_mssql(session["conn_str"], paged); total = -1
-        else:
-            result = await execute_pg(session["conn_str"], paged); total = -1
+        result = await _exec_session(session, paged)
+        total = await count_rows_sqlite(session["path"], req.sql) if stype == "sqlite" else -1
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
     safe = mask_sensitive_columns(result)
     d = result_to_dict(safe)
     d.update({"total_count": total, "page": page, "page_size": page_size})
+    return d
+
+
+class FilterRequest(BaseModel):
+    sql: str
+    db_ref: str = "chinook"
+    filter_text: str
+    columns: list[str] = []
+    provider: str = "groq"
+
+
+@router.post("/sql/filter")
+async def filter_results(req: FilterRequest):
+    await _preload_chinook()
+    session = _sessions.get(req.db_ref)
+    if not session:
+        return JSONResponse({"error": "Session expired or unknown"}, status_code=404)
+    try:
+        validate_sql(req.sql)
+    except UnsafeQueryError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    cfg = get_provider_cfg(req.provider)
+    key = os.environ.get(cfg["env"], "")
+    if not key:
+        return JSONResponse({"error": f"{cfg['env']} not configured"}, status_code=422)
+    try:
+        expr = await generate_filter_expr(sanitize_question(req.filter_text), req.columns, req.provider, key)
+    except Exception as e:
+        return JSONResponse({"error": f"Filter generation failed: {e}"}, status_code=500)
+    inner = req.sql.rstrip(";").strip()
+    filtered_sql = f"SELECT * FROM ({inner}) AS _filtered WHERE {expr}"
+    try:
+        validate_sql(filtered_sql)
+    except UnsafeQueryError as e:
+        return JSONResponse({"error": f"Generated filter is unsafe: {e}"}, status_code=400)
+    stype = session["type"]
+    paged = paginate_mssql_sql(filtered_sql, 1, 50) if stype == "mssql" else paginate_sql(filtered_sql, 1, 50)
+    try:
+        result = await _exec_session(session, paged)
+        total = await count_rows_sqlite(session["path"], filtered_sql) if stype == "sqlite" else -1
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    safe = mask_sensitive_columns(result)
+    d = result_to_dict(safe)
+    d.update({"filtered_sql": filtered_sql, "filter_expr": expr, "total_count": total, "page": 1, "page_size": 50})
     return d
 
 
@@ -318,16 +363,7 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
         try:
             stype = session["type"]
             paged = paginate_mssql_sql(sql, 1, 50) if stype == "mssql" else paginate_sql(sql, 1, 50)
-            if stype == "sqlite":
-                result = await execute_sqlite(session["path"], paged)
-            elif stype == "duckdb":
-                result = await execute_duckdb(session["path"], paged)
-            elif stype == "mysql":
-                result = await execute_mysql(session["conn_str"], paged)
-            elif stype == "mssql":
-                result = await execute_mssql(session["conn_str"], paged)
-            else:
-                result = await execute_pg(session["conn_str"], paged)
+            result = await _exec_session(session, paged)
             break  # success
         except Exception as e:
             last_error = f"Execution error: {e}"
