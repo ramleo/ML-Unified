@@ -133,12 +133,13 @@ def detect_visualization(columns: list[str], rows: list[list]) -> dict | None:
             col_vals2 = [str(v) for v in col_vals[text_cols[1]]]
             unique_rows = list(dict.fromkeys(row_vals))[:20]
             unique_cols = list(dict.fromkeys(col_vals2))[:15]
-            # Skip heatmap when BOTH axes are fully unique — 1:1 mapping
-            # (e.g. FirstName × LastName). Use uncapped sets; the old check
-            # used capped unique_rows/cols so it broke when len(rows) > 20.
-            # Valid heatmaps (Genre × Country) always repeat at least one axis.
-            is_one_to_one = (len(set(row_vals)) == len(rows) and len(set(col_vals2)) == len(rows))
-            if len(unique_rows) >= 2 and len(unique_cols) >= 2 and not is_one_to_one:
+            # Skip heatmap when EITHER axis is near-fully unique (name/ID column).
+            # Use >= len(rows)*0.8 so near-duplicates (58/59) also get caught.
+            # Valid cross-tabs (Genre × Country) always have far fewer unique
+            # values per axis than total rows, so they pass through.
+            n = len(rows)
+            bad = (len(set(row_vals)) >= n * 0.8 or len(set(col_vals2)) >= n * 0.8)
+            if len(unique_rows) >= 2 and len(unique_cols) >= 2 and not bad:
                 data = [
                     {"row": row_vals[i], "col": col_vals2[i],
                      "value": sf(col_vals[numeric_cols[0]][i])}
