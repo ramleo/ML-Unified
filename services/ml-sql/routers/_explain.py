@@ -133,10 +133,13 @@ def detect_visualization(columns: list[str], rows: list[list]) -> dict | None:
             col_vals2 = [str(v) for v in col_vals[text_cols[1]]]
             unique_rows = list(dict.fromkeys(row_vals))[:20]
             unique_cols = list(dict.fromkeys(col_vals2))[:15]
-            # Skip heatmap when every (row, col) pair is unique — it's a 1:1 record
-            # set (e.g. FirstName × LastName), not a real cross-tabulation grid.
-            is_diagonal = (len(unique_rows) == len(rows) and len(unique_cols) == len(rows))
-            if len(unique_rows) >= 2 and len(unique_cols) >= 2 and not is_diagonal:
+            # Skip heatmap when every (row, col) pair is unique — 1:1 mapping
+            # (e.g. FirstName × LastName per customer), not a real cross-tab.
+            # Use set of pairs (not capped unique_rows/cols) to avoid false negatives
+            # when len(rows) > 20 (the cap on unique_rows/unique_cols).
+            pairs = set(zip(row_vals, col_vals2))
+            is_one_to_one = len(pairs) == len(rows)
+            if len(unique_rows) >= 2 and len(unique_cols) >= 2 and not is_one_to_one:
                 data = [
                     {"row": row_vals[i], "col": col_vals2[i],
                      "value": sf(col_vals[numeric_cols[0]][i])}
