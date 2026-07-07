@@ -273,24 +273,30 @@ def paginate_mssql_sql(sql: str, page: int, page_size: int) -> str:
 
 
 async def execute_mssql(conn_str: str, sql: str) -> QueryResult:
-    import aiomssql
+    import asyncio
     from urllib.parse import urlparse
-    p = urlparse(conn_str)
-    conn = await aiomssql.connect(
-        host=p.hostname, port=p.port or 1433,
-        user=p.username, password=p.password,
-        database=(p.path or "").lstrip("/"),
-    )
+
+    def _run() -> tuple[list[str], list[list]]:
+        import pymssql
+        p = urlparse(conn_str)
+        conn = pymssql.connect(
+            server=p.hostname, port=p.port or 1433,
+            user=p.username, password=p.password,
+            database=(p.path or "").lstrip("/"),
+        )
+        try:
+            cur = conn.cursor()
+            cur.execute(sql)
+            raw = cur.fetchall()
+            cols = [d[0] for d in (cur.description or [])]
+            return cols, [list(r) for r in raw]
+        finally:
+            conn.close()
+
     t0 = time.monotonic()
-    try:
-        cur = await conn.cursor()
-        await cur.execute(sql)
-        raw = await cur.fetchall()
-        cols = [d[0] for d in (cur.description or [])]
-        rows = _trim_oversized([list(r) for r in raw])
-    finally:
-        conn.close()
+    cols, rows = await asyncio.to_thread(_run)
     exec_ms = (time.monotonic() - t0) * 1000
+    rows = _trim_oversized(rows)
     return QueryResult(columns=cols, rows=rows, count=len(rows), exec_time_ms=round(exec_ms, 1))
 
 
