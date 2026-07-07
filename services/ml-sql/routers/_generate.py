@@ -166,18 +166,30 @@ async def _call_cohere(prompt: str, model: str, key: str) -> str:
 
 
 def _build_filter_prompt(filter_text: str, columns: list[str]) -> str:
-    cols = ", ".join(columns) if columns else "(unknown)"
+    # Show columns pre-quoted so the LLM mirrors the quoting in its output
+    cols_display = ", ".join(f'"{c}"' for c in columns) if columns else "(unknown)"
     return (
-        f"Available columns: {cols}\n"
+        f"Available columns: {cols_display}\n"
         f"Filter request: \"{filter_text}\"\n"
         "Output ONLY the SQL WHERE clause condition — no WHERE keyword, no semicolons, no markdown.\n"
-        "Use exact column names from the list above.\n"
+        "Wrap every column name in double-quotes exactly as shown above.\n"
         "Examples:\n"
-        "  'revenue greater than 1000' → Revenue > 1000\n"
-        "  'country is USA' → Country = 'USA'\n"
-        "  'name starts with A' → Name LIKE 'A%'\n"
+        "  'revenue greater than 1000' → \"Revenue\" > 1000\n"
+        "  'country is USA' → \"Country\" = 'USA'\n"
+        "  'name starts with A' → \"Name\" LIKE 'A%'\n"
         "Condition:"
     )
+
+
+def _ensure_quoted(expr: str, columns: list[str]) -> str:
+    """Quote any multi-word column name that the LLM left unquoted."""
+    for col in sorted(columns, key=len, reverse=True):
+        if " " not in col:
+            continue
+        # Match unquoted occurrence: not already surrounded by double-quotes
+        pattern = re.compile(r'(?<!")\b' + re.escape(col) + r'\b(?!")', re.IGNORECASE)
+        expr = pattern.sub(f'"{col}"', expr)
+    return expr
 
 
 async def generate_filter_expr(
@@ -193,7 +205,8 @@ async def generate_filter_expr(
     else:
         raw = await _call_groq(prompt, cfg["model"], key)
     expr = re.sub(r"```.*?```", "", raw, flags=re.DOTALL).strip()
-    return expr.lstrip("WHERE ").rstrip(";").strip()
+    expr = expr.lstrip("WHERE ").rstrip(";").strip()
+    return _ensure_quoted(expr, columns)
 
 
 async def generate_sql(
