@@ -21,7 +21,7 @@ from ._execute import (
     validate_sql, result_to_dict, mask_sensitive_columns,
     paginate_sql, paginate_mssql_sql, count_rows_sqlite,
 )
-from ._generate import generate_sql, generate_filter_expr, get_provider_cfg, sanitize_question
+from ._generate import generate_sql, generate_filter_expr, get_provider_cfg, sanitize_question, generate_sample_questions
 from ._schema import (
     DBSchema, load_pg_schema, load_sqlite_schema, load_mysql_schema, load_duckdb_schema,
     schema_to_dict, schema_to_prompt_text,
@@ -110,8 +110,6 @@ async def _preload_chinook() -> None:
     await _restore_sessions()
 
 
-# ── Health ────────────────────────────────────────────────────────────────────
-
 @router.get("/health")
 async def health():
     await _preload_chinook()
@@ -119,8 +117,6 @@ async def health():
     tables  = len(chinook["schema"].tables) if chinook else 0
     return {"status": "ok", "demo_db": "chinook.db", "tables": tables}
 
-
-# ── Schema ────────────────────────────────────────────────────────────────────
 
 @router.get("/sql/schema")
 async def get_schema(db_ref: str = "chinook"):
@@ -131,7 +127,14 @@ async def get_schema(db_ref: str = "chinook"):
     return schema_to_dict(session["schema"])
 
 
-# ── Upload SQLite ─────────────────────────────────────────────────────────────
+@router.get("/sql/sample-questions")
+async def get_sample_questions(db_ref: str, provider: str = "groq"):
+    session = _sessions.get(db_ref)
+    if not session:
+        return JSONResponse({"error": "session not found"}, status_code=404)
+    key = os.environ.get(get_provider_cfg(provider)["env"], "")
+    return {"questions": await generate_sample_questions(session["schema"], provider, key)}
+
 
 _SQLITE_EXTS = {".db", ".sqlite", ".sqlite3"}
 _DUCKDB_EXTS = {".duckdb", ".parquet", ".csv"}
@@ -168,8 +171,6 @@ async def upload_db(file: UploadFile = File(...)):
     return {"db_ref": db_ref, "schema": schema_to_dict(schema)}
 
 
-# ── Connect PostgreSQL ────────────────────────────────────────────────────────
-
 class ConnectRequest(BaseModel):
     conn_str: str
     db_type: str = "postgresql"  # "postgresql" | "mysql"
@@ -196,8 +197,6 @@ async def connect_db(req: ConnectRequest):
                          "schema": schema, "created_at": time.time()}
     return {"db_ref": db_ref, "schema": schema_to_dict(schema)}
 
-
-# ── Query (SSE pipeline) ──────────────────────────────────────────────────────
 
 class QueryRequest(BaseModel):
     question: str

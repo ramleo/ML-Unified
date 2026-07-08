@@ -285,6 +285,36 @@ async def generate_filter_expr(
     return _ensure_quoted(expr, columns)
 
 
+def _build_sample_q_prompt(schema_text: str) -> str:
+    return (
+        f"Database schema:\n{schema_text}\n\n"
+        "Write exactly 5 natural-language questions a data analyst would ask about this database.\n"
+        "- One per line, no numbering, no bullets\n"
+        "- Cover: rankings, totals, trends, comparisons, breakdowns\n"
+        "- Keep each question under 15 words\n"
+        "Return only the 5 questions, nothing else."
+    )
+
+
+async def generate_sample_questions(schema: "DBSchema", provider: str, key: str) -> list[str]:
+    """LLM-generated sample questions tailored to the loaded DB schema."""
+    from ._schema import schema_to_prompt_text
+    schema_text = schema_to_prompt_text(schema)
+    prompt = _build_sample_q_prompt(schema_text)
+    cfg = get_provider_cfg(provider)
+    try:
+        if provider == "gemini":
+            raw = await _call_gemini(prompt, cfg["model"], key)
+        elif provider == "cohere":
+            raw = await _call_cohere(prompt, cfg["model"], key)
+        else:
+            raw = await _call_groq(prompt, cfg["model"], key)
+    except Exception:
+        return []
+    lines = [l.strip().lstrip("0123456789.-) ") for l in raw.strip().splitlines() if l.strip()]
+    return [l for l in lines if len(l) > 10][:5]
+
+
 async def generate_sql(
     question: str,
     schema_text: str,
