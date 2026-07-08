@@ -37,6 +37,15 @@ def _is_id_col(col: str) -> bool:
     return bool(_ID_COL_RE.search(col))
 
 
+def _is_year_col(vals: list) -> bool:
+    """True if values look like calendar years (integers 1900-2099)."""
+    try:
+        int_vals = [int(v) for v in vals if v is not None]
+        return len(int_vals) >= 2 and all(1900 <= y <= 2099 for y in int_vals)
+    except (TypeError, ValueError):
+        return False
+
+
 def detect_visualization(columns: list[str], rows: list[list]) -> dict | None:
     """Return chart spec dict or None if no suitable chart detected.
 
@@ -153,8 +162,20 @@ def detect_visualization(columns: list[str], rows: list[list]) -> dict | None:
             labels = [f"{r} {c}" for r, c in zip(row_vals, col_vals2)]
 
         if len(numeric_cols) == 2:
-            # If the two numeric columns have wildly different scales (e.g. milliseconds
-            # vs unit price), a scatter plot is more honest than a grouped bar chart.
+            year_col = next((c for c in numeric_cols if _is_year_col(col_vals[c])), None)
+            if year_col and text_cols:
+                # Pivot year as a heatmap column axis (e.g. Country × Year → Revenue)
+                val_col = next(c for c in numeric_cols if c != year_col)
+                row_dim, col_dim = text_cols[0], year_col
+                rv = [str(v) for v in col_vals[row_dim]]
+                cv = [str(v) for v in col_vals[col_dim]]
+                data = [{"row": rv[i], "col": cv[i], "value": sf(col_vals[val_col][i])}
+                        for i in range(len(rows))]
+                return {"chart_type": "heatmap",
+                        "rows": list(dict.fromkeys(rv))[:20],
+                        "cols": list(dict.fromkeys(cv))[:15],
+                        "data": data, "x_label": col_dim,
+                        "y_label": row_dim, "v_label": val_col}
             vals0 = [sf(v) for v in col_vals[numeric_cols[0]][:20]]
             vals1 = [sf(v) for v in col_vals[numeric_cols[1]][:20]]
             m0, m1 = max(vals0, default=1), max(vals1, default=1)
