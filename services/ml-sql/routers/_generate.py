@@ -5,6 +5,11 @@ import os
 import re
 import httpx
 
+_TOP_N_PER_GROUP_RE = re.compile(
+    r"\btop\s+\d+\s+.{0,40}\b(per|each|in\s+each|by\s+each|within|for\s+each)\b",
+    re.IGNORECASE,
+)
+
 _PROVIDERS: dict[str, dict] = {
     "groq":   {"env": "GROQ_API_KEY",   "model": "llama-3.3-70b-versatile"},
     "gemini": {"env": "GEMINI_API_KEY", "model": "gemini-2.0-flash"},
@@ -143,6 +148,13 @@ def _build_sql_prompt(
             if turn.get("result_summary"):
                 lines.append(f"Result: {turn['result_summary']}")
             lines.append("")
+
+    if _TOP_N_PER_GROUP_RE.search(question):
+        lines.append(
+            "\nIMPORTANT: This is a TOP-N-PER-GROUP query. You MUST use a CTE with "
+            "ROW_NUMBER() OVER (PARTITION BY <group_col> ORDER BY <metric> DESC) AS rn, "
+            "then SELECT from it WHERE rn <= N. Never use ORDER BY + LIMIT alone."
+        )
 
     lines.append(f"Current question: {question}")
 
