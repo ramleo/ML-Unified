@@ -36,11 +36,62 @@ def sanitize_question(question: str) -> str:
 
 _FEW_SHOT = """
 Examples of correct SQL:
+
 Q: Which artist has the most albums?
 A: SELECT ar.Name, COUNT(al.AlbumId) AS album_count FROM Artist ar JOIN Album al ON ar.ArtistId = al.ArtistId GROUP BY ar.Name ORDER BY album_count DESC LIMIT 1
 
 Q: What is total revenue by country?
 A: SELECT BillingCountry, ROUND(SUM(Total), 2) AS revenue FROM Invoice GROUP BY BillingCountry ORDER BY revenue DESC LIMIT 20
+
+Q: Show the top 3 products in each category by sales.
+A: WITH ranked AS (
+     SELECT category, product, SUM(amount) AS total_sales,
+            ROW_NUMBER() OVER (PARTITION BY category ORDER BY SUM(amount) DESC) AS rn
+     FROM sales GROUP BY category, product
+   )
+   SELECT category, product, total_sales FROM ranked WHERE rn <= 3 ORDER BY category, total_sales DESC
+
+Q: Show cumulative revenue over time.
+A: SELECT order_date, revenue,
+          SUM(revenue) OVER (ORDER BY order_date ROWS UNBOUNDED PRECEDING) AS cumulative_revenue
+   FROM daily_sales ORDER BY order_date
+
+Q: Compare this month's revenue to last month.
+A: SELECT month, revenue,
+          LAG(revenue) OVER (ORDER BY month) AS prev_month_revenue,
+          ROUND((revenue - LAG(revenue) OVER (ORDER BY month)) * 100.0
+                / NULLIF(LAG(revenue) OVER (ORDER BY month), 0), 1) AS pct_change
+   FROM monthly_revenue ORDER BY month DESC LIMIT 12
+
+Q: What percentage of total revenue does each category contribute?
+A: SELECT category,
+          ROUND(SUM(amount) * 100.0 / (SELECT SUM(amount) FROM sales), 1) AS pct_of_total
+   FROM sales GROUP BY category ORDER BY pct_of_total DESC
+
+Q: Which customers have never placed an order?
+A: SELECT c.name FROM customers c
+   LEFT JOIN orders o ON c.id = o.customer_id
+   WHERE o.customer_id IS NULL
+
+Q: Find all products whose name contains 'pro' or starts with 'super'.
+A: SELECT name, price FROM products WHERE name LIKE '%pro%' OR name LIKE 'super%'
+
+Q: Show total sales grouped by month.
+A: SELECT strftime('%Y-%m', order_date) AS month, ROUND(SUM(amount), 2) AS total
+   FROM orders GROUP BY strftime('%Y-%m', order_date) ORDER BY month
+
+Q: Which categories have more than 10 products?
+A: SELECT category, COUNT(*) AS product_count FROM products
+   GROUP BY category HAVING COUNT(*) > 10 ORDER BY product_count DESC
+
+Q: Find employees who earn more than their manager.
+A: SELECT e.name AS employee, e.salary, m.name AS manager, m.salary AS manager_salary
+   FROM employees e JOIN employees m ON e.manager_id = m.id
+   WHERE e.salary > m.salary
+
+Q: List the top 5 items by revenue; break ties alphabetically by name.
+A: SELECT name, ROUND(SUM(amount), 2) AS revenue FROM sales
+   GROUP BY name ORDER BY revenue DESC, name ASC LIMIT 5
 """.strip()
 
 
