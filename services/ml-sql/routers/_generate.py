@@ -51,6 +51,18 @@ A: WITH ranked AS (
    )
    SELECT category, product, total_sales FROM ranked WHERE rn <= 3 ORDER BY category, total_sales DESC
 
+Q: Who are the top 3 artists in each genre by track count?
+A: WITH ranked AS (
+     SELECT g.Name AS "Genre", a.Name AS "Artist", COUNT(t.TrackId) AS "Track Count",
+            ROW_NUMBER() OVER (PARTITION BY g.Name ORDER BY COUNT(t.TrackId) DESC) AS rn
+     FROM Genre g
+     JOIN Track t ON g.GenreId = t.GenreId
+     JOIN Album al ON t.AlbumId = al.AlbumId
+     JOIN Artist a ON al.ArtistId = a.ArtistId
+     GROUP BY g.Name, a.Name
+   )
+   SELECT "Genre", "Artist", "Track Count" FROM ranked WHERE rn <= 3 ORDER BY "Genre", "Track Count" DESC
+
 Q: Show cumulative revenue over time.
 A: SELECT order_date, revenue,
           SUM(revenue) OVER (ORDER BY order_date ROWS UNBOUNDED PRECEDING) AS cumulative_revenue
@@ -148,6 +160,7 @@ def _build_sql_prompt(
         "- Use only SELECT statements",
         "- Use proper JOIN syntax when combining tables",
         "- Limit results to 100 rows unless the question asks for all",
+        "- For 'top N per group/category/genre' questions, ALWAYS use ROW_NUMBER() OVER (PARTITION BY ...) in a CTE — never use ORDER BY + LIMIT alone",
         "- Use double-quotes for identifiers with spaces",
         "- Do NOT select ID/key columns (e.g. CustomerId, TrackId) unless the question asks for them",
         "- Return ONLY the SQL query, nothing else",
