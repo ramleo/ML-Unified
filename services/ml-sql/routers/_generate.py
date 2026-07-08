@@ -3,22 +3,13 @@ from __future__ import annotations
 
 import os
 import re
-import httpx
+
+from ._providers import _PROVIDERS, get_provider_cfg, _call_groq, _call_gemini, _call_cohere
 
 _TOP_N_PER_GROUP_RE = re.compile(
     r"\btop\s+\d+\s+.{0,40}\b(per|each|in\s+each|by\s+each|within|for\s+each)\b",
     re.IGNORECASE,
 )
-
-_PROVIDERS: dict[str, dict] = {
-    "groq":   {"env": "GROQ_API_KEY",   "model": "llama-3.3-70b-versatile"},
-    "gemini": {"env": "GEMINI_API_KEY", "model": "gemini-2.0-flash"},
-    "cohere": {"env": "COHERE_API_KEY", "model": "command-r-plus-08-2024"},
-}
-
-
-def get_provider_cfg(provider: str) -> dict:
-    return _PROVIDERS.get(provider, _PROVIDERS["groq"])
 
 
 # ── Input sanitization ────────────────────────────────────────────────────────
@@ -109,6 +100,12 @@ A: SELECT e.name AS employee, e.salary, m.name AS manager, m.salary AS manager_s
 Q: List the top 5 items by revenue; break ties alphabetically by name.
 A: SELECT name, ROUND(SUM(amount), 2) AS revenue FROM sales
    GROUP BY name ORDER BY revenue DESC, name ASC LIMIT 5
+
+Q: Show number of tracks per genre and media type.
+A: SELECT g.Name AS "Genre", mt.Name AS "Media Type", COUNT(t.TrackId) AS "Track Count"
+   FROM Genre g JOIN Track t ON g.GenreId = t.GenreId
+   JOIN MediaType mt ON t.MediaTypeId = mt.MediaTypeId
+   GROUP BY g.Name, mt.Name ORDER BY "Genre", "Track Count" DESC
 """.strip()
 
 
@@ -188,57 +185,6 @@ def _extract_sql(text: str) -> str:
     if match:
         text = match.group(1).strip()
     return text.rstrip(";").strip()
-
-
-async def _call_groq(prompt: str, model: str, key: str) -> str:
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-            json={
-                "model": model,
-                "messages": [{"role": "user", "content": prompt}],
-                "stream": False,
-                "max_tokens": 512,
-                "temperature": 0.1,
-            },
-        )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
-
-
-async def _call_gemini(prompt: str, model: str, key: str) -> str:
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{model}:generateContent?key={key}"
-    )
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(
-            url,
-            json={
-                "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-                "generationConfig": {"maxOutputTokens": 512, "temperature": 0.1},
-            },
-        )
-        resp.raise_for_status()
-        return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-
-
-async def _call_cohere(prompt: str, model: str, key: str) -> str:
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(
-            "https://api.cohere.ai/v2/chat",
-            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-            json={
-                "model": model,
-                "messages": [{"role": "user", "content": prompt}],
-                "stream": False,
-                "max_tokens": 512,
-                "temperature": 0.1,
-            },
-        )
-        resp.raise_for_status()
-        return resp.json()["message"]["content"][0]["text"]
 
 
 def _build_filter_prompt(filter_text: str, columns: list[str]) -> str:
