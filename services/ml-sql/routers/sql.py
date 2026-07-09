@@ -66,7 +66,6 @@ def _save_session_index() -> None:
 
 
 async def _restore_sessions() -> None:
-    """On startup, reload SQLite sessions from the index whose files still exist."""
     if not _SESSION_FILE.exists():
         return
     try:
@@ -75,18 +74,13 @@ async def _restore_sessions() -> None:
         return
     cutoff = time.time() - _SESSION_TTL
     for ref, meta in index.items():
-        if meta.get("created_at", 0) < cutoff:
-            continue  # TTL expired
+        if meta.get("created_at", 0) < cutoff: continue
         path = meta.get("path", "")
         if path and Path(path).exists() and ref not in _sessions:
             try:
                 stype = meta.get("type", "sqlite")
-                if stype == "duckdb":
-                    schema = await load_duckdb_schema(path)
-                else:
-                    schema = await load_sqlite_schema(path)
-                _sessions[ref] = {"type": stype, "path": path,
-                                  "schema": schema, "created_at": meta["created_at"]}
+                schema = await load_duckdb_schema(path) if stype == "duckdb" else await load_sqlite_schema(path)
+                _sessions[ref] = {"type": stype, "path": path, "schema": schema, "created_at": meta["created_at"]}
             except Exception:
                 pass
 
@@ -389,8 +383,11 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
 
     # --- explanation (streaming) ---
     prompt = build_explain_prompt(safe_question, sql, safe_result.columns, safe_result.rows[:10])
-    async for chunk in stream_explanation(prompt, req.provider, key):
-        yield chunk
+    try:
+        async for chunk in stream_explanation(prompt, req.provider, key):
+            yield chunk
+    except RateLimitError:
+        pass  # results already delivered; skip explanation silently
 
     # --- follow-up suggestions ---
     suggestions = await generate_followup_suggestions(
