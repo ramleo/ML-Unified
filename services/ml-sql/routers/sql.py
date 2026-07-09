@@ -21,7 +21,7 @@ from ._execute import (
     validate_sql, result_to_dict, mask_sensitive_columns,
     paginate_sql, paginate_mssql_sql, count_rows_sqlite,
 )
-from ._generate import generate_sql, generate_filter_expr, get_provider_cfg, sanitize_question, generate_sample_questions
+from ._generate import generate_sql, generate_filter_expr, get_provider_cfg, sanitize_question, generate_sample_questions, generate_followup_suggestions
 from ._schema import (
     DBSchema, load_pg_schema, load_sqlite_schema, load_mysql_schema, load_duckdb_schema,
     schema_to_dict, schema_to_prompt_text,
@@ -390,3 +390,11 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
     prompt = build_explain_prompt(safe_question, sql, safe_result.columns, safe_result.rows[:10])
     async for chunk in stream_explanation(prompt, req.provider, key):
         yield chunk
+
+    # --- follow-up suggestions ---
+    suggestions = await generate_followup_suggestions(
+        safe_question, sql, safe_result.columns, safe_result.rows[:5], req.provider, key,
+    )
+    if suggestions:
+        yield _sse({"type": "suggestions", "questions": suggestions})
+    yield _sse({"type": "done"})

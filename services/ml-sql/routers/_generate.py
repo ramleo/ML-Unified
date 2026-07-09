@@ -267,6 +267,38 @@ async def generate_sample_questions(schema: "DBSchema", provider: str, key: str)
     return [l for l in lines if len(l) > 10][:5]
 
 
+def _build_followup_prompt(question: str, sql: str, columns: list[str], rows_preview: list) -> str:
+    cols = ", ".join(columns)
+    sample = "; ".join(str(dict(zip(columns, row))) for row in rows_preview[:3])
+    return (
+        f"Question asked: {question}\nSQL: {sql}\n"
+        f"Result columns: {cols}\nSample rows: {sample}\n\n"
+        "Suggest exactly 3 natural follow-up questions a data analyst would ask next.\n"
+        "- One per line, no numbering, no bullets\n"
+        "- Build on what was found: drill deeper, compare, or find a trend\n"
+        "- Keep each under 12 words\n"
+        "Return only the 3 questions, nothing else."
+    )
+
+
+async def generate_followup_suggestions(
+    question: str, sql: str, columns: list[str], rows_preview: list, provider: str, key: str,
+) -> list[str]:
+    prompt = _build_followup_prompt(question, sql, columns, rows_preview)
+    cfg = get_provider_cfg(provider)
+    try:
+        if provider == "gemini":
+            raw = await _call_gemini(prompt, cfg["model"], key)
+        elif provider == "cohere":
+            raw = await _call_cohere(prompt, cfg["model"], key)
+        else:
+            raw = await _call_groq(prompt, cfg["model"], key)
+    except Exception:
+        return []
+    lines = [l.strip().lstrip("0123456789.-) ") for l in raw.strip().splitlines() if l.strip()]
+    return [l for l in lines if len(l) > 8][:3]
+
+
 async def generate_sql(
     question: str,
     schema_text: str,
