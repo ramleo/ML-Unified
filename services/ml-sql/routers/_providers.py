@@ -3,6 +3,10 @@ from __future__ import annotations
 
 import httpx
 
+
+class RateLimitError(Exception):
+    """Raised when all attempted providers return HTTP 429."""
+
 _PROVIDERS: dict[str, dict] = {
     "groq":   {"env": "GROQ_API_KEY",   "model": "llama-3.3-70b-versatile"},
     "gemini": {"env": "GEMINI_API_KEY", "model": "gemini-2.0-flash"},
@@ -27,6 +31,7 @@ async def _call_groq(prompt: str, model: str, key: str) -> str:
                 "temperature": 0.1,
             },
         )
+        if resp.status_code == 429: raise RateLimitError("groq")
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"]
 
@@ -44,6 +49,7 @@ async def _call_gemini(prompt: str, model: str, key: str) -> str:
                 "generationConfig": {"maxOutputTokens": 512, "temperature": 0.1},
             },
         )
+        if resp.status_code == 429: raise RateLimitError("gemini")
         resp.raise_for_status()
         return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
@@ -61,5 +67,6 @@ async def _call_cohere(prompt: str, model: str, key: str) -> str:
                 "temperature": 0.1,
             },
         )
+        if resp.status_code == 429: raise RateLimitError("cohere")
         resp.raise_for_status()
         return resp.json()["message"]["content"][0]["text"]

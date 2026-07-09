@@ -23,6 +23,7 @@ from ._execute import (
     paginate_sql, paginate_mssql_sql, count_rows_sqlite,
 )
 from ._generate import generate_sql, generate_filter_expr, get_provider_cfg, sanitize_question, generate_sample_questions, generate_followup_suggestions
+from ._providers import RateLimitError
 from ._schema import (
     DBSchema, load_pg_schema, load_sqlite_schema, load_mysql_schema, load_duckdb_schema,
     schema_to_dict, schema_to_prompt_text,
@@ -47,16 +48,12 @@ _RATE_LIMIT = 30  # max queries per 60 seconds globally
 
 def _check_rate_limit() -> bool:
     now = time.time()
-    cutoff = now - 60.0
-    _recent_queries[:] = [t for t in _recent_queries if t > cutoff]
-    if len(_recent_queries) >= _RATE_LIMIT:
-        return False
-    _recent_queries.append(now)
-    return True
+    _recent_queries[:] = [t for t in _recent_queries if t > now - 60.0]
+    if len(_recent_queries) >= _RATE_LIMIT: return False
+    _recent_queries.append(now); return True
 
 
 def _save_session_index() -> None:
-    """Persist file-based session metadata to disk so they survive in-process resets."""
     index = {
         ref: {"type": s["type"], "path": s.get("path", ""), "created_at": s.get("created_at", 0)}
         for ref, s in _sessions.items()
@@ -349,6 +346,8 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
                 prev_sql, last_error, req.history or None, req.glossary,
             )
             validate_sql(sql)
+        except RateLimitError as e:
+            yield _sse({"type": "error", "text": str(e)}); yield _sse({"type": "done"}); return
         except UnsafeQueryError as e:
             last_error = str(e)
             prev_sql = sql

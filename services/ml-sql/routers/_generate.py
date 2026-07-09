@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import re
 
-from ._providers import _PROVIDERS, get_provider_cfg, _call_groq, _call_gemini, _call_cohere
+from ._providers import _PROVIDERS, get_provider_cfg, _call_groq, _call_gemini, _call_cohere, RateLimitError
 
 _TOP_N_PER_GROUP_RE = re.compile(
     r"\btop\s+\d+\s+.{0,40}\b(per|each|in\s+each|by\s+each|within|for\s+each)\b",
@@ -325,6 +325,7 @@ async def generate_sql(
             providers_to_try.append((fallback, fkey))
 
     last_exc: Exception | None = None
+    rate_limited: list[str] = []
     for p, k in providers_to_try:
         cfg = get_provider_cfg(p)
         try:
@@ -335,8 +336,14 @@ async def generate_sql(
             else:
                 raw = await _call_groq(prompt, cfg["model"], k)
             return _extract_sql(raw)
+        except RateLimitError as exc:
+            rate_limited.append(p)
+            last_exc = exc
+            continue
         except Exception as exc:
             last_exc = exc
             continue
 
+    if rate_limited and len(rate_limited) == len(providers_to_try):
+        raise RateLimitError(f"All providers rate-limited ({', '.join(rate_limited)}). Wait ~60s and try again.")
     raise Exception(f"All providers failed. Last error: {last_exc}")
