@@ -1,6 +1,7 @@
 """FastAPI router — /health, /sql/schema, /sql/upload, /sql/connect, /sql/query."""
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import shutil
@@ -338,6 +339,7 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
 
     for attempt in range(1, 4):
         if attempt > 1:
+            await asyncio.sleep(2 ** (attempt - 2))  # 1s before attempt 2, 2s before attempt 3
             yield _sse({"type": "retry", "attempt": attempt, "error": last_error})
 
         # --- generate SQL ---
