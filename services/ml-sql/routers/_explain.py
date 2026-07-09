@@ -90,7 +90,7 @@ def detect_visualization(columns: list[str], rows: list[list]) -> dict | None:
             values = [sf(v) for v in col_vals[numeric_cols[0]][:50]]
             avg_len = sum(len(l) for l in labels) / max(len(labels), 1)
 
-            if len(rows) <= 7:
+            if len(rows) <= 4:
                 return {"chart_type": "donut", "labels": labels, "values": values,
                         "x_label": numeric_cols[0], "y_label": text_cols[0]}
             if len(rows) > 12:

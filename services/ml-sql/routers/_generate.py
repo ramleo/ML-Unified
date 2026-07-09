@@ -101,6 +101,11 @@ Q: List the top 5 items by revenue; break ties alphabetically by name.
 A: SELECT name, ROUND(SUM(amount), 2) AS revenue FROM sales
    GROUP BY name ORDER BY revenue DESC, name ASC LIMIT 5
 
+Q: Top 5 artists by number of albums.
+A: SELECT ar.Name AS "Artist", COUNT(al.AlbumId) AS "Album Count"
+   FROM Artist ar JOIN Album al ON ar.ArtistId = al.ArtistId
+   GROUP BY ar.Name ORDER BY "Album Count" DESC LIMIT 5
+
 Q: Show number of tracks per genre and media type.
 A: SELECT g.Name AS "Genre", mt.Name AS "Media Type", COUNT(t.TrackId) AS "Track Count"
    FROM Genre g JOIN Track t ON g.GenreId = t.GenreId
