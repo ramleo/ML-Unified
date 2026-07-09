@@ -199,10 +199,7 @@ class QueryRequest(BaseModel):
 
 
 class PageRequest(BaseModel):
-    sql:       str
-    db_ref:    str = "chinook"
-    page:      int = 1
-    page_size: int = 50
+    sql: str; db_ref: str = "chinook"; page: int = 1; page_size: int = 50
 
 
 @router.post("/sql/page")
@@ -380,19 +377,25 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
     result_dict["page"] = 1
     result_dict["page_size"] = 50
     yield _sse({"type": "results", **result_dict})
+    yield _sse({"type": "done"})
 
-    # --- explanation (streaming) ---
-    prompt = build_explain_prompt(safe_question, sql, safe_result.columns, safe_result.rows[:10])
+
+class ExplainRequest(BaseModel):
+    question: str; sql: str; columns: list[str]; rows: list; provider: str = "groq"
+
+@router.post("/sql/explain")
+async def explain_sql(req: ExplainRequest):
+    return StreamingResponse(_stream_explain(req), media_type="text/event-stream", headers={"Cache-Control":"no-cache","X-Accel-Buffering":"no"})
+
+async def _stream_explain(req: ExplainRequest) -> AsyncGenerator[str, None]:
+    cfg = get_provider_cfg(req.provider)
+    key = os.environ.get(cfg["env"], "")
+    if not key: yield _sse({"type": "error", "text": f"{cfg['env']} not configured"}); yield _sse({"type": "done"}); return
+    prompt = build_explain_prompt(sanitize_question(req.question), req.sql, req.columns, req.rows[:10])
     try:
-        async for chunk in stream_explanation(prompt, req.provider, key):
-            yield chunk
-    except RateLimitError:
-        pass  # results already delivered; skip explanation silently
-
-    # --- follow-up suggestions ---
-    suggestions = await generate_followup_suggestions(
-        safe_question, sql, safe_result.columns, safe_result.rows[:5], req.provider, key,
-    )
-    if suggestions:
-        yield _sse({"type": "suggestions", "questions": suggestions})
+        async for chunk in stream_explanation(prompt, req.provider, key): yield chunk
+        sugg = await generate_followup_suggestions(req.question, req.sql, req.columns, req.rows[:5], req.provider, key)
+        if sugg: yield _sse({"type": "suggestions", "questions": sugg})
+    except RateLimitError as e:
+        yield _sse({"type": "error", "text": str(e)})
     yield _sse({"type": "done"})
