@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from ._explain import (
-    _sse, build_explain_prompt, detect_visualization, stream_explanation,
+    _sse, build_explain_prompt, stream_explanation,
 )
 from ._execute import (
     UnsafeQueryError, execute_pg, execute_sqlite, execute_mysql, execute_duckdb, execute_mssql,
@@ -385,11 +385,6 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
     result_dict["page"] = 1
     result_dict["page_size"] = 50
     yield _sse({"type": "results", **result_dict})
-
-    # --- visualization ---
-    viz = detect_visualization(safe_result.columns, safe_result.rows)
-    if viz:
-        yield _sse({"type": "visualization", **viz})
 
     # --- explanation (streaming) ---
     prompt = build_explain_prompt(safe_question, sql, safe_result.columns, safe_result.rows[:10])
