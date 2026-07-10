@@ -113,14 +113,31 @@ class QueryResult:
     total_count: int = -1  # -1 = unknown; set when count query is run
 
 
+def _extract_user_limit(sql: str) -> int | None:
+    m = re.search(r"\bLIMIT\s+(\d+)(\s+OFFSET\s+\d+)?\s*$", sql.rstrip(";").strip(), flags=re.IGNORECASE)
+    return int(m.group(1)) if m else None
+
+
+def _strip_limit(sql: str) -> str:
+    return re.sub(r"\bLIMIT\s+\d+(\s+OFFSET\s+\d+)?\s*$", "", sql.rstrip(";").strip(), flags=re.IGNORECASE).strip()
+
+
 def paginate_sql(sql: str, page: int, page_size: int) -> str:
-    """Wrap sql with LIMIT/OFFSET for the given 1-indexed page."""
-    inner = re.sub(r"\bLIMIT\s+\d+(\s+OFFSET\s+\d+)?\s*$", "", sql.rstrip(";").strip(), flags=re.IGNORECASE).strip()
-    return f"SELECT * FROM ({inner}) AS _paged LIMIT {page_size} OFFSET {(page - 1) * page_size}"
+    """Wrap sql with LIMIT/OFFSET for the given 1-indexed page, honoring user's LIMIT if smaller."""
+    user_limit = _extract_user_limit(sql)
+    inner = _strip_limit(sql)
+    offset = (page - 1) * page_size
+    if user_limit is not None and user_limit <= page_size + offset:
+        effective = max(0, user_limit - offset)
+        return f"SELECT * FROM ({inner}) AS _paged LIMIT {effective} OFFSET {offset}"
+    return f"SELECT * FROM ({inner}) AS _paged LIMIT {page_size} OFFSET {offset}"
 
 
 def _count_sql(sql: str) -> str:
-    inner = re.sub(r"\bLIMIT\s+\d+(\s+OFFSET\s+\d+)?\s*$", "", sql.rstrip(";").strip(), flags=re.IGNORECASE).strip()
+    user_limit = _extract_user_limit(sql)
+    inner = _strip_limit(sql)
+    if user_limit is not None:
+        return f"SELECT COUNT(*) FROM (SELECT * FROM ({inner}) AS _inner LIMIT {user_limit}) AS _cnt"
     return f"SELECT COUNT(*) FROM ({inner}) AS _cnt"
 
 
