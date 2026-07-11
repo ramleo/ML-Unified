@@ -20,7 +20,7 @@ from ._explain import (
 from ._execute import (
     UnsafeQueryError, execute_pg, execute_sqlite, execute_mysql, execute_duckdb, execute_mssql,
     validate_sql, result_to_dict, mask_sensitive_columns,
-    paginate_sql, paginate_mssql_sql, count_rows_sqlite,
+    paginate_sql, paginate_mssql_sql, count_rows_sqlite, count_rows_remote,
 )
 from ._generate import generate_sql, generate_filter_expr, get_provider_cfg, sanitize_question, generate_sample_questions, generate_followup_suggestions
 from ._providers import RateLimitError
@@ -218,7 +218,12 @@ async def page_results(req: PageRequest):
     paged     = paginate_mssql_sql(req.sql, page, page_size) if stype == "mssql" else paginate_sql(req.sql, page, page_size)
     try:
         result = await _exec_session(session, paged)
-        total = await count_rows_sqlite(session["path"], req.sql) if stype == "sqlite" else -1
+        if stype == "sqlite":
+            total = await count_rows_sqlite(session["path"], req.sql)
+        elif stype in ("postgresql", "mysql", "mssql"):
+            total = await count_rows_remote(session, req.sql)
+        else:
+            total = -1
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
     safe = mask_sensitive_columns(result)
@@ -263,7 +268,12 @@ async def filter_results(req: FilterRequest):
     paged = paginate_mssql_sql(filtered_sql, 1, 50) if stype == "mssql" else paginate_sql(filtered_sql, 1, 50)
     try:
         result = await _exec_session(session, paged)
-        total = await count_rows_sqlite(session["path"], filtered_sql) if stype == "sqlite" else -1
+        if stype == "sqlite":
+            total = await count_rows_sqlite(session["path"], filtered_sql)
+        elif stype in ("postgresql", "mysql", "mssql"):
+            total = await count_rows_remote(session, filtered_sql)
+        else:
+            total = -1
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
     safe = mask_sensitive_columns(result)
@@ -370,8 +380,14 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
     # Mask sensitive columns before sending to client or LLM
     safe_result = mask_sensitive_columns(result)
 
-    # Total count for pagination (SQLite only; -1 = unknown for other backends)
-    total_count = await count_rows_sqlite(session["path"], sql) if session["type"] == "sqlite" else -1
+    # Total count for pagination
+    stype = session["type"]
+    if stype == "sqlite":
+        total_count = await count_rows_sqlite(session["path"], sql)
+    elif stype in ("postgresql", "mysql", "mssql"):
+        total_count = await count_rows_remote(session, sql)
+    else:
+        total_count = -1
     result_dict = result_to_dict(safe_result)
     result_dict["total_count"] = total_count
     result_dict["page"] = 1

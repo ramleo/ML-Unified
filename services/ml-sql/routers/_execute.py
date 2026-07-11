@@ -151,6 +151,22 @@ async def count_rows_sqlite(db_path: str, sql: str) -> int:
         return -1
 
 
+async def count_rows_remote(session: dict, sql: str) -> int:
+    """Count total rows for pg/mysql/mssql via a COUNT(*) subquery."""
+    try:
+        count_sql = _count_sql(sql)
+        stype = session["type"]
+        if stype == "mysql":
+            result = await execute_mysql(session["conn_str"], count_sql)
+        elif stype == "mssql":
+            result = await execute_mssql(session["conn_str"], count_sql)
+        else:
+            result = await execute_pg(session["conn_str"], count_sql)
+        return int(result.rows[0][0]) if result.rows else -1
+    except Exception:
+        return -1
+
+
 def mask_sensitive_columns(result: "QueryResult") -> "QueryResult":
     """Replace cell values in sensitive columns with *** before returning to client or LLM."""
     sensitive_idx = [
