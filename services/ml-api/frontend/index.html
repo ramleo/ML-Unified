@@ -1592,7 +1592,7 @@ body {
 .u-result-plot { position:relative; flex:1; min-width:280px; }
 .u-result-stats { min-width:200px; flex:0 0 auto; }
 .u-axis-label  { font-size:0.7rem; color:var(--text3); text-align:center; }
-.u-axis-y      { writing-mode:vertical-rl; transform:rotate(180deg); position:absolute; left:-18px; top:50%; transform:translateX(-50%) rotate(-90deg); }
+.u-axis-y      { position:absolute; left:-30px; top:50%; transform:translateY(-50%) rotate(-90deg); font-size:0.7rem; color:var(--text3); white-space:nowrap; }
 .u-stat-row    { display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:0.35rem 0; font-size:0.83rem; color:var(--text2); }
 .u-stat-divider { border-top:1px solid var(--border1); margin:0.5rem 0; }
 
@@ -7758,8 +7758,8 @@ const UNSUPERVISED_META = {
       <div class="u-param-row">
         <label class="wizard-label">Plot Dimensions</label>
         <div class="task-toggle">
-          <input type="radio" name="uKmDim" id="uKm2d" value="2" checked><label for="uKm2d">2D</label>
-          <input type="radio" name="uKmDim" id="uKm3d" value="3"><label for="uKm3d">3D</label>
+          <input type="radio" name="uKmDim" id="uKm2d" value="2" checked onchange="if(uFile&&!document.getElementById('uRunBtn').disabled)runUnsupervisedAnalysis('kmeans')"><label for="uKm2d">2D</label>
+          <input type="radio" name="uKmDim" id="uKm3d" value="3" onchange="if(uFile&&!document.getElementById('uRunBtn').disabled)runUnsupervisedAnalysis('kmeans')"><label for="uKm3d">3D</label>
         </div>
       </div>`
   },
@@ -7778,8 +7778,8 @@ const UNSUPERVISED_META = {
       <div class="u-param-row">
         <label class="wizard-label">Plot Dimensions</label>
         <div class="task-toggle">
-          <input type="radio" name="uDbDim" id="uDb2d" value="2" checked><label for="uDb2d">2D</label>
-          <input type="radio" name="uDbDim" id="uDb3d" value="3"><label for="uDb3d">3D</label>
+          <input type="radio" name="uDbDim" id="uDb2d" value="2" checked onchange="if(uFile&&!document.getElementById('uRunBtn').disabled)runUnsupervisedAnalysis('dbscan')"><label for="uDb2d">2D</label>
+          <input type="radio" name="uDbDim" id="uDb3d" value="3" onchange="if(uFile&&!document.getElementById('uRunBtn').disabled)runUnsupervisedAnalysis('dbscan')"><label for="uDb3d">3D</label>
         </div>
       </div>`
   },
@@ -7794,8 +7794,8 @@ const UNSUPERVISED_META = {
       <div class="u-param-row">
         <label class="wizard-label">Dimensions</label>
         <div class="task-toggle">
-          <input type="radio" name="uTsneDim" id="uTsne2d" value="2" checked><label for="uTsne2d">2D</label>
-          <input type="radio" name="uTsneDim" id="uTsne3d" value="3"><label for="uTsne3d">3D</label>
+          <input type="radio" name="uTsneDim" id="uTsne2d" value="2" checked onchange="if(uFile&&!document.getElementById('uRunBtn').disabled)runUnsupervisedAnalysis('tsne')"><label for="uTsne2d">2D</label>
+          <input type="radio" name="uTsneDim" id="uTsne3d" value="3" onchange="if(uFile&&!document.getElementById('uRunBtn').disabled)runUnsupervisedAnalysis('tsne')"><label for="uTsne3d">3D</label>
         </div>
       </div>`
   },
@@ -7807,7 +7807,7 @@ const UNSUPERVISED_META = {
         <label class="wizard-label">n_components <span style="color:var(--text3);font-size:0.78rem">— components to extract</span></label>
         <div class="task-toggle">
           <input type="radio" name="uPcaDim" id="uPca2d" value="2" checked><label for="uPca2d">2</label>
-          <input type="radio" name="uPcaDim" id="uPca3d" value="3"><label for="uPca3d">3</label>
+          <input type="radio" name="uPcaDim" id="uPca3d" value="3" onchange="if(uFile&&!document.getElementById('uRunBtn').disabled)runUnsupervisedAnalysis('pca')"><label for="uPca3d">3</label>
         </div>
       </div>`
   },
