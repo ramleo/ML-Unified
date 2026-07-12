@@ -1872,6 +1872,23 @@ let VISION_API = '';  // ml-vision base URL — set by initServiceUrls() on load
 let EDA_API = '';     // ml-eda base URL — set by initServiceUrls() on load
 let _cleanCurrentFile = null;
 
+// ── Analytics tracking ───────────────────────────────────────
+const _TRACK_URL = 'https://ml-portfolio-rho.vercel.app/api/track';
+function _getSession() {
+  let id = localStorage.getItem('_ml_session');
+  if (!id) { id = crypto.randomUUID(); localStorage.setItem('_ml_session', id); }
+  return id;
+}
+function _track(type, meta) {
+  try {
+    fetch(_TRACK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, path: window.location.pathname, session_id: _getSession(), referrer: document.referrer, meta: meta || {} }),
+    }).catch(() => {});
+  } catch(_) {}
+}
+
 async function initVisionUrl() {
   try {
     const r = await fetch('/app-config');
@@ -2216,6 +2233,7 @@ async function init() {
     allModels  = await res.json();
     renderSidebar();
     animateSidebarIn();
+    _track('page_view', { tool: APP_MODE || 'ml-unified' });
     // Auto-select the appropriate default panel based on mode
     if (APP_MODE === 'vision') {
       selectVision();
@@ -2381,6 +2399,7 @@ function renderSidebar() {
 
 // ── Select model ──────────────────────────────────────────────
 async function selectModel(id) {
+  _track('tool_open', { tool: 'model:' + id });
   // Update active button + pulse dot
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById(`btn-${id}`);
@@ -3233,6 +3252,7 @@ async function runPredict() {
     });
     if (!res.ok) throw new Error(`Server error ${res.status}`);
     const result = await res.json();
+    _track('query_run', { tool: 'model:' + activeModel.id, success: true });
     renderResult(result);
     emptyEl.style.display  = 'none';
     resultEl.style.display = 'block';
@@ -3670,6 +3690,7 @@ async function analyzeCSV() {
     clearTimeout(wake);
     if (!res.ok) { const t = await res.text(); throw new Error(t); }
     wizardAnalysis = await res.json();
+    _track('query_run', { tool: 'automl:analyze', success: true });
     renderWizardStep2();
   } catch(e) {
     clearTimeout(wake);
@@ -4673,6 +4694,7 @@ async function _analyzeAutoMLCSV() {
     const res = await fetch(API + '/analyze', { method: 'POST', body: form });
     if (!res.ok) { const t = await res.text(); throw new Error(t); }
     automlAnalysis = await res.json();
+    _track('query_run', { tool: 'automl:analyze', success: true });
     _renderAutoMLStep0();
   } catch(e) {
     document.getElementById('main').innerHTML = `
@@ -5996,6 +6018,7 @@ async function runAutoML() {
       if (ev.result) result = ev.result;
     }
     if (!result) throw new Error('No result received from server.');
+    _track('query_run', { tool: 'automl:train', success: true });
 
     const mr = await fetch(API + '/models');
     allModels = await mr.json();
@@ -6191,6 +6214,7 @@ function setAmbientFromAccent(hex) {
 const AMBIENT_DEFAULT = ['rgba(99,102,241,0.14)', 'rgba(56,189,248,0.11)'];
 
 function selectVision() {
+  _track('tool_open', { tool: 'vision' });
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('vbtn-classifier');
   if (btn) btn.classList.add('active');
@@ -6402,6 +6426,7 @@ async function runBatchClassify() {
     try {
       const res = await fetch(`${VISION_API}/classify-image`, { method: 'POST', body: form });
       if (!res.ok) throw new Error(await res.text());
+      _track('query_run', { tool: 'vision:classify', success: true });
       _updateBatchCard(i, 'done', await res.json());
     } catch {
       _updateBatchCard(i, 'error');
@@ -6670,6 +6695,7 @@ async function runImageProcess() {
     const res = await fetch(`${VISION_API}/process-image`, { method: 'POST', body: form });
     if (!res.ok) { const t = await res.text(); throw new Error(t); }
     const data = await res.json();
+    _track('query_run', { tool: 'vision:process', success: true });
     renderIpResult(data);
   } catch(e) {
     document.getElementById('ipResult').innerHTML = '';
@@ -6969,6 +6995,7 @@ async function runObjectDetect() {
       if (ev.result) data = ev.result;
     }
     if (!data) throw new Error('No result received from server.');
+    _track('query_run', { tool: 'vision:detect', success: true });
     renderDetectionResult(data);
   } catch(e) {
     document.getElementById('detResult').innerHTML = '';
@@ -7814,6 +7841,7 @@ const UNSUPERVISED_META = {
 };
 
 function selectUnsupervised(id, label, accent) {
+  _track('tool_open', { tool: 'cluster:' + id });
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('ubtn-' + id);
   if (btn) btn.classList.add('active');
@@ -7935,6 +7963,7 @@ async function runUnsupervisedAnalysis(id) {
       if (ev.result) data = ev.result;
     }
     if (!data) throw new Error('No result received from server.');
+    _track('query_run', { tool: 'cluster:' + id, success: true });
     renderUnsupervisedResult(id, data);
   } catch(e) {
     document.getElementById('uResult').innerHTML = '';
@@ -8124,6 +8153,7 @@ let _edaCurrentFilename = null;
 let _edaCurrentFile = null;
 
 function selectEDA() {
+  _track('tool_open', { tool: 'eda' });
   document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('ebtn-eda');
   if (btn) btn.classList.add('active');
