@@ -3,7 +3,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers.sql import router, _preload_chinook
+from routers.sql import router
+from routers._session_mgr import preload_chinook as _preload_chinook
 
 
 @asynccontextmanager

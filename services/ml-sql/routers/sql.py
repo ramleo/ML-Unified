@@ -2,10 +2,8 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import shutil
-import time
 import uuid
 from pathlib import Path
 from typing import AsyncGenerator
@@ -18,8 +16,7 @@ from ._explain import (
     _sse, build_explain_prompt, stream_explanation,
 )
 from ._execute import (
-    UnsafeQueryError, execute_pg, execute_sqlite, execute_mysql, execute_duckdb, execute_mssql,
-    validate_sql, result_to_dict, mask_sensitive_columns,
+    UnsafeQueryError, validate_sql, result_to_dict, mask_sensitive_columns,
     paginate_sql, paginate_mssql_sql, count_rows_sqlite, count_rows_remote,
 )
 from ._generate import generate_sql, generate_filter_expr, get_provider_cfg, sanitize_question, generate_sample_questions, generate_followup_suggestions
@@ -29,82 +26,20 @@ from ._schema import (
     schema_to_dict, schema_to_prompt_text,
 )
 from ._schema_mssql import load_mssql_schema
+from ._session_mgr import (
+    CHINOOK_PATH, _UPLOAD_DIR, _sessions,
+    check_rate_limit, save_session_index, exec_session, preload_chinook,
+)
 
 router = APIRouter()
 
-CHINOOK_PATH  = Path(__file__).parent.parent / "data" / "chinook.db"
-_UPLOAD_DIR   = Path("/tmp/ml_sql_sessions")
-_SESSION_FILE = _UPLOAD_DIR / "index.json"
-_SESSION_TTL  = 86_400  # 24 hours
-_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-# in-memory session store: db_ref → {type, path|conn_str, schema, created_at}
-_sessions: dict[str, dict] = {}
-
-# Global rate limiter — sliding window of query timestamps
-_recent_queries: list[float] = []
-_RATE_LIMIT = 30  # max queries per 60 seconds globally
-
-
-def _check_rate_limit() -> bool:
-    now = time.time()
-    _recent_queries[:] = [t for t in _recent_queries if t > now - 60.0]
-    if len(_recent_queries) >= _RATE_LIMIT: return False
-    _recent_queries.append(now); return True
-
-
-def _save_session_index() -> None:
-    index = {
-        ref: {"type": s["type"], "path": s.get("path", ""), "created_at": s.get("created_at", 0)}
-        for ref, s in _sessions.items()
-        if s["type"] in ("sqlite", "duckdb") and ref != "chinook"
-    }
-    try:
-        _SESSION_FILE.write_text(json.dumps(index))
-    except OSError:
-        pass
-
-
-async def _restore_sessions() -> None:
-    if not _SESSION_FILE.exists():
-        return
-    try:
-        index = json.loads(_SESSION_FILE.read_text())
-    except (OSError, json.JSONDecodeError):
-        return
-    cutoff = time.time() - _SESSION_TTL
-    for ref, meta in index.items():
-        if meta.get("created_at", 0) < cutoff: continue
-        path = meta.get("path", "")
-        if path and Path(path).exists() and ref not in _sessions:
-            try:
-                stype = meta.get("type", "sqlite")
-                schema = await load_duckdb_schema(path) if stype == "duckdb" else await load_sqlite_schema(path)
-                _sessions[ref] = {"type": stype, "path": path, "schema": schema, "created_at": meta["created_at"]}
-            except Exception:
-                pass
-
-
-async def _exec_session(session: dict, sql: str):
-    stype = session["type"]
-    if stype == "sqlite":   return await execute_sqlite(session["path"], sql)
-    elif stype == "duckdb": return await execute_duckdb(session["path"], sql)
-    elif stype == "mysql":  return await execute_mysql(session["conn_str"], sql)
-    elif stype == "mssql":  return await execute_mssql(session["conn_str"], sql)
-    else:                   return await execute_pg(session["conn_str"], sql)
-
-
-async def _preload_chinook() -> None:
-    if "chinook" not in _sessions and CHINOOK_PATH.exists():
-        schema = await load_sqlite_schema(str(CHINOOK_PATH))
-        _sessions["chinook"] = {"type": "sqlite", "path": str(CHINOOK_PATH),
-                                "schema": schema, "created_at": time.time()}
-    await _restore_sessions()
+_SQLITE_EXTS = {".db", ".sqlite", ".sqlite3"}
+_DUCKDB_EXTS = {".duckdb", ".parquet", ".csv"}
 
 
 @router.get("/health")
 async def health():
-    await _preload_chinook()
+    await preload_chinook()
     chinook = _sessions.get("chinook")
     tables  = len(chinook["schema"].tables) if chinook else 0
     return {"status": "ok", "demo_db": "chinook.db", "tables": tables}
@@ -112,7 +47,7 @@ async def health():
 
 @router.get("/sql/schema")
 async def get_schema(db_ref: str = "chinook"):
-    await _preload_chinook()
+    await preload_chinook()
     session = _sessions.get(db_ref)
     if not session:
         return JSONResponse({"error": f"Unknown db_ref: {db_ref}"}, status_code=404)
@@ -126,10 +61,6 @@ async def get_sample_questions(db_ref: str, provider: str = "groq"):
         return JSONResponse({"error": "session not found"}, status_code=404)
     key = os.environ.get(get_provider_cfg(provider)["env"], "")
     return {"questions": await generate_sample_questions(session["schema"], provider, key)}
-
-
-_SQLITE_EXTS = {".db", ".sqlite", ".sqlite3"}
-_DUCKDB_EXTS = {".duckdb", ".parquet", ".csv"}
 
 
 @router.post("/sql/upload")
@@ -150,22 +81,18 @@ async def upload_db(file: UploadFile = File(...)):
     with db_path.open("wb") as f:
         shutil.copyfileobj(file.file, f)
     try:
-        if stype == "duckdb":
-            schema = await load_duckdb_schema(str(db_path))
-        else:
-            schema = await load_sqlite_schema(str(db_path))
+        schema = await load_duckdb_schema(str(db_path)) if stype == "duckdb" else await load_sqlite_schema(str(db_path))
     except Exception as e:
         db_path.unlink(missing_ok=True)
         return JSONResponse({"error": f"Could not read file: {e}"}, status_code=422)
-    _sessions[db_ref] = {"type": stype, "path": str(db_path),
-                         "schema": schema, "created_at": time.time()}
-    _save_session_index()
+    _sessions[db_ref] = {"type": stype, "path": str(db_path), "schema": schema, "created_at": __import__("time").time()}
+    save_session_index()
     return {"db_ref": db_ref, "schema": schema_to_dict(schema)}
 
 
 class ConnectRequest(BaseModel):
     conn_str: str
-    db_type: str = "postgresql"  # "postgresql" | "mysql"
+    db_type: str = "postgresql"
 
 
 @router.post("/sql/connect")
@@ -173,29 +100,26 @@ async def connect_db(req: ConnectRequest):
     try:
         if req.db_type == "mysql":
             schema = await load_mysql_schema(req.conn_str)
-            db_ref = f"mysql_{uuid.uuid4().hex[:8]}"
-            stype  = "mysql"
+            db_ref, stype = f"mysql_{uuid.uuid4().hex[:8]}", "mysql"
         elif req.db_type == "mssql":
             schema = await load_mssql_schema(req.conn_str)
-            db_ref = f"mssql_{uuid.uuid4().hex[:8]}"
-            stype  = "mssql"
+            db_ref, stype = f"mssql_{uuid.uuid4().hex[:8]}", "mssql"
         else:
             schema = await load_pg_schema(req.conn_str)
-            db_ref = f"pg_{uuid.uuid4().hex[:8]}"
-            stype  = "postgresql"
+            db_ref, stype = f"pg_{uuid.uuid4().hex[:8]}", "postgresql"
     except Exception as e:
         return JSONResponse({"error": f"Connection failed: {e}"}, status_code=422)
-    _sessions[db_ref] = {"type": stype, "conn_str": req.conn_str,
-                         "schema": schema, "created_at": time.time()}
+    _sessions[db_ref] = {"type": stype, "conn_str": req.conn_str, "schema": schema, "created_at": __import__("time").time()}
     return {"db_ref": db_ref, "schema": schema_to_dict(schema)}
 
 
 class QueryRequest(BaseModel):
-    question: str
-    provider:  str = "groq"
-    db_ref:    str = "chinook"
-    history:   list[dict] = []
-    glossary:  str = ""
+    question:   str
+    provider:   str = "groq"
+    db_ref:     str = "chinook"
+    history:    list[dict] = []
+    glossary:   str = ""
+    correction: str = ""
 
 
 class PageRequest(BaseModel):
@@ -204,7 +128,7 @@ class PageRequest(BaseModel):
 
 @router.post("/sql/page")
 async def page_results(req: PageRequest):
-    await _preload_chinook()
+    await preload_chinook()
     session = _sessions.get(req.db_ref)
     if not session:
         return JSONResponse({"error": "Session expired or unknown"}, status_code=404)
@@ -212,37 +136,26 @@ async def page_results(req: PageRequest):
         validate_sql(req.sql)
     except UnsafeQueryError as e:
         return JSONResponse({"error": str(e)}, status_code=400)
-    page      = max(1, req.page)
-    page_size = min(max(10, req.page_size), 200)
-    stype     = session["type"]
-    paged     = paginate_mssql_sql(req.sql, page, page_size) if stype == "mssql" else paginate_sql(req.sql, page, page_size)
+    page, page_size = max(1, req.page), min(max(10, req.page_size), 200)
+    stype  = session["type"]
+    paged  = paginate_mssql_sql(req.sql, page, page_size) if stype == "mssql" else paginate_sql(req.sql, page, page_size)
     try:
-        result = await _exec_session(session, paged)
-        if stype == "sqlite":
-            total = await count_rows_sqlite(session["path"], req.sql)
-        elif stype in ("postgresql", "mysql", "mssql"):
-            total = await count_rows_remote(session, req.sql)
-        else:
-            total = -1
+        result = await exec_session(session, paged)
+        total  = await count_rows_sqlite(session["path"], req.sql) if stype == "sqlite" else await count_rows_remote(session, req.sql) if stype in ("postgresql", "mysql", "mssql") else -1
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
-    safe = mask_sensitive_columns(result)
-    d = result_to_dict(safe)
+    d = result_to_dict(mask_sensitive_columns(result))
     d.update({"total_count": total, "page": page, "page_size": page_size})
     return d
 
 
 class FilterRequest(BaseModel):
-    sql: str
-    db_ref: str = "chinook"
-    filter_text: str
-    columns: list[str] = []
-    provider: str = "groq"
+    sql: str; db_ref: str = "chinook"; filter_text: str; columns: list[str] = []; provider: str = "groq"
 
 
 @router.post("/sql/filter")
 async def filter_results(req: FilterRequest):
-    await _preload_chinook()
+    await preload_chinook()
     session = _sessions.get(req.db_ref)
     if not session:
         return JSONResponse({"error": "Session expired or unknown"}, status_code=404)
@@ -258,8 +171,7 @@ async def filter_results(req: FilterRequest):
         expr = await generate_filter_expr(sanitize_question(req.filter_text), req.columns, req.provider, key)
     except Exception as e:
         return JSONResponse({"error": f"Filter generation failed: {e}"}, status_code=500)
-    inner = req.sql.rstrip(";").strip()
-    filtered_sql = f"SELECT * FROM ({inner}) AS _filtered WHERE {expr}"
+    filtered_sql = f"SELECT * FROM ({req.sql.rstrip(';').strip()}) AS _filtered WHERE {expr}"
     try:
         validate_sql(filtered_sql)
     except UnsafeQueryError as e:
@@ -267,17 +179,11 @@ async def filter_results(req: FilterRequest):
     stype = session["type"]
     paged = paginate_mssql_sql(filtered_sql, 1, 50) if stype == "mssql" else paginate_sql(filtered_sql, 1, 50)
     try:
-        result = await _exec_session(session, paged)
-        if stype == "sqlite":
-            total = await count_rows_sqlite(session["path"], filtered_sql)
-        elif stype in ("postgresql", "mysql", "mssql"):
-            total = await count_rows_remote(session, filtered_sql)
-        else:
-            total = -1
+        result = await exec_session(session, paged)
+        total  = await count_rows_sqlite(session["path"], filtered_sql) if stype == "sqlite" else await count_rows_remote(session, filtered_sql) if stype in ("postgresql", "mysql", "mssql") else -1
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
-    safe = mask_sensitive_columns(result)
-    d = result_to_dict(safe)
+    d = result_to_dict(mask_sensitive_columns(result))
     d.update({"filtered_sql": filtered_sql, "filter_expr": expr, "total_count": total, "page": 1, "page_size": 50})
     return d
 
@@ -292,106 +198,71 @@ async def query_sql(req: QueryRequest):
 
 
 async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
-    if not _check_rate_limit():
+    if not check_rate_limit():
         yield _sse({"type": "error", "text": "Rate limit reached. Please wait a moment and try again."})
         yield _sse({"type": "done"})
         return
 
-    await _preload_chinook()
+    await preload_chinook()
     session = _sessions.get(req.db_ref)
     if not session:
-        if req.db_ref.startswith("pg_"):
-            msg = "PostgreSQL session expired (server restarted). Please reconnect."
-        elif req.db_ref.startswith("mysql_"):
-            msg = "MySQL session expired (server restarted). Please reconnect."
-        elif req.db_ref.startswith("mssql_"):
-            msg = "SQL Server session expired (server restarted). Please reconnect."
-        elif req.db_ref.startswith("upload_"):
-            msg = "Uploaded DB session expired (server restarted). Please re-upload your file."
-        else:
-            msg = f"Unknown db_ref: {req.db_ref}"
-        yield _sse({"type": "error", "text": msg})
-        yield _sse({"type": "done"})
-        return
+        if req.db_ref.startswith("pg_"):        msg = "PostgreSQL session expired (server restarted). Please reconnect."
+        elif req.db_ref.startswith("mysql_"):   msg = "MySQL session expired (server restarted). Please reconnect."
+        elif req.db_ref.startswith("mssql_"):   msg = "SQL Server session expired (server restarted). Please reconnect."
+        elif req.db_ref.startswith("upload_"):  msg = "Uploaded DB session expired (server restarted). Please re-upload your file."
+        else:                                   msg = f"Unknown db_ref: {req.db_ref}"
+        yield _sse({"type": "error", "text": msg}); yield _sse({"type": "done"}); return
 
     cfg = get_provider_cfg(req.provider)
     key = os.environ.get(cfg["env"], "")
     if not key:
         yield _sse({"type": "error", "text": f"{cfg['env']} not configured on this server."})
-        yield _sse({"type": "done"})
-        return
+        yield _sse({"type": "done"}); return
 
-    # Sanitize user question — strip prompt injection attempts
     safe_question = sanitize_question(req.question)
-
     schema: DBSchema = session["schema"]
     schema_text = schema_to_prompt_text(schema, safe_question)
     yield _sse({"type": "schema_loaded", "tables": len(schema.tables),
                 "columns": sum(len(t.columns) for t in schema.tables.values())})
 
-    # Retry loop: generate SQL + execute (max 3 attempts total)
-    sql        = None
-    result     = None
-    last_error = None
-    prev_sql   = None
-
+    sql = None; result = None; last_error = None; prev_sql = None
     for attempt in range(1, 4):
         if attempt > 1:
-            await asyncio.sleep(2 ** (attempt - 2))  # 1s before attempt 2, 2s before attempt 3
+            await asyncio.sleep(2 ** (attempt - 2))
             yield _sse({"type": "retry", "attempt": attempt, "error": last_error})
-
-        # --- generate SQL ---
         try:
             sql = await generate_sql(
                 safe_question, schema_text, req.provider, key,
-                prev_sql, last_error, req.history or None, req.glossary,
+                prev_sql, last_error, req.history or None, req.glossary, req.correction,
             )
             validate_sql(sql)
         except RateLimitError as e:
             yield _sse({"type": "error", "text": str(e)}); yield _sse({"type": "done"}); return
         except UnsafeQueryError as e:
-            last_error = str(e)
-            prev_sql = sql
-            continue
+            last_error = str(e); prev_sql = sql; continue
         except Exception as e:
-            last_error = f"SQL generation error: {e}"
-            prev_sql = sql
-            continue
+            last_error = f"SQL generation error: {e}"; prev_sql = sql; continue
 
         yield _sse({"type": "sql_generated", "sql": sql})
-
-        # --- execute (page 1 of 50) ---
         try:
             stype = session["type"]
             paged = paginate_mssql_sql(sql, 1, 50) if stype == "mssql" else paginate_sql(sql, 1, 50)
-            result = await _exec_session(session, paged)
-            break  # success
+            result = await exec_session(session, paged)
+            break
         except Exception as e:
-            last_error = f"Execution error: {e}"
-            prev_sql = sql
-            result = None
-            continue
+            last_error = f"Execution error: {e}"; prev_sql = sql; result = None; continue
 
     if result is None:
         yield _sse({"type": "error", "text": f"Failed after 3 attempts. Last: {last_error}"})
-        yield _sse({"type": "done"})
-        return
+        yield _sse({"type": "done"}); return
 
-    # Mask sensitive columns before sending to client or LLM
     safe_result = mask_sensitive_columns(result)
-
-    # Total count for pagination
     stype = session["type"]
-    if stype == "sqlite":
-        total_count = await count_rows_sqlite(session["path"], sql)
-    elif stype in ("postgresql", "mysql", "mssql"):
-        total_count = await count_rows_remote(session, sql)
-    else:
-        total_count = -1
+    if stype == "sqlite":                          total_count = await count_rows_sqlite(session["path"], sql)
+    elif stype in ("postgresql", "mysql", "mssql"): total_count = await count_rows_remote(session, sql)
+    else:                                           total_count = -1
     result_dict = result_to_dict(safe_result)
-    result_dict["total_count"] = total_count
-    result_dict["page"] = 1
-    result_dict["page_size"] = 50
+    result_dict.update({"total_count": total_count, "page": 1, "page_size": 50})
     yield _sse({"type": "results", **result_dict})
     yield _sse({"type": "done"})
 
@@ -399,9 +270,11 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
 class ExplainRequest(BaseModel):
     question: str; sql: str; columns: list[str]; rows: list; provider: str = "groq"
 
+
 @router.post("/sql/explain")
 async def explain_sql(req: ExplainRequest):
-    return StreamingResponse(_stream_explain(req), media_type="text/event-stream", headers={"Cache-Control":"no-cache","X-Accel-Buffering":"no"})
+    return StreamingResponse(_stream_explain(req), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
 
 async def _stream_explain(req: ExplainRequest) -> AsyncGenerator[str, None]:
     cfg = get_provider_cfg(req.provider)
@@ -412,6 +285,38 @@ async def _stream_explain(req: ExplainRequest) -> AsyncGenerator[str, None]:
         async for chunk in stream_explanation(prompt, req.provider, key): yield chunk
         sugg = await generate_followup_suggestions(req.question, req.sql, req.columns, req.rows[:5], req.provider, key)
         if sugg: yield _sse({"type": "suggestions", "questions": sugg})
+    except RateLimitError as e:
+        yield _sse({"type": "error", "text": str(e)})
+    yield _sse({"type": "done"})
+
+
+class ReasonRequest(BaseModel):
+    question: str; sql: str; columns: list[str]; provider: str = "groq"
+
+
+@router.post("/sql/reason")
+async def reason_sql(req: ReasonRequest):
+    return StreamingResponse(_stream_reason(req), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+async def _stream_reason(req: ReasonRequest) -> AsyncGenerator[str, None]:
+    cfg = get_provider_cfg(req.provider)
+    key = os.environ.get(cfg["env"], "")
+    if not key: yield _sse({"type": "error", "text": f"{cfg['env']} not configured"}); yield _sse({"type": "done"}); return
+    cols = ", ".join(req.columns) or "unknown"
+    prompt = (
+        f"Question: {sanitize_question(req.question)}\n"
+        f"SQL generated: {req.sql}\n"
+        f"Result columns: {cols}\n\n"
+        "Explain your step-by-step reasoning for generating this SQL:\n"
+        "- What did you identify as the key intent of the question?\n"
+        "- Which tables and columns did you choose and why?\n"
+        "- What assumptions did you make (e.g. how a term maps to a column)?\n"
+        "- Why did you use this aggregation / join / filter?\n"
+        "Be concise but specific. Use plain English, not SQL."
+    )
+    try:
+        async for chunk in stream_explanation(prompt, req.provider, key): yield chunk
     except RateLimitError as e:
         yield _sse({"type": "error", "text": str(e)})
     yield _sse({"type": "done"})
