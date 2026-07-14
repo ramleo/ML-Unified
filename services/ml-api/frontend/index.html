@@ -2221,14 +2221,30 @@ async function executeDeleteModel() {
 }
 
 // ── Boot ──────────────────────────────────────────────────────
+async function fetchWithRetry(url, maxRetries = 4, delayMs = 12000) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res;
+    } catch(e) {
+      if (attempt === maxRetries) throw e;
+      const msg = document.getElementById('loadingMsg');
+      const remaining = (maxRetries - attempt);
+      if (msg) msg.textContent = `Server waking up — retrying in ${delayMs/1000}s… (${remaining} attempt${remaining !== 1 ? 's' : ''} left)`;
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+}
+
 async function init() {
   const coldStartTimer = setTimeout(() => {
     const msg = document.getElementById('loadingMsg');
-    if (msg) msg.textContent = 'Server waking up — please wait ~30s…';
-  }, 5000);
+    if (msg) msg.textContent = 'Server waking up — please wait…';
+  }, 3000);
 
   try {
-    const res = await fetch(`${API}/models`);
+    const res = await fetchWithRetry(`${API}/models`);
     clearTimeout(coldStartTimer);
     allModels  = await res.json();
     renderSidebar();
@@ -2245,7 +2261,7 @@ async function init() {
   } catch(e) {
     clearTimeout(coldStartTimer);
     document.getElementById('sidebar').innerHTML =
-      '<div class="sidebar-loading" style="color:#f87171">Failed to load models. Is the server running?</div>';
+      '<div class="sidebar-loading" style="color:#f87171">Server unavailable — please refresh in ~60s (HF Space cold start)</div>';
   }
 }
 
