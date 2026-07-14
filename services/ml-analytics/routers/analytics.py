@@ -39,6 +39,7 @@ class TrackEvent(BaseModel):
     path: str = ""
     session_id: str = ""
     referrer: str = ""
+    duration_ms: int = 0
     meta: dict[str, Any] = {}
 
 
@@ -49,10 +50,10 @@ async def track_event(req: TrackEvent, request: Request):
     country = request.headers.get("CF-IPCountry", "")
     async with _pool.acquire() as conn:
         await conn.execute(
-            """INSERT INTO events (type, path, session_id, country, referrer, meta)
-               VALUES ($1, $2, $3, $4, $5, $6::jsonb)""",
+            """INSERT INTO events (type, path, session_id, country, referrer, duration_ms, meta)
+               VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)""",
             req.type, req.path, req.session_id, country, req.referrer,
-            json.dumps(req.meta),
+            req.duration_ms, json.dumps(req.meta),
         )
     return {"ok": True}
 
@@ -94,12 +95,46 @@ async def get_stats():
                GROUP BY type
                ORDER BY count DESC"""
         )
+        top_countries = await conn.fetch(
+            """SELECT country, COUNT(*) AS count
+               FROM events
+               WHERE created_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'UTC')
+                 AND country != ''
+               GROUP BY country
+               ORDER BY count DESC
+               LIMIT 8"""
+        )
+        qsr_row = await conn.fetchrow(
+            """SELECT
+                 COUNT(*) FILTER (WHERE (meta->>'success')::boolean = true) AS success,
+                 COUNT(*) AS total
+               FROM events
+               WHERE type = 'query_run'
+                 AND created_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'UTC')"""
+        )
+        funnel = await conn.fetchrow(
+            """SELECT
+                 COUNT(*) FILTER (WHERE type = 'page_view') AS page_view,
+                 COUNT(*) FILTER (WHERE type = 'tool_open') AS tool_open,
+                 COUNT(*) FILTER (WHERE type = 'query_run') AS query_run
+               FROM events
+               WHERE created_at >= DATE_TRUNC('day', NOW() AT TIME ZONE 'UTC')"""
+        )
+    qsr_total = int(qsr_row["total"] or 0)
+    qsr = round(int(qsr_row["success"] or 0) / qsr_total, 3) if qsr_total else None
     return {
         "active_now": int(active_now or 0),
         "today_count": int(today_count or 0),
         "per_minute": [dict(r) for r in per_minute],
         "top_pages": [dict(r) for r in top_pages],
         "by_type": [dict(r) for r in by_type],
+        "top_countries": [dict(r) for r in top_countries],
+        "query_success_rate": qsr,
+        "funnel": {
+            "page_view": int(funnel["page_view"] or 0),
+            "tool_open": int(funnel["tool_open"] or 0),
+            "query_run": int(funnel["query_run"] or 0),
+        },
     }
 
 
@@ -110,9 +145,25 @@ async def get_recent_events():
     async with _pool.acquire() as conn:
         rows = await conn.fetch(
             """SELECT id, created_at::TEXT AS created_at, type, path, country,
-                      session_id, meta::TEXT AS meta
+                      session_id, duration_ms, meta::TEXT AS meta
                FROM events
                ORDER BY created_at DESC
                LIMIT 50"""
+        )
+    return {"events": [dict(r) for r in rows]}
+
+
+@router.get("/events/session/{session_id}")
+async def get_session_events(session_id: str):
+    if not _pool:
+        return _no_db()
+    async with _pool.acquire() as conn:
+        rows = await conn.fetch(
+            """SELECT id, created_at::TEXT AS created_at, type, path,
+                      duration_ms, meta::TEXT AS meta
+               FROM events
+               WHERE session_id = $1
+               ORDER BY created_at ASC""",
+            session_id,
         )
     return {"events": [dict(r) for r in rows]}
