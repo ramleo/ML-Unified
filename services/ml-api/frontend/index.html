@@ -2225,7 +2225,6 @@ async function fetchWithRetry(url, maxRetries = 4, delayMs = 12000) {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res;
     } catch(e) {
       if (attempt === maxRetries) throw e;
