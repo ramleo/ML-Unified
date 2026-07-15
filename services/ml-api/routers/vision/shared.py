@@ -10,9 +10,7 @@ from tqdm import tqdm
 
 # ── Cache directory ───────────────────────────────────────────────────────────
 
-HERE             = os.path.dirname(os.path.abspath(__file__))
-_API_ROOT        = os.path.abspath(os.path.join(HERE, "..", ".."))
-VISION_CACHE_DIR = os.path.join(_API_ROOT, "vision_cache")
+VISION_CACHE_DIR = "/tmp/vision_cache"
 os.makedirs(VISION_CACHE_DIR, exist_ok=True)
 
 _MAX_IMG_DIM = 1200
