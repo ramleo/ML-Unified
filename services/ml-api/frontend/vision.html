@@ -81,9 +81,40 @@
   </div>
 </nav>
 
-<!-- Layout — no sidebar on standalone Vision page -->
-<div class="layout" style="grid-template-columns:1fr">
-  <main class="main" id="main" style="margin-left:0;padding-left:1.5rem">
+<!-- Layout -->
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-label">Vision</div>
+    <button class="model-btn active" id="vbtn-classifier" onclick="selectVision()">
+      <div class="model-dot" style="background:#e879f9"></div>
+      <div class="model-btn-info">
+        <div class="model-btn-title">Image Classifier</div>
+        <div class="model-btn-sub">ImageNet · 1000 classes</div>
+      </div>
+    </button>
+    <button class="model-btn" id="vbtn-processing" onclick="selectImageProcessing()">
+      <div class="model-dot" style="background:#fb923c"></div>
+      <div class="model-btn-info">
+        <div class="model-btn-title">Image Processing</div>
+        <div class="model-btn-sub">Blur · Edges · Rotate · More</div>
+      </div>
+    </button>
+    <button class="model-btn" id="vbtn-detection" onclick="selectObjectDetection()">
+      <div class="model-dot" style="background:#38bdf8"></div>
+      <div class="model-btn-info">
+        <div class="model-btn-title">Object Detection</div>
+        <div class="model-btn-sub">TinyYOLOv3 · COCO 80 classes</div>
+      </div>
+    </button>
+    <button class="model-btn" id="vbtn-segmentation" onclick="selectSegmentation()">
+      <div class="model-dot" style="background:#a78bfa"></div>
+      <div class="model-btn-info">
+        <div class="model-btn-title">Image Segmentation</div>
+        <div class="model-btn-sub">SegFormer-B0 · ADE20K 150 classes</div>
+      </div>
+    </button>
+  </aside>
+  <main class="main" id="main">
     <div class="empty-state">
       <div class="empty-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><circle cx="22" cy="22" r="5" fill="#818cf8" opacity="0.75"/><circle cx="22" cy="8" r="3" fill="#818cf8" opacity="0.5"/><circle cx="36" cy="22" r="3" fill="#38bdf8" opacity="0.5"/><circle cx="22" cy="36" r="3" fill="#34d399" opacity="0.5"/><circle cx="8" cy="22" r="3" fill="#818cf8" opacity="0.5"/></svg></div>
       <div>Loading ML Vision…</div>

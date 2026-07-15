@@ -81,9 +81,26 @@
   </div>
 </nav>
 
-<!-- Layout — no sidebar on standalone EDA page -->
-<div class="layout" style="grid-template-columns:1fr">
-  <main class="main" id="main" style="margin-left:0;padding-left:1.5rem">
+<!-- Layout -->
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-label">Data Tools</div>
+    <button class="model-btn active" id="ebtn-eda" onclick="selectEDA()">
+      <div class="model-dot" style="background:#34d399"></div>
+      <div class="model-btn-info">
+        <div class="model-btn-title">EDA Explorer</div>
+        <div class="model-btn-sub">Explore any CSV dataset</div>
+      </div>
+    </button>
+    <button class="model-btn" id="ebtn-clean" onclick="selectClean()">
+      <div class="model-dot" style="background:#22d3ee"></div>
+      <div class="model-btn-info">
+        <div class="model-btn-title">Clean &amp; Export</div>
+        <div class="model-btn-sub">Deduplicate, impute, download</div>
+      </div>
+    </button>
+  </aside>
+  <main class="main" id="main">
     <div class="empty-state">
       <div class="empty-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><rect x="3" y="3" width="38" height="38" rx="10" stroke="#818cf8" stroke-width="1.3" opacity="0.2"/><rect x="9" y="26" width="7" height="11" rx="2" fill="#818cf8" opacity="0.65"/><rect x="18.5" y="19" width="7" height="18" rx="2" fill="#38bdf8" opacity="0.65"/><rect x="28" y="22" width="7" height="15" rx="2" fill="#34d399" opacity="0.65"/><path d="M7 37h30" stroke="#64748b" stroke-width="1" stroke-linecap="round" opacity="0.35"/></svg></div>
       <div>Loading EDA Explorer…</div>
