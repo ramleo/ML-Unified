@@ -325,3 +325,44 @@ function countUp(el, endVal, prefix, duration) {
   resize(); spawn(); draw();
 })();
 
+// ── SSE streaming helpers ─────────────────────────────────────────────────────
+async function* _sseStream(response) {
+  const reader  = response.body.getReader();
+  const decoder = new TextDecoder();
+  let   buffer  = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop();
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        try { yield JSON.parse(line.slice(6)); } catch {}
+      }
+    }
+  }
+  if (buffer.startsWith('data: ')) {
+    try { yield JSON.parse(buffer.slice(6)); } catch {}
+  }
+}
+
+function _progressBarHTML(fillId, msgId, pctId) {
+  return `<div class="sse-progress">
+    <div class="sse-progress-track"><div class="sse-progress-fill" id="${fillId}" style="width:4%"></div></div>
+    <div class="sse-progress-row">
+      <span class="sse-progress-msg" id="${msgId}">Starting…</span>
+      <span class="sse-progress-pct" id="${pctId}">0%</span>
+    </div>
+  </div>`;
+}
+
+function _updateProgressBar(fillId, msgId, pctId, pct, msg) {
+  const fill  = document.getElementById(fillId);
+  const msgEl = document.getElementById(msgId);
+  const pctEl = document.getElementById(pctId);
+  if (fill)  fill.style.width  = Math.max(4, pct) + '%';
+  if (msgEl) msgEl.textContent = msg || '';
+  if (pctEl) pctEl.textContent = pct + '%';
+}
+
