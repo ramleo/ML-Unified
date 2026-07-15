@@ -601,6 +601,7 @@ async function selectModel(id) {
     if (!schemaRes || !modelMeta) { animateMainIn(); return; }
 
     activeModel = { ...modelMeta, schema: schemaRes };
+    _track('tool_open', { tool: 'ml-unified', model_id: id, task: activeModel?.schema?.task || '' });
 
     // Model accent only — never override the theme's --accent
     document.documentElement.style.setProperty('--model-accent', modelMeta.accent);
@@ -1435,6 +1436,7 @@ async function runPredict() {
     const result = await res.json();
     _track('query_run', { tool: 'model:' + activeModel.id, success: true });
     renderResult(result);
+    _track('query_run', { tool: 'ml-unified', action: 'predict', model_id: activeModel?.id || '', confidence: result?.confidence ?? null });
     emptyEl.style.display  = 'none';
     resultEl.style.display = 'block';
     resultEl.classList.remove('result-reveal');
@@ -1589,8 +1591,10 @@ async function fetchAndRenderShap(data) {
       if (ev.pct !== undefined) _updateProgressBar('shapFill','shapMsg','shapPct', ev.pct, ev.msg);
       if (ev.result) shap = ev.result;
     }
-    if (shap) renderShap(shap);
-    else throw new Error('No SHAP result received.');
+    if (shap) {
+      renderShap(shap);
+      _track('query_run', { tool: 'ml-unified', action: 'shap', model_id: activeModel?.id || '' });
+    } else throw new Error('No SHAP result received.');
   } catch (e) {
     body.innerHTML = `<div class="shap-loading" style="color:var(--text3)">Feature impact unavailable${e.message ? ': ' + e.message : ''}</div>`;
   }
@@ -1774,6 +1778,7 @@ async function runCustomShap() {
         <div class="shap-base">Base value: <strong>${shap.base_value.toFixed(3)}</strong></div>
       </div>`;
 
+    _track('query_run', { tool: 'ml-unified', action: 'shap', model_id: 'custom' });
     requestAnimationFrame(() => requestAnimationFrame(() => {
       document.querySelectorAll('#shapCustomResult .shap-bar-fill[data-pct]').forEach(bar => {
         bar.style.width = bar.dataset.pct + '%';
@@ -1871,6 +1876,7 @@ async function analyzeCSV() {
     clearTimeout(wake);
     if (!res.ok) { const t = await res.text(); throw new Error(t); }
     wizardAnalysis = await res.json();
+    _track('tool_open', { tool: 'ml-unified', action: 'upload_csv', rows: wizardAnalysis?.rows || 0, cols: wizardAnalysis?.columns?.length || 0 });
     _track('query_run', { tool: 'automl:analyze', success: true });
     renderWizardStep2();
   } catch(e) {
@@ -4200,6 +4206,7 @@ async function runAutoML() {
     }
     if (!result) throw new Error('No result received from server.');
     _track('query_run', { tool: 'automl:train', success: true });
+    _track('query_run', { tool: 'ml-unified', action: 'automl', winner: result?.automl?.winner || result?.id || '', models_tried: result?.automl?.n_models || nTrials || 0 });
 
     const mr = await fetch(API + '/models');
     allModels = await mr.json();
@@ -4269,6 +4276,7 @@ async function runTrain() {
       if (ev.result) result = ev.result;
     }
     if (!result) throw new Error('No result received from server.');
+    _track('query_run', { tool: 'ml-unified', action: 'train', model_type: algorithm || '', metric_value: result?.metric ?? null, features_count: (wizardAnalysis?.columns?.length - 1) || 0 });
 
     const mr = await fetch(API + '/models');
     allModels = await mr.json();
@@ -4821,6 +4829,7 @@ async function runUnsupervisedAnalysis(id) {
     if (!data) throw new Error('No result received from server.');
     _track('query_run', { tool: 'cluster:' + id, success: true });
     renderUnsupervisedResult(id, data);
+    _track('query_run', { tool: 'ml-unified', action: 'cluster', algorithm: id, n_samples: data?.stats?.n_samples || 0 });
   } catch(e) {
     document.getElementById('uResult').innerHTML = '';
     document.getElementById('uErr').innerHTML = '<div class="js-err-box">' + e.message + '</div>';

@@ -171,9 +171,12 @@ async function _runEDA(file) {
     _edaCurrentData     = data;
     _edaCurrentFilename = file.name;
     _edaCurrentFile     = file;
+    _track('tool_open', { tool: 'eda', action: 'upload', rows: data?.overview?.rows || 0, cols: data?.overview?.cols || 0 });
     resEl.innerHTML = _renderEDA(data, file.name);
+    _track('query_run', { tool: 'eda', action: 'analyze', rows: data?.overview?.rows || 0, cols: data?.overview?.cols || 0 });
     setTimeout(() => { _renderEDAPlots(data); _edaInitAnimations(data); }, 0);
   } catch (e) {
+    _track('error', { tool: 'eda', action: 'api_fail', status_code: e?.status || 0 });
     resEl.innerHTML = '';
     errEl.textContent = e.message;
     errEl.style.display = 'block';
@@ -647,6 +650,7 @@ async function _submitClean() {
     setProgress(95, 'Preparing download…');
     const result = await r.json();
     setProgress(100, 'Done');
+    _track('query_run', { tool: 'eda', action: 'clean', operation: numMethod || 'none' });
     const s = result.summary;
     summaryEl.style.display = 'block';
     summaryEl.innerHTML = `
@@ -677,6 +681,7 @@ async function _submitClean() {
     await new Promise(res => setTimeout(res, 800));
   } catch (e) {
     clearInterval(iv);
+    _track('error', { tool: 'eda', action: 'api_fail', status_code: e?.status || 0 });
     errEl.textContent = e.message; errEl.style.display = 'block';
   } finally {
     btn.disabled = false;
@@ -1240,6 +1245,7 @@ async function _runEdaSuggest() {
 
 function _renderEDAPlots(d) {
   if (typeof Plotly === 'undefined') return;
+  _track('query_run', { tool: 'eda', action: 'chart', chart_type: 'distribution' });
   const cs  = getComputedStyle(document.documentElement);
   const tc  = cs.getPropertyValue('--text3').trim()   || '#64748b';
   const gc  = cs.getPropertyValue('--border').trim()  || 'rgba(255,255,255,0.07)';

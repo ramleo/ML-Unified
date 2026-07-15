@@ -245,6 +245,7 @@ function addBatchFiles(files) {
 
   renderBatchGrid();
   document.getElementById('vErr').innerHTML = '';
+  _track('tool_open', { tool: 'vision', action: 'upload_image' });
 }
 
 function renderBatchGrid() {
@@ -328,9 +329,13 @@ async function runBatchClassify() {
     try {
       const res = await fetch(`${VISION_API}/classify-image`, { method: 'POST', body: form });
       if (!res.ok) throw new Error(await res.text());
+      const cData = await res.json();
+      const topPred = cData.predictions?.[0];
       _track('query_run', { tool: 'vision:classify', success: true });
-      _updateBatchCard(i, 'done', await res.json());
-    } catch {
+      _track('query_run', { tool: 'vision', action: 'classify', model: visionModel || '', top_label: topPred?.label || '', confidence: topPred?.confidence ?? null });
+      _updateBatchCard(i, 'done', cData);
+    } catch (err) {
+      _track('error', { tool: 'vision', action: 'classify', status_code: err?.status || 0 });
       _updateBatchCard(i, 'error');
     }
     _updateBatchProgress(i + 1, batchFiles.length);
@@ -899,7 +904,9 @@ async function runObjectDetect() {
     if (!data) throw new Error('No result received from server.');
     _track('query_run', { tool: 'vision:detect', success: true });
     renderDetectionResult(data);
+    _track('query_run', { tool: 'vision', action: 'detect', model: data?.model_name || 'tiny_yolov3', objects_found: data?.count || 0 });
   } catch(e) {
+    _track('error', { tool: 'vision', action: 'detect', status_code: e?.status || 0 });
     document.getElementById('detResult').innerHTML = '';
     errEl.innerHTML = `<div class="js-err-box">${e.message}</div>`;
   } finally {
@@ -1117,7 +1124,9 @@ async function runSegmentation() {
       }
       const data = await res.json();
       renderSegmentationResult(data);
+      _track('query_run', { tool: 'vision', action: 'segment', model: model || '' });
     } catch(e) {
+      _track('error', { tool: 'vision', action: 'segment', status_code: e?.status || 0 });
       document.getElementById('segResult').innerHTML = '';
       errEl.innerHTML = `<div class="js-err-box">${e.message}</div>`;
     } finally {
@@ -1149,7 +1158,9 @@ async function runSegmentation() {
     }
     if (!data) throw new Error('No result received from server.');
     renderSegmentationResult(data);
+    _track('query_run', { tool: 'vision', action: 'segment', model: model || '' });
   } catch(e) {
+    _track('error', { tool: 'vision', action: 'segment', status_code: e?.status || 0 });
     document.getElementById('segResult').innerHTML = '';
     errEl.innerHTML = `<div class="js-err-box">${e.message}</div>`;
   } finally {
