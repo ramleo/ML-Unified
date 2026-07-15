@@ -10,6 +10,8 @@ from .shared import (
     _large_vision_cache,
     _large_vision_lock,
     StreamingTask,
+    download_model,
+    ort_session,
 )
 
 router = APIRouter(tags=["vision"])
@@ -138,19 +140,17 @@ def _pil_segment(img, orig_w: int, orig_h: int) -> dict:
 
 def _ensure_segformer_model() -> str:
     if not os.path.exists(_SEGFORMER_PATH):
-        import urllib.request  # noqa: PLC0415
-        urllib.request.urlretrieve(_SEGFORMER_URL, _SEGFORMER_PATH)
+        download_model(_SEGFORMER_URL, _SEGFORMER_PATH)
     return _SEGFORMER_PATH
 
 
 def _load_segformer_session():
     import gc
-    import onnxruntime as ort  # noqa: PLC0415
     path = _ensure_segformer_model()
     with _large_vision_lock:
         _large_vision_cache.clear()
         gc.collect()
-        session = ort.InferenceSession(path)
+        session = ort_session(path)
         _large_vision_cache["model_type"] = "seg"
         _large_vision_cache["model_id"]   = "segformer_b0"
         _large_vision_cache["session"]    = session

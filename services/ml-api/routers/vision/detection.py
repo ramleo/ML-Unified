@@ -12,6 +12,8 @@ from .shared import (
     _large_vision_cache,
     _large_vision_lock,
     StreamingTask,
+    download_model,
+    ort_session,
 )
 
 router = APIRouter(tags=["vision"])
@@ -60,19 +62,17 @@ _BOX_PALETTE = [
 def _ensure_det_model(model_id: str) -> str:
     path = os.path.join(VISION_CACHE_DIR, f"det_{model_id}.onnx")
     if not os.path.exists(path):
-        import urllib.request  # noqa: PLC0415
-        urllib.request.urlretrieve(_DETECTION_MODEL_CONFIGS[model_id]["url"], path)
+        download_model(_DETECTION_MODEL_CONFIGS[model_id]["url"], path)
     return path
 
 
 def _load_det_session(model_id: str):
     import gc
-    import onnxruntime as ort  # noqa: PLC0415
     path = _ensure_det_model(model_id)
     with _large_vision_lock:
         _large_vision_cache.clear()
         gc.collect()
-        session = ort.InferenceSession(path)
+        session = ort_session(path)
         _large_vision_cache["model_type"] = "det"
         _large_vision_cache["model_id"]   = model_id
         _large_vision_cache["session"]    = session

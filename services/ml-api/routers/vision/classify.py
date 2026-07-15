@@ -5,7 +5,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from .shared import VISION_CACHE_DIR
+from .shared import VISION_CACHE_DIR, download_model, ort_session
 
 router = APIRouter(tags=["vision"])
 
@@ -56,8 +56,7 @@ def _ensure_labels() -> None:
         return
     labels_path = os.path.join(VISION_CACHE_DIR, "imagenet_classes.txt")
     if not os.path.exists(labels_path):
-        import urllib.request  # noqa: PLC0415
-        urllib.request.urlretrieve(
+        download_model(
             "https://raw.githubusercontent.com/pytorch/hub/master/imagenet_classes.txt",
             labels_path,
         )
@@ -68,8 +67,7 @@ def _ensure_labels() -> None:
 def _ensure_img_model_file(model_id: str) -> str:
     path = os.path.join(VISION_CACHE_DIR, f"{model_id}.onnx")
     if not os.path.exists(path):
-        import urllib.request  # noqa: PLC0415
-        urllib.request.urlretrieve(_IMAGE_MODEL_CONFIGS[model_id]["url"], path)
+        download_model(_IMAGE_MODEL_CONFIGS[model_id]["url"], path)
     return path
 
 
@@ -117,9 +115,8 @@ async def classify_image(
     if _img_active[0] != model_name:
         _img_cache.clear()
         try:
-            import onnxruntime as ort  # noqa: PLC0415
             model_path = _ensure_img_model_file(model_name)
-            session    = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+            session    = ort_session(model_path)
             _img_cache["session"] = session
             _img_active[0]        = model_name
         except Exception as e:

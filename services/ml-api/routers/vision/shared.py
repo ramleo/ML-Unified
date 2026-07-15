@@ -13,6 +13,31 @@ from tqdm import tqdm
 VISION_CACHE_DIR = "/tmp/vision_cache"
 os.makedirs(VISION_CACHE_DIR, exist_ok=True)
 
+
+def download_model(url: str, dest: str, timeout: int = 120) -> None:
+    """Download a model file with a timeout; removes partial file on failure."""
+    import httpx  # already in requirements.txt
+    tmp = dest + ".tmp"
+    try:
+        with httpx.stream("GET", url, timeout=timeout, follow_redirects=True) as r:
+            r.raise_for_status()
+            with open(tmp, "wb") as f:
+                for chunk in r.iter_bytes(chunk_size=65536):
+                    f.write(chunk)
+        os.replace(tmp, dest)
+    except Exception:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise
+
+
+def ort_session(path: str):
+    """Load an ONNX InferenceSession with basic (fast) graph optimization."""
+    import onnxruntime as ort
+    opts = ort.SessionOptions()
+    opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
+    return ort.InferenceSession(path, sess_options=opts)
+
 _MAX_IMG_DIM = 1200
 
 # Shared slot — only ONE large ONNX model in RAM at a time (detection OR segmentation).
