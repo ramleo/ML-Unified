@@ -23,6 +23,7 @@ from routers.rag.ingest import router as rag_ingest_router
 from routers.rag.evaluate import router as rag_eval_router
 from routers.rag.agent import router as rag_agent_router
 from routers.rag import initialize_rag
+from routers.vision import router as vision_router, init_vision_models
 
 from routers.core.shared import (
     _detect_gpu, MODELS, _fetch_hf_models, _load,
@@ -47,6 +48,7 @@ async def _lifespan(app: FastAPI):
             import traceback
             print("ERROR: _load() failed:", exc, flush=True)
             traceback.print_exc()
+        init_vision_models()
     threading.Thread(target=_bg, daemon=True).start()
     kb_dir = os.path.join(os.environ.get("DATA_DIR", "data"), "knowledge_base")
     threading.Thread(target=initialize_rag, args=(kb_dir,), daemon=True).start()
@@ -147,6 +149,7 @@ app.include_router(rag_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_ingest_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_eval_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_agent_router, prefix="/rag", tags=["rag"])
+app.include_router(vision_router)
 
 
 if __name__ == "__main__":
