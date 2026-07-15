@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from routers import shap as _shap_router
 from routers import pipeline as _pipeline_router
@@ -60,6 +61,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount("/static", StaticFiles(directory=os.path.join(HERE, "frontend")), name="static")
+
 
 @app.middleware("http")
 async def _monitor(request: Request, call_next):
@@ -78,14 +81,16 @@ async def _monitor(request: Request, call_next):
 
 
 @app.get("/")
-def index():
-    if os.path.exists(FRONTEND):
+def index(mode: str = "ml"):
+    fname = {"eda": "eda.html", "vision": "vision.html"}.get(mode, "index.html")
+    fpath = os.path.join(HERE, "frontend", fname)
+    if os.path.exists(fpath):
         vision_url = os.environ.get("ML_VISION_URL", "").rstrip("/")
         eda_url    = os.environ.get("ML_EDA_URL", "").rstrip("/")
-        with open(FRONTEND, encoding="utf-8") as f:
+        with open(fpath, encoding="utf-8") as f:
             html = f.read()
-        html = html.replace("let VISION_API = '';", f"let VISION_API = '{vision_url}';", 1)
-        html = html.replace("let EDA_API = '';",    f"let EDA_API = '{eda_url}';",       1)
+        html = html.replace("'__VISION_URL__'", f"'{vision_url}'", 1)
+        html = html.replace("'__EDA_URL__'",    f"'{eda_url}'",    1)
         return HTMLResponse(
             html,
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},

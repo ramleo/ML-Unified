@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<!-- build:vision-split -->
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ML Vision — Computer Vision Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImJnIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzFlMWI0YiIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwYzFhMmUiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImdseXBoIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzgxOGNmOCIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjUwJSIgc3RvcC1jb2xvcj0iIzM4YmRmOCIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMzNGQzOTkiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgoKICA8cmVjdCB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHJ4PSI3IiBmaWxsPSJ1cmwoI2JnKSIvPgogIDxjaXJjbGUgY3g9IjE2IiBjeT0iMTYiIHI9IjMuMiIgZmlsbD0idXJsKCNnbHlwaCkiLz4KICA8Y2lyY2xlIGN4PSIxNiIgY3k9IjYiICByPSIyIiBmaWxsPSJ1cmwoI2dseXBoKSIgb3BhY2l0eT0iMC45Ii8+CiAgPGNpcmNsZSBjeD0iMjYiIGN5PSIxNiIgcj0iMiIgZmlsbD0idXJsKCNnbHlwaCkiIG9wYWNpdHk9IjAuOSIvPgogIDxjaXJjbGUgY3g9IjE2IiBjeT0iMjYiIHI9IjIiIGZpbGw9InVybCgjZ2x5cGgpIiBvcGFjaXR5PSIwLjkiLz4KICA8Y2lyY2xlIGN4PSI2IiAgY3k9IjE2IiByPSIyIiBmaWxsPSJ1cmwoI2dseXBoKSIgb3BhY2l0eT0iMC45Ii8+CiAgPGNpcmNsZSBjeD0iMjMiIGN5PSI5IiAgcj0iMS40IiBmaWxsPSIjODE4Y2Y4IiBvcGFjaXR5PSIwLjciLz4KICA8Y2lyY2xlIGN4PSIyMyIgY3k9IjIzIiByPSIxLjQiIGZpbGw9IiMzOGJkZjgiIG9wYWNpdHk9IjAuNyIvPgogIDxjaXJjbGUgY3g9IjkiICBjeT0iMjMiIHI9IjEuNCIgZmlsbD0iIzM0ZDM5OSIgb3BhY2l0eT0iMC43Ii8+CiAgPGNpcmNsZSBjeD0iOSIgIGN5PSI5IiAgcj0iMS40IiBmaWxsPSIjODE4Y2Y4IiBvcGFjaXR5PSIwLjciLz4KICA8bGluZSB4MT0iMTYiIHkxPSIxNiIgeDI9IjE2IiB5Mj0iOCIgIHN0cm9rZT0iIzgxOGNmOCIgc3Ryb2tlLXdpZHRoPSIxIiBvcGFjaXR5PSIwLjUiLz4KICA8bGluZSB4MT0iMTYiIHkxPSIxNiIgeDI9IjI0IiB5Mj0iMTYiIHN0cm9rZT0iIzM4YmRmOCIgc3Ryb2tlLXdpZHRoPSIxIiBvcGFjaXR5PSIwLjUiLz4KICA8bGluZSB4MT0iMTYiIHkxPSIxNiIgeDI9IjE2IiB5Mj0iMjQiIHN0cm9rZT0iIzM0ZDM5OSIgc3Ryb2tlLXdpZHRoPSIxIiBvcGFjaXR5PSIwLjUiLz4KICA8bGluZSB4MT0iMTYiIHkxPSIxNiIgeDI9IjgiICB5Mj0iMTYiIHN0cm9rZT0iIzgxOGNmOCIgc3Ryb2tlLXdpZHRoPSIxIiBvcGFjaXR5PSIwLjUiLz4KICA8bGluZSB4MT0iMTYiIHkxPSIxNiIgeDI9IjIyIiB5Mj0iMTAiIHN0cm9rZT0iIzgxOGNmOCIgc3Ryb2tlLXdpZHRoPSIwLjgiIG9wYWNpdHk9IjAuMzUiLz4KICA8bGluZSB4MT0iMTYiIHkxPSIxNiIgeDI9IjIyIiB5Mj0iMjIiIHN0cm9rZT0iIzM4YmRmOCIgc3Ryb2tlLXdpZHRoPSIwLjgiIG9wYWNpdHk9IjAuMzUiLz4KICA8bGluZSB4MT0iMTYiIHkxPSIxNiIgeDI9IjEwIiB5Mj0iMjIiIHN0cm9rZT0iIzM0ZDM5OSIgc3Ryb2tlLXdpZHRoPSIwLjgiIG9wYWNpdHk9IjAuMzUiLz4KICA8bGluZSB4MT0iMTYiIHkxPSIxNiIgeDI9IjEwIiB5Mj0iMTAiIHN0cm9rZT0iIzgxOGNmOCIgc3Ryb2tlLXdpZHRoPSIwLjgiIG9wYWNpdHk9IjAuMzUiLz4KPC9zdmc+Cg==" type="image/svg+xml">
+<link rel="stylesheet" href="/static/common.css">
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js" defer></script>
+</head>
+<body>
+
+<!-- Particle canvas + ambient blobs -->
+<canvas id="bg-canvas"></canvas>
+<div class="bg-blob bg-blob-1"></div>
+<div class="bg-blob bg-blob-2"></div>
+
+<!-- Gradient top bar -->
+<div class="gradient-top-bar"></div>
+
+<!-- Navbar -->
+<nav class="nav">
+  <a class="nav-logo" href="#">
+    <div class="nav-logo-mark">
+      <svg viewBox="0 0 32 32" width="20" height="20" fill="none">
+        <circle cx="16" cy="16" r="3.2" fill="white" opacity="0.95"/>
+        <circle cx="16" cy="6"  r="2"   fill="white" opacity="0.82"/>
+        <circle cx="26" cy="16" r="2"   fill="white" opacity="0.82"/>
+        <circle cx="16" cy="26" r="2"   fill="white" opacity="0.82"/>
+        <circle cx="6"  cy="16" r="2"   fill="white" opacity="0.82"/>
+        <circle cx="23" cy="9"  r="1.3" fill="white" opacity="0.55"/>
+        <circle cx="23" cy="23" r="1.3" fill="white" opacity="0.55"/>
+        <circle cx="9"  cy="23" r="1.3" fill="white" opacity="0.55"/>
+        <circle cx="9"  cy="9"  r="1.3" fill="white" opacity="0.55"/>
+        <line x1="16" y1="16" x2="16" y2="8"  stroke="white" stroke-width="1"   opacity="0.45"/>
+        <line x1="16" y1="16" x2="24" y2="16" stroke="white" stroke-width="1"   opacity="0.45"/>
+        <line x1="16" y1="16" x2="16" y2="24" stroke="white" stroke-width="1"   opacity="0.45"/>
+        <line x1="16" y1="16" x2="8"  y2="16" stroke="white" stroke-width="1"   opacity="0.45"/>
+        <line x1="16" y1="16" x2="22" y2="10" stroke="white" stroke-width="0.7" opacity="0.28"/>
+        <line x1="16" y1="16" x2="22" y2="22" stroke="white" stroke-width="0.7" opacity="0.28"/>
+        <line x1="16" y1="16" x2="10" y2="22" stroke="white" stroke-width="0.7" opacity="0.28"/>
+        <line x1="16" y1="16" x2="10" y2="10" stroke="white" stroke-width="0.7" opacity="0.28"/>
+      </svg>
+    </div>
+    <div>
+      <div class="nav-title" id="nav-title-el">ML Vision</div>
+      <div class="nav-sub" id="nav-sub-el">Computer Vision Platform</div>
+    </div>
+  </a>
+  <a href="https://ml-portfolio-rho.vercel.app/"
+     onclick="this.href='https://ml-portfolio-rho.vercel.app/?theme='+document.documentElement.getAttribute('data-theme')"
+     style="font-size:0.75rem;color:var(--text3);text-decoration:none;display:flex;align-items:center;
+            gap:0.3rem;padding:0.3rem 0.65rem;border:1px solid var(--border2);border-radius:9999px;
+            transition:color 0.15s,border-color 0.15s;white-space:nowrap"
+     onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--text3)'"
+     onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border2)'"
+     title="Back to portfolio">
+    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 1H2v10h8V5L8 1z"/><path d="M8 1v4h4"/>
+    </svg>
+    Portfolio
+  </a>
+  <div class="theme-picker-wrap" id="themePickerWrap">
+    <button class="theme-picker-btn" onclick="toggleThemePicker()" id="themePickerBtn" title="Change theme">
+      <span class="theme-picker-swatch" id="themePickerSwatch"></span>
+      <span id="themePickerLabel">Dark</span>
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 3.5l3 3 3-3"/></svg>
+    </button>
+    <div class="theme-picker-dropdown" id="themePickerDropdown">
+      <button class="theme-option" onclick="setThemeChoice('dark')"     data-theme-opt="dark">     <span class="theme-option-dot" style="background:linear-gradient(135deg,#818cf8,#34d399)"></span> Dark</button>
+      <button class="theme-option" onclick="setThemeChoice('light')"    data-theme-opt="light">    <span class="theme-option-dot" style="background:linear-gradient(135deg,#6366f1,#10b981)"></span> Light</button>
+      <button class="theme-option" onclick="setThemeChoice('midnight')" data-theme-opt="midnight"> <span class="theme-option-dot" style="background:linear-gradient(135deg,#a855f7,#f43f5e)"></span> Midnight</button>
+      <button class="theme-option" onclick="setThemeChoice('ocean')"    data-theme-opt="ocean">    <span class="theme-option-dot" style="background:linear-gradient(135deg,#0ea5e9,#64ffda)"></span> Ocean</button>
+      <button class="theme-option" onclick="setThemeChoice('sunset')"   data-theme-opt="sunset">   <span class="theme-option-dot" style="background:linear-gradient(135deg,#f97316,#fbbf24)"></span> Sunset</button>
+      <button class="theme-option" onclick="setThemeChoice('forest')"   data-theme-opt="forest">   <span class="theme-option-dot" style="background:linear-gradient(135deg,#22c55e,#06b6d4)"></span> Forest</button>
+    </div>
+  </div>
+</nav>
+
+<!-- Layout — no sidebar on standalone Vision page -->
+<div class="layout" style="grid-template-columns:1fr">
+  <main class="main" id="main" style="margin-left:0;padding-left:1.5rem">
+    <div class="empty-state">
+      <div class="empty-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><circle cx="22" cy="22" r="5" fill="#818cf8" opacity="0.75"/><circle cx="22" cy="8" r="3" fill="#818cf8" opacity="0.5"/><circle cx="36" cy="22" r="3" fill="#38bdf8" opacity="0.5"/><circle cx="22" cy="36" r="3" fill="#34d399" opacity="0.5"/><circle cx="8" cy="22" r="3" fill="#818cf8" opacity="0.5"/></svg></div>
+      <div>Loading ML Vision…</div>
+    </div>
+  </main>
+</div>
+
+<script>
+  window.__ML_URLS__ = { vision: '__VISION_URL__', eda: '__EDA_URL__' };
+</script>
+<script src="/static/common.js"></script>
+
+<script>
+// ── Vision standalone stubs ──────────────────────────────────
+// No sidebar or mobile bottom tabs on this standalone page.
+let _mobileVisionPanel = 'classifier';
+function syncBottomTab(tab) {}  // no-op — no mobile bottom tabs in standalone vision page
+
+// ── Vision / Image Classification ────────────────────────────────
+let visionFile     = null;
+let visionModel    = 'mobilenetv2';
+let visionImageURL = null;
+
+const VISION_MODEL_META = {
+  mobilenetv2: { label: 'MobileNetV2',    desc: 'Fast & lightweight (14 MB)' },
+  resnet50:    { label: 'ResNet50',        desc: 'Classic deep residual (98 MB)' },
+  squeezenet:  { label: 'SqueezeNet 1.1', desc: 'Tiny & fast (5 MB)' },
+  googlenet:   { label: 'GoogLeNet',      desc: 'Multi-scale Inception (28 MB)' },
+};
+
+
+function selectVision() {
+  _track('tool_open', { tool: 'vision' });
+  document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('vbtn-classifier');
+  if (btn) btn.classList.add('active');
+  setAmbientTheme('rgba(232,121,249,0.16)', 'rgba(168,85,247,0.10)');
+  _mobileVisionPanel = 'classifier'; syncBottomTab('vision');
+  renderImageClassifierPanel();
+}
+
+function renderImageClassifierPanel() {
+  batchFiles = [];
+  batchURLs  = [];
+
+  const chipHTML = Object.entries(VISION_MODEL_META).map(([id, m]) => `
+    <button class="vision-model-chip${id === visionModel ? ' selected' : ''}"
+            data-model="${id}" onclick="selectVisionModel(this)">
+      <div class="vmchip-label">${m.label}</div>
+      <div class="vmchip-desc">${m.desc}</div>
+    </button>`).join('');
+
+  document.getElementById('main').innerHTML = `
+    <div class="vision-panel">
+      <div class="u-header">
+        <div class="model-eyebrow" style="color:#e879f9">Vision &middot; Image Classification</div>
+        <div class="u-title">Image Classifier</div>
+        <div class="u-subtitle">Upload one or more images — classify against 1,000 ImageNet categories using four pre-trained models.</div>
+      </div>
+
+      <div class="wizard-section">
+        <label class="wizard-label">Pre-trained Model</label>
+        <div class="vision-model-grid">${chipHTML}</div>
+      </div>
+
+      <div class="u-param-row" style="margin-bottom:1.25rem">
+        <label class="wizard-label">Top predictions per image</label>
+        <input type="number" class="field-input" id="vTopK" value="3" min="1" max="10" step="1" style="width:70px">
+      </div>
+
+      <div class="upload-zone" id="vUploadZone">
+        <input type="file" id="vImageInput" accept="image/*" multiple onchange="handleBatchFiles(event)">
+        <div class="upload-zone-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><rect x="4" y="9" width="36" height="27" rx="5" stroke="#818cf8" stroke-width="1.5" opacity="0.55"/><circle cx="15" cy="19" r="3.8" stroke="#fbbf24" stroke-width="1.4" opacity="0.8"/><path d="M4 30l11-10 8 7 5-5 12 14" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.65"/></svg></div>
+        <div class="upload-zone-text">Click to browse or drag &amp; drop</div>
+        <div class="upload-zone-sub">JPEG · PNG · WebP · multiple images supported</div>
+      </div>
+
+      <div id="vErr" style="margin-top:0.5rem"></div>
+
+      <!-- Toolbar: shown after files selected -->
+      <div id="vBatchToolbar" style="display:none;margin:1rem 0;align-items:center;gap:1rem;flex-wrap:wrap">
+        <button class="btn btn-primary" id="vClassifyBtn" onclick="runBatchClassify()">Classify All →</button>
+        <span id="vBatchCount" style="font-size:0.82rem;color:var(--text3)"></span>
+        <button onclick="clearBatch()"
+                style="background:none;border:none;color:var(--text3);font-size:0.8rem;cursor:pointer;padding:0.25rem 0.5rem">
+          ✕ Clear
+        </button>
+      </div>
+
+      <!-- Progress -->
+      <div id="vBatchProgress" style="display:none" class="batch-progress-wrap">
+        <div style="display:flex;justify-content:space-between">
+          <span id="vProgressText" style="font-size:0.75rem;color:var(--text3)">0 / 0 classified</span>
+        </div>
+        <div class="batch-progress-bar-bg">
+          <div class="batch-progress-bar-fill" id="vProgressBar"></div>
+        </div>
+      </div>
+
+      <!-- Batch grid -->
+      <div class="batch-grid" id="vBatchGrid"></div>
+
+      <!-- Category browser -->
+      <div style="margin-top:2rem;border-top:1px solid var(--border);padding-top:1.25rem">
+        <button id="vCategoryBtn" onclick="toggleCategoryBrowser()"
+                style="background:none;border:none;color:var(--text3);font-size:0.8rem;
+                       cursor:pointer;padding:0;font-weight:600">
+          Browse 1,000 categories ▸
+        </button>
+        <div id="vCategoryPanel" style="display:none;margin-top:0.75rem">
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.6rem">
+            <input type="text" class="field-input" placeholder="Search categories…"
+                   oninput="renderCategoryList(this.value)"
+                   style="flex:1;font-size:0.82rem;padding:0.4rem 0.65rem">
+            <span id="vCategoryCount" style="font-size:0.72rem;color:var(--text3);white-space:nowrap">1,000 categories</span>
+          </div>
+          <div id="vCategoryGrid"
+               style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+                      gap:0.3rem;max-height:260px;overflow-y:auto;padding:0.5rem;
+                      background:var(--bg-input);border:1px solid var(--border2);border-radius:10px">
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  const zone = document.getElementById('vUploadZone');
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag');
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    if (files.length) addBatchFiles(files);
+  });
+}
+
+function selectVisionModel(el) {
+  document.querySelectorAll('.vision-model-chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  visionModel = el.dataset.model;
+}
+
+let batchFiles = [];
+let batchURLs  = [];
+
+function handleBatchFiles(e) {
+  const files = Array.from(e.target.files).filter(f => f.type.startsWith('image/'));
+  if (files.length) addBatchFiles(files);
+}
+
+function addBatchFiles(files) {
+  batchURLs.forEach(u => URL.revokeObjectURL(u));
+  batchFiles = files;
+  batchURLs  = files.map(f => URL.createObjectURL(f));
+
+  const toolbar = document.getElementById('vBatchToolbar');
+  if (toolbar) toolbar.style.display = 'flex';
+  const countEl = document.getElementById('vBatchCount');
+  if (countEl) countEl.textContent = `${files.length} image${files.length !== 1 ? 's' : ''} selected`;
+
+  renderBatchGrid();
+  document.getElementById('vErr').innerHTML = '';
+}
+
+function renderBatchGrid() {
+  const grid = document.getElementById('vBatchGrid');
+  if (!grid) return;
+  grid.innerHTML = batchFiles.map((f, i) => `
+    <div class="batch-card" id="batch-card-${i}">
+      <img src="${batchURLs[i]}" class="batch-card-img" alt="${f.name}">
+      <div class="batch-card-body">
+        <div class="batch-card-filename">${f.name}</div>
+        <div class="batch-card-status" id="batch-status-${i}" style="color:var(--text3);font-size:0.72rem">Ready</div>
+      </div>
+    </div>`).join('');
+}
+
+function clearBatch() {
+  batchURLs.forEach(u => URL.revokeObjectURL(u));
+  batchFiles = []; batchURLs = [];
+  const grid = document.getElementById('vBatchGrid');
+  if (grid) grid.innerHTML = '';
+  const toolbar = document.getElementById('vBatchToolbar');
+  if (toolbar) toolbar.style.display = 'none';
+  const progress = document.getElementById('vBatchProgress');
+  if (progress) progress.style.display = 'none';
+}
+
+function _updateBatchProgress(done, total) {
+  const textEl = document.getElementById('vProgressText');
+  const barEl  = document.getElementById('vProgressBar');
+  if (textEl) textEl.textContent = `${done} / ${total} classified`;
+  if (barEl)  barEl.style.width  = `${(done / total * 100).toFixed(0)}%`;
+}
+
+function _updateBatchCard(i, state, data) {
+  const card   = document.getElementById(`batch-card-${i}`);
+  const status = document.getElementById(`batch-status-${i}`);
+  if (!card || !status) return;
+
+  if (state === 'running') {
+    status.innerHTML = `<span class="spinner" style="width:11px;height:11px;border-width:2px;display:inline-block;vertical-align:middle"></span> Classifying…`;
+  } else if (state === 'done') {
+    const preds   = data.predictions || [];
+    const top     = preds[0];
+    const rest    = preds.slice(1, 3);
+    const lowConf = data.low_confidence;
+    const accent  = lowConf ? '#fbbf24' : '#e879f9';
+    card.classList.add(lowConf ? 'batch-card--low' : 'batch-card--done');
+    status.innerHTML = `
+      <div class="batch-card-top-label">${top ? top.label : '—'}</div>
+      <div class="batch-card-top-conf" style="color:${accent}">${top ? (top.confidence*100).toFixed(1)+'%' : ''}</div>
+      ${rest.length ? `<div class="batch-card-top2">${rest.map(p => `${p.label} · ${(p.confidence*100).toFixed(1)}%`).join('<br>')}</div>` : ''}`;
+  } else {
+    card.classList.add('batch-card--error');
+    status.innerHTML = `<span style="color:var(--color-danger);font-size:0.7rem">Failed</span>`;
+  }
+}
+
+async function runBatchClassify() {
+  if (!batchFiles.length) return;
+  if (!VISION_API) {
+    document.getElementById('vErr').innerHTML = `<div class="js-err-box">Vision service not connected.</div>`;
+    return;
+  }
+  const btn      = document.getElementById('vClassifyBtn');
+  const errEl    = document.getElementById('vErr');
+  const topK     = parseInt(document.getElementById('vTopK').value) || 3;
+  const progress = document.getElementById('vBatchProgress');
+
+  btn.disabled  = true;
+  btn.innerHTML = 'Classifying…';
+  errEl.innerHTML = '';
+  if (progress) progress.style.display = 'block';
+  _updateBatchProgress(0, batchFiles.length);
+
+  for (let i = 0; i < batchFiles.length; i++) {
+    _updateBatchCard(i, 'running');
+    const form = new FormData();
+    form.append('file',       batchFiles[i]);
+    form.append('model_name', visionModel);
+    form.append('top_k',      topK);
+    try {
+      const res = await fetch(`${VISION_API}/classify-image`, { method: 'POST', body: form });
+      if (!res.ok) throw new Error(await res.text());
+      _track('query_run', { tool: 'vision:classify', success: true });
+      _updateBatchCard(i, 'done', await res.json());
+    } catch {
+      _updateBatchCard(i, 'error');
+    }
+    _updateBatchProgress(i + 1, batchFiles.length);
+  }
+
+  btn.disabled  = false;
+  btn.innerHTML = 'Classify All →';
+}
+
+function renderVisionResult(data) {
+  const preds   = data.predictions || [];
+  const accent  = '#e879f9';
+  const maxConf = preds.length ? preds[0].confidence : 1;
+  const lowConf = data.low_confidence;
+
+  const lowConfBanner = lowConf ? `
+    <div style="padding:0.65rem 0.9rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);
+                border-radius:8px;color:#fbbf24;font-size:0.82rem;margin-bottom:1rem;line-height:1.5">
+      ⚠️ <strong>No confident match found</strong> — top score is only ${(data.top_confidence*100).toFixed(1)}%.
+      This image likely doesn't belong to any of the 1,000 ImageNet categories,
+      or is too ambiguous for the model to classify reliably.
+    </div>` : '';
+
+  const barsHTML = preds.map(p => `
+    <div class="proba-row" style="margin-bottom:0.55rem">
+      <div class="proba-name" style="width:180px;font-size:0.8rem">
+        <span style="color:${accent};font-size:0.65rem;font-weight:700;margin-right:0.3rem">#${p.rank}</span>
+        ${p.label}
+      </div>
+      <div class="proba-bar-wrap">
+        <div class="proba-bar-fill" style="width:${(p.confidence/maxConf*100).toFixed(1)}%;background:${lowConf ? '#fbbf24' : accent}"></div>
+      </div>
+      <div class="proba-pct" style="color:${lowConf ? '#fbbf24' : accent}">${(p.confidence*100).toFixed(1)}%</div>
+    </div>`).join('');
+
+  document.getElementById('vResult').innerHTML = `
+    <div class="result-state" style="display:block;margin-top:0.5rem">
+      <div class="result-accent-bar" style="background:${lowConf ? '#fbbf24' : accent}"></div>
+      <div class="result-body">
+        ${lowConfBanner}
+        <div class="vision-result-layout">
+          <div class="vision-result-thumb">
+            <img src="${visionImageURL}" class="vision-preview-img" alt="classified image">
+            <div style="font-size:0.68rem;color:var(--text3);margin-top:0.4rem">${data.model_label}</div>
+          </div>
+          <div class="vision-result-preds">
+            <div class="proba-section-label" style="margin-bottom:0.75rem">
+              ${lowConf ? 'Best guesses (unreliable)' : 'Top Predictions'}
+            </div>
+            ${barsHTML}
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── ImageNet category browser ─────────────────────────────────────────────
+let _imagenetClasses = null;
+
+async function toggleCategoryBrowser() {
+  const panel = document.getElementById('vCategoryPanel');
+  if (!panel) return;
+
+  if (panel.style.display !== 'none') {
+    panel.style.display = 'none';
+    document.getElementById('vCategoryBtn').textContent = 'Browse 1,000 categories ▸';
+    return;
+  }
+
+  document.getElementById('vCategoryBtn').textContent = 'Loading…';
+  if (!_imagenetClasses) {
+    try {
+      const r = await fetch(`${VISION_API}/imagenet-classes`);
+      const d = await r.json();
+      _imagenetClasses = d.classes || [];
+    } catch(e) {
+      document.getElementById('vCategoryBtn').textContent = 'Browse 1,000 categories ▸';
+      return;
+    }
+  }
+
+  panel.style.display = 'block';
+  document.getElementById('vCategoryBtn').textContent = 'Browse 1,000 categories ▾';
+  renderCategoryList('');
+}
+
+function renderCategoryList(query) {
+  const grid = document.getElementById('vCategoryGrid');
+  if (!grid || !_imagenetClasses) return;
+  const q = query.toLowerCase();
+  const filtered = q
+    ? _imagenetClasses.filter(c => c.toLowerCase().includes(q))
+    : _imagenetClasses;
+  grid.innerHTML = filtered.length
+    ? filtered.map((c, i) => `
+        <div style="font-size:0.75rem;padding:0.2rem 0.4rem;border-radius:4px;
+                    background:var(--border);color:var(--text2);white-space:nowrap;
+                    overflow:hidden;text-overflow:ellipsis" title="${c}">
+          ${c}
+        </div>`).join('')
+    : '<div style="color:var(--text3);font-size:0.8rem;grid-column:1/-1">No matches</div>';
+  document.getElementById('vCategoryCount').textContent =
+    q ? `${filtered.length} of 1,000 matching` : '1,000 categories';
+}
+
+// ── Image Processing ─────────────────────────────────────────────────────
+let ipFile      = null;
+let ipImageURL  = null;
+let ipOperation = 'grayscale';
+
+const IP_OPERATIONS = [
+  { id: 'grayscale',  label: 'Grayscale',       params: [] },
+  { id: 'blur',       label: 'Blur',             params: [{ name: 'blur_radius',       label: 'Radius',   min: 1,    max: 20,  defaultVal: 3,   step: 1   }] },
+  { id: 'sharpen',    label: 'Sharpen',          params: [{ name: 'sharpen_factor',    label: 'Strength', min: 1.0,  max: 5.0, defaultVal: 2.0, step: 0.5 }] },
+  { id: 'edges',      label: 'Edge Detection',   params: [] },
+  { id: 'rotate',     label: 'Rotate',           params: [{ name: 'rotate_angle',      label: 'Angle °',  min: -180, max: 180, defaultVal: 90,  step: 1   }] },
+  { id: 'brightness', label: 'Brightness',       params: [{ name: 'brightness_factor', label: 'Factor',   min: 0.1,  max: 3.0, defaultVal: 1.5, step: 0.1 }] },
+  { id: 'contrast',   label: 'Contrast',         params: [{ name: 'contrast_factor',   label: 'Factor',   min: 0.1,  max: 3.0, defaultVal: 1.5, step: 0.1 }] },
+  { id: 'flip_h',     label: 'Flip Horizontal',  params: [] },
+  { id: 'flip_v',     label: 'Flip Vertical',    params: [] },
+  { id: 'emboss',     label: 'Emboss',           params: [] },
+  { id: 'invert',     label: 'Invert Colors',    params: [] },
+];
+
+function selectImageProcessing() {
+  document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('vbtn-processing');
+  if (btn) btn.classList.add('active');
+  setAmbientTheme('rgba(251,146,60,0.15)', 'rgba(249,115,22,0.09)');
+  _mobileVisionPanel = 'processing'; syncBottomTab('vision');
+  renderImageProcessingPanel();
+}
+
+function renderImageProcessingPanel() {
+  ipFile     = null;
+  ipImageURL = null;
+
+  const chipsHTML = IP_OPERATIONS.map(op => `
+    <button class="ip-op-chip${op.id === ipOperation ? ' selected' : ''}"
+            data-op="${op.id}" onclick="selectIpOperation(this)">
+      ${op.label}
+    </button>`).join('');
+
+  document.getElementById('main').innerHTML = `
+    <div class="vision-panel">
+      <div class="u-header">
+        <div class="model-eyebrow" style="color:#fb923c">Vision &middot; Image Processing</div>
+        <div class="u-title">Image Processing</div>
+        <div class="u-subtitle">Apply classical image operations — blur, sharpen, edge detection, rotation, colour adjustments, and more — all in the browser with instant before/after comparison.</div>
+      </div>
+
+      <div class="wizard-section">
+        <label class="wizard-label">Operation</label>
+        <div class="ip-ops-grid">${chipsHTML}</div>
+      </div>
+
+      <div id="ipParamsSection" style="margin-bottom:1.25rem"></div>
+
+      <div class="upload-zone" id="ipUploadZone">
+        <input type="file" id="ipImageInput" accept="image/*" onchange="handleIpFile(event)">
+        <div class="upload-zone-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><rect x="4" y="9" width="36" height="27" rx="5" stroke="#818cf8" stroke-width="1.5" opacity="0.55"/><circle cx="15" cy="19" r="3.8" stroke="#fbbf24" stroke-width="1.4" opacity="0.8"/><path d="M4 30l11-10 8 7 5-5 12 14" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.65"/></svg></div>
+        <div class="upload-zone-text">Click to browse or drag &amp; drop</div>
+        <div class="upload-zone-sub">JPEG, PNG, WebP, GIF</div>
+      </div>
+
+      <div id="ipPreviewSection" style="display:none;margin:0.75rem 0">
+        <img id="ipPreviewImg" class="vision-preview-img" src="" alt="preview">
+        <div id="ipFileName" style="font-size:0.78rem;color:var(--text3);margin-top:0.4rem"></div>
+      </div>
+
+      <div id="ipErr" style="margin-top:0.5rem"></div>
+
+      <div style="margin:1.25rem 0">
+        <button class="btn btn-primary" id="ipApplyBtn" onclick="runImageProcess()" disabled style="opacity:0.4;background:#fb923c">
+          Apply →
+        </button>
+      </div>
+
+      <div id="ipResult"></div>
+    </div>`;
+
+  renderIpParams();
+
+  const zone = document.getElementById('ipUploadZone');
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) setIpFile(f);
+  });
+}
+
+function selectIpOperation(el) {
+  document.querySelectorAll('.ip-op-chip').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  ipOperation = el.dataset.op;
+  renderIpParams();
+}
+
+function renderIpParams() {
+  const sec = document.getElementById('ipParamsSection');
+  if (!sec) return;
+  const op = IP_OPERATIONS.find(o => o.id === ipOperation);
+  if (!op || op.params.length === 0) { sec.innerHTML = ''; return; }
+
+  sec.innerHTML = op.params.map(p => `
+    <div class="u-param-row">
+      <label class="wizard-label">${p.label}</label>
+      <input type="number" class="field-input" id="ipParam_${p.name}"
+             value="${p.defaultVal}" min="${p.min}" max="${p.max}" step="${p.step}"
+             style="width:100px">
+    </div>`).join('');
+}
+
+function handleIpFile(e) {
+  const f = e.target.files[0];
+  if (f) setIpFile(f);
+}
+
+function setIpFile(f) {
+  ipFile = f;
+  if (ipImageURL) URL.revokeObjectURL(ipImageURL);
+  ipImageURL = URL.createObjectURL(f);
+
+  const preview = document.getElementById('ipPreviewSection');
+  preview.style.display = 'block';
+  document.getElementById('ipPreviewImg').src = ipImageURL;
+  document.getElementById('ipFileName').textContent = `📄 ${f.name}  (${(f.size/1024).toFixed(1)} KB)`;
+
+  const btn = document.getElementById('ipApplyBtn');
+  btn.disabled = false; btn.style.opacity = '1';
+  document.getElementById('ipResult').innerHTML = '';
+  document.getElementById('ipErr').innerHTML    = '';
+}
+
+async function runImageProcess() {
+  if (!ipFile) return;
+  const btn   = document.getElementById('ipApplyBtn');
+  const errEl = document.getElementById('ipErr');
+
+  btn.innerHTML = '<span class="spinner"></span> Processing…';
+  btn.disabled  = true;
+  errEl.innerHTML = '';
+  document.getElementById('ipResult').innerHTML = `
+    <div style="text-align:center;padding:2rem 1rem;color:var(--text3)">
+      <span class="spinner" style="width:20px;height:20px;border-width:3px;display:inline-block"></span>
+      <div style="margin-top:0.75rem;font-size:0.82rem">Applying operation…</div>
+    </div>`;
+
+  const form = new FormData();
+  form.append('file',      ipFile);
+  form.append('operation', ipOperation);
+
+  const op = IP_OPERATIONS.find(o => o.id === ipOperation);
+  if (op) {
+    op.params.forEach(p => {
+      const el = document.getElementById(`ipParam_${p.name}`);
+      if (el) form.append(p.name, el.value);
+    });
+  }
+
+  try {
+    const res = await fetch(`${VISION_API}/process-image`, { method: 'POST', body: form });
+    if (!res.ok) { const t = await res.text(); throw new Error(t); }
+    const data = await res.json();
+    _track('query_run', { tool: 'vision:process', success: true });
+    renderIpResult(data);
+  } catch(e) {
+    document.getElementById('ipResult').innerHTML = '';
+    errEl.innerHTML = `<div class="js-err-box">${e.message}</div>`;
+  } finally {
+    btn.innerHTML = 'Apply →';
+    btn.disabled  = false;
+  }
+}
+
+function renderIpResult(data) {
+  const paramsText = Object.entries(data.params_used || {})
+    .map(([k, v]) => `${k}: ${v}`).join(' · ') || '';
+
+  document.getElementById('ipResult').innerHTML = `
+    <div class="result-state" style="display:block;margin-top:0.5rem">
+      <div class="result-accent-bar" style="background:#fb923c"></div>
+      <div class="result-body">
+        <div class="proba-section-label" style="margin-bottom:1rem">
+          ${data.operation_label}${paramsText ? ' — ' + paramsText : ''}
+          &nbsp;·&nbsp; ${data.width}×${data.height} px
+        </div>
+        <div class="ip-before-after">
+          <div class="ip-image-box">
+            <div class="ip-image-label">Original</div>
+            <img src="${ipImageURL}" class="ip-image-result" alt="original">
+          </div>
+          <div class="ip-image-box">
+            <div class="ip-image-label">Processed</div>
+            <img src="${data.image_b64}" class="ip-image-result" alt="processed">
+          </div>
+        </div>
+        <div style="margin-top:1rem">
+          <a href="${data.image_b64}" download="processed_${data.operation}.png"
+             class="btn btn-clear" style="text-decoration:none;font-size:0.8rem">
+            ↓ Download
+          </a>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── Object Detection ─────────────────────────────────────────────────────
+let detFile     = null;
+let detImageURL = null;
+
+const DET_BOX_PALETTE = [
+  "#e879f9","#38bdf8","#34d399","#fbbf24",
+  "#f87171","#fb923c","#818cf8","#4ade80",
+  "#f472b6","#2dd4bf","#facc15","#a78bfa",
+];
+
+function selectObjectDetection() {
+  document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('vbtn-detection');
+  if (btn) btn.classList.add('active');
+  setAmbientTheme('rgba(56,189,248,0.11)', 'rgba(14,165,233,0.07)');
+  _mobileVisionPanel = 'detection'; syncBottomTab('vision');
+  renderObjectDetectionPanel();
+}
+
+function renderObjectDetectionPanel() {
+  detFile     = null;
+  detImageURL = null;
+
+  document.getElementById('main').innerHTML = `
+    <div class="vision-panel">
+      <div class="u-header">
+        <div class="model-eyebrow" style="color:#38bdf8">Vision &middot; Object Detection</div>
+        <div class="u-title">Object Detection</div>
+        <div class="u-subtitle">Upload any photo — detect and locate objects from 80 COCO categories (people, cars, animals, furniture, food…) using TinyYOLOv3 (35 MB, MIT license). Bounding boxes are drawn directly on the image.</div>
+      </div>
+
+      <div class="wizard-section">
+        <label class="wizard-label">Confidence threshold</label>
+        <div class="det-conf-row">
+          <input type="range" id="detConf" min="5" max="90" value="30" step="5"
+                 oninput="document.getElementById('detConfVal').textContent=this.value+'%'">
+          <span class="det-conf-val" id="detConfVal">30%</span>
+        </div>
+      </div>
+
+      <div class="upload-zone" id="detUploadZone">
+        <input type="file" id="detImageInput" accept="image/*" onchange="handleDetFile(event)">
+        <div class="upload-zone-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><rect x="3" y="12" width="38" height="24" rx="5" stroke="#38bdf8" stroke-width="1.5" opacity="0.6"/><path d="M15 12l4-6h6l4 6" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/><circle cx="22" cy="24" r="6.5" stroke="#818cf8" stroke-width="1.5" opacity="0.7"/><circle cx="22" cy="24" r="3" fill="#818cf8" opacity="0.45"/><circle cx="35" cy="17" r="1.8" fill="#34d399" opacity="0.7"/></svg></div>
+        <div class="upload-zone-text">Click to browse or drag &amp; drop</div>
+        <div class="upload-zone-sub">JPEG, PNG, WebP</div>
+      </div>
+
+      <div id="detPreviewSection" style="display:none;margin:0.75rem 0">
+        <img id="detPreviewImg" class="vision-preview-img" src="" alt="preview">
+        <div id="detFileName" style="font-size:0.78rem;color:var(--text3);margin-top:0.4rem"></div>
+      </div>
+
+      <div id="detErr" style="margin-top:0.5rem"></div>
+
+      <div style="margin:1.25rem 0">
+        <button class="btn btn-primary" id="detRunBtn" onclick="runObjectDetect()"
+                disabled style="opacity:0.4;background:#38bdf8">
+          Detect Objects →
+        </button>
+      </div>
+
+      <div id="detResult"></div>
+
+      <div style="margin-top:2rem;border-top:1px solid var(--border);padding-top:1.25rem">
+        <button id="detClassBtn" onclick="toggleDetClassBrowser()"
+                style="background:none;border:none;color:var(--text3);font-size:0.8rem;
+                       cursor:pointer;padding:0;font-weight:600">
+          Browse 80 COCO classes ▸
+        </button>
+        <div id="detClassPanel" style="display:none;margin-top:0.75rem">
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.6rem">
+            <input type="text" class="field-input" placeholder="Search classes…"
+                   oninput="renderDetClassList(this.value)"
+                   style="flex:1;font-size:0.82rem;padding:0.4rem 0.65rem">
+            <span id="detClassCount" style="font-size:0.72rem;color:var(--text3);white-space:nowrap">80 classes</span>
+          </div>
+          <div id="detClassGrid"
+               style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));
+                      gap:0.3rem;max-height:260px;overflow-y:auto;padding:0.5rem;
+                      background:var(--bg-input);border:1px solid var(--border2);border-radius:10px">
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  const zone = document.getElementById('detUploadZone');
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) setDetFile(f);
+  });
+}
+
+function handleDetFile(e) { const f = e.target.files[0]; if (f) setDetFile(f); }
+
+function setDetFile(f) {
+  detFile = f;
+  if (detImageURL) URL.revokeObjectURL(detImageURL);
+  detImageURL = URL.createObjectURL(f);
+
+  const prev = document.getElementById('detPreviewSection');
+  prev.style.display = 'block';
+  document.getElementById('detPreviewImg').src = detImageURL;
+  document.getElementById('detFileName').textContent = `📄 ${f.name}  (${(f.size/1024).toFixed(1)} KB)`;
+
+  const btn = document.getElementById('detRunBtn');
+  btn.disabled = false; btn.style.opacity = '1';
+  document.getElementById('detResult').innerHTML = '';
+  document.getElementById('detErr').innerHTML    = '';
+}
+
+/* ── COCO 80 class browser ── */
+const _COCO_80 = [
+  'person','bicycle','car','motorcycle','airplane','bus','train','truck','boat',
+  'traffic light','fire hydrant','stop sign','parking meter','bench','bird','cat',
+  'dog','horse','sheep','cow','elephant','bear','zebra','giraffe','backpack',
+  'umbrella','handbag','tie','suitcase','frisbee','skis','snowboard','sports ball',
+  'kite','baseball bat','baseball glove','skateboard','surfboard','tennis racket',
+  'bottle','wine glass','cup','fork','knife','spoon','bowl','banana','apple',
+  'sandwich','orange','broccoli','carrot','hot dog','pizza','donut','cake','chair',
+  'couch','potted plant','bed','dining table','toilet','tv','laptop','mouse',
+  'remote','keyboard','cell phone','microwave','oven','toaster','sink',
+  'refrigerator','book','clock','vase','scissors','teddy bear','hair drier','toothbrush'
+];
+
+function toggleDetClassBrowser() {
+  const panel = document.getElementById('detClassPanel');
+  const btn   = document.getElementById('detClassBtn');
+  if (!panel) return;
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  btn.textContent = open ? 'Browse 80 COCO classes ▾' : 'Browse 80 COCO classes ▸';
+  if (open) renderDetClassList('');
+}
+
+function renderDetClassList(q) {
+  const grid  = document.getElementById('detClassGrid');
+  const count = document.getElementById('detClassCount');
+  if (!grid) return;
+  const lq       = q.toLowerCase();
+  const filtered = q ? _COCO_80.filter(c => c.includes(lq)) : _COCO_80;
+  grid.innerHTML  = filtered.map(c =>
+    `<div style="padding:0.25rem 0.5rem;font-size:0.75rem;color:var(--text2);
+                 background:var(--bg-card);border:1px solid var(--border2);border-radius:6px;
+                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${c}">${c}</div>`
+  ).join('');
+  count.textContent = q ? `${filtered.length} of 80 matching` : '80 classes';
+}
+
+/* ── Shared XHR progress helper for vision panels ── */
+function _postWithProgress(url, formData, resultId, accent, noteText) {
+  return new Promise((resolve, reject) => {
+    let pct = 0;
+    let inferTid = null;
+    let stopped = false;
+
+    const barEl = () => document.getElementById(resultId + 'PBar');
+    const lblEl = () => document.getElementById(resultId + 'PLbl');
+    const setBar = (p, label) => {
+      const b = barEl(); const l = lblEl();
+      if (b) b.style.width = Math.round(p) + '%';
+      if (l) l.textContent = label + ' · ' + Math.round(p) + '%';
+    };
+
+    document.getElementById(resultId).innerHTML = `
+      <div style="padding:2.5rem 1.5rem;text-align:center">
+        <div id="${resultId}PLbl" style="font-size:0.83rem;color:var(--text2);margin-bottom:0.9rem">Uploading · 0%</div>
+        <div style="height:5px;background:var(--border2);border-radius:3px;overflow:hidden;max-width:300px;margin:0 auto">
+          <div id="${resultId}PBar" style="height:100%;width:0%;background:${accent};border-radius:3px;transition:width 0.18s ease-out"></div>
+        </div>
+        <div style="font-size:0.7rem;color:var(--text3);margin-top:0.7rem;opacity:0.75">${noteText}</div>
+      </div>`;
+
+    const startInfer = () => {
+      const tick = () => {
+        if (stopped) return;
+        pct = Math.min(90, pct + 0.65);
+        setBar(pct, pct < 65 ? 'Running model' : 'Processing');
+        if (pct < 90) inferTid = setTimeout(tick, 260);
+      };
+      pct = 30;
+      tick();
+    };
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+
+    xhr.upload.addEventListener('progress', e => {
+      if (e.lengthComputable) {
+        pct = Math.min(28, Math.round((e.loaded / e.total) * 28));
+        setBar(pct, 'Uploading');
+      }
+    });
+    xhr.upload.addEventListener('load', () => { setBar(29, 'Uploading'); startInfer(); });
+
+    xhr.addEventListener('load', () => {
+      stopped = true; clearTimeout(inferTid); setBar(100, 'Complete');
+      resolve({ status: xhr.status, ok: xhr.status >= 200 && xhr.status < 300,
+        text: () => Promise.resolve(xhr.responseText),
+        json: () => Promise.resolve(JSON.parse(xhr.responseText)) });
+    });
+    xhr.addEventListener('error',  () => { stopped = true; clearTimeout(inferTid); reject(new Error('Network error')); });
+    xhr.addEventListener('abort',  () => { stopped = true; clearTimeout(inferTid); reject(new Error('Request aborted')); });
+
+    xhr.send(formData);
+  });
+}
+
+let _detRetryCount = 0;
+let _detRetryTimer = null;
+
+function cancelDetRetry() {
+  if (_detRetryTimer) { clearTimeout(_detRetryTimer); _detRetryTimer = null; }
+  _detRetryCount = 0;
+  document.getElementById('detErr').innerHTML = '';
+}
+
+async function runObjectDetect() {
+  if (!detFile) return;
+  const btn   = document.getElementById('detRunBtn');
+  const errEl = document.getElementById('detErr');
+  const conf  = parseInt(document.getElementById('detConf').value) / 100;
+
+  btn.innerHTML = '<span class="spinner"></span> Detecting…';
+  btn.disabled  = true;
+  errEl.innerHTML = '';
+
+  document.getElementById('detResult').innerHTML = `
+    <div style="padding:2.5rem 1.5rem;text-align:center">
+      ${_progressBarHTML('detFill','detMsg','detPct')}
+      <div style="font-size:0.7rem;color:var(--text3);margin-top:0.7rem;opacity:0.75">First call downloads ~35 MB — may take up to 60 s on free tier</div>
+    </div>`;
+
+  const form = new FormData();
+  form.append('file',       detFile);
+  form.append('model_name', 'tiny_yolov3');
+  form.append('confidence', conf);
+  form.append('max_dets',   20);
+
+  try {
+    const res = await fetch(`${VISION_API}/detect-objects`, { method: 'POST', body: form });
+    if (!res.ok) {
+      const raw = await res.text();
+      let msg;
+      try { const j = JSON.parse(raw); msg = j.detail || raw; } catch { msg = raw; }
+      if (res.status === 503) { showDetRetry(msg); return; }
+      throw new Error(msg);
+    }
+    let data = null;
+    for await (const ev of _sseStream(res)) {
+      if (ev.error) throw new Error(ev.error);
+      if (ev.pct !== undefined) _updateProgressBar('detFill','detMsg','detPct', ev.pct, ev.msg);
+      if (ev.result) data = ev.result;
+    }
+    if (!data) throw new Error('No result received from server.');
+    _track('query_run', { tool: 'vision:detect', success: true });
+    renderDetectionResult(data);
+  } catch(e) {
+    document.getElementById('detResult').innerHTML = '';
+    errEl.innerHTML = `<div class="js-err-box">${e.message}</div>`;
+  } finally {
+    btn.innerHTML = 'Detect Objects →';
+    btn.disabled  = false;
+  }
+}
+
+function showDetRetry(msg) {
+  const errEl = document.getElementById('detErr');
+  const btn   = document.getElementById('detRunBtn');
+  btn.innerHTML = 'Detect Objects →'; btn.disabled = false;
+  if (_detRetryCount >= 3) {
+    _detRetryCount = 0;
+    errEl.innerHTML = `<div class="js-err-box">✗ Model unavailable after 3 attempts. Please try again later.</div>`;
+    return;
+  }
+  _detRetryCount++;
+  let secs = 20;
+  const tick = () => {
+    errEl.innerHTML = `<div class="js-warn-box">
+      <span>⏳ ${msg} Auto-retrying in ${secs}s… (attempt ${_detRetryCount}/3)</span>
+      <button onclick="cancelDetRetry()" style="padding:0.2rem 0.6rem;border:1px solid #fbbf2466;border-radius:6px;background:transparent;color:#fbbf24;cursor:pointer;font-size:0.78rem;flex-shrink:0">Stop</button>
+    </div>`;
+    if (secs-- > 0) { _detRetryTimer = setTimeout(tick, 1000); } else { runObjectDetect(); }
+  };
+  tick();
+}
+
+function renderDetectionResult(data) {
+  const accent = '#38bdf8';
+  const dets   = data.detections || [];
+
+  const noneMsg = dets.length === 0 ? `
+    <div style="padding:0.65rem 0.9rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);
+                border-radius:8px;color:#fbbf24;font-size:0.82rem;margin-bottom:1rem">
+      ⚠️ No objects detected above the confidence threshold. Try lowering it.
+    </div>` : '';
+
+  const tagsHTML = dets.map(d => {
+    const color = DET_BOX_PALETTE[d.class_id % DET_BOX_PALETTE.length];
+    return `<span class="det-tag" style="background:${color}22;border:1px solid ${color}55">
+      <span class="det-tag-dot" style="background:${color}"></span>
+      ${d.label} <span style="color:${color};font-weight:800">${(d.confidence*100).toFixed(0)}%</span>
+    </span>`;
+  }).join('');
+
+  document.getElementById('detResult').innerHTML = `
+    <div class="result-state" style="display:block;margin-top:0.5rem">
+      <div class="result-accent-bar" style="background:${accent}"></div>
+      <div class="result-body">
+        ${noneMsg}
+        <div class="proba-section-label" style="margin-bottom:0.75rem">
+          ${data.count} object${data.count !== 1 ? 's' : ''} detected
+          &nbsp;·&nbsp; confidence ≥ ${(data.confidence_threshold*100).toFixed(0)}%
+          &nbsp;·&nbsp; ${data.orig_width}×${data.orig_height} px
+        </div>
+        <div class="ip-before-after">
+          <div class="ip-image-box">
+            <div class="ip-image-label">Original</div>
+            <img src="${detImageURL}" class="ip-image-result" alt="original">
+          </div>
+          <div class="ip-image-box">
+            <div class="ip-image-label">Detected</div>
+            <img src="${data.image_b64}" class="ip-image-result" alt="detection result">
+          </div>
+        </div>
+        <div style="margin-top:0.75rem">${tagsHTML}</div>
+        ${data.count > 0 ? `
+        <div style="margin-top:1rem">
+          <a href="${data.image_b64}" download="detected_objects.png"
+             class="btn btn-clear" style="text-decoration:none;font-size:0.8rem">
+            ↓ Download
+          </a>
+        </div>` : ''}
+      </div>
+    </div>`;
+}
+
+// ── Image Segmentation ───────────────────────────────────────────────────────
+let segFile     = null;
+let segImageURL = null;
+
+function selectSegmentation() {
+  document.querySelectorAll('.model-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('vbtn-segmentation');
+  if (btn) btn.classList.add('active');
+  setAmbientTheme('rgba(167,139,250,0.16)', 'rgba(139,92,246,0.10)');
+  _mobileVisionPanel = 'segment'; syncBottomTab('vision');
+  renderSegmentationPanel();
+}
+
+function renderSegmentationPanel() {
+  segFile     = null;
+  segImageURL = null;
+
+  document.getElementById('main').innerHTML = `
+    <div class="vision-panel">
+      <div class="u-header">
+        <div class="model-eyebrow" style="color:#a78bfa">Vision &middot; Image Segmentation</div>
+        <div class="u-title">Image Segmentation</div>
+        <div class="u-subtitle">Upload any photo — each pixel is classified into one of 150 ADE20K categories (people, vehicles, furniture, nature…) using SegFormer-B0. Classes are colour-overlaid on the original image.</div>
+      </div>
+
+      <div class="upload-zone" id="segUploadZone">
+        <input type="file" id="segImageInput" accept="image/*" onchange="handleSegFile(event)">
+        <div class="upload-zone-icon"><svg width="44" height="44" viewBox="0 0 44 44" fill="none"><rect x="4" y="9" width="36" height="27" rx="5" stroke="#818cf8" stroke-width="1.5" opacity="0.55"/><circle cx="15" cy="19" r="3.8" stroke="#fbbf24" stroke-width="1.4" opacity="0.8"/><path d="M4 30l11-10 8 7 5-5 12 14" stroke="#38bdf8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.65"/></svg></div>
+        <div class="upload-zone-text">Click to browse or drag &amp; drop</div>
+        <div class="upload-zone-sub">JPEG, PNG, WebP</div>
+      </div>
+
+      <div id="segPreviewSection" style="display:none;margin:0.75rem 0">
+        <img id="segPreviewImg" class="vision-preview-img" src="" alt="preview">
+        <div id="segFileName" style="font-size:0.78rem;color:var(--text3);margin-top:0.4rem"></div>
+      </div>
+
+      <div id="segErr" style="margin-top:0.5rem"></div>
+
+      <div style="margin:1.25rem 0">
+        <button class="btn btn-primary" id="segRunBtn" onclick="runSegmentation()"
+                disabled style="opacity:0.4;background:#a78bfa">
+          Segment Image →
+        </button>
+      </div>
+
+      <div id="segResult"></div>
+
+      <div style="margin-top:2rem;border-top:1px solid var(--border);padding-top:1.25rem">
+        <button id="segClassBtn" onclick="toggleSegClassBrowser()"
+                style="background:none;border:none;color:var(--text3);font-size:0.8rem;
+                       cursor:pointer;padding:0;font-weight:600">
+          Browse 150 ADE20K classes ▸
+        </button>
+        <div id="segClassPanel" style="display:none;margin-top:0.75rem">
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.6rem">
+            <input type="text" class="field-input" placeholder="Search classes…"
+                   oninput="renderSegClassList(this.value)"
+                   style="flex:1;font-size:0.82rem;padding:0.4rem 0.65rem">
+            <span id="segClassCount" style="font-size:0.72rem;color:var(--text3);white-space:nowrap">150 classes</span>
+          </div>
+          <div id="segClassGrid"
+               style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));
+                      gap:0.3rem;max-height:260px;overflow-y:auto;padding:0.5rem;
+                      background:var(--bg-input);border:1px solid var(--border2);border-radius:10px">
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  const zone = document.getElementById('segUploadZone');
+  zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) setSegFile(f);
+  });
+}
+
+function handleSegFile(e) { const f = e.target.files[0]; if (f) setSegFile(f); }
+
+function setSegFile(f) {
+  segFile = f;
+  if (segImageURL) URL.revokeObjectURL(segImageURL);
+  segImageURL = URL.createObjectURL(f);
+
+  const prev = document.getElementById('segPreviewSection');
+  prev.style.display = 'block';
+  document.getElementById('segPreviewImg').src = segImageURL;
+  document.getElementById('segFileName').textContent = `📄 ${f.name}  (${(f.size/1024).toFixed(1)} KB)`;
+
+  const btn = document.getElementById('segRunBtn');
+  btn.disabled = false; btn.style.opacity = '1';
+  document.getElementById('segResult').innerHTML = '';
+  document.getElementById('segErr').innerHTML    = '';
+}
+
+let _segRetryCount = 0;
+let _segRetryTimer = null;
+
+function cancelSegRetry() {
+  if (_segRetryTimer) { clearTimeout(_segRetryTimer); _segRetryTimer = null; }
+  _segRetryCount = 0;
+  document.getElementById('segErr').innerHTML = '';
+}
+
+async function runSegmentation() {
+  if (!segFile) return;
+  const btn   = document.getElementById('segRunBtn');
+  const errEl = document.getElementById('segErr');
+  const model = document.querySelector('input[name="segModel"]:checked')?.value || 'segformer_b0';
+
+  btn.innerHTML = '<span class="spinner"></span> Segmenting…';
+  btn.disabled  = true;
+  errEl.innerHTML = '';
+
+  const form = new FormData();
+  form.append('file',       segFile);
+  form.append('model_name', model);
+
+  // color_segmentation is fast plain-JSON — no SSE progress needed
+  if (model === 'color_segmentation') {
+    document.getElementById('segResult').innerHTML = `
+      <div style="padding:2.5rem 1.5rem;text-align:center">
+        ${_progressBarHTML('segFill','segMsg','segPct')}
+      </div>`;
+    _updateProgressBar('segFill','segMsg','segPct', 50, 'Analyzing colors');
+    try {
+      const res = await fetch(`${VISION_API}/segment-image`, { method: 'POST', body: form });
+      if (!res.ok) {
+        const raw = await res.text();
+        let msg; try { msg = JSON.parse(raw).detail || raw; } catch { msg = raw; }
+        if (res.status === 503) { showSegRetry(msg); return; }
+        throw new Error(msg);
+      }
+      const data = await res.json();
+      renderSegmentationResult(data);
+    } catch(e) {
+      document.getElementById('segResult').innerHTML = '';
+      errEl.innerHTML = `<div class="js-err-box">${e.message}</div>`;
+    } finally {
+      btn.innerHTML = 'Segment Image →'; btn.disabled = false;
+    }
+    return;
+  }
+
+  document.getElementById('segResult').innerHTML = `
+    <div style="padding:2.5rem 1.5rem;text-align:center">
+      ${_progressBarHTML('segFill','segMsg','segPct')}
+      <div style="font-size:0.7rem;color:var(--text3);margin-top:0.7rem;opacity:0.75">First call downloads ~4.4 MB — may take ~30 s on free tier cold start</div>
+    </div>`;
+
+  try {
+    const res = await fetch(`${VISION_API}/segment-image`, { method: 'POST', body: form });
+    if (!res.ok) {
+      const raw = await res.text();
+      let msg;
+      try { const j = JSON.parse(raw); msg = j.detail || raw; } catch { msg = raw; }
+      if (res.status === 503) { showSegRetry(msg); return; }
+      throw new Error(msg);
+    }
+    let data = null;
+    for await (const ev of _sseStream(res)) {
+      if (ev.error) throw new Error(ev.error);
+      if (ev.pct !== undefined) _updateProgressBar('segFill','segMsg','segPct', ev.pct, ev.msg);
+      if (ev.result) data = ev.result;
+    }
+    if (!data) throw new Error('No result received from server.');
+    renderSegmentationResult(data);
+  } catch(e) {
+    document.getElementById('segResult').innerHTML = '';
+    errEl.innerHTML = `<div class="js-err-box">${e.message}</div>`;
+  } finally {
+    btn.innerHTML = 'Segment Image →';
+    btn.disabled  = false;
+  }
+}
+
+function showSegRetry(msg) {
+  const errEl = document.getElementById('segErr');
+  const btn   = document.getElementById('segRunBtn');
+  btn.innerHTML = 'Segment Image →'; btn.disabled = false;
+  if (_segRetryCount >= 3) {
+    _segRetryCount = 0;
+    errEl.innerHTML = `<div class="js-err-box">✗ Model unavailable after 3 attempts. Please try again later.</div>`;
+    return;
+  }
+  _segRetryCount++;
+  let secs = 30;
+  const tick = () => {
+    errEl.innerHTML = `<div class="js-warn-box">
+      <span>⏳ Vision service is warming up — please try again in ~30 seconds. Auto-retrying in ${secs}s… (attempt ${_segRetryCount}/3)</span>
+      <button onclick="cancelSegRetry()" style="padding:0.2rem 0.6rem;border:1px solid #fbbf2466;border-radius:6px;background:transparent;color:#fbbf24;cursor:pointer;font-size:0.78rem;flex-shrink:0">Stop</button>
+    </div>`;
+    if (secs-- > 0) { _segRetryTimer = setTimeout(tick, 1000); } else { runSegmentation(); }
+  };
+  tick();
+}
+
+/* ── ADE20K 150 class browser ── */
+const _ADE20K_150 = [
+  'wall','building','sky','floor','tree','ceiling','road','bed','window','grass',
+  'cabinet','sidewalk','person','earth','door','table','mountain','plant','curtain',
+  'chair','car','water','painting','sofa','shelf','house','sea','mirror','rug','field',
+  'armchair','seat','fence','desk','rock','wardrobe','lamp','bathtub','railing',
+  'cushion','base','box','column','signboard','chest of drawers','counter','sand',
+  'sink','skyscraper','fireplace','refrigerator','grandstand','path','stairs','runway',
+  'case','pool table','pillow','screen door','stairway','river','bridge','bookcase',
+  'blind','coffee table','toilet','flower','book','hill','bench','countertop','stove',
+  'palm','kitchen island','computer','swivel chair','boat','bar','arcade machine',
+  'hovel','bus','towel','light','truck','tower','chandelier','awning','streetlight',
+  'booth','television','airplane','dirt track','apparel','pole','land','bannister',
+  'escalator','ottoman','bottle','buffet','poster','stage','van','ship','fountain',
+  'conveyer belt','canopy','washer','plaything','swimming pool','stool','barrel',
+  'basket','waterfall','tent','bag','minibike','cradle','oven','ball','food','step',
+  'tank','trade name','microwave','pot','animal','bicycle','lake','dishwasher',
+  'screen','blanket','sculpture','hood','sconce','vase','traffic light','tray',
+  'ashcan','fan','pier','crt screen','plate','monitor','bulletin board','shower',
+  'radiator','glass','clock','flag'
+];
+
+function toggleSegClassBrowser() {
+  const panel = document.getElementById('segClassPanel');
+  const btn   = document.getElementById('segClassBtn');
+  if (!panel) return;
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  btn.textContent = open ? 'Browse 150 ADE20K classes ▾' : 'Browse 150 ADE20K classes ▸';
+  if (open) renderSegClassList('');
+}
+
+function renderSegClassList(q) {
+  const grid  = document.getElementById('segClassGrid');
+  const count = document.getElementById('segClassCount');
+  if (!grid) return;
+  const lq       = q.toLowerCase();
+  const filtered = q ? _ADE20K_150.filter(c => c.includes(lq)) : _ADE20K_150;
+  grid.innerHTML  = filtered.map(c =>
+    `<div style="padding:0.25rem 0.5rem;font-size:0.75rem;color:var(--text2);
+                 background:var(--bg-card);border:1px solid var(--border2);border-radius:6px;
+                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${c}">${c}</div>`
+  ).join('');
+  count.textContent = q ? `${filtered.length} of 150 matching` : '150 classes';
+}
+
+
+function renderSegmentationResult(data) {
+  const accent  = '#a78bfa';
+  const classes = data.classes_found || [];
+
+  const noneMsg = classes.length === 0 ? `
+    <div style="padding:0.65rem 0.9rem;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);
+                border-radius:8px;color:#fbbf24;font-size:0.82rem;margin-bottom:1rem">
+      ⚠️ No foreground classes detected. The image may be background-only or out of distribution.
+    </div>` : '';
+
+  const chipsHTML = classes.map(c => `
+    <span class="seg-class-chip" style="background:${c.color}22;border:1px solid ${c.color}55">
+      <span class="seg-chip-swatch" style="background:${c.color}"></span>
+      ${c.label}
+      <span style="color:${c.color};font-weight:800">${c.percentage}%</span>
+    </span>`).join('');
+
+  document.getElementById('segResult').innerHTML = `
+    <div class="result-state" style="display:block;margin-top:0.5rem">
+      <div class="result-accent-bar" style="background:${accent}"></div>
+      <div class="result-body">
+        ${noneMsg}
+        <div class="proba-section-label" style="margin-bottom:0.75rem">
+          ${classes.length} class${classes.length !== 1 ? 'es' : ''} detected
+          &nbsp;·&nbsp; ${data.orig_width}×${data.orig_height} px
+        </div>
+        <div class="ip-before-after">
+          <div class="ip-image-box">
+            <div class="ip-image-label">Original</div>
+            <img src="${segImageURL}" class="ip-image-result" alt="original">
+          </div>
+          <div class="ip-image-box">
+            <div class="ip-image-label">Segmented</div>
+            <img src="${data.image_b64}" class="ip-image-result" alt="segmentation result">
+          </div>
+        </div>
+        <div class="seg-class-list" style="margin-top:0.75rem">${chipsHTML}</div>
+        ${classes.length > 0 ? `
+        <div style="margin-top:1rem">
+          <a href="${data.image_b64}" download="segmentation_result.png"
+             class="btn btn-clear" style="text-decoration:none;font-size:0.8rem">
+            ↓ Download
+          </a>
+        </div>` : ''}
+      </div>
+    </div>`;
+}
+
+
+
+async function init() {
+  _track('page_view', { tool: 'vision' });
+  selectVision();
+}
+init();
+</script>
+</body>
+</html>
