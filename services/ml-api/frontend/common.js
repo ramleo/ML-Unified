@@ -15,7 +15,7 @@ function _track(type, meta) {
     fetch(_TRACK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, path: window.location.pathname + (typeof APP_MODE !== 'undefined' && APP_MODE && APP_MODE !== 'ml' ? '?mode=' + APP_MODE : ''), session_id: _getSession(), referrer: document.referrer, meta: meta || {} }),
+      body: JSON.stringify({ type, path: (typeof APP_MODE !== 'undefined' && APP_MODE === 'eda' ? '/eda' : typeof APP_MODE !== 'undefined' && APP_MODE === 'vision' ? '/vision' : '/'), session_id: _getSession(), referrer: document.referrer, meta: meta || {} }),
     }).catch(() => {});
   } catch(_) {}
 }
