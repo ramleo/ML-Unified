@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import re
+import time
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -178,17 +179,26 @@ def extract_visual_sections(page_images: list[str], existing_names: set[str], mi
                     {"inline_data": {"mime_type": "image/png", "data": b64}},
                     {"text": prompt},
                 ]
-                try:
-                    r = client.post(url, params={"key": key},
-                                    json={"contents": [{"role": "user", "parts": parts}]})
-                    r.raise_for_status()
-                    raw = r.json()["candidates"][0]["content"]["parts"][0]["text"]
-                    for f in _normalize_fields(_parse_json(raw).get("fields", []), {}):
-                        if f["name"] not in seen:
-                            seen.add(f["name"])
-                            all_fields.append(f)
-                except Exception as exc:
-                    logger.warning("Gemini vision page failed: %s", exc)
+                for attempt in range(3):
+                    try:
+                        r = client.post(url, params={"key": key},
+                                        json={"contents": [{"role": "user", "parts": parts}]})
+                        if r.status_code == 429:
+                            wait = 5 * (attempt + 1)
+                            logger.warning("Gemini vision 429 — retrying in %ss", wait)
+                            time.sleep(wait)
+                            continue
+                        r.raise_for_status()
+                        raw = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+                        for f in _normalize_fields(_parse_json(raw).get("fields", []), {}):
+                            if f["name"] not in seen:
+                                seen.add(f["name"])
+                                all_fields.append(f)
+                        break
+                    except Exception as exc:
+                        logger.warning("Gemini vision page failed: %s", exc)
+                        break
+                time.sleep(4)  # 15 RPM limit = 4s between requests
     except Exception as exc:
         logger.warning("Visual extraction failed: %s", exc)
     return all_fields
