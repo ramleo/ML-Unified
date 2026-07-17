@@ -1,0 +1,145 @@
+"""FastAPI router for Document Intelligence — POST /document/analyze, GET /document/types."""
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+from typing import AsyncGenerator
+
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
+
+from ._schema import DOC_TYPES
+from ._extract import extract_document, search_bbox_in_doc
+from ._llm import classify_document, extract_fields_from_text, extract_fields_from_image
+
+router = APIRouter(prefix="/document", tags=["document"])
+logger = logging.getLogger(__name__)
+
+MAX_FILE_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+def _sse(data: dict) -> str:
+    return f"data: {json.dumps(data)}\n\n"
+
+
+async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str) -> AsyncGenerator[str, None]:
+    known_types = list(DOC_TYPES.keys())
+
+    # ── Step 1: Extract ───────────────────────────────────────────────────────
+    yield _sse({"step": "extract", "label": "Extracting content", "status": "running"})
+    await asyncio.sleep(0)
+
+    extracted = extract_document(file_bytes, filename)
+    text = extracted["text"]
+    page_images = extracted["page_images"]
+    processing_mode = extracted["processing_mode"]
+    pages = extracted["pages"]
+
+    if processing_mode == "error":
+        yield _sse({"error": "Failed to process file. Ensure it is a valid PDF, PNG, or JPG."})
+        return
+
+    yield _sse({"step": "extract", "status": "done"})
+
+    # ── Step 2: Classify ──────────────────────────────────────────────────────
+    yield _sse({"step": "classify", "label": "Identifying document type", "status": "running"})
+    await asyncio.sleep(0)
+
+    if doc_type_hint and doc_type_hint != "auto" and doc_type_hint in DOC_TYPES:
+        doc_type, class_confidence = doc_type_hint, 1.0
+    elif text.strip():
+        try:
+            doc_type, class_confidence = classify_document(text[:600], known_types)
+        except Exception as exc:
+            logger.error("Classification failed: %s", exc)
+            doc_type, class_confidence = "invoice", 0.5
+    else:
+        # Scanned / image with no text — default; user can override via sidebar
+        doc_type, class_confidence = "invoice", 0.4
+
+    yield _sse({
+        "step": "classify", "status": "done",
+        "doc_type": doc_type,
+        "doc_type_label": DOC_TYPES[doc_type]["label"],
+        "classification_confidence": round(class_confidence, 3),
+    })
+
+    # ── Step 3: Analyze ───────────────────────────────────────────────────────
+    yield _sse({"step": "analyze", "label": "Extracting fields with AI", "status": "running"})
+    await asyncio.sleep(0)
+
+    schema_fields = DOC_TYPES[doc_type]["fields"]
+    fields: list[dict] = []
+
+    try:
+        if text.strip():
+            fields = extract_fields_from_text(text, doc_type, schema_fields)
+        elif page_images:
+            fields = extract_fields_from_image(page_images[0], doc_type, schema_fields)
+    except Exception as exc:
+        logger.error("Field extraction failed: %s", exc)
+
+    # ── Step 4: Validate + bbox lookup for digital PDFs ───────────────────────
+    yield _sse({"step": "validate", "label": "Validating & locating fields", "status": "running"})
+    await asyncio.sleep(0)
+
+    is_pdf = file_bytes[:4] == b"%PDF"
+    if processing_mode == "digital" and is_pdf:
+        for field in fields:
+            if field.get("value") and field.get("bbox") is None:
+                field["bbox"] = search_bbox_in_doc(file_bytes, field["value"])
+
+    yield _sse({"step": "validate", "status": "done"})
+
+    # ── Stream fields one-by-one ──────────────────────────────────────────────
+    for field in fields:
+        yield _sse({"field": field})
+        await asyncio.sleep(0.07)  # stagger for frontend animation
+
+    # ── Done ──────────────────────────────────────────────────────────────────
+    yield _sse({
+        "done": True,
+        "doc_type": doc_type,
+        "doc_type_label": DOC_TYPES[doc_type]["label"],
+        "processing_mode": processing_mode,
+        "pages": pages,
+        "page_image": page_images[0] if page_images else None,
+        "field_count": len(fields),
+        "classification_confidence": round(class_confidence, 3),
+    })
+
+
+@router.post("/analyze")
+async def analyze_document(
+    file: UploadFile = File(...),
+    doc_type: str = Form(default="auto"),
+):
+    """Analyze a document and stream extracted fields as SSE events."""
+    file_bytes = await file.read()
+    if len(file_bytes) > MAX_FILE_BYTES:
+        raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    return StreamingResponse(
+        _stream(file_bytes, file.filename or "document", doc_type),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/types")
+def get_document_types():
+    """Return supported document types and their field schemas."""
+    return {
+        "types": [
+            {
+                "id": k,
+                "label": v["label"],
+                "description": v["description"],
+                "fields": v["fields"],
+            }
+            for k, v in DOC_TYPES.items()
+        ]
+    }
