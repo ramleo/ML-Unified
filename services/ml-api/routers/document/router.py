@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 from ._schema import DOC_TYPES
 from ._extract import extract_document, search_bbox_in_doc, extract_tables_markdown
 from ._llm import classify_document, extract_fields_from_text, extract_fields_from_image, extract_visual_sections
+from ._validate import validate_and_correct
 
 router = APIRouter(prefix="/document", tags=["document"])
 logger = logging.getLogger(__name__)
@@ -113,8 +114,19 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str) -> Async
     except Exception as exc:
         logger.error("Field extraction failed: %s", exc)
 
-    # ── Step 4: Validate + bbox lookup for digital PDFs ───────────────────────
-    yield _sse({"step": "validate", "label": "Validating & locating fields", "status": "running"})
+    # ── Step 4: Self-correction loop ──────────────────────────────────────────
+    yield _sse({"step": "validate", "label": "Checking field consistency", "status": "running"})
+    await asyncio.sleep(0)
+
+    try:
+        fields = await loop.run_in_executor(
+            _executor, lambda: validate_and_correct(fields, doc_type)
+        )
+    except Exception as exc:
+        logger.error("Validation pass failed: %s", exc)
+
+    # ── Step 4b: bbox lookup for digital PDFs ────────────────────────────────
+    yield _sse({"step": "validate", "label": "Locating fields in document", "status": "running"})
     await asyncio.sleep(0)
 
     is_pdf = file_bytes[:4] == b"%PDF"
