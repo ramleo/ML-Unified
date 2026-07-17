@@ -159,59 +159,39 @@ def _visual_prompt(n_pages: int, already: str) -> str:
     )
 
 
-def _visual_anthropic(page_images: list[str], prompt: str) -> str:
-    key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if not key:
-        return ""
-    try:
-        import anthropic
-        content: list[dict] = []
-        for b64 in page_images:
-            content.append({"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}})
-        content.append({"type": "text", "text": prompt})
-        client = anthropic.Anthropic(api_key=key)
-        msg = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=2000,
-            messages=[{"role": "user", "content": content}],
-        )
-        return msg.content[0].text if msg.content else ""
-    except Exception as exc:
-        logger.warning("Anthropic vision failed: %s", exc)
-        return ""
-
-
-def _visual_gemini(page_images: list[str], prompt: str) -> str:
-    key = os.environ.get("GEMINI_API_KEY", "")
-    if not key:
-        return ""
-    try:
-        import httpx
-        parts: list[dict] = [{"inline_data": {"mime_type": "image/png", "data": b64}} for b64 in page_images]
-        parts.append({"text": prompt})
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
-        with httpx.Client(timeout=120) as client:
-            r = client.post(url, params={"key": key}, json={"contents": [{"role": "user", "parts": parts}]})
-            r.raise_for_status()
-            return r.json()["candidates"][0]["content"]["parts"][0]["text"]
-    except Exception as exc:
-        logger.warning("Gemini vision failed: %s", exc)
-        return ""
-
-
 def extract_visual_sections(page_images: list[str], existing_names: set[str]) -> list[dict]:
-    """Extract visual-only content (timelines, charts, image tables) from all page images.
-    Tries Anthropic Claude vision first, falls back to Gemini."""
-    if not page_images:
+    """Extract visual content (timelines, charts, image tables) using Gemini Vision.
+    Sends pages one at a time to avoid size limits, merges results."""
+    key = os.environ.get("GEMINI_API_KEY", "")
+    if not key or not page_images:
         return []
     already = json.dumps(sorted(existing_names))
-    prompt = _visual_prompt(len(page_images), already)
-    raw = _visual_anthropic(page_images, prompt) or _visual_gemini(page_images, prompt)
-    if not raw:
-        logger.warning("No vision provider available for visual extraction")
-        return []
-    data = _parse_json(raw)
-    return _normalize_fields(data.get("fields", []), {})
+    prompt = _visual_prompt(1, already)
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+    all_fields: list[dict] = []
+    seen: set[str] = set()
+    try:
+        import httpx
+        with httpx.Client(timeout=90) as client:
+            for b64 in page_images[:4]:  # max 4 pages
+                parts = [
+                    {"inline_data": {"mime_type": "image/png", "data": b64}},
+                    {"text": prompt},
+                ]
+                try:
+                    r = client.post(url, params={"key": key},
+                                    json={"contents": [{"role": "user", "parts": parts}]})
+                    r.raise_for_status()
+                    raw = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+                    for f in _normalize_fields(_parse_json(raw).get("fields", []), {}):
+                        if f["name"] not in seen:
+                            seen.add(f["name"])
+                            all_fields.append(f)
+                except Exception as exc:
+                    logger.warning("Gemini vision page failed: %s", exc)
+    except Exception as exc:
+        logger.warning("Visual extraction failed: %s", exc)
+    return all_fields
 
 
 def extract_fields_from_image(image_b64: str, doc_type: str, schema_fields: list[dict]) -> list[dict]:

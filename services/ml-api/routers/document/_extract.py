@@ -78,7 +78,7 @@ def _render_pages(doc, max_pages: int = 5) -> list[str]:
     images: list[str] = []
     try:
         import fitz
-        mat = fitz.Matrix(1.5, 1.5)
+        mat = fitz.Matrix(1.2, 1.2)
         for i in range(min(max_pages, len(doc))):
             try:
                 pix = doc[i].get_pixmap(matrix=mat)
