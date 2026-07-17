@@ -130,9 +130,12 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
     field_meta = {f["name"]: f for f in schema_fields}
     system = "You are a document data extraction expert. Respond only with valid JSON."
     prompt = (
-        f'Extract fields from this {doc_type} document. Return JSON:\n'
-        f'{{"fields": [{{"name": "<name>", "value": "<value or null>", "confidence": <0.0-1.0>}}]}}\n\n'
-        f"Fields to extract: {json.dumps(field_names)}\n\n"
+        f'Extract data from this {doc_type} document. Return JSON:\n'
+        f'{{"fields": [{{"name": "<snake_case_name>", "label": "<Human Readable Label>", "value": "<value or null>", "confidence": <0.0-1.0>}}]}}\n\n'
+        f'First extract these predefined fields (use null if not found): {json.dumps(field_names)}\n\n'
+        f'Then append ANY additional sections, headers, or structured data you find in the document '
+        f'that are not in the predefined list — use the section heading as the label and a snake_case version as the name. '
+        f'Do not skip any section that has meaningful content.\n\n'
         f"Document text:\n{text[:4000]}"
     )
     raw = _cascade([{"role": "user", "content": prompt}], system)
@@ -153,10 +156,13 @@ def extract_fields_from_image(image_b64: str, doc_type: str, schema_fields: list
     user_parts: list[dict] = [
         {"inline_data": {"mime_type": "image/png", "data": image_b64}},
         {"text": (
-            f'Extract these fields from the {doc_type} document image.\n'
-            f'Return JSON: {{"fields": [{{"name": "<name>", "value": "<value or null>", '
-            f'"confidence": <0.0-1.0>, "bbox": [left, top, width, height] normalized 0-1 or null}}]}}\n\n'
-            f"Fields: {json.dumps(field_names)}"
+            f'Extract data from this {doc_type} document image.\n'
+            f'Return JSON: {{"fields": [{{"name": "<snake_case_name>", "label": "<Human Readable Label>", '
+            f'"value": "<value or null>", "confidence": <0.0-1.0>, '
+            f'"bbox": [left, top, width, height] normalized 0-1 or null}}]}}\n\n'
+            f'First extract these predefined fields: {json.dumps(field_names)}\n\n'
+            f'Then append ANY additional sections or headers you find that are not in the predefined list. '
+            f'Use the section heading as the label and snake_case as the name.'
         )},
     ]
     try:
@@ -178,21 +184,26 @@ def extract_fields_from_image(image_b64: str, doc_type: str, schema_fields: list
 
 def _normalize_fields(raw_fields: list[dict], field_meta: dict, allow_bbox: bool = False) -> list[dict]:
     result = []
+    seen = set()
     for f in raw_fields:
-        name = f.get("name", "")
+        name = f.get("name", "").strip()
         value = f.get("value")
-        if name not in field_meta or value is None:
+        if not name or value is None or name in seen:
             continue
-        meta = field_meta[name]
+        seen.add(name)
+        meta = field_meta.get(name)
+        # Use schema label if known; otherwise use LLM-provided label or prettify the name
+        label = (meta["label"] if meta else
+                 f.get("label") or name.replace("_", " ").title())
         bbox = f.get("bbox") if allow_bbox else None
         if bbox is not None and (not isinstance(bbox, list) or len(bbox) != 4):
             bbox = None
         result.append({
             "name": name,
-            "label": meta["label"],
+            "label": label,
             "value": str(value),
             "confidence": max(0.0, min(1.0, float(f.get("confidence", 0.7)))),
-            "field_type": meta.get("field_type", "text"),
+            "field_type": meta.get("field_type", "text") if meta else "text",
             "bbox": bbox,
             "page": 1,
         })
