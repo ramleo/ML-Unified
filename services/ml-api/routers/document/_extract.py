@@ -91,6 +91,34 @@ def _render_pages(doc, max_pages: int = 5) -> list[str]:
     return images
 
 
+def extract_tables_markdown(file_bytes: bytes, max_pages: int = 5) -> str:
+    """Extract tables from a PDF as markdown using pymupdf find_tables().
+    Returns empty string if no tables found or extraction fails."""
+    try:
+        import fitz
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        parts: list[str] = []
+        for page_num in range(min(max_pages, len(doc))):
+            page = doc[page_num]
+            tabs = page.find_tables()
+            for tab in tabs:
+                rows = tab.extract()
+                if not rows:
+                    continue
+                lines: list[str] = []
+                for j, row in enumerate(rows):
+                    cells = [str(c or "").strip().replace("|", " ") for c in row]
+                    lines.append("| " + " | ".join(cells) + " |")
+                    if j == 0:
+                        lines.append("|" + "|".join(["---"] * len(row)) + "|")
+                parts.append(f"\n### Table (Page {page_num + 1})\n" + "\n".join(lines))
+        doc.close()
+        return "\n".join(parts)
+    except Exception as exc:
+        logger.warning("Table extraction failed: %s", exc)
+        return ""
+
+
 def search_bbox_in_doc(file_bytes: bytes, value: str, page_idx: int = 0) -> list[float] | None:
     """
     Search for `value` text in a PDF page and return normalized

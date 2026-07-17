@@ -13,7 +13,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
 from ._schema import DOC_TYPES
-from ._extract import extract_document, search_bbox_in_doc
+from ._extract import extract_document, search_bbox_in_doc, extract_tables_markdown
 from ._llm import classify_document, extract_fields_from_text, extract_fields_from_image, extract_visual_sections
 
 router = APIRouter(prefix="/document", tags=["document"])
@@ -38,6 +38,13 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str) -> Async
     page_images = extracted["page_images"]
     processing_mode = extracted["processing_mode"]
     pages = extracted["pages"]
+
+    # Append structured table markdown so LLM sees clean table data for
+    # invoices, bank statements, purchase orders, etc.
+    if processing_mode == "digital" and file_bytes[:4] == b"%PDF":
+        table_md = extract_tables_markdown(file_bytes)
+        if table_md:
+            text = text + "\n\n## DOCUMENT TABLES\n" + table_md
 
     if processing_mode == "error":
         yield _sse({"error": "Failed to process file. Ensure it is a valid PDF, PNG, or JPG."})
