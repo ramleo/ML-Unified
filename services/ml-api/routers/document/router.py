@@ -11,7 +11,7 @@ from fastapi.responses import StreamingResponse
 
 from ._schema import DOC_TYPES
 from ._extract import extract_document, search_bbox_in_doc
-from ._llm import classify_document, extract_fields_from_text, extract_fields_from_image
+from ._llm import classify_document, extract_fields_from_text, extract_fields_from_image, extract_visual_sections
 
 router = APIRouter(prefix="/document", tags=["document"])
 logger = logging.getLogger(__name__)
@@ -75,6 +75,21 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str) -> Async
     try:
         if text.strip():
             fields = extract_fields_from_text(text, doc_type, schema_fields)
+            # Supplement with Gemini Vision for any visual-only content (embedded
+            # timelines, image-based tables, charts) that text extraction misses
+            if page_images:
+                existing_names = {f["name"] for f in fields if f.get("value")}
+                visual_fields = extract_visual_sections(page_images[0], existing_names)
+                # Merge: add visual fields not already captured by text extraction
+                existing_all = {f["name"] for f in fields}
+                for vf in visual_fields:
+                    if vf["name"] not in existing_all:
+                        fields.append(vf)
+                    else:
+                        # Override if text extraction returned empty for this field
+                        for f in fields:
+                            if f["name"] == vf["name"] and not f.get("value"):
+                                f.update(vf)
         elif page_images:
             fields = extract_fields_from_image(page_images[0], doc_type, schema_fields)
     except Exception as exc:

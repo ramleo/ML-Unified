@@ -143,6 +143,44 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
     return _normalize_fields(data.get("fields", []), field_meta)
 
 
+def extract_visual_sections(image_b64: str, existing_names: set[str]) -> list[dict]:
+    """Send a rendered page image to Gemini to extract visual-only content
+    (embedded timelines, charts, image-based tables) missed by text extraction."""
+    key = os.environ.get("GEMINI_API_KEY", "")
+    if not key:
+        return []
+    already = json.dumps(sorted(existing_names))
+    user_parts = [
+        {"inline_data": {"mime_type": "image/png", "data": image_b64}},
+        {"text": (
+            "This PDF page was already processed with text extraction. "
+            f"Fields already extracted: {already}. "
+            "Now look ONLY at visual elements — embedded images, graphical timelines, "
+            "image-based tables, charts, or any section whose content is rendered as a graphic "
+            "rather than selectable text. "
+            "Extract the content of each such visual section. "
+            'Return JSON: {"fields": [{"name": "<snake_case>", "label": "<Section Name as it appears>", '
+            '"value": "<full extracted content>", "confidence": <0.0-1.0>}]}. '
+            "Return an empty fields list if no visual-only content is found. "
+            "Do NOT re-extract fields already listed above."
+        )},
+    ]
+    try:
+        import httpx
+        url = ("https://generativelanguage.googleapis.com/v1beta/models"
+               "/gemini-2.0-flash:generateContent")
+        with httpx.Client(timeout=90) as client:
+            r = client.post(url, params={"key": key},
+                            json={"contents": [{"role": "user", "parts": user_parts}]})
+            r.raise_for_status()
+            raw = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+        data = _parse_json(raw)
+        return _normalize_fields(data.get("fields", []), {})
+    except Exception as exc:
+        logger.warning("Visual section extraction failed: %s", exc)
+        return []
+
+
 def extract_fields_from_image(image_b64: str, doc_type: str, schema_fields: list[dict]) -> list[dict]:
     """Extract fields from a scanned/image document using Gemini Vision."""
     key = os.environ.get("GEMINI_API_KEY", "")
