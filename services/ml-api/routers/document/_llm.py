@@ -159,48 +159,75 @@ def _visual_prompt(already: str, missing: str) -> str:
     )
 
 
-def extract_visual_sections(page_images: list[str], existing_names: set[str], missing_names: set[str] | None = None) -> list[dict]:
-    """Extract visual content (timelines, charts, image tables) using Gemini Vision.
-    Sends pages one at a time to avoid size limits, merges results."""
+def _groq_vision_page(b64: str, prompt: str) -> list[dict]:
+    """Extract fields from one page image using Groq vision (llama-3.2-11b-vision)."""
+    key = os.environ.get("GROQ_API_KEY", "")
+    if not key:
+        return []
+    try:
+        import httpx
+        messages = [{"role": "user", "content": [
+            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
+            {"type": "text", "text": prompt},
+        ]}]
+        with httpx.Client(timeout=60) as client:
+            r = client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {key}"},
+                json={"model": "llama-3.2-11b-vision-preview", "messages": messages,
+                      "max_tokens": 2000},
+            )
+            r.raise_for_status()
+            raw = r.json()["choices"][0]["message"]["content"]
+            return _normalize_fields(_parse_json(raw).get("fields", []), {})
+    except Exception as exc:
+        logger.warning("Groq vision page failed: %s", exc)
+        return []
+
+
+def _gemini_vision_page(b64: str, prompt: str) -> list[dict]:
+    """Extract fields from one page image using Gemini Vision (fallback)."""
     key = os.environ.get("GEMINI_API_KEY", "")
-    if not key or not page_images:
+    if not key:
+        return []
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+    parts = [
+        {"inline_data": {"mime_type": "image/png", "data": b64}},
+        {"text": prompt},
+    ]
+    try:
+        import httpx
+        with httpx.Client(timeout=90) as client:
+            for attempt in range(2):
+                r = client.post(url, params={"key": key},
+                                json={"contents": [{"role": "user", "parts": parts}]})
+                if r.status_code == 429:
+                    time.sleep(5 * (attempt + 1))
+                    continue
+                r.raise_for_status()
+                raw = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+                return _normalize_fields(_parse_json(raw).get("fields", []), {})
+    except Exception as exc:
+        logger.warning("Gemini vision page failed: %s", exc)
+    return []
+
+
+def extract_visual_sections(page_images: list[str], existing_names: set[str], missing_names: set[str] | None = None) -> list[dict]:
+    """Extract visual content using Groq Vision (primary) → Gemini Vision (fallback)."""
+    if not page_images:
         return []
     already = json.dumps(sorted(existing_names))
     missing = json.dumps(sorted(missing_names or []))
     prompt = _visual_prompt(already, missing)
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
     all_fields: list[dict] = []
     seen: set[str] = set()
-    try:
-        import httpx
-        with httpx.Client(timeout=90) as client:
-            for b64 in page_images[:4]:  # max 4 pages
-                parts = [
-                    {"inline_data": {"mime_type": "image/png", "data": b64}},
-                    {"text": prompt},
-                ]
-                for attempt in range(3):
-                    try:
-                        r = client.post(url, params={"key": key},
-                                        json={"contents": [{"role": "user", "parts": parts}]})
-                        if r.status_code == 429:
-                            wait = 5 * (attempt + 1)
-                            logger.warning("Gemini vision 429 — retrying in %ss", wait)
-                            time.sleep(wait)
-                            continue
-                        r.raise_for_status()
-                        raw = r.json()["candidates"][0]["content"]["parts"][0]["text"]
-                        for f in _normalize_fields(_parse_json(raw).get("fields", []), {}):
-                            if f["name"] not in seen:
-                                seen.add(f["name"])
-                                all_fields.append(f)
-                        break
-                    except Exception as exc:
-                        logger.warning("Gemini vision page failed: %s", exc)
-                        break
-                time.sleep(4)  # 15 RPM limit = 4s between requests
-    except Exception as exc:
-        logger.warning("Visual extraction failed: %s", exc)
+    for b64 in page_images[:4]:
+        fields = _groq_vision_page(b64, prompt) or _gemini_vision_page(b64, prompt)
+        for f in fields:
+            if f["name"] not in seen:
+                seen.add(f["name"])
+                all_fields.append(f)
+        time.sleep(1)
     return all_fields
 
 
