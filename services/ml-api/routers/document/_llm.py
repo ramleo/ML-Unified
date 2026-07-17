@@ -155,17 +155,19 @@ def extract_visual_sections(page_images: list[str], existing_names: set[str]) ->
     for b64 in page_images:
         user_parts.append({"inline_data": {"mime_type": "image/png", "data": b64}})
     user_parts.append({"text": (
-        f"These are {len(page_images)} rendered page(s) from a PDF. "
-        "The PDF was already processed with text extraction. "
-        f"Fields already extracted: {already}. "
-        "Scan ALL pages above and look for visual elements — embedded image sections, "
-        "graphical timelines, image-based tables, charts, or any section rendered as a "
-        "graphic rather than selectable text (e.g. a CAREER TIMELINE laid out as a visual). "
-        "Extract the full content of each such visual section across all pages. "
+        f"These are {len(page_images)} rendered page(s) from a PDF document. "
+        f"Fields already captured from text extraction: {already}. "
+        "Carefully read ALL pages above and extract every section or piece of structured "
+        "information you can see — including but not limited to: career timeline, work history, "
+        "employment history, experience entries, projects, certifications, soft skills, "
+        "hobbies, references, publications, training, languages, and any other section "
+        "present in the document. Pay special attention to visually-laid-out sections like "
+        "timelines or charts which may not have been captured by text extraction. "
+        "For career timelines, list each role with company, title, and dates. "
         'Return JSON: {"fields": [{"name": "<snake_case>", "label": "<Section Name>", '
-        '"value": "<full extracted content>", "confidence": <0.0-1.0>}]}. '
-        "Return empty fields list only if truly no visual-only content exists. "
-        "Do NOT re-extract fields already listed above."
+        '"value": "<full content as descriptive text>", "confidence": <0.0-1.0>}]}. '
+        "Only skip a field if it was already extracted AND has the same content. "
+        "Never return an empty fields list unless the document is truly blank."
     )})
     try:
         import httpx

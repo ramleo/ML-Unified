@@ -62,6 +62,8 @@ DOC_TYPES: dict[str, dict] = {
             {"name": "projects",          "label": "Projects",               "field_type": "text"},
             {"name": "certifications",    "label": "Certifications",         "field_type": "text"},
             {"name": "achievements",      "label": "Achievements / Awards",  "field_type": "text"},
+            {"name": "soft_skills",       "label": "Soft Skills",            "field_type": "text"},
+            {"name": "career_timeline",   "label": "Career Timeline",        "field_type": "text"},
             {"name": "languages",         "label": "Languages",              "field_type": "text"},
         ],
     },
