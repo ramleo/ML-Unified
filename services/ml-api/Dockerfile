@@ -9,6 +9,11 @@ RUN apt-get update \
 
 RUN adduser --disabled-password --gecos "" appuser
 
+# Layer 1: heavy packages (torch, transformers, ML libs) — cached unless requirements-base.txt changes
+COPY requirements-base.txt .
+RUN pip install --no-cache-dir -r requirements-base.txt
+
+# Layer 2: lightweight / frequently-changing packages — only this layer rebuilds when adding new tools
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
