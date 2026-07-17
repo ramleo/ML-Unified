@@ -136,7 +136,7 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
         f'Then append ANY additional sections, headers, or structured data you find in the document '
         f'that are not in the predefined list — use the section heading as the label and a snake_case version as the name. '
         f'Do not skip any section that has meaningful content.\n\n'
-        f"Document text:\n{text[:4000]}"
+        f"Document text:\n{text[:10000]}"
     )
     raw = _cascade([{"role": "user", "content": prompt}], system)
     data = _parse_json(raw)

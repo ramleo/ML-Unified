@@ -119,7 +119,7 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str) -> Async
         "doc_type_label": DOC_TYPES[doc_type]["label"],
         "processing_mode": processing_mode,
         "pages": pages,
-        "page_image": page_images[0] if page_images else None,
+        "page_images": page_images,
         "field_count": len(fields),
         "classification_confidence": round(class_confidence, 3),
     })
