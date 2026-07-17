@@ -4,7 +4,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from typing import AsyncGenerator
+
+_executor = ThreadPoolExecutor(max_workers=2)
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -73,25 +76,33 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str) -> Async
     fields: list[dict] = []
 
     try:
+        loop = asyncio.get_event_loop()
         if text.strip():
-            fields = extract_fields_from_text(text, doc_type, schema_fields)
-            # Supplement with Gemini Vision for any visual-only content (embedded
-            # timelines, image-based tables, charts) that text extraction misses
+            fields = await loop.run_in_executor(
+                _executor, lambda: extract_fields_from_text(text, doc_type, schema_fields)
+            )
             if page_images:
-                existing_names = {f["name"] for f in fields if f.get("value")}
-                visual_fields = extract_visual_sections(page_images, existing_names)
-                # Merge: add visual fields not already captured by text extraction
+                schema_names = {f["name"] for f in schema_fields}
+                found_names = {f["name"] for f in fields if f.get("value")}
+                missing_names = schema_names - found_names
+                yield _sse({"step": "analyze", "label": "Analyzing visual content", "status": "running"})
+                visual_fields = await loop.run_in_executor(
+                    _executor,
+                    lambda: extract_visual_sections(page_images, found_names, missing_names),
+                )
                 existing_all = {f["name"] for f in fields}
                 for vf in visual_fields:
                     if vf["name"] not in existing_all:
                         fields.append(vf)
                     else:
-                        # Override if text extraction returned empty for this field
                         for f in fields:
                             if f["name"] == vf["name"] and not f.get("value"):
                                 f.update(vf)
         elif page_images:
-            fields = extract_fields_from_image(page_images[0], doc_type, schema_fields)
+            fields = await loop.run_in_executor(
+                _executor,
+                lambda: extract_fields_from_image(page_images[0], doc_type, schema_fields),
+            )
     except Exception as exc:
         logger.error("Field extraction failed: %s", exc)
 

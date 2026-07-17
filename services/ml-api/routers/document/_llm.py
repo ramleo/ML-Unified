@@ -143,30 +143,30 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
     return _normalize_fields(data.get("fields", []), field_meta)
 
 
-def _visual_prompt(n_pages: int, already: str) -> str:
+def _visual_prompt(already: str, missing: str) -> str:
     return (
-        f"These are {n_pages} rendered page(s) from a PDF document. "
-        f"Fields already captured from text extraction: {already}. "
-        "Read ALL pages and extract every section or structured piece of information — "
-        "including career timeline, work history, employment history, soft skills, "
-        "projects, certifications, languages, achievements, and any other section. "
-        "Pay special attention to visually-laid-out sections like timelines or pie charts "
-        "which may not appear in plain text. For career timelines, list each role with "
-        "company name, job title, and date range. "
+        "This is a rendered page from a PDF document. "
+        f"Fields ALREADY extracted from text (skip these): {already}. "
+        f"PRIORITY: find these MISSING fields which may be in visual/image format: {missing}. "
+        "Also extract any other visual section not in the already-extracted list. "
+        "Pay special attention to: career timelines (bars/charts showing job history), "
+        "soft skills (pie charts, icons, ratings), work experience tables, certifications. "
+        "For career timelines: list each role with company, title, and dates. "
         'Return JSON only: {"fields": [{"name": "<snake_case>", "label": "<Section Name>", '
-        '"value": "<full content>", "confidence": <0.0-1.0>}]}. '
-        "Never return an empty fields list unless the document is truly blank."
+        '"value": "<full content as a string>", "confidence": <0.0-1.0>}]}. '
+        "If a visual section has content, include it — never return empty value for a section you can see."
     )
 
 
-def extract_visual_sections(page_images: list[str], existing_names: set[str]) -> list[dict]:
+def extract_visual_sections(page_images: list[str], existing_names: set[str], missing_names: set[str] | None = None) -> list[dict]:
     """Extract visual content (timelines, charts, image tables) using Gemini Vision.
     Sends pages one at a time to avoid size limits, merges results."""
     key = os.environ.get("GEMINI_API_KEY", "")
     if not key or not page_images:
         return []
     already = json.dumps(sorted(existing_names))
-    prompt = _visual_prompt(1, already)
+    missing = json.dumps(sorted(missing_names or []))
+    prompt = _visual_prompt(already, missing)
     url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
     all_fields: list[dict] = []
     seen: set[str] = set()
@@ -233,6 +233,8 @@ def extract_fields_from_image(image_b64: str, doc_type: str, schema_fields: list
     return _normalize_fields(data.get("fields", []), field_meta, allow_bbox=True)
 
 
+_NULL_VALUES = {"null", "none", "n/a", "na", "not found", "not available", "unknown", "-", "–", ""}
+
 def _normalize_fields(raw_fields: list[dict], field_meta: dict, allow_bbox: bool = False) -> list[dict]:
     result = []
     seen = set()
@@ -240,6 +242,8 @@ def _normalize_fields(raw_fields: list[dict], field_meta: dict, allow_bbox: bool
         name = f.get("name", "").strip()
         value = f.get("value")
         if not name or value is None or name in seen:
+            continue
+        if str(value).strip().lower() in _NULL_VALUES:
             continue
         seen.add(name)
         meta = field_meta.get(name)
