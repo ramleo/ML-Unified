@@ -143,33 +143,35 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
     return _normalize_fields(data.get("fields", []), field_meta)
 
 
-def extract_visual_sections(image_b64: str, existing_names: set[str]) -> list[dict]:
-    """Send a rendered page image to Gemini to extract visual-only content
+def extract_visual_sections(page_images: list[str], existing_names: set[str]) -> list[dict]:
+    """Send all rendered page images to Gemini to extract visual-only content
     (embedded timelines, charts, image-based tables) missed by text extraction."""
     key = os.environ.get("GEMINI_API_KEY", "")
-    if not key:
+    if not key or not page_images:
         return []
     already = json.dumps(sorted(existing_names))
-    user_parts = [
-        {"inline_data": {"mime_type": "image/png", "data": image_b64}},
-        {"text": (
-            "This PDF page was already processed with text extraction. "
-            f"Fields already extracted: {already}. "
-            "Now look ONLY at visual elements — embedded images, graphical timelines, "
-            "image-based tables, charts, or any section whose content is rendered as a graphic "
-            "rather than selectable text. "
-            "Extract the content of each such visual section. "
-            'Return JSON: {"fields": [{"name": "<snake_case>", "label": "<Section Name as it appears>", '
-            '"value": "<full extracted content>", "confidence": <0.0-1.0>}]}. '
-            "Return an empty fields list if no visual-only content is found. "
-            "Do NOT re-extract fields already listed above."
-        )},
-    ]
+    # Build parts: one inline_data per page, then the instruction
+    user_parts: list[dict] = []
+    for b64 in page_images:
+        user_parts.append({"inline_data": {"mime_type": "image/png", "data": b64}})
+    user_parts.append({"text": (
+        f"These are {len(page_images)} rendered page(s) from a PDF. "
+        "The PDF was already processed with text extraction. "
+        f"Fields already extracted: {already}. "
+        "Scan ALL pages above and look for visual elements — embedded image sections, "
+        "graphical timelines, image-based tables, charts, or any section rendered as a "
+        "graphic rather than selectable text (e.g. a CAREER TIMELINE laid out as a visual). "
+        "Extract the full content of each such visual section across all pages. "
+        'Return JSON: {"fields": [{"name": "<snake_case>", "label": "<Section Name>", '
+        '"value": "<full extracted content>", "confidence": <0.0-1.0>}]}. '
+        "Return empty fields list only if truly no visual-only content exists. "
+        "Do NOT re-extract fields already listed above."
+    )})
     try:
         import httpx
         url = ("https://generativelanguage.googleapis.com/v1beta/models"
                "/gemini-2.0-flash:generateContent")
-        with httpx.Client(timeout=90) as client:
+        with httpx.Client(timeout=120) as client:
             r = client.post(url, params={"key": key},
                             json={"contents": [{"role": "user", "parts": user_parts}]})
             r.raise_for_status()

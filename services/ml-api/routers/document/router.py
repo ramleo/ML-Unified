@@ -79,7 +79,7 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str) -> Async
             # timelines, image-based tables, charts) that text extraction misses
             if page_images:
                 existing_names = {f["name"] for f in fields if f.get("value")}
-                visual_fields = extract_visual_sections(page_images[0], existing_names)
+                visual_fields = extract_visual_sections(page_images, existing_names)
                 # Merge: add visual fields not already captured by text extraction
                 existing_all = {f["name"] for f in fields}
                 for vf in visual_fields:

@@ -73,7 +73,7 @@ def _extract_image(file_bytes: bytes) -> dict[str, Any]:
         return {"text": "", "page_images": [], "processing_mode": "error", "pages": 0}
 
 
-def _render_pages(doc, max_pages: int = 2) -> list[str]:
+def _render_pages(doc, max_pages: int = 5) -> list[str]:
     """Render first N pages of an open fitz.Document to base64 PNG strings."""
     images: list[str] = []
     try:
