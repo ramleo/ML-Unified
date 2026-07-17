@@ -143,46 +143,75 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
     return _normalize_fields(data.get("fields", []), field_meta)
 
 
-def extract_visual_sections(page_images: list[str], existing_names: set[str]) -> list[dict]:
-    """Send all rendered page images to Gemini to extract visual-only content
-    (embedded timelines, charts, image-based tables) missed by text extraction."""
-    key = os.environ.get("GEMINI_API_KEY", "")
-    if not key or not page_images:
-        return []
-    already = json.dumps(sorted(existing_names))
-    # Build parts: one inline_data per page, then the instruction
-    user_parts: list[dict] = []
-    for b64 in page_images:
-        user_parts.append({"inline_data": {"mime_type": "image/png", "data": b64}})
-    user_parts.append({"text": (
-        f"These are {len(page_images)} rendered page(s) from a PDF document. "
+def _visual_prompt(n_pages: int, already: str) -> str:
+    return (
+        f"These are {n_pages} rendered page(s) from a PDF document. "
         f"Fields already captured from text extraction: {already}. "
-        "Carefully read ALL pages above and extract every section or piece of structured "
-        "information you can see — including but not limited to: career timeline, work history, "
-        "employment history, experience entries, projects, certifications, soft skills, "
-        "hobbies, references, publications, training, languages, and any other section "
-        "present in the document. Pay special attention to visually-laid-out sections like "
-        "timelines or charts which may not have been captured by text extraction. "
-        "For career timelines, list each role with company, title, and dates. "
-        'Return JSON: {"fields": [{"name": "<snake_case>", "label": "<Section Name>", '
-        '"value": "<full content as descriptive text>", "confidence": <0.0-1.0>}]}. '
-        "Only skip a field if it was already extracted AND has the same content. "
+        "Read ALL pages and extract every section or structured piece of information — "
+        "including career timeline, work history, employment history, soft skills, "
+        "projects, certifications, languages, achievements, and any other section. "
+        "Pay special attention to visually-laid-out sections like timelines or pie charts "
+        "which may not appear in plain text. For career timelines, list each role with "
+        "company name, job title, and date range. "
+        'Return JSON only: {"fields": [{"name": "<snake_case>", "label": "<Section Name>", '
+        '"value": "<full content>", "confidence": <0.0-1.0>}]}. '
         "Never return an empty fields list unless the document is truly blank."
-    )})
+    )
+
+
+def _visual_anthropic(page_images: list[str], prompt: str) -> str:
+    key = os.environ.get("ANTHROPIC_API_KEY", "")
+    if not key:
+        return ""
+    try:
+        import anthropic
+        content: list[dict] = []
+        for b64 in page_images:
+            content.append({"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": b64}})
+        content.append({"type": "text", "text": prompt})
+        client = anthropic.Anthropic(api_key=key)
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": content}],
+        )
+        return msg.content[0].text if msg.content else ""
+    except Exception as exc:
+        logger.warning("Anthropic vision failed: %s", exc)
+        return ""
+
+
+def _visual_gemini(page_images: list[str], prompt: str) -> str:
+    key = os.environ.get("GEMINI_API_KEY", "")
+    if not key:
+        return ""
     try:
         import httpx
-        url = ("https://generativelanguage.googleapis.com/v1beta/models"
-               "/gemini-2.0-flash:generateContent")
+        parts: list[dict] = [{"inline_data": {"mime_type": "image/png", "data": b64}} for b64 in page_images]
+        parts.append({"text": prompt})
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
         with httpx.Client(timeout=120) as client:
-            r = client.post(url, params={"key": key},
-                            json={"contents": [{"role": "user", "parts": user_parts}]})
+            r = client.post(url, params={"key": key}, json={"contents": [{"role": "user", "parts": parts}]})
             r.raise_for_status()
-            raw = r.json()["candidates"][0]["content"]["parts"][0]["text"]
-        data = _parse_json(raw)
-        return _normalize_fields(data.get("fields", []), {})
+            return r.json()["candidates"][0]["content"]["parts"][0]["text"]
     except Exception as exc:
-        logger.warning("Visual section extraction failed: %s", exc)
+        logger.warning("Gemini vision failed: %s", exc)
+        return ""
+
+
+def extract_visual_sections(page_images: list[str], existing_names: set[str]) -> list[dict]:
+    """Extract visual-only content (timelines, charts, image tables) from all page images.
+    Tries Anthropic Claude vision first, falls back to Gemini."""
+    if not page_images:
         return []
+    already = json.dumps(sorted(existing_names))
+    prompt = _visual_prompt(len(page_images), already)
+    raw = _visual_anthropic(page_images, prompt) or _visual_gemini(page_images, prompt)
+    if not raw:
+        logger.warning("No vision provider available for visual extraction")
+        return []
+    data = _parse_json(raw)
+    return _normalize_fields(data.get("fields", []), {})
 
 
 def extract_fields_from_image(image_b64: str, doc_type: str, schema_fields: list[dict]) -> list[dict]:
