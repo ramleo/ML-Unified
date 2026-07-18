@@ -119,125 +119,135 @@ def extract_tables_markdown(file_bytes: bytes, max_pages: int = 5) -> str:
         return ""
 
 
-def search_bbox_in_doc(file_bytes: bytes, value: str, page_idx: int = 0) -> list[float] | None:
-    """
-    Search for `value` text in a PDF page and return normalized
-    [left, top, width, height] in [0, 1] range, or None if not found.
+def _tier4_keep(s: str) -> bool:
+    """Keep a JSON value string as a Tier4 search candidate.
+    Only exclude very short plain integers (qty like 2, 10, 100) — they match
+    too many places and add no positional value. Everything else is kept:
+    formatted amounts ($25.00) anchor the right side of the table, and long
+    digit strings (account numbers, IDs) anchor their own location."""
+    if len(s) < 3:
+        return False
+    core = s.lstrip("-$€£¥").replace(",", "").replace(".", "")
+    return not (core.isdigit() and len(s) <= 4)
 
-    Strategy:
-    - JSON array (line items)  → layout-aware table detection via find_tables()
-    - JSON object              → union bbox of all string values extracted from JSON
-    - Scalar                   → tiered substring search (full → chunks → words)
-    """
+
+def build_bbox_candidates(value: str) -> tuple[bool, list[str], list[str]]:
+    """Split a field value into (is_array, tier4_json_values, scalar_candidates)."""
     import re
     import json as _json
 
     val = str(value).strip()
+    stripped = val
+    tier4: list[str] = []
+    if stripped[:1] in ("{", "["):
+        try:
+            parsed = _json.loads(stripped)
+            items = parsed if isinstance(parsed, list) else [parsed]
+            for item in items:
+                if isinstance(item, dict):
+                    for v in item.values():
+                        s = str(v).strip()
+                        if _tier4_keep(s):
+                            tier4.append(s)
+        except Exception:
+            pass
+
+    chunks = re.split(r"[,|;\n]+", val)
+    tier2 = sorted((c.strip() for c in chunks if len(c.strip()) >= 3), key=len, reverse=True)
+    tier3: list[str] = []
+    tier5: list[str] = []
+    for chunk in chunks:
+        words = re.split(r"\s+", re.sub(r"[^\w\s$]", " ", chunk.strip()))
+        words = [w for w in words if w]
+        if len(words) >= 2:
+            tier3.append(" ".join(words[:2]))
+        if len(words) >= 3:
+            tier3.append(" ".join(words[:3]))
+        for w in words:
+            if len(w) >= 4:
+                tier5.append(w)
+    scalar_candidates = [val[:80]] + tier2 + tier3 + tier5
+    seen: set[str] = set()
+    scalar_candidates = [c for c in scalar_candidates if not (c in seen or seen.add(c))]  # type: ignore[func-returns-value]
+    return stripped[:1] == "[", tier4, scalar_candidates
+
+
+def _norm_box(page, x0, y0, x1, y1) -> list[float]:
+    w, h = page.rect.width, page.rect.height
+    return [round(x0 / w, 4), round(y0 / h, 4),
+            round((x1 - x0) / w, 4), round((y1 - y0) / h, 4)]
+
+
+def _table_bbox(page) -> list[float] | None:
+    """Largest detected table on the page, if it spans ≥ 15% of page width.
+    find_tables() works well for bordered PDFs; borderless text-aligned tables
+    may return a uselessly narrow bbox — reject those."""
+    try:
+        tables = list(page.find_tables())
+        if tables:
+            best = max(tables, key=lambda t: sum(len(r) for r in (t.extract() or [])))
+            r = best.bbox
+            if page.rect.width > 0 and (r.x1 - r.x0) / page.rect.width >= 0.15:
+                return _norm_box(page, r.x0, r.y0, r.x1, r.y1)
+    except Exception as exc:
+        logger.debug("find_tables failed: %s", exc)
+    return None
+
+
+def search_bbox_in_doc(file_bytes: bytes, value: str,
+                       max_pages: int = 5) -> tuple[list[float], int] | None:
+    """
+    Search for `value` across PDF pages. Returns (normalized bbox, 1-based page
+    number), or None.
+
+    Strategy:
+    - JSON object/array → the page with the most string-value hits wins; union
+      bbox of the hits (arrays additionally prefer that page's detected table)
+    - Scalar → tiered candidates (full → chunks → words); each candidate is
+      tried across ALL pages before falling to a weaker candidate, so a strong
+      match on page 3 beats a single-word match on page 1.
+    """
+    val = str(value).strip()
     if not val or len(val) < 3:
         return None
-
-    stripped = val.strip()
-
-    def _tier4_keep(s: str) -> bool:
-        """Keep a JSON value string as a Tier4 search candidate.
-        Only exclude very short plain integers (qty like 2, 10, 100) — they match
-        too many places and add no positional value. Everything else is kept:
-        formatted amounts ($25.00) anchor the right side of the table, and long
-        digit strings (account numbers, IDs) anchor their own location."""
-        if len(s) < 3:
-            return False
-        core = s.lstrip("-$€£¥").replace(",", "").replace(".", "")
-        # Short plain integer (qty, small count) → skip; everything else → keep
-        return not (core.isdigit() and len(s) <= 4)
+    is_array, tier4, scalar_candidates = build_bbox_candidates(val)
 
     try:
         import fitz
         doc = fitz.open(stream=file_bytes, filetype="pdf")
-        if page_idx >= len(doc):
+        try:
+            n = min(max_pages, len(doc))
+
+            # JSON values: pick the page where most of the values appear
+            if tier4:
+                best_idx, best_rects = -1, []
+                for pi in range(n):
+                    rects = []
+                    for t in tier4:
+                        rects.extend(doc[pi].search_for(t))
+                    if len(rects) > len(best_rects):
+                        best_idx, best_rects = pi, rects
+                if best_rects:
+                    page = doc[best_idx]
+                    if is_array:
+                        tb = _table_bbox(page)
+                        if tb:
+                            return tb, best_idx + 1
+                    return _norm_box(
+                        page,
+                        min(r.x0 for r in best_rects), min(r.y0 for r in best_rects),
+                        max(r.x1 for r in best_rects), max(r.y1 for r in best_rects),
+                    ), best_idx + 1
+
+            # Scalar: strongest candidate across all pages first
+            for candidate in scalar_candidates:
+                for pi in range(n):
+                    rects = doc[pi].search_for(candidate)
+                    if rects:
+                        r = rects[0]
+                        return _norm_box(doc[pi], r.x0, r.y0, r.x1, r.y1), pi + 1
+        finally:
             doc.close()
-            return None
-        page = doc[page_idx]
-        rect_w, rect_h = page.rect.width, page.rect.height
-
-        def _norm(r: object) -> list[float]:
-            return [round(r.x0 / rect_w, 4), round(r.y0 / rect_h, 4),  # type: ignore[attr-defined]
-                    round((r.x1 - r.x0) / rect_w, 4), round((r.y1 - r.y0) / rect_h, 4)]  # type: ignore[attr-defined]
-
-        # ── JSON array → layout-aware table detection ─────────────────────────
-        # find_tables() works well for PDFs with visible borders; for borderless
-        # text-aligned tables it may return a narrow bbox — validate width > 15%
-        # of page before trusting it, otherwise fall through to Tier 4.
-        if stripped[0] == "[":
-            try:
-                tables = list(page.find_tables())
-                if tables:
-                    best = max(tables, key=lambda t: sum(len(r) for r in (t.extract() or [])))
-                    r = best.bbox
-                    rel_width = (r.x1 - r.x0) / rect_w if rect_w > 0 else 0
-                    if rel_width >= 0.15:
-                        doc.close()
-                        return [round(r.x0 / rect_w, 4), round(r.y0 / rect_h, 4),
-                                round((r.x1 - r.x0) / rect_w, 4), round((r.y1 - r.y0) / rect_h, 4)]
-                    logger.debug("find_tables bbox too narrow (%.1f%%), falling back", rel_width * 100)
-            except Exception as exc:
-                logger.debug("find_tables for array field failed: %s", exc)
-            # Fall through to Tier 4 value-search if table detection fails
-
-        # ── Tier 4: JSON object/array → union bbox of all string values ───────
-        tier4: list[str] = []
-        if stripped[0] in ("{", "["):
-            try:
-                parsed = _json.loads(stripped)
-                items = parsed if isinstance(parsed, list) else [parsed]
-                for item in items:
-                    if isinstance(item, dict):
-                        for v in item.values():
-                            s = str(v).strip()
-                            if _tier4_keep(s):
-                                tier4.append(s)
-            except Exception:
-                pass
-
-        # ── Scalar candidate tiers ─────────────────────────────────────────────
-        chunks = re.split(r"[,|;\n]+", val)
-        tier2 = sorted((c.strip() for c in chunks if len(c.strip()) >= 3), key=len, reverse=True)
-        tier3: list[str] = []
-        tier5: list[str] = []
-        for chunk in chunks:
-            words = re.split(r"\s+", re.sub(r"[^\w\s$]", " ", chunk.strip()))
-            words = [w for w in words if w]
-            if len(words) >= 2:
-                tier3.append(" ".join(words[:2]))
-            if len(words) >= 3:
-                tier3.append(" ".join(words[:3]))
-            for w in words:
-                if len(w) >= 4:
-                    tier5.append(w)
-        scalar_candidates = [val[:80]] + tier2 + tier3 + tier5
-        seen: set[str] = set()
-        scalar_candidates = [c for c in scalar_candidates if not (c in seen or seen.add(c))]  # type: ignore[func-returns-value]
-
-        # Union bbox of all Tier 4 matches
-        if tier4:
-            all_rects = []
-            for t in tier4:
-                all_rects.extend(page.search_for(t))
-            if all_rects:
-                x0 = min(r.x0 for r in all_rects)
-                y0 = min(r.y0 for r in all_rects)
-                x1 = max(r.x1 for r in all_rects)
-                y1 = max(r.y1 for r in all_rects)
-                doc.close()
-                return [round(x0 / rect_w, 4), round(y0 / rect_h, 4),
-                        round((x1 - x0) / rect_w, 4), round((y1 - y0) / rect_h, 4)]
-
-        # Scalar: first match wins
-        for candidate in scalar_candidates:
-            rects = page.search_for(candidate)
-            if rects and rect_w > 0 and rect_h > 0:
-                doc.close()
-                return _norm(rects[0])
-        doc.close()
     except Exception as exc:
         logger.debug("bbox search failed for '%s': %s", val[:30], exc)
     return None

@@ -15,7 +15,8 @@ from fastapi.responses import StreamingResponse
 from ._schema import DOC_TYPES
 from ._extract import extract_document, search_bbox_in_doc, extract_tables_markdown
 from ._llm import classify_document, extract_fields_from_text
-from ._vision import extract_fields_from_image, extract_visual_sections, mistral_ocr_pages
+from ._vision import (extract_fields_from_image, extract_visual_sections,
+                      locate_fields_from_ocr, mistral_ocr_pages)
 from ._validate import validate_and_correct
 
 router = APIRouter(prefix="/document", tags=["document"])
@@ -55,9 +56,11 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
 
     # OCR-first for scanned/image docs: convert pages to markdown so classify
     # and extraction use the same high-quality text path as digital PDFs.
+    # ocr_meta keeps per-block pixel bboxes for field location later.
+    ocr_meta: list[dict] = []
     if not text.strip() and page_images:
         loop = asyncio.get_event_loop()
-        ocr_md = await loop.run_in_executor(
+        ocr_md, ocr_meta = await loop.run_in_executor(
             _executor, lambda: mistral_ocr_pages(page_images)
         )
         if ocr_md.strip():
@@ -163,7 +166,11 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
     if processing_mode == "digital" and is_pdf:
         for field in fields:
             if field.get("value") and field.get("bbox") is None:
-                field["bbox"] = search_bbox_in_doc(file_bytes, field["value"])
+                found = search_bbox_in_doc(file_bytes, field["value"])
+                if found:
+                    field["bbox"], field["page"] = found
+    elif ocr_meta:
+        locate_fields_from_ocr(fields, ocr_meta)
 
     yield _sse({"step": "validate", "status": "done"})
 
