@@ -138,14 +138,17 @@ def search_bbox_in_doc(file_bytes: bytes, value: str, page_idx: int = 0) -> list
 
     stripped = val.strip()
 
-    def _is_numeric_noise(s: str) -> bool:
-        """True for formatted amounts/prices and very short digit strings.
-        Pure long-digit strings (account numbers, IDs) return False so they ARE searched."""
-        core = s.lstrip("-$€£¥").replace(",", "")
-        if not core.replace(".", "").isdigit():
-            return False  # non-numeric chars present → not a number
-        # Formatted number (has decimal or comma) or too short to be unique → noise
-        return "." in core or "," in s or len(s) <= 4
+    def _tier4_keep(s: str) -> bool:
+        """Keep a JSON value string as a Tier4 search candidate.
+        Only exclude very short plain integers (qty like 2, 10, 100) — they match
+        too many places and add no positional value. Everything else is kept:
+        formatted amounts ($25.00) anchor the right side of the table, and long
+        digit strings (account numbers, IDs) anchor their own location."""
+        if len(s) < 3:
+            return False
+        core = s.lstrip("-$€£¥").replace(",", "").replace(".", "")
+        # Short plain integer (qty, small count) → skip; everything else → keep
+        return not (core.isdigit() and len(s) <= 4)
 
     try:
         import fitz
@@ -190,7 +193,7 @@ def search_bbox_in_doc(file_bytes: bytes, value: str, page_idx: int = 0) -> list
                     if isinstance(item, dict):
                         for v in item.values():
                             s = str(v).strip()
-                            if len(s) >= 3 and not _is_numeric_noise(s):
+                            if _tier4_keep(s):
                                 tier4.append(s)
             except Exception:
                 pass
