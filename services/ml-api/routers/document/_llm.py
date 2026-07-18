@@ -26,7 +26,7 @@ def _groq(messages: list[dict], system: str) -> str:
         client = openai.OpenAI(api_key=key, base_url="https://api.groq.com/openai/v1")
         resp = client.chat.completions.create(
             model="llama-3.3-70b-versatile", messages=full, max_tokens=2000,
-            response_format={"type": "json_object"},
+            response_format={"type": "json_object"}, temperature=0,
         )
         return resp.choices[0].message.content or ""
     except Exception as exc:
@@ -52,7 +52,9 @@ def _gemini_text(messages: list[dict], system: str) -> str:
         url = ("https://generativelanguage.googleapis.com/v1beta/models"
                "/gemini-2.0-flash:generateContent")
         with httpx.Client(timeout=60) as client:
-            r = client.post(url, params={"key": key}, json={"contents": contents})
+            r = client.post(url, params={"key": key},
+                            json={"contents": contents,
+                                  "generationConfig": {"temperature": 0}})
             r.raise_for_status()
             return r.json()["candidates"][0]["content"]["parts"][0]["text"]
     except Exception as exc:
@@ -74,7 +76,7 @@ def _cohere(messages: list[dict], system: str) -> str:
             r = client.post(
                 "https://api.cohere.ai/v2/chat",
                 headers={"Authorization": f"Bearer {key}"},
-                json={"model": "command-r-plus", "messages": fmt},
+                json={"model": "command-r-plus", "messages": fmt, "temperature": 0},
             )
             r.raise_for_status()
             return r.json()["message"]["content"][0]["text"]
@@ -125,8 +127,9 @@ def classify_document(text_sample: str, known_types: list[str]) -> tuple[str, fl
     return doc_type, max(0.0, min(1.0, confidence))
 
 
-def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]) -> list[dict]:
-    """Extract fields from document text using the LLM cascade."""
+def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict],
+                             provider: str = "auto") -> list[dict]:
+    """Extract fields from document text using the LLM cascade (or a forced provider)."""
     field_names = [f["name"] for f in schema_fields]
     field_meta = {f["name"]: f for f in schema_fields}
     system = "You are a document data extraction expert. Respond only with valid JSON."
@@ -139,7 +142,11 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
         f'Do not skip any section that has meaningful content.\n\n'
         f"Document text:\n{text[:14000]}"
     )
-    raw = _cascade([{"role": "user", "content": prompt}], system)
+    _provider_map = {"groq": _groq, "gemini": _gemini_text, "cohere": _cohere}
+    fn = _provider_map.get(provider)
+    raw = fn([{"role": "user", "content": prompt}], system) if fn else _cascade(
+        [{"role": "user", "content": prompt}], system
+    )
     data = _parse_json(raw)
     return _normalize_fields(data.get("fields", []), field_meta)
 

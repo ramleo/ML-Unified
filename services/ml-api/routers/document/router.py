@@ -27,7 +27,8 @@ def _sse(data: dict) -> str:
     return f"data: {json.dumps(data)}\n\n"
 
 
-async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str) -> AsyncGenerator[str, None]:
+async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
+                  provider: str = "auto") -> AsyncGenerator[str, None]:
     known_types = list(DOC_TYPES.keys())
 
     # ── Step 1: Extract ───────────────────────────────────────────────────────
@@ -87,7 +88,7 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str) -> Async
         loop = asyncio.get_event_loop()
         if text.strip():
             fields = await loop.run_in_executor(
-                _executor, lambda: extract_fields_from_text(text, doc_type, schema_fields)
+                _executor, lambda: extract_fields_from_text(text, doc_type, schema_fields, provider)
             )
             if page_images:
                 schema_names = {f["name"] for f in schema_fields}
@@ -159,8 +160,11 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str) -> Async
 async def analyze_document(
     file: UploadFile = File(...),
     doc_type: str = Form(default="auto"),
+    provider: str = Form(default="auto"),
 ):
-    """Analyze a document and stream extracted fields as SSE events."""
+    """Analyze a document and stream extracted fields as SSE events.
+    provider: "auto" (cascade) | "groq" | "gemini" | "cohere"
+    """
     file_bytes = await file.read()
     if len(file_bytes) > MAX_FILE_BYTES:
         raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
@@ -168,7 +172,7 @@ async def analyze_document(
         raise HTTPException(status_code=400, detail="Empty file")
 
     return StreamingResponse(
-        _stream(file_bytes, file.filename or "document", doc_type),
+        _stream(file_bytes, file.filename or "document", doc_type, provider),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
