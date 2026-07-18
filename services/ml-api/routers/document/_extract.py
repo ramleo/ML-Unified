@@ -132,12 +132,20 @@ def search_bbox_in_doc(file_bytes: bytes, value: str, page_idx: int = 0) -> list
     if not val or len(val) < 3:
         return None
 
-    # Build candidate strings: full value first, then split by common delimiters
+    # Tier 1: full value
+    # Tier 2: delimiter-split chunks (longest first)
+    # Tier 3: first 2-3 alphanumeric words of each chunk (catches reformatted line items)
     chunks = re.split(r"[,|;\n]+", val)
-    candidates = [val[:80]] + sorted(
-        (c.strip() for c in chunks if len(c.strip()) >= 3),
-        key=len, reverse=True,
-    )
+    tier2 = sorted((c.strip() for c in chunks if len(c.strip()) >= 3), key=len, reverse=True)
+    tier3: list[str] = []
+    for chunk in chunks:
+        words = re.split(r"\s+", re.sub(r"[^\w\s$]", " ", chunk.strip()))
+        words = [w for w in words if len(w) >= 2]
+        if len(words) >= 2:
+            tier3.append(" ".join(words[:2]))
+        if len(words) >= 3:
+            tier3.append(" ".join(words[:3]))
+    candidates = [val[:80]] + tier2 + tier3
     # Deduplicate while preserving order
     seen: set[str] = set()
     candidates = [c for c in candidates if not (c in seen or seen.add(c))]  # type: ignore[func-returns-value]
