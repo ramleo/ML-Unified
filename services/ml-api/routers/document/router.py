@@ -115,6 +115,8 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
     except Exception as exc:
         logger.error("Field extraction failed: %s", exc)
 
+    yield _sse({"step": "analyze", "status": "done"})
+
     # ── Step 4: Self-correction loop ──────────────────────────────────────────
     yield _sse({"step": "validate", "label": "Checking field consistency", "status": "running"})
     await asyncio.sleep(0)
