@@ -117,6 +117,9 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
 
     yield _sse({"step": "analyze", "status": "done"})
 
+    if not fields:
+        yield _sse({"warning": "No fields extracted — AI providers may be temporarily unavailable. Please try again in a few minutes."})
+
     # ── Step 4: Self-correction loop ──────────────────────────────────────────
     yield _sse({"step": "validate", "label": "Checking field consistency", "status": "running"})
     await asyncio.sleep(0)

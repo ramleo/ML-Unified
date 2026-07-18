@@ -30,7 +30,7 @@ def _groq(messages: list[dict], system: str) -> str:
         )
         return resp.choices[0].message.content or ""
     except Exception as exc:
-        logger.warning("Groq failed: %s", exc)
+        logger.error("Groq failed: %s", exc)
         return ""
 
 
@@ -58,7 +58,7 @@ def _gemini_text(messages: list[dict], system: str) -> str:
             r.raise_for_status()
             return r.json()["candidates"][0]["content"]["parts"][0]["text"]
     except Exception as exc:
-        logger.warning("Gemini text failed: %s", exc)
+        logger.error("Gemini text failed: %s", exc)
         return ""
 
 
@@ -82,7 +82,7 @@ def _cohere(messages: list[dict], system: str) -> str:
             r.raise_for_status()
             return r.json()["message"]["content"][0]["text"]
     except Exception as exc:
-        logger.warning("Cohere failed: %s", exc)
+        logger.error("Cohere failed: %s", exc)
         return ""
 
 
