@@ -40,21 +40,21 @@ def _gemini_text(messages: list[dict], system: str) -> str:
         return ""
     try:
         import httpx
-        contents = []
+        contents = [
+            {"role": "model" if m["role"] == "assistant" else "user",
+             "parts": [{"text": m["content"]}]}
+            for m in messages
+        ]
+        body: dict = {
+            "contents": contents,
+            "generationConfig": {"temperature": 0, "responseMimeType": "application/json"},
+        }
         if system:
-            contents += [
-                {"role": "user", "parts": [{"text": f"[System]: {system}"}]},
-                {"role": "model", "parts": [{"text": "Understood."}]},
-            ]
-        for m in messages:
-            role = "model" if m["role"] == "assistant" else "user"
-            contents.append({"role": role, "parts": [{"text": m["content"]}]})
+            body["system_instruction"] = {"parts": [{"text": system}]}
         url = ("https://generativelanguage.googleapis.com/v1beta/models"
                "/gemini-2.0-flash:generateContent")
         with httpx.Client(timeout=60) as client:
-            r = client.post(url, params={"key": key},
-                            json={"contents": contents,
-                                  "generationConfig": {"temperature": 0}})
+            r = client.post(url, params={"key": key}, json=body)
             r.raise_for_status()
             return r.json()["candidates"][0]["content"]["parts"][0]["text"]
     except Exception as exc:
@@ -76,7 +76,8 @@ def _cohere(messages: list[dict], system: str) -> str:
             r = client.post(
                 "https://api.cohere.ai/v2/chat",
                 headers={"Authorization": f"Bearer {key}"},
-                json={"model": "command-r-plus", "messages": fmt, "temperature": 0},
+                json={"model": "command-r-plus", "messages": fmt, "temperature": 0,
+                      "response_format": {"type": "json_object"}},
             )
             r.raise_for_status()
             return r.json()["message"]["content"][0]["text"]
