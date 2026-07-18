@@ -169,10 +169,10 @@ def search_bbox_in_doc(file_bytes: bytes, value: str, page_idx: int = 0) -> list
         for w in words:
             if len(w) >= 4:
                 tier5.append(w)
-    candidates = [val[:80]] + tier2 + tier3 + tier4 + tier5
+    scalar_candidates = [val[:80]] + tier2 + tier3 + tier5
     # Deduplicate while preserving order
     seen: set[str] = set()
-    candidates = [c for c in candidates if not (c in seen or seen.add(c))]  # type: ignore[func-returns-value]
+    scalar_candidates = [c for c in scalar_candidates if not (c in seen or seen.add(c))]  # type: ignore[func-returns-value]
 
     try:
         import fitz
@@ -182,17 +182,31 @@ def search_bbox_in_doc(file_bytes: bytes, value: str, page_idx: int = 0) -> list
             return None
         page = doc[page_idx]
         rect_w, rect_h = page.rect.width, page.rect.height
-        for candidate in candidates:
+
+        def _norm(r: object) -> list[float]:
+            return [round(r.x0 / rect_w, 4), round(r.y0 / rect_h, 4),  # type: ignore[attr-defined]
+                    round((r.x1 - r.x0) / rect_w, 4), round((r.y1 - r.y0) / rect_h, 4)]  # type: ignore[attr-defined]
+
+        # For JSON values: union-bbox of ALL tier4 string matches
+        if tier4:
+            all_rects = []
+            for t in tier4:
+                all_rects.extend(page.search_for(t))
+            if all_rects:
+                x0 = min(r.x0 for r in all_rects)
+                y0 = min(r.y0 for r in all_rects)
+                x1 = max(r.x1 for r in all_rects)
+                y1 = max(r.y1 for r in all_rects)
+                doc.close()
+                return [round(x0 / rect_w, 4), round(y0 / rect_h, 4),
+                        round((x1 - x0) / rect_w, 4), round((y1 - y0) / rect_h, 4)]
+
+        # Scalar values: first match wins
+        for candidate in scalar_candidates:
             rects = page.search_for(candidate)
             if rects and rect_w > 0 and rect_h > 0:
-                r = rects[0]
                 doc.close()
-                return [
-                    round(r.x0 / rect_w, 4),
-                    round(r.y0 / rect_h, 4),
-                    round((r.x1 - r.x0) / rect_w, 4),
-                    round((r.y1 - r.y0) / rect_h, 4),
-                ]
+                return _norm(rects[0])
         doc.close()
     except Exception as exc:
         logger.debug("bbox search failed for '%s': %s", val[:30], exc)

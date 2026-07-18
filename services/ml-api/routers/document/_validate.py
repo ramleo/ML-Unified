@@ -193,8 +193,12 @@ def validate_and_correct(fields: list[dict], doc_type: str) -> list[dict]:
         issue = all_issues.get(f["name"])
         if issue:
             f["validation"] = {"status": issue["status"], "note": issue["note"]}
-            if issue.get("corrected_value") and issue["status"] == "corrected":
-                f["value"] = issue["corrected_value"]
+            cv = issue.get("corrected_value")
+            existing = f.get("value", "").strip()
+            # Don't overwrite structured JSON values — LLM flattens them incorrectly
+            is_json = existing and existing[0] in ("{", "[")
+            if cv and issue["status"] == "corrected" and not is_json:
+                f["value"] = cv
         else:
             f["validation"] = {"status": "ok", "note": ""}
 
