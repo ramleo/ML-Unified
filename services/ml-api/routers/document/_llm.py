@@ -34,6 +34,24 @@ def _groq(messages: list[dict], system: str) -> str:
         return ""
 
 
+def _mistral(messages: list[dict], system: str) -> str:
+    key = os.environ.get("MISTRAL_API_KEY", "")
+    if not key:
+        return ""
+    try:
+        import openai
+        full = ([{"role": "system", "content": system}] if system else []) + messages
+        client = openai.OpenAI(api_key=key, base_url="https://api.mistral.ai/v1")
+        resp = client.chat.completions.create(
+            model="mistral-large-latest", messages=full, max_tokens=4096,
+            response_format={"type": "json_object"}, temperature=0,
+        )
+        return resp.choices[0].message.content or ""
+    except Exception as exc:
+        logger.error("Mistral failed: %s", exc)
+        return ""
+
+
 def _cerebras(messages: list[dict], system: str) -> str:
     key = os.environ.get("CEREBRAS_API_KEY", "")
     if not key:
@@ -105,7 +123,7 @@ def _cohere(messages: list[dict], system: str) -> str:
 
 
 def _cascade(messages: list[dict], system: str) -> str:
-    for fn in (_groq, _cerebras, _gemini_text, _cohere):
+    for fn in (_groq, _mistral, _cerebras, _gemini_text, _cohere):
         result = fn(messages, system)
         if result.strip():
             return result
