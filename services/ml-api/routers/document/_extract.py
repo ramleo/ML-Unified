@@ -138,6 +138,7 @@ def search_bbox_in_doc(file_bytes: bytes, value: str, page_idx: int = 0) -> list
     chunks = re.split(r"[,|;\n]+", val)
     tier2 = sorted((c.strip() for c in chunks if len(c.strip()) >= 3), key=len, reverse=True)
     tier3: list[str] = []
+    tier4: list[str] = []  # individual words ≥4 chars (catches JSON key names like "description")
     for chunk in chunks:
         words = re.split(r"\s+", re.sub(r"[^\w\s$]", " ", chunk.strip()))
         words = [w for w in words if w]  # drop empty strings only
@@ -145,7 +146,10 @@ def search_bbox_in_doc(file_bytes: bytes, value: str, page_idx: int = 0) -> list
             tier3.append(" ".join(words[:2]))
         if len(words) >= 3:
             tier3.append(" ".join(words[:3]))
-    candidates = [val[:80]] + tier2 + tier3
+        for w in words:
+            if len(w) >= 4:
+                tier4.append(w)
+    candidates = [val[:80]] + tier2 + tier3 + tier4
     # Deduplicate while preserving order
     seen: set[str] = set()
     candidates = [c for c in candidates if not (c in seen or seen.add(c))]  # type: ignore[func-returns-value]
