@@ -204,7 +204,7 @@ def _visual_prompt(already: str, missing: str) -> str:
 
 
 def _groq_vision_page(b64: str, prompt: str) -> list[dict]:
-    """Extract fields from one page image using Groq vision (llama-3.2-11b-vision)."""
+    """Extract fields from one page image using Groq vision (llama-4-scout)."""
     key = os.environ.get("GROQ_API_KEY", "")
     if not key:
         return []
@@ -218,14 +218,14 @@ def _groq_vision_page(b64: str, prompt: str) -> list[dict]:
             r = client.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {key}"},
-                json={"model": "llama-3.2-11b-vision-preview", "messages": messages,
-                      "max_tokens": 2000},
+                json={"model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                      "messages": messages, "max_tokens": 4096},
             )
             r.raise_for_status()
             raw = r.json()["choices"][0]["message"]["content"]
             return _normalize_fields(_parse_json(raw).get("fields", []), {})
     except Exception as exc:
-        logger.warning("Groq vision page failed: %s", exc)
+        logger.error("Groq vision page failed: %s", exc)
         return []
 
 
@@ -276,34 +276,60 @@ def extract_visual_sections(page_images: list[str], existing_names: set[str], mi
 
 
 def extract_fields_from_image(image_b64: str, doc_type: str, schema_fields: list[dict]) -> list[dict]:
-    """Extract fields from a scanned/image document using Gemini Vision."""
-    key = os.environ.get("GEMINI_API_KEY", "")
-    if not key:
-        logger.warning("No GEMINI_API_KEY — cannot process scanned document")
-        return []
-
+    """Extract fields from a scanned/image document — Groq Vision primary, Gemini fallback."""
     field_names = [f["name"] for f in schema_fields]
     field_meta = {f["name"]: f for f in schema_fields}
 
-    user_parts: list[dict] = [
-        {"inline_data": {"mime_type": "image/png", "data": image_b64}},
-        {"text": (
-            f'Extract data from this {doc_type} document image.\n'
-            f'Return JSON: {{"fields": [{{"name": "<snake_case_name>", "label": "<Human Readable Label>", '
-            f'"value": "<value or null>", "confidence": <0.0-1.0>, '
-            f'"bbox": [left, top, width, height] normalized 0-1 or null}}]}}\n\n'
-            f'First extract these predefined fields: {json.dumps(field_names)}\n\n'
-            f'Then append ANY additional sections or headers you find that are not in the predefined list. '
-            f'Use the section heading as the label and snake_case as the name.'
-        )},
-    ]
+    prompt = (
+        f'Extract data from this {doc_type} document image.\n'
+        f'Return JSON: {{"fields": [{{"name": "<snake_case_name>", "label": "<Human Readable Label>", '
+        f'"value": "<value or null>", "confidence": <0.0-1.0>, '
+        f'"bbox": [left, top, width, height] normalized 0-1 or null}}]}}\n\n'
+        f'First extract these predefined fields: {json.dumps(field_names)}\n\n'
+        f'Then append ANY additional sections or headers you find that are not in the predefined list. '
+        f'Use the section heading as the label and snake_case as the name.'
+    )
+
+    # Primary: Groq llama-4-scout vision
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    if groq_key:
+        try:
+            import httpx
+            messages = [{"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_b64}"}},
+                {"type": "text", "text": prompt},
+            ]}]
+            with httpx.Client(timeout=90) as client:
+                r = client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {groq_key}"},
+                    json={"model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                          "messages": messages, "max_tokens": 4096},
+                )
+                r.raise_for_status()
+                raw = r.json()["choices"][0]["message"]["content"]
+                fields = _normalize_fields(_parse_json(raw).get("fields", []), field_meta, allow_bbox=True)
+                if fields:
+                    return fields
+        except Exception as exc:
+            logger.error("Groq vision extract failed: %s", exc)
+
+    # Fallback: Gemini Vision
+    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    if not gemini_key:
+        logger.warning("No vision provider available for scanned document")
+        return []
     try:
         import httpx
         url = ("https://generativelanguage.googleapis.com/v1beta/models"
                "/gemini-2.0-flash:generateContent")
-        contents = [{"role": "user", "parts": user_parts}]
+        user_parts = [
+            {"inline_data": {"mime_type": "image/png", "data": image_b64}},
+            {"text": prompt},
+        ]
         with httpx.Client(timeout=90) as client:
-            r = client.post(url, params={"key": key}, json={"contents": contents})
+            r = client.post(url, params={"key": gemini_key},
+                            json={"contents": [{"role": "user", "parts": user_parts}]})
             r.raise_for_status()
             raw = r.json()["candidates"][0]["content"]["parts"][0]["text"]
     except Exception as exc:
