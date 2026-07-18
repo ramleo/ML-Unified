@@ -239,8 +239,19 @@ def _normalize_fields(raw_fields: list[dict], field_meta: dict, allow_bbox: bool
             bbox = None
         # Structured values must serialize as valid JSON (double quotes) — str()
         # would emit Python repr with single quotes, breaking json.loads in the
-        # bbox search and validator downstream.
+        # bbox search and validator downstream. Models may also return the value
+        # as a string that is itself single-quoted pseudo-JSON — normalize both.
         value_str = json.dumps(value) if isinstance(value, (dict, list)) else str(value)
+        s = value_str.strip()
+        if s[:1] in ("{", "["):
+            try:
+                json.loads(s)
+            except json.JSONDecodeError:
+                try:
+                    import ast
+                    value_str = json.dumps(ast.literal_eval(s))
+                except Exception:
+                    pass
         result.append({
             "name": name,
             "label": label,
