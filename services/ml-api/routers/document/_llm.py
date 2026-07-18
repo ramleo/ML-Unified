@@ -237,10 +237,14 @@ def _normalize_fields(raw_fields: list[dict], field_meta: dict, allow_bbox: bool
         bbox = f.get("bbox") if allow_bbox else None
         if bbox is not None and (not isinstance(bbox, list) or len(bbox) != 4):
             bbox = None
+        # Structured values must serialize as valid JSON (double quotes) — str()
+        # would emit Python repr with single quotes, breaking json.loads in the
+        # bbox search and validator downstream.
+        value_str = json.dumps(value) if isinstance(value, (dict, list)) else str(value)
         result.append({
             "name": name,
             "label": label,
-            "value": str(value),
+            "value": value_str,
             "confidence": max(0.0, min(1.0, float(f.get("confidence", 0.7)))),
             "field_type": meta.get("field_type", "text") if meta else "text",
             "bbox": bbox,
