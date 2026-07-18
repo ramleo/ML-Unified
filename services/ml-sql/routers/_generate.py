@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import re
 
-from ._providers import _PROVIDERS, get_provider_cfg, _call_groq, _call_gemini, _call_cohere, RateLimitError
+from ._providers import _PROVIDERS, get_provider_cfg, call_provider, RateLimitError
 
 _TOP_N_PER_GROUP_RE = re.compile(
     r"\btop\s+\d+\s+.{0,40}\b(per|each|in\s+each|by\s+each|within|for\s+each)\b",
@@ -230,12 +230,7 @@ async def generate_filter_expr(
     """Convert a plain-English filter request into a SQL WHERE expression."""
     prompt = _build_filter_prompt(filter_text, columns)
     cfg = get_provider_cfg(provider)
-    if provider == "gemini":
-        raw = await _call_gemini(prompt, cfg["model"], key)
-    elif provider == "cohere":
-        raw = await _call_cohere(prompt, cfg["model"], key)
-    else:
-        raw = await _call_groq(prompt, cfg["model"], key)
+    raw = await call_provider(provider, prompt, cfg["model"], key)
     expr = re.sub(r"```.*?```", "", raw, flags=re.DOTALL).strip()
     expr = expr.lstrip("WHERE ").rstrip(";").strip()
     return _ensure_quoted(expr, columns)
@@ -259,12 +254,7 @@ async def generate_sample_questions(schema: "DBSchema", provider: str, key: str)
     prompt = _build_sample_q_prompt(schema_text)
     cfg = get_provider_cfg(provider)
     try:
-        if provider == "gemini":
-            raw = await _call_gemini(prompt, cfg["model"], key)
-        elif provider == "cohere":
-            raw = await _call_cohere(prompt, cfg["model"], key)
-        else:
-            raw = await _call_groq(prompt, cfg["model"], key)
+        raw = await call_provider(provider, prompt, cfg["model"], key)
     except Exception:
         return []
     lines = [l.strip().lstrip("0123456789.-) ") for l in raw.strip().splitlines() if l.strip()]
@@ -291,12 +281,7 @@ async def generate_followup_suggestions(
     prompt = _build_followup_prompt(question, sql, columns, rows_preview)
     cfg = get_provider_cfg(provider)
     try:
-        if provider == "gemini":
-            raw = await _call_gemini(prompt, cfg["model"], key)
-        elif provider == "cohere":
-            raw = await _call_cohere(prompt, cfg["model"], key)
-        else:
-            raw = await _call_groq(prompt, cfg["model"], key)
+        raw = await call_provider(provider, prompt, cfg["model"], key)
     except Exception:
         return []
     lines = [l.strip().lstrip("0123456789.-) ") for l in raw.strip().splitlines() if l.strip()]
@@ -322,7 +307,7 @@ async def generate_sql(
 
     # Build ordered provider list: primary first, then fallbacks with available keys
     providers_to_try: list[tuple[str, str]] = [(provider, key)]
-    for fallback in ("groq", "gemini", "cohere"):
+    for fallback in ("groq", "mistral", "gemini", "cohere"):
         if fallback == provider:
             continue
         fkey = os.environ.get(_PROVIDERS[fallback]["env"], "")
@@ -334,12 +319,7 @@ async def generate_sql(
     for p, k in providers_to_try:
         cfg = get_provider_cfg(p)
         try:
-            if p == "gemini":
-                raw = await _call_gemini(prompt, cfg["model"], k)
-            elif p == "cohere":
-                raw = await _call_cohere(prompt, cfg["model"], k)
-            else:
-                raw = await _call_groq(prompt, cfg["model"], k)
+            raw = await call_provider(p, prompt, cfg["model"], k)
             return _extract_sql(raw)
         except RateLimitError as exc:
             rate_limited.append(p)
