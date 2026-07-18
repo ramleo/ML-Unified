@@ -180,18 +180,58 @@ async def analyze_document(
 
 @router.get("/test-providers")
 def test_providers():
-    """Debug: call each provider with a minimal prompt and return raw result or error."""
-    from ._llm import _groq, _gemini_text, _cohere
-    import traceback
+    """Debug: call each provider directly (bypassing their internal try/except) to surface real errors."""
+    import os, traceback
+    import httpx
+    import openai
+    results = {}
     system = "You are a helpful assistant. Respond only with valid JSON."
     prompt = 'Return this JSON exactly: {"ok": true, "provider": "test"}'
-    results = {}
-    for name, fn in [("groq", _groq), ("gemini", _gemini_text), ("cohere", _cohere)]:
-        try:
-            raw = fn([{"role": "user", "content": prompt}], system)
-            results[name] = {"raw": raw[:300] if raw else "", "empty": not bool(raw.strip())}
-        except Exception as exc:
-            results[name] = {"error": str(exc), "trace": traceback.format_exc()[-400:]}
+
+    # Groq
+    try:
+        key = os.environ.get("GROQ_API_KEY", "")
+        client = openai.OpenAI(api_key=key, base_url="https://api.groq.com/openai/v1")
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+            max_tokens=100, response_format={"type": "json_object"}, temperature=0,
+        )
+        results["groq"] = {"raw": resp.choices[0].message.content, "ok": True}
+    except Exception as exc:
+        results["groq"] = {"error": str(exc), "trace": traceback.format_exc()[-300:]}
+
+    # Gemini
+    try:
+        key = os.environ.get("GEMINI_API_KEY", "")
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+        body = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0, "responseMimeType": "application/json"},
+            "system_instruction": {"parts": [{"text": system}]},
+        }
+        with httpx.Client(timeout=30) as client:
+            r = client.post(url, params={"key": key}, json=body)
+            results["gemini"] = {"status": r.status_code, "raw": r.text[:500], "ok": r.status_code == 200}
+    except Exception as exc:
+        results["gemini"] = {"error": str(exc), "trace": traceback.format_exc()[-300:]}
+
+    # Cohere
+    try:
+        key = os.environ.get("COHERE_API_KEY", "")
+        with httpx.Client(timeout=30) as client:
+            r = client.post(
+                "https://api.cohere.ai/v2/chat",
+                headers={"Authorization": f"Bearer {key}"},
+                json={"model": "command-r-plus", "temperature": 0,
+                      "response_format": {"type": "json_object"},
+                      "messages": [{"role": "system", "content": system},
+                                   {"role": "user", "content": prompt}]},
+            )
+            results["cohere"] = {"status": r.status_code, "raw": r.text[:500], "ok": r.status_code == 200}
+    except Exception as exc:
+        results["cohere"] = {"error": str(exc), "trace": traceback.format_exc()[-300:]}
+
     return results
 
 
