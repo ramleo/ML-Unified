@@ -161,17 +161,21 @@ def search_bbox_in_doc(file_bytes: bytes, value: str, page_idx: int = 0) -> list
                     round((r.x1 - r.x0) / rect_w, 4), round((r.y1 - r.y0) / rect_h, 4)]  # type: ignore[attr-defined]
 
         # ── JSON array → layout-aware table detection ─────────────────────────
-        # Line-item arrays map to a table in the PDF; find_tables() returns the
-        # full row+column region including headers, which value-search cannot.
+        # find_tables() works well for PDFs with visible borders; for borderless
+        # text-aligned tables it may return a narrow bbox — validate width > 15%
+        # of page before trusting it, otherwise fall through to Tier 4.
         if stripped[0] == "[":
             try:
                 tables = list(page.find_tables())
                 if tables:
                     best = max(tables, key=lambda t: sum(len(r) for r in (t.extract() or [])))
                     r = best.bbox
-                    doc.close()
-                    return [round(r.x0 / rect_w, 4), round(r.y0 / rect_h, 4),
-                            round((r.x1 - r.x0) / rect_w, 4), round((r.y1 - r.y0) / rect_h, 4)]
+                    rel_width = (r.x1 - r.x0) / rect_w if rect_w > 0 else 0
+                    if rel_width >= 0.15:
+                        doc.close()
+                        return [round(r.x0 / rect_w, 4), round(r.y0 / rect_h, 4),
+                                round((r.x1 - r.x0) / rect_w, 4), round((r.y1 - r.y0) / rect_h, 4)]
+                    logger.debug("find_tables bbox too narrow (%.1f%%), falling back", rel_width * 100)
             except Exception as exc:
                 logger.debug("find_tables for array field failed: %s", exc)
             # Fall through to Tier 4 value-search if table detection fails
