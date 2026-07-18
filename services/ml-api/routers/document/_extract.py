@@ -124,55 +124,28 @@ def search_bbox_in_doc(file_bytes: bytes, value: str, page_idx: int = 0) -> list
     Search for `value` text in a PDF page and return normalized
     [left, top, width, height] in [0, 1] range, or None if not found.
 
-    Falls back to substring search when the LLM reformatted/combined values:
-    splits on common delimiters and tries each chunk longest-first.
+    Strategy:
+    - JSON array (line items)  → layout-aware table detection via find_tables()
+    - JSON object              → union bbox of all string values extracted from JSON
+    - Scalar                   → tiered substring search (full → chunks → words)
     """
     import re
+    import json as _json
+
     val = str(value).strip()
     if not val or len(val) < 3:
         return None
 
-    # Tier 1: full value (verbatim, capped 80 chars)
-    # Tier 2: delimiter-split chunks longest-first
-    # Tier 3: first 2-3 words of each chunk
-    # Tier 4: JSON string values — parse JSON and extract all string values ≥3 chars
-    # Tier 5: individual words ≥4 chars from the whole value
-    import json as _json
-
-    # Tier 4: extract string values from JSON if value looks like JSON
-    tier4: list[str] = []
     stripped = val.strip()
-    if stripped and stripped[0] in ("{", "["):
-        try:
-            parsed = _json.loads(stripped)
-            items = parsed if isinstance(parsed, list) else [parsed]
-            for item in items:
-                if isinstance(item, dict):
-                    for v in item.values():
-                        s = str(v).strip()
-                        if len(s) >= 3 and not s.lstrip("-").replace(".", "").isdigit():
-                            tier4.append(s)
-        except Exception:
-            pass
 
-    chunks = re.split(r"[,|;\n]+", val)
-    tier2 = sorted((c.strip() for c in chunks if len(c.strip()) >= 3), key=len, reverse=True)
-    tier3: list[str] = []
-    tier5: list[str] = []  # individual words ≥4 chars
-    for chunk in chunks:
-        words = re.split(r"\s+", re.sub(r"[^\w\s$]", " ", chunk.strip()))
-        words = [w for w in words if w]
-        if len(words) >= 2:
-            tier3.append(" ".join(words[:2]))
-        if len(words) >= 3:
-            tier3.append(" ".join(words[:3]))
-        for w in words:
-            if len(w) >= 4:
-                tier5.append(w)
-    scalar_candidates = [val[:80]] + tier2 + tier3 + tier5
-    # Deduplicate while preserving order
-    seen: set[str] = set()
-    scalar_candidates = [c for c in scalar_candidates if not (c in seen or seen.add(c))]  # type: ignore[func-returns-value]
+    def _is_numeric_noise(s: str) -> bool:
+        """True for formatted amounts/prices and very short digit strings.
+        Pure long-digit strings (account numbers, IDs) return False so they ARE searched."""
+        core = s.lstrip("-$€£¥").replace(",", "")
+        if not core.replace(".", "").isdigit():
+            return False  # non-numeric chars present → not a number
+        # Formatted number (has decimal or comma) or too short to be unique → noise
+        return "." in core or "," in s or len(s) <= 4
 
     try:
         import fitz
@@ -187,7 +160,57 @@ def search_bbox_in_doc(file_bytes: bytes, value: str, page_idx: int = 0) -> list
             return [round(r.x0 / rect_w, 4), round(r.y0 / rect_h, 4),  # type: ignore[attr-defined]
                     round((r.x1 - r.x0) / rect_w, 4), round((r.y1 - r.y0) / rect_h, 4)]  # type: ignore[attr-defined]
 
-        # For JSON values: union-bbox of ALL tier4 string matches
+        # ── JSON array → layout-aware table detection ─────────────────────────
+        # Line-item arrays map to a table in the PDF; find_tables() returns the
+        # full row+column region including headers, which value-search cannot.
+        if stripped[0] == "[":
+            try:
+                tables = list(page.find_tables())
+                if tables:
+                    best = max(tables, key=lambda t: sum(len(r) for r in (t.extract() or [])))
+                    r = best.bbox
+                    doc.close()
+                    return [round(r.x0 / rect_w, 4), round(r.y0 / rect_h, 4),
+                            round((r.x1 - r.x0) / rect_w, 4), round((r.y1 - r.y0) / rect_h, 4)]
+            except Exception as exc:
+                logger.debug("find_tables for array field failed: %s", exc)
+            # Fall through to Tier 4 value-search if table detection fails
+
+        # ── Tier 4: JSON object/array → union bbox of all string values ───────
+        tier4: list[str] = []
+        if stripped[0] in ("{", "["):
+            try:
+                parsed = _json.loads(stripped)
+                items = parsed if isinstance(parsed, list) else [parsed]
+                for item in items:
+                    if isinstance(item, dict):
+                        for v in item.values():
+                            s = str(v).strip()
+                            if len(s) >= 3 and not _is_numeric_noise(s):
+                                tier4.append(s)
+            except Exception:
+                pass
+
+        # ── Scalar candidate tiers ─────────────────────────────────────────────
+        chunks = re.split(r"[,|;\n]+", val)
+        tier2 = sorted((c.strip() for c in chunks if len(c.strip()) >= 3), key=len, reverse=True)
+        tier3: list[str] = []
+        tier5: list[str] = []
+        for chunk in chunks:
+            words = re.split(r"\s+", re.sub(r"[^\w\s$]", " ", chunk.strip()))
+            words = [w for w in words if w]
+            if len(words) >= 2:
+                tier3.append(" ".join(words[:2]))
+            if len(words) >= 3:
+                tier3.append(" ".join(words[:3]))
+            for w in words:
+                if len(w) >= 4:
+                    tier5.append(w)
+        scalar_candidates = [val[:80]] + tier2 + tier3 + tier5
+        seen: set[str] = set()
+        scalar_candidates = [c for c in scalar_candidates if not (c in seen or seen.add(c))]  # type: ignore[func-returns-value]
+
+        # Union bbox of all Tier 4 matches
         if tier4:
             all_rects = []
             for t in tier4:
@@ -201,7 +224,7 @@ def search_bbox_in_doc(file_bytes: bytes, value: str, page_idx: int = 0) -> list
                 return [round(x0 / rect_w, 4), round(y0 / rect_h, 4),
                         round((x1 - x0) / rect_w, 4), round((y1 - y0) / rect_h, 4)]
 
-        # Scalar values: first match wins
+        # Scalar: first match wins
         for candidate in scalar_candidates:
             rects = page.search_for(candidate)
             if rects and rect_w > 0 and rect_h > 0:
