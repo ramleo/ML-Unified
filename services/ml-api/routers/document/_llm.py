@@ -110,6 +110,24 @@ def _parse_json(raw: str) -> dict[str, Any]:
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def _keyword_classify(text: str, known_types: list[str]) -> tuple[str, float]:
+    """Keyword-based fallback when all LLM providers fail."""
+    t = text.lower()
+    patterns: dict[str, list[str]] = {
+        "resume":         ["resume", "curriculum vitae", " cv ", "work experience", "linkedin", "github", "employment history", "soft skills", "career"],
+        "invoice":        ["invoice", "bill to", "amount due", "payment terms", "subtotal", "line items"],
+        "receipt":        ["receipt", "thank you for your purchase", "cashier", "store #"],
+        "contract":       ["agreement", "contract", "clause", "whereas", "hereinafter", "party"],
+        "medical_report": ["patient", "diagnosis", "physician", "lab result", "clinical", "specimen"],
+        "bank_statement": ["account statement", "opening balance", "closing balance", "transaction history"],
+        "id_card":        ["date of birth", "nationality", "id number", "expiry date", "issued by"],
+        "purchase_order": ["purchase order", "ship to", "delivery date", "po number", "supplier"],
+    }
+    scores = {dt: sum(1 for kw in patterns.get(dt, []) if kw in t) for dt in known_types}
+    best = max(scores, key=scores.get)
+    return (best, 0.55) if scores[best] > 0 else (known_types[0], 0.3)
+
+
 def classify_document(text_sample: str, known_types: list[str]) -> tuple[str, float]:
     """Classify doc type from a text sample. Returns (doc_type, confidence 0–1)."""
     types_str = ", ".join(f'"{t}"' for t in known_types)
@@ -121,10 +139,10 @@ def classify_document(text_sample: str, known_types: list[str]) -> tuple[str, fl
     )
     raw = _cascade([{"role": "user", "content": prompt}], system)
     data = _parse_json(raw)
-    doc_type = data.get("doc_type", known_types[0])
+    doc_type = data.get("doc_type", "")
     confidence = float(data.get("confidence", 0.7))
-    if doc_type not in known_types:
-        doc_type = known_types[0]
+    if not doc_type or doc_type not in known_types:
+        doc_type, confidence = _keyword_classify(text_sample, known_types)
     return doc_type, max(0.0, min(1.0, confidence))
 
 
