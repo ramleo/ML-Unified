@@ -34,6 +34,24 @@ def _groq(messages: list[dict], system: str) -> str:
         return ""
 
 
+def _cerebras(messages: list[dict], system: str) -> str:
+    key = os.environ.get("CEREBRAS_API_KEY", "")
+    if not key:
+        return ""
+    try:
+        import openai
+        full = ([{"role": "system", "content": system}] if system else []) + messages
+        client = openai.OpenAI(api_key=key, base_url="https://api.cerebras.ai/v1")
+        resp = client.chat.completions.create(
+            model="llama-3.3-70b", messages=full, max_tokens=4096,
+            response_format={"type": "json_object"}, temperature=0,
+        )
+        return resp.choices[0].message.content or ""
+    except Exception as exc:
+        logger.error("Cerebras failed: %s", exc)
+        return ""
+
+
 def _gemini_text(messages: list[dict], system: str) -> str:
     key = os.environ.get("GEMINI_API_KEY", "")
     if not key:
@@ -87,7 +105,7 @@ def _cohere(messages: list[dict], system: str) -> str:
 
 
 def _cascade(messages: list[dict], system: str) -> str:
-    for fn in (_groq, _gemini_text, _cohere):
+    for fn in (_groq, _cerebras, _gemini_text, _cohere):
         result = fn(messages, system)
         if result.strip():
             return result
