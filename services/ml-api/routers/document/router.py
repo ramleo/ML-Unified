@@ -14,7 +14,8 @@ from fastapi.responses import StreamingResponse
 
 from ._schema import DOC_TYPES
 from ._extract import extract_document, search_bbox_in_doc, extract_tables_markdown
-from ._llm import classify_document, extract_fields_from_text, extract_fields_from_image, extract_visual_sections
+from ._llm import classify_document, extract_fields_from_text
+from ._vision import extract_fields_from_image, extract_visual_sections, mistral_ocr_pages
 from ._validate import validate_and_correct
 
 router = APIRouter(prefix="/document", tags=["document"])
@@ -51,6 +52,16 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
     if processing_mode == "error":
         yield _sse({"error": "Failed to process file. Ensure it is a valid PDF, PNG, or JPG."})
         return
+
+    # OCR-first for scanned/image docs: convert pages to markdown so classify
+    # and extraction use the same high-quality text path as digital PDFs.
+    if not text.strip() and page_images:
+        loop = asyncio.get_event_loop()
+        ocr_md = await loop.run_in_executor(
+            _executor, lambda: mistral_ocr_pages(page_images)
+        )
+        if ocr_md.strip():
+            text = ocr_md
 
     yield _sse({"step": "extract", "status": "done"})
 
@@ -114,6 +125,16 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
             )
     except Exception as exc:
         logger.error("Field extraction failed: %s", exc)
+
+    # Text path (incl. OCR-first) produced nothing → one-shot vision fallback
+    if not fields and page_images:
+        try:
+            fields = await loop.run_in_executor(
+                _executor,
+                lambda: extract_fields_from_image(page_images[0], doc_type, schema_fields),
+            )
+        except Exception as exc:
+            logger.error("Vision fallback failed: %s", exc)
 
     yield _sse({"step": "analyze", "status": "done"})
 
