@@ -140,7 +140,7 @@ def search_bbox_in_doc(file_bytes: bytes, value: str, page_idx: int = 0) -> list
     tier3: list[str] = []
     for chunk in chunks:
         words = re.split(r"\s+", re.sub(r"[^\w\s$]", " ", chunk.strip()))
-        words = [w for w in words if len(w) >= 2]
+        words = [w for w in words if w]  # drop empty strings only
         if len(words) >= 2:
             tier3.append(" ".join(words[:2]))
         if len(words) >= 3:
