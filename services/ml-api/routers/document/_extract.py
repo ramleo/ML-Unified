@@ -123,10 +123,25 @@ def search_bbox_in_doc(file_bytes: bytes, value: str, page_idx: int = 0) -> list
     """
     Search for `value` text in a PDF page and return normalized
     [left, top, width, height] in [0, 1] range, or None if not found.
+
+    Falls back to substring search when the LLM reformatted/combined values:
+    splits on common delimiters and tries each chunk longest-first.
     """
+    import re
     val = str(value).strip()
     if not val or len(val) < 3:
         return None
+
+    # Build candidate strings: full value first, then split by common delimiters
+    chunks = re.split(r"[,|;\n]+", val)
+    candidates = [val[:80]] + sorted(
+        (c.strip() for c in chunks if len(c.strip()) >= 3),
+        key=len, reverse=True,
+    )
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    candidates = [c for c in candidates if not (c in seen or seen.add(c))]  # type: ignore[func-returns-value]
+
     try:
         import fitz
         doc = fitz.open(stream=file_bytes, filetype="pdf")
@@ -134,17 +149,19 @@ def search_bbox_in_doc(file_bytes: bytes, value: str, page_idx: int = 0) -> list
             doc.close()
             return None
         page = doc[page_idx]
-        rects = page.search_for(val[:80])  # cap search string length
         rect_w, rect_h = page.rect.width, page.rect.height
+        for candidate in candidates:
+            rects = page.search_for(candidate)
+            if rects and rect_w > 0 and rect_h > 0:
+                r = rects[0]
+                doc.close()
+                return [
+                    round(r.x0 / rect_w, 4),
+                    round(r.y0 / rect_h, 4),
+                    round((r.x1 - r.x0) / rect_w, 4),
+                    round((r.y1 - r.y0) / rect_h, 4),
+                ]
         doc.close()
-        if rects and rect_w > 0 and rect_h > 0:
-            r = rects[0]
-            return [
-                round(r.x0 / rect_w, 4),
-                round(r.y0 / rect_h, 4),
-                round((r.x1 - r.x0) / rect_w, 4),
-                round((r.y1 - r.y0) / rect_h, 4),
-            ]
     except Exception as exc:
         logger.debug("bbox search failed for '%s': %s", val[:30], exc)
     return None
