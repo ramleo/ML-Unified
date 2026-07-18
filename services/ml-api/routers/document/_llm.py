@@ -43,7 +43,7 @@ def _cerebras(messages: list[dict], system: str) -> str:
         full = ([{"role": "system", "content": system}] if system else []) + messages
         client = openai.OpenAI(api_key=key, base_url="https://api.cerebras.ai/v1")
         resp = client.chat.completions.create(
-            model="llama-3.3-70b", messages=full, max_tokens=4096,
+            model="gpt-oss-120b", messages=full, max_tokens=4096,
             response_format={"type": "json_object"}, temperature=0,
         )
         return resp.choices[0].message.content or ""
