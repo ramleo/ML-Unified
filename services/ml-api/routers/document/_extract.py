@@ -132,24 +132,44 @@ def search_bbox_in_doc(file_bytes: bytes, value: str, page_idx: int = 0) -> list
     if not val or len(val) < 3:
         return None
 
-    # Tier 1: full value
-    # Tier 2: delimiter-split chunks (longest first)
-    # Tier 3: first 2-3 alphanumeric words of each chunk (catches reformatted line items)
+    # Tier 1: full value (verbatim, capped 80 chars)
+    # Tier 2: delimiter-split chunks longest-first
+    # Tier 3: first 2-3 words of each chunk
+    # Tier 4: JSON string values — parse JSON and extract all string values ≥3 chars
+    # Tier 5: individual words ≥4 chars from the whole value
+    import json as _json
+
+    # Tier 4: extract string values from JSON if value looks like JSON
+    tier4: list[str] = []
+    stripped = val.strip()
+    if stripped and stripped[0] in ("{", "["):
+        try:
+            parsed = _json.loads(stripped)
+            items = parsed if isinstance(parsed, list) else [parsed]
+            for item in items:
+                if isinstance(item, dict):
+                    for v in item.values():
+                        s = str(v).strip()
+                        if len(s) >= 3 and not s.lstrip("-").replace(".", "").isdigit():
+                            tier4.append(s)
+        except Exception:
+            pass
+
     chunks = re.split(r"[,|;\n]+", val)
     tier2 = sorted((c.strip() for c in chunks if len(c.strip()) >= 3), key=len, reverse=True)
     tier3: list[str] = []
-    tier4: list[str] = []  # individual words ≥4 chars (catches JSON key names like "description")
+    tier5: list[str] = []  # individual words ≥4 chars
     for chunk in chunks:
         words = re.split(r"\s+", re.sub(r"[^\w\s$]", " ", chunk.strip()))
-        words = [w for w in words if w]  # drop empty strings only
+        words = [w for w in words if w]
         if len(words) >= 2:
             tier3.append(" ".join(words[:2]))
         if len(words) >= 3:
             tier3.append(" ".join(words[:3]))
         for w in words:
             if len(w) >= 4:
-                tier4.append(w)
-    candidates = [val[:80]] + tier2 + tier3 + tier4
+                tier5.append(w)
+    candidates = [val[:80]] + tier2 + tier3 + tier4 + tier5
     # Deduplicate while preserving order
     seen: set[str] = set()
     candidates = [c for c in candidates if not (c in seen or seen.add(c))]  # type: ignore[func-returns-value]
