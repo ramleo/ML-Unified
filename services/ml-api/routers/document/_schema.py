@@ -4,7 +4,7 @@ from __future__ import annotations
 DOC_TYPES: dict[str, dict] = {
     "invoice": {
         "label": "Invoice",
-        "description": "Vendor invoice or bill document",
+        "description": "A REQUEST for payment: has an invoice number, due date, and payment terms (e.g. Net 30); payment has not happened yet",
         "fields": [
             {"name": "vendor",        "label": "Vendor",         "field_type": "text"},
             {"name": "invoice_no",    "label": "Invoice #",      "field_type": "text"},
@@ -19,7 +19,7 @@ DOC_TYPES: dict[str, dict] = {
     },
     "receipt": {
         "label": "Receipt",
-        "description": "Purchase receipt or transaction record",
+        "description": "PROOF of a completed purchase/payment at point of sale: shows payment method, no due date or payment terms",
         "fields": [
             {"name": "merchant",        "label": "Merchant",        "field_type": "text"},
             {"name": "date",            "label": "Date",            "field_type": "date"},

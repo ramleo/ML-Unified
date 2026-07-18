@@ -169,12 +169,18 @@ def _keyword_classify(text: str, known_types: list[str]) -> tuple[str, float]:
     return (best, 0.55) if scores[best] > 0 else (known_types[0], 0.3)
 
 
-def classify_document(text_sample: str, known_types: list[str]) -> tuple[str, float]:
+def classify_document(text_sample: str, known_types: list[str],
+                      descriptions: dict[str, str] | None = None) -> tuple[str, float]:
     """Classify doc type from a text sample. Returns (doc_type, confidence 0–1)."""
     types_str = ", ".join(f'"{t}"' for t in known_types)
+    if descriptions:
+        types_block = "\n".join(f'- "{t}": {descriptions.get(t, "")}' for t in known_types)
+    else:
+        types_block = types_str
     system = "You are a document classification expert. Respond only with valid JSON."
     prompt = (
-        f"Classify this document. Respond with JSON only: "
+        f"Classify this document into one of these types:\n{types_block}\n\n"
+        f"Respond with JSON only: "
         f'{{\"doc_type\": <one of {types_str}>, \"confidence\": <0.0-1.0>}}\n\n'
         f"Document excerpt:\n{text_sample[:600]}"
     )

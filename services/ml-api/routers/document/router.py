@@ -73,7 +73,10 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
         doc_type, class_confidence = doc_type_hint, 1.0
     elif text.strip():
         try:
-            doc_type, class_confidence = classify_document(text[:600], known_types)
+            doc_type, class_confidence = classify_document(
+                text[:600], known_types,
+                {k: v["description"] for k, v in DOC_TYPES.items()},
+            )
         except Exception as exc:
             logger.error("Classification failed: %s", exc)
             doc_type, class_confidence = "invoice", 0.5
