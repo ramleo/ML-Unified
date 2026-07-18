@@ -178,6 +178,23 @@ async def analyze_document(
     )
 
 
+@router.get("/test-providers")
+def test_providers():
+    """Debug: call each provider with a minimal prompt and return raw result or error."""
+    from ._llm import _groq, _gemini_text, _cohere
+    import traceback
+    system = "You are a helpful assistant. Respond only with valid JSON."
+    prompt = 'Return this JSON exactly: {"ok": true, "provider": "test"}'
+    results = {}
+    for name, fn in [("groq", _groq), ("gemini", _gemini_text), ("cohere", _cohere)]:
+        try:
+            raw = fn([{"role": "user", "content": prompt}], system)
+            results[name] = {"raw": raw[:300] if raw else "", "empty": not bool(raw.strip())}
+        except Exception as exc:
+            results[name] = {"error": str(exc), "trace": traceback.format_exc()[-400:]}
+    return results
+
+
 @router.get("/types")
 def get_document_types():
     """Return supported document types and their field schemas."""
