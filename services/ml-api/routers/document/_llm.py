@@ -217,6 +217,10 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
         f'Then append ANY additional sections, headers, or structured data you find in the document '
         f'that are not in the predefined list — use the section heading as the label and a snake_case version as the name. '
         f'Do not skip any section that has meaningful content.\n\n'
+        f'For total experience / duration fields: NEVER compute "latest date minus earliest date" — '
+        f'employment histories contain gaps. Sum each listed period individually (per-role start to end) '
+        f'and show the working in the value, e.g. "~11 years (sum of listed roles; gaps excluded)". '
+        f'If per-role dates are not stated, use null.\n\n'
         f"Document text:\n{text[:14000]}"
     )
     _provider_map = {"groq": _groq, "mistral": _mistral, "gemini": _gemini_text, "cohere": _cohere}
