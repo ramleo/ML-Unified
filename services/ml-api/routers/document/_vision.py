@@ -184,9 +184,12 @@ def _gemini_vision_raw(b64: str, prompt: str) -> str:
 
 
 def _vision_cascade_raw(b64: str, prompt: str) -> str:
-    for fn in (_groq_vision_raw, _mistral_vision_raw, _gemini_vision_raw):
+    from . import _llm as _llm_state
+    for name, fn in (("groq", _groq_vision_raw), ("mistral", _mistral_vision_raw),
+                     ("gemini", _gemini_vision_raw)):
         raw = fn(b64, prompt)
         if raw.strip():
+            _llm_state.last_provider = f"{name} vision"
             return raw
     return ""
 

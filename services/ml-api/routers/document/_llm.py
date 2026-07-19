@@ -127,11 +127,22 @@ def _cohere(messages: list[dict], system: str) -> str:
         return ""
 
 
+# Name of the provider that served the most recent successful call.
+# Read by the router right after extraction to attribute results in the UI.
+last_provider: str = ""
+
+_CASCADE_ORDER = (("groq", _groq), ("mistral", _mistral), ("gemini", _gemini_text),
+                  ("cohere", _cohere), ("cerebras", _cerebras))
+
+
 def _cascade(messages: list[dict], system: str) -> str:
-    for fn in (_groq, _mistral, _gemini_text, _cohere, _cerebras):
+    global last_provider
+    for name, fn in _CASCADE_ORDER:
         result = fn(messages, system)
         if result.strip():
+            last_provider = name
             return result
+    last_provider = ""
     return ""
 
 
@@ -210,9 +221,13 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
     )
     _provider_map = {"groq": _groq, "mistral": _mistral, "gemini": _gemini_text, "cohere": _cohere}
     fn = _provider_map.get(provider)
-    raw = fn([{"role": "user", "content": prompt}], system) if fn else _cascade(
-        [{"role": "user", "content": prompt}], system
-    )
+    if fn:
+        raw = fn([{"role": "user", "content": prompt}], system)
+        if raw.strip():
+            global last_provider
+            last_provider = provider
+    else:
+        raw = _cascade([{"role": "user", "content": prompt}], system)
     data = _parse_json(raw)
     return _normalize_fields(data.get("fields", []), field_meta)
 

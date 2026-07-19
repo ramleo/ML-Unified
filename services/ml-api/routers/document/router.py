@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse
 
 from ._schema import DOC_TYPES
 from ._extract import extract_document, search_bbox_in_doc, extract_tables_markdown
+from . import _llm as _llm_state
 from ._llm import classify_document, extract_fields_from_text
 from ._vision import (extract_fields_from_image, extract_visual_sections,
                       locate_fields_from_ocr, mistral_ocr_pages)
@@ -142,7 +143,11 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
         except Exception as exc:
             logger.error("Vision fallback failed: %s", exc)
 
-    yield _sse({"step": "analyze", "status": "done"})
+    # Capture attribution now — the validation pass below also calls the
+    # cascade and would overwrite it.
+    served_by = _llm_state.last_provider if fields else ""
+
+    yield _sse({"step": "analyze", "status": "done", "provider": served_by})
 
     if not fields:
         yield _sse({"warning": "No fields extracted — AI providers may be temporarily unavailable. Please try again in a few minutes."})
@@ -189,6 +194,7 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
         "page_images": page_images,
         "field_count": len(fields),
         "classification_confidence": round(class_confidence, 3),
+        "provider": served_by,
     })
 
 
