@@ -287,7 +287,8 @@ async def chat_with_document(payload: dict):
         f"DOCUMENT CONTENT:\n{doc_text}\n\n"
         f"EXTRACTED FIELDS:\n{field_summary}\n\n"
         f"QUESTION: {question}\n\n"
-        'Return JSON: {"answer": "<your concise answer>"}'
+        'Return JSON: {"answer": "<your concise answer>"}. '
+        "The answer value must be a plain conversational sentence (a string), never a nested object or list."
     )
     messages = [{"role": m.get("role", "user"), "content": str(m.get("content", ""))[:1000]}
                 for m in history[-6:] if m.get("content")]
