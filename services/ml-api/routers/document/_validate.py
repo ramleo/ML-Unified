@@ -169,6 +169,57 @@ def _check_line_items_sum(fields: list[dict]) -> dict[str, dict]:
     return issues
 
 
+_MONTHS = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+           "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
+_MONTH_YEAR_RE = re.compile(
+    r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(?:\d{1,2},?\s+)?(\d{4})",
+    re.IGNORECASE)
+_PRESENT_RE = re.compile(r"till date|present|current|now|ongoing", re.IGNORECASE)
+
+
+def _recompute_experience(fields: list[dict]) -> dict[str, dict]:
+    """LLMs are unreliable at date arithmetic — recompute total experience
+    deterministically by summing each role's period from the career timeline."""
+    by_name = {f["name"]: f for f in fields}
+    exp_f = by_name.get("experience_years")
+    timeline_f = by_name.get("career_timeline") or by_name.get("work_experience")
+    if not (exp_f and timeline_f):
+        return {}
+    try:
+        roles = json.loads(str(timeline_f["value"]))
+    except Exception:
+        return {}
+    if not isinstance(roles, list):
+        return {}
+
+    from datetime import date
+    today = (date.today().year, date.today().month)
+    total_months = 0
+    counted = 0
+    for role in roles:
+        text = json.dumps(role) if isinstance(role, dict) else str(role)
+        dates = [(int(y), _MONTHS[m[:3].lower()]) for m, y in _MONTH_YEAR_RE.findall(text)]
+        if len(dates) >= 2:
+            start, end = dates[0], dates[1]
+        elif len(dates) == 1 and _PRESENT_RE.search(text):
+            start, end = dates[0], today
+        else:
+            continue
+        months = (end[0] - start[0]) * 12 + (end[1] - start[1])
+        if 0 <= months <= 600:
+            total_months += max(months, 1)
+            counted += 1
+
+    if counted < 2:  # not enough parseable periods to trust
+        return {}
+    years = total_months / 12
+    return {exp_f["name"]: {
+        "status": "corrected",
+        "note": f"Recomputed from {counted} career-timeline periods (gaps excluded)",
+        "corrected_value": f"~{years:.0f} years",
+    }}
+
+
 # Unambiguous formats only — dd/mm vs mm/dd guessing would produce false flags
 _DATE_FORMATS = ("%Y-%m-%d", "%d %B %Y", "%d %b %Y", "%B %d, %Y", "%B %d %Y", "%b %d, %Y")
 
@@ -280,6 +331,8 @@ def validate_and_correct(fields: list[dict], doc_type: str) -> list[dict]:
         arithmetic_issues.update(_check_line_items_sum(fields))
     elif doc_type == "bank_statement":
         arithmetic_issues.update(_check_balance_equation(fields))
+    elif doc_type == "resume":
+        arithmetic_issues.update(_recompute_experience(fields))
     arithmetic_issues.update(_check_date_order(fields, doc_type))
 
     # Pass 3 — LLM consistency (only when we have enough fields to check)
