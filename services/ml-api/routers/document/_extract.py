@@ -38,22 +38,67 @@ def _looks_like_docx(file_bytes: bytes) -> bool:
         return False
 
 
+_DOCX_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
+
+def _docx_extra_text(file_bytes: bytes, seen: set[str]) -> list[str]:
+    """Text python-docx misses: text boxes/shapes, headers, footers.
+
+    Designed resumes and letterheads often keep the whole contact block in
+    text boxes — invisible to Document.paragraphs. Walk every paragraph in
+    the document + header/footer XML parts and keep lines not already seen.
+    """
+    import re
+    import zipfile
+    from xml.etree import ElementTree as ET
+
+    extra: list[str] = []
+    try:
+        with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
+            parts = [n for n in z.namelist()
+                     if re.match(r"word/(document|header\d*|footer\d*)\.xml$", n)]
+            for name in sorted(parts):
+                root = ET.fromstring(z.read(name))
+                for p in root.iter(_DOCX_NS + "p"):
+                    t = "".join(n.text or "" for n in p.iter(_DOCX_NS + "t")).strip()
+                    if t and t not in seen:
+                        seen.add(t)
+                        extra.append(t)
+    except Exception as exc:
+        logger.warning("DOCX extra-text walk failed: %s", exc)
+    return extra
+
+
 def _extract_docx(file_bytes: bytes) -> dict[str, Any]:
     """Extract text + tables from a Word document. No page rendering — DOCX has
     no fixed layout, so the preview panel stays empty and bbox search is skipped."""
     try:
         import docx
         d = docx.Document(io.BytesIO(file_bytes))
-        parts: list[str] = [p.text for p in d.paragraphs if p.text.strip()]
+        seen: set[str] = set()
+        parts: list[str] = []
+        for p in d.paragraphs:
+            if p.text.strip():
+                parts.append(p.text)
+                seen.add(p.text.strip())
         for tbl in d.tables:
             lines: list[str] = []
             for i, row in enumerate(tbl.rows):
                 cells = [c.text.strip().replace("|", " ") for c in row.cells]
+                for c in row.cells:
+                    seen.update(s.strip() for s in c.text.split("\n") if s.strip())
                 lines.append("| " + " | ".join(cells) + " |")
                 if i == 0:
                     lines.append("|" + "|".join(["---"] * len(cells)) + "|")
             if lines:
                 parts.append("\n".join(lines))
+
+        # Text boxes, headers, footers — where designed resumes hide contact info
+        extra = _docx_extra_text(file_bytes, seen)
+        if extra:
+            parts.append("## ADDITIONAL CONTENT (text boxes, headers, footers)\n"
+                         + "\n".join(extra))
+
         text = "\n\n".join(parts)
         return {"text": text, "page_images": [], "processing_mode": "docx", "pages": 1}
     except Exception as exc:
