@@ -1,5 +1,5 @@
 """Vision + OCR extraction for scanned/image documents.
-Vision cascade: Groq llama-4-scout → Mistral medium → Gemini 2.0 Flash.
+Vision cascade: Groq Qwen3.6-27B → Mistral medium → Gemini 2.0 Flash.
 OCR-first path: mistral-ocr-latest converts pages to markdown so scanned
 docs can use the same text cascade as digital PDFs.
 """
@@ -123,7 +123,7 @@ def _groq_vision_raw(b64: str, prompt: str) -> str:
             r = client.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {key}"},
-                json={"model": "meta-llama/llama-4-scout-17b-16e-instruct",
+                json={"model": "qwen/qwen3.6-27b",
                       "messages": messages, "max_tokens": 4096},
             )
             r.raise_for_status()
