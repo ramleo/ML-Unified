@@ -10,7 +10,9 @@ import hashlib
 import threading
 import time
 
-_TTL_SECONDS = 6 * 3600
+# 24h — standard for exact-match LLM caches; content is keyed by byte hash so
+# it cannot go stale, and code deploys restart the Space (clearing it) anyway.
+_TTL_SECONDS = 24 * 3600
 _MAX_ENTRIES = 10  # page_images make entries heavy (~1-2 MB each)
 
 _lock = threading.Lock()
