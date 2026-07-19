@@ -298,6 +298,10 @@ async def chat_with_document(payload: dict):
         _executor, lambda: _llm_state._cascade(messages, system)
     )
     answer = _llm_state._parse_json(raw).get("answer", "")
+    if isinstance(answer, (dict, list)):
+        # Model sometimes structures the answer — flatten to readable text
+        answer = json.dumps(answer, ensure_ascii=False)
+    answer = str(answer).strip()
     if not answer:
         raise HTTPException(status_code=503, detail="AI providers unavailable — try again shortly")
     return {"answer": answer, "provider": _llm_state.last_provider}
