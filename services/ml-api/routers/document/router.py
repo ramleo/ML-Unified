@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse
 
 from ._schema import DOC_TYPES
 from ._extract import extract_document, search_bbox_in_doc, extract_tables_markdown
+from . import _cache
 from . import _llm as _llm_state
 from ._llm import classify_document, extract_fields_from_text
 from ._vision import (extract_fields_from_image, extract_visual_sections,
@@ -33,6 +34,26 @@ def _sse(data: dict) -> str:
 async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
                   provider: str = "auto") -> AsyncGenerator[str, None]:
     known_types = list(DOC_TYPES.keys())
+
+    # ── Cache: same file + settings analyzed before → replay instantly ────────
+    cache_key = _cache.make_key(file_bytes, doc_type_hint, provider)
+    cached = _cache.get(cache_key)
+    if cached:
+        done_evt = cached["done"]
+        for step in ("extract", "classify", "analyze", "validate"):
+            evt: dict = {"step": step, "status": "done"}
+            if step == "classify":
+                evt.update({"doc_type": done_evt["doc_type"],
+                            "doc_type_label": done_evt["doc_type_label"],
+                            "classification_confidence": done_evt["classification_confidence"]})
+            if step == "analyze":
+                evt["provider"] = f'{cached["provider"]} (cached)' if cached["provider"] else ""
+            yield _sse(evt)
+        for field in cached["fields"]:
+            yield _sse({"field": field})
+            await asyncio.sleep(0.03)
+        yield _sse({**done_evt, "cached": True})
+        return
 
     # ── Step 1: Extract ───────────────────────────────────────────────────────
     yield _sse({"step": "extract", "label": "Extracting content", "status": "running"})
@@ -191,7 +212,7 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
         await asyncio.sleep(0.07)  # stagger for frontend animation
 
     # ── Done ──────────────────────────────────────────────────────────────────
-    yield _sse({
+    done_evt = {
         "done": True,
         "doc_type": doc_type,
         "doc_type_label": DOC_TYPES[doc_type]["label"],
@@ -201,7 +222,12 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
         "field_count": len(fields),
         "classification_confidence": round(class_confidence, 3),
         "provider": served_by,
-    })
+    }
+    yield _sse(done_evt)
+
+    # Only cache successful runs — failures should retry on next upload
+    if fields:
+        _cache.put(cache_key, {"fields": fields, "provider": served_by, "done": done_evt})
 
 
 @router.post("/analyze")
