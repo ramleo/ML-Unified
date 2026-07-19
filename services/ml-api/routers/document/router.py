@@ -32,11 +32,11 @@ def _sse(data: dict) -> str:
 
 
 async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
-                  provider: str = "auto") -> AsyncGenerator[str, None]:
+                  provider: str = "auto", custom_fields: str = "") -> AsyncGenerator[str, None]:
     known_types = list(DOC_TYPES.keys())
 
     # ── Cache: same file + settings analyzed before → replay instantly ────────
-    cache_key = _cache.make_key(file_bytes, doc_type_hint, provider)
+    cache_key = _cache.make_key(file_bytes, doc_type_hint, provider + "|" + custom_fields)
     cached = _cache.get(cache_key)
     if cached:
         done_evt = cached["done"]
@@ -121,7 +121,14 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
     yield _sse({"step": "analyze", "label": "Extracting fields with AI", "status": "running"})
     await asyncio.sleep(0)
 
-    schema_fields = DOC_TYPES[doc_type]["fields"]
+    schema_fields = list(DOC_TYPES[doc_type]["fields"])
+    # User-requested extra fields: "GST Number, HSN Code" → schema entries
+    for cf in custom_fields.split(","):
+        cf = cf.strip()
+        if cf:
+            name = "".join(c if c.isalnum() else "_" for c in cf.lower()).strip("_")
+            if name and name not in {f["name"] for f in schema_fields}:
+                schema_fields.append({"name": name, "label": cf, "field_type": "text"})
     fields: list[dict] = []
     served_by = ""
 
@@ -223,6 +230,7 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
         "field_count": len(fields),
         "classification_confidence": round(class_confidence, 3),
         "provider": served_by,
+        "doc_text": text[:14000],  # context for the chat-with-document feature
     }
     yield _sse(done_evt)
 
@@ -236,9 +244,11 @@ async def analyze_document(
     file: UploadFile = File(...),
     doc_type: str = Form(default="auto"),
     provider: str = Form(default="auto"),
+    custom_fields: str = Form(default=""),
 ):
     """Analyze a document and stream extracted fields as SSE events.
-    provider: "auto" (cascade) | "groq" | "gemini" | "cohere"
+    provider: "auto" (cascade) | "groq" | "mistral" | "gemini" | "cohere"
+    custom_fields: comma-separated extra field names to extract
     """
     file_bytes = await file.read()
     if len(file_bytes) > MAX_FILE_BYTES:
@@ -247,10 +257,50 @@ async def analyze_document(
         raise HTTPException(status_code=400, detail="Empty file")
 
     return StreamingResponse(
-        _stream(file_bytes, file.filename or "document", doc_type, provider),
+        _stream(file_bytes, file.filename or "document", doc_type, provider, custom_fields),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post("/chat")
+async def chat_with_document(payload: dict):
+    """Answer a free-form question about an analyzed document.
+    payload: {question, doc_text, fields?, history?: [{role, content}]}
+    """
+    question = str(payload.get("question", "")).strip()
+    doc_text = str(payload.get("doc_text", ""))[:14000]
+    if not question or not doc_text.strip():
+        raise HTTPException(status_code=400, detail="question and doc_text are required")
+
+    fields = payload.get("fields") or []
+    history = payload.get("history") or []
+    field_summary = "\n".join(
+        f'- {f.get("label", f.get("name"))}: {str(f.get("value"))[:200]}'
+        for f in fields[:30] if isinstance(f, dict)
+    )
+
+    system = ("You answer questions about a specific document. Use ONLY the document "
+              "content and extracted fields provided. If the answer is not in the "
+              "document, say so plainly. Be concise. Respond with valid JSON.")
+    prompt = (
+        f"DOCUMENT CONTENT:\n{doc_text}\n\n"
+        f"EXTRACTED FIELDS:\n{field_summary}\n\n"
+        f"QUESTION: {question}\n\n"
+        'Return JSON: {"answer": "<your concise answer>"}'
+    )
+    messages = [{"role": m.get("role", "user"), "content": str(m.get("content", ""))[:1000]}
+                for m in history[-6:] if m.get("content")]
+    messages.append({"role": "user", "content": prompt})
+
+    loop = asyncio.get_event_loop()
+    raw = await loop.run_in_executor(
+        _executor, lambda: _llm_state._cascade(messages, system)
+    )
+    answer = _llm_state._parse_json(raw).get("answer", "")
+    if not answer:
+        raise HTTPException(status_code=503, detail="AI providers unavailable — try again shortly")
+    return {"answer": answer, "provider": _llm_state.last_provider}
 
 
 
