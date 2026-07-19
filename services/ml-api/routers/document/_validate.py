@@ -104,6 +104,107 @@ def _check_invoice_totals(fields: list[dict]) -> dict[str, dict]:
     return issues
 
 
+def _check_balance_equation(fields: list[dict]) -> dict[str, dict]:
+    """For bank statements: closing ≈ opening + credits − debits."""
+    by_name = {f["name"]: f for f in fields}
+    issues: dict[str, dict] = {}
+
+    opening = by_name.get("opening_balance")
+    closing = by_name.get("closing_balance")
+    credits = by_name.get("total_credits")
+    debits = by_name.get("total_debits")
+    if not (opening and closing and credits and debits):
+        return issues
+
+    o = _parse_amount(opening["value"])
+    c = _parse_amount(closing["value"])
+    cr = _parse_amount(credits["value"])
+    db = _parse_amount(debits["value"])
+    if None in (o, c, cr, db):
+        return issues
+    expected = o + cr - db
+    if abs(expected - c) > 0.02 * max(abs(c), 1):
+        issues[closing["name"]] = {
+            "status": "flagged",
+            "note": f"Closing {c} ≠ opening {o} + credits {cr} − debits {db} = {expected:.2f}",
+        }
+    return issues
+
+
+def _check_line_items_sum(fields: list[dict]) -> dict[str, dict]:
+    """Line-item amounts should sum to the subtotal (pre-tax)."""
+    by_name = {f["name"]: f for f in fields}
+    issues: dict[str, dict] = {}
+
+    items_f = by_name.get("line_items") or by_name.get("items")
+    subtotal_f = by_name.get("subtotal")
+    if not (items_f and subtotal_f):
+        return issues
+    try:
+        items = json.loads(str(items_f["value"]))
+    except Exception:
+        return issues
+    if not isinstance(items, list) or not items:
+        return issues
+
+    total = 0.0
+    for item in items:
+        if not isinstance(item, dict):
+            return issues
+        for key in ("amount", "total", "total_price", "line_total"):
+            if key in item:
+                amt = _parse_amount(str(item[key]))
+                if amt is not None:
+                    total += amt
+                break
+        else:
+            return issues  # no amount key on an item — can't verify
+
+    sub = _parse_amount(subtotal_f["value"])
+    if sub is not None and abs(total - sub) > 0.02 * max(sub, 1):
+        issues[items_f["name"]] = {
+            "status": "flagged",
+            "note": f"Line items sum to {total:.2f} but subtotal is {sub}",
+        }
+    return issues
+
+
+# Unambiguous formats only — dd/mm vs mm/dd guessing would produce false flags
+_DATE_FORMATS = ("%Y-%m-%d", "%d %B %Y", "%d %b %Y", "%B %d, %Y", "%B %d %Y", "%b %d, %Y")
+
+_DATE_ORDER_RULES: dict[str, list[tuple[str, str, str]]] = {
+    "invoice":        [("date", "due_date", "Invoice date is after the due date")],
+    "contract":       [("effective_date", "termination_date", "Effective date is after termination date")],
+    "id_card":        [("issue_date", "expiry_date", "Issue date is after expiry date")],
+    "purchase_order": [("date", "delivery_date", "Order date is after delivery date")],
+}
+
+
+def _parse_date(s: str):
+    from datetime import datetime
+    s = s.strip()
+    for fmt in _DATE_FORMATS:
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _check_date_order(fields: list[dict], doc_type: str) -> dict[str, dict]:
+    by_name = {f["name"]: f for f in fields}
+    issues: dict[str, dict] = {}
+    for earlier, later, note in _DATE_ORDER_RULES.get(doc_type, []):
+        e_f, l_f = by_name.get(earlier), by_name.get(later)
+        if not (e_f and l_f):
+            continue
+        e_d, l_d = _parse_date(str(e_f["value"])), _parse_date(str(l_f["value"]))
+        if e_d and l_d and e_d > l_d:
+            issues[later] = {"status": "flagged",
+                             "note": f"{note} ({e_f['value']} > {l_f['value']})"}
+    return issues
+
+
 # ── LLM consistency check ─────────────────────────────────────────────────────
 
 def _llm_consistency_check(fields: list[dict], doc_type: str) -> dict[str, dict]:
@@ -172,10 +273,14 @@ def validate_and_correct(fields: list[dict], doc_type: str) -> list[dict]:
         if issue:
             rule_issues[f["name"]] = issue
 
-    # Pass 2 — invoice total arithmetic (free, deterministic)
+    # Pass 2 — deterministic cross-field arithmetic (free, instant)
     arithmetic_issues: dict[str, dict] = {}
-    if doc_type == "invoice":
-        arithmetic_issues = _check_invoice_totals(fields)
+    if doc_type in ("invoice", "receipt", "purchase_order"):
+        arithmetic_issues.update(_check_invoice_totals(fields))
+        arithmetic_issues.update(_check_line_items_sum(fields))
+    elif doc_type == "bank_statement":
+        arithmetic_issues.update(_check_balance_equation(fields))
+    arithmetic_issues.update(_check_date_order(fields, doc_type))
 
     # Pass 3 — LLM consistency (only when we have enough fields to check)
     llm_issues: dict[str, dict] = {}
