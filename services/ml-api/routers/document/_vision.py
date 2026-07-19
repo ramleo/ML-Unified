@@ -124,12 +124,13 @@ def _groq_vision_raw(b64: str, prompt: str) -> str:
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {key}"},
                 json={"model": "qwen/qwen3.6-27b",
-                      "messages": messages, "max_tokens": 4096},
+                      "messages": messages, "max_tokens": 1500},
             )
             r.raise_for_status()
             return r.json()["choices"][0]["message"]["content"] or ""
     except Exception as exc:
-        logger.error("Groq vision failed: %s", exc)
+        body = getattr(getattr(exc, "response", None), "text", "")[:300]
+        logger.error("Groq vision failed: %s %s", exc, body)
         return ""
 
 
