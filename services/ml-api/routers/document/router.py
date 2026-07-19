@@ -52,7 +52,8 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
         for field in cached["fields"]:
             yield _sse({"field": field})
             await asyncio.sleep(0.03)
-        yield _sse({**done_evt, "cached": True})
+        cached_provider = f'{cached["provider"]} (cached)' if cached["provider"] else ""
+        yield _sse({**done_evt, "provider": cached_provider, "cached": True})
         return
 
     # ── Step 1: Extract ───────────────────────────────────────────────────────
