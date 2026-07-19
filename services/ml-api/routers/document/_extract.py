@@ -83,20 +83,28 @@ def _extract_docx(file_bytes: bytes) -> dict[str, Any]:
                 seen.add(p.text.strip())
         for tbl in d.tables:
             lines: list[str] = []
+            seen_tc: set[int] = set()  # merged cells share one tc element — emit once
             for i, row in enumerate(tbl.rows):
-                cells = [c.text.strip().replace("|", " ") for c in row.cells]
+                cells: list[str] = []
                 for c in row.cells:
+                    tc_id = id(c._tc)
+                    if tc_id in seen_tc:
+                        continue
+                    seen_tc.add(tc_id)
+                    cells.append(c.text.strip().replace("|", " "))
                     seen.update(s.strip() for s in c.text.split("\n") if s.strip())
-                lines.append("| " + " | ".join(cells) + " |")
-                if i == 0:
-                    lines.append("|" + "|".join(["---"] * len(cells)) + "|")
+                if any(cells):
+                    lines.append("| " + " | ".join(cells) + " |")
+                    if i == 0:
+                        lines.append("|" + "|".join(["---"] * len(cells)) + "|")
             if lines:
                 parts.append("\n".join(lines))
 
-        # Text boxes, headers, footers — where designed resumes hide contact info
+        # Text boxes, headers, footers — where designed resumes keep contact
+        # info. Put FIRST so it survives the extraction prompt's length cap.
         extra = _docx_extra_text(file_bytes, seen)
         if extra:
-            parts.append("## ADDITIONAL CONTENT (text boxes, headers, footers)\n"
+            parts.insert(0, "## DOCUMENT TEXT (text boxes, headers, footers)\n"
                          + "\n".join(extra))
 
         text = "\n\n".join(parts)
