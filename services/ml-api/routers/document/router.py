@@ -101,6 +101,7 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
 
     schema_fields = DOC_TYPES[doc_type]["fields"]
     fields: list[dict] = []
+    served_by = ""
 
     try:
         loop = asyncio.get_event_loop()
@@ -108,6 +109,11 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
             fields = await loop.run_in_executor(
                 _executor, lambda: extract_fields_from_text(text, doc_type, schema_fields, provider)
             )
+            # Capture attribution for the MAIN extraction now — the visual
+            # sections pass and validation below also run the cascades and
+            # would overwrite last_provider.
+            if fields:
+                served_by = _llm_state.last_provider
             if page_images:
                 schema_names = {f["name"] for f in schema_fields}
                 found_names = {f["name"] for f in fields if f.get("value")}
@@ -130,6 +136,8 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
                 _executor,
                 lambda: extract_fields_from_image(page_images[0], doc_type, schema_fields),
             )
+            if fields:
+                served_by = _llm_state.last_provider
     except Exception as exc:
         logger.error("Field extraction failed: %s", exc)
 
@@ -140,12 +148,10 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
                 _executor,
                 lambda: extract_fields_from_image(page_images[0], doc_type, schema_fields),
             )
+            if fields:
+                served_by = _llm_state.last_provider
         except Exception as exc:
             logger.error("Vision fallback failed: %s", exc)
-
-    # Capture attribution now — the validation pass below also calls the
-    # cascade and would overwrite it.
-    served_by = _llm_state.last_provider if fields else ""
 
     yield _sse({"step": "analyze", "status": "done", "provider": served_by})
 
