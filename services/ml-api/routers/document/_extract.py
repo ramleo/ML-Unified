@@ -22,7 +22,43 @@ def extract_document(file_bytes: bytes, filename: str) -> dict[str, Any]:
     fname = (filename or "").lower()
     if fname.endswith(".pdf") or file_bytes[:4] == b"%PDF":
         return _extract_pdf(file_bytes)
+    if fname.endswith(".docx") or _looks_like_docx(file_bytes):
+        return _extract_docx(file_bytes)
     return _extract_image(file_bytes)
+
+
+def _looks_like_docx(file_bytes: bytes) -> bool:
+    if file_bytes[:2] != b"PK":
+        return False
+    try:
+        import zipfile
+        with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
+            return "word/document.xml" in z.namelist()
+    except Exception:
+        return False
+
+
+def _extract_docx(file_bytes: bytes) -> dict[str, Any]:
+    """Extract text + tables from a Word document. No page rendering — DOCX has
+    no fixed layout, so the preview panel stays empty and bbox search is skipped."""
+    try:
+        import docx
+        d = docx.Document(io.BytesIO(file_bytes))
+        parts: list[str] = [p.text for p in d.paragraphs if p.text.strip()]
+        for tbl in d.tables:
+            lines: list[str] = []
+            for i, row in enumerate(tbl.rows):
+                cells = [c.text.strip().replace("|", " ") for c in row.cells]
+                lines.append("| " + " | ".join(cells) + " |")
+                if i == 0:
+                    lines.append("|" + "|".join(["---"] * len(cells)) + "|")
+            if lines:
+                parts.append("\n".join(lines))
+        text = "\n\n".join(parts)
+        return {"text": text, "page_images": [], "processing_mode": "docx", "pages": 1}
+    except Exception as exc:
+        logger.error("DOCX extraction failed: %s", exc)
+        return {"text": "", "page_images": [], "processing_mode": "error", "pages": 0}
 
 
 def _extract_pdf(file_bytes: bytes) -> dict[str, Any]:
