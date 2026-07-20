@@ -1,16 +1,23 @@
-"""In-memory store of human field corrections (HITL feedback loop).
+"""Store of human field corrections (HITL feedback loop), persisted to a JSON
+file on disk.
 
 When a user edits an extracted field in the UI, the (original → corrected)
 pair is recorded per document type. Recent pairs are injected into future
 extraction prompts as few-shot guidance, so the model "learns" from human
-corrections with zero training infrastructure. In-memory only: resets on
-Space restart, entries expire after 7 days.
+corrections with zero training infrastructure. File-backed so corrections
+survive a plain process restart; a rebuild/redeploy that recreates the
+container resets the file. Swap for a real DB (e.g. SQLite) if this needs to
+survive redeploys or scale beyond one instance — the add()/guidance() API
+would not need to change.
 """
 from __future__ import annotations
 
+import json
 import logging
+import os
 import time
 from collections import deque
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +25,29 @@ _MAX_PER_TYPE = 12   # corrections kept per document type
 _MAX_IN_PROMPT = 8   # most recent pairs injected into the prompt
 _TTL_SECONDS = 7 * 24 * 3600
 
-_store: dict[str, deque] = {}
+_STORE_PATH = Path(os.environ.get("CORRECTIONS_STORE_PATH",
+                                  Path(__file__).parent / "_corrections_store.json"))
+
+
+def _load() -> dict[str, deque]:
+    try:
+        raw = json.loads(_STORE_PATH.read_text())
+        return {dt: deque(entries, maxlen=_MAX_PER_TYPE) for dt, entries in raw.items()}
+    except FileNotFoundError:
+        return {}
+    except Exception as exc:
+        logger.warning("Corrections store unreadable, starting fresh: %s", exc)
+        return {}
+
+
+def _save() -> None:
+    try:
+        _STORE_PATH.write_text(json.dumps({dt: list(dq) for dt, dq in _store.items()}))
+    except Exception as exc:
+        logger.warning("Corrections store save failed: %s", exc)
+
+
+_store: dict[str, deque] = _load()
 
 
 def add(doc_type: str, name: str, label: str, original: str, corrected: str) -> bool:
@@ -38,6 +67,7 @@ def add(doc_type: str, name: str, label: str, original: str, corrected: str) -> 
         "corrected": corrected[:120],
         "at": time.time(),
     })
+    _save()
     logger.info("Correction stored: %s.%s (%d for this type)", doc_type, name, len(dq))
     return True
 
