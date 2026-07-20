@@ -168,9 +168,23 @@ def _image_prompt(terse: bool = False) -> str:
     )
 
 
-def _looks_like_image(file_bytes: bytes) -> bool:
-    sigs = (b"\x89PNG", b"\xff\xd8\xff", b"GIF8", b"RIFF")  # PNG, JPEG, GIF, WEBP(RIFF)
-    return any(file_bytes.startswith(s) for s in sigs)
+def _looks_like_image(file_bytes: bytes, content_type: str = "") -> bool:
+    if content_type.startswith("image/"):
+        return True
+    sigs = (b"\x89PNG", b"\xff\xd8\xff", b"GIF8", b"RIFF",  # PNG, JPEG, GIF, WEBP(RIFF)
+            b"BM", b"II*\x00", b"MM\x00*")                    # BMP, TIFF (little/big-endian)
+    if any(file_bytes.startswith(s) for s in sigs):
+        return True
+    # Last resort: let PIL make the call — covers real image files whose exact
+    # header a fixed signature list doesn't anticipate (e.g. unusual PNG/TIFF
+    # variants exported by some invoice/office tools).
+    try:
+        from PIL import Image
+        import io
+        Image.open(io.BytesIO(file_bytes)).verify()
+        return True
+    except Exception:
+        return False
 
 
 def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[str], dict]:
@@ -257,7 +271,7 @@ def _sse(data: dict) -> str:
 
 
 async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
-                  save_scope: str, session_id: str) -> AsyncGenerator[str, None]:
+                  save_scope: str, session_id: str, content_type: str = "") -> AsyncGenerator[str, None]:
     import asyncio
     from routers.rag import get_rag_state
 
@@ -289,7 +303,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
     else:
         yield _sse({"step": "extract", "status": "running"})
         loop = asyncio.get_event_loop()
-        is_image = _looks_like_image(file_bytes)
+        is_image = file_bytes[:4] != b"%PDF" and _looks_like_image(file_bytes, content_type)
         events: list[dict] = []
         try:
             if is_image:
@@ -355,14 +369,15 @@ async def mm_ingest(
     your /rag/query calls use so the upload is retrievable from that chat
     session; a fresh one is generated if omitted."""
     file_bytes = await file.read()
+    content_type = file.content_type or ""
     if len(file_bytes) > MAX_FILE_BYTES:
         raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
-    if not file_bytes or not (file_bytes[:4] == b"%PDF" or _looks_like_image(file_bytes)):
+    if not file_bytes or not (file_bytes[:4] == b"%PDF" or _looks_like_image(file_bytes, content_type)):
         raise HTTPException(status_code=400,
-                            detail="Only PDF or image files (PNG/JPG/GIF/WEBP) are supported.")
+                            detail="Only PDF or image files (PNG/JPG/GIF/WEBP/BMP/TIFF) are supported.")
 
     return StreamingResponse(
-        _stream(file_bytes, file.filename or "document.pdf", embedding_mode, save_scope, session_id),
+        _stream(file_bytes, file.filename or "document.pdf", embedding_mode, save_scope, session_id, content_type),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

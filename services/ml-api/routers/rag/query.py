@@ -52,6 +52,7 @@ class QueryRequest(BaseModel):
     embedding_model: str = "minilm"  # "minilm" | "jina"
     session_id: str = ""
     force_web: bool = False
+    restrict_to_uploads: bool = False  # answer ONLY from this session's uploads — no KB, no web
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -202,15 +203,18 @@ def _sse_generator(req: QueryRequest):
     # 1. Expand query, retrieve top-50 candidates per variant (RRF-merged), rerank to top-8
     use_jina = req.embedding_model == "jina" and state.jina_ready
     queries = expand_query(req.query, provider, model, key)
-    candidates = multi_query_retrieve(queries, state, top_k=20, use_jina=use_jina, session_id=req.session_id)
+    candidates = multi_query_retrieve(queries, state, top_k=20, use_jina=use_jina,
+                                      session_id=req.session_id, kb_fallback=not req.restrict_to_uploads)
     chunks = rerank(req.query, candidates, state, top_k=5)
 
     top_raw = chunks[0].get("score", 0.0) if chunks else 0.0
     low_confidence = not chunks or top_raw < 0.05
 
     # 2a. CRAG: fire when confidence is low and no dataset, OR when user forces web override.
+    # Never for restrict_to_uploads — a tool answering from one specific
+    # document must not quietly answer from the open web instead.
     web_fallback_used = False
-    if (low_confidence and not has_dataset) or req.force_web:
+    if not req.restrict_to_uploads and ((low_confidence and not has_dataset) or req.force_web):
         web_chunks = web_search_fallback(req.query)
         if web_chunks:
             chunks = web_chunks if req.force_web else chunks + web_chunks
@@ -229,7 +233,7 @@ def _sse_generator(req: QueryRequest):
             seen_sources.append(src)
 
     # 3. Build prompt
-    system_prompt = build_system_prompt(req.tool_context, chunks)
+    system_prompt = build_system_prompt(req.tool_context, chunks, restrict_to_uploads=req.restrict_to_uploads)
     messages: list[dict] = list(req.history or [])
     messages.append({"role": "user", "content": req.query})
 

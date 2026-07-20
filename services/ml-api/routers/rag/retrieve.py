@@ -181,7 +181,8 @@ def hybrid_retrieve(query: str, state, top_k: int = 8, use_jina: bool = False, s
 
 
 def tiered_hybrid_retrieve(
-    query: str, state, top_k: int = 8, use_jina: bool = False, session_id: str = ""
+    query: str, state, top_k: int = 8, use_jina: bool = False, session_id: str = "",
+    kb_fallback: bool = True,
 ) -> list[dict]:
     """Two-tier retrieval: session-uploaded docs first, KB fallback if weak match.
 
@@ -189,12 +190,17 @@ def tiered_hybrid_retrieve(
     If top score ≥ 0.15 → return those.
     Tier 2 — KB-only retrieval; merge with any tier-1 results via RRF.
     Falls through to standard hybrid_retrieve when no uploads exist for session.
+
+    kb_fallback=False confines results to the session's own uploads only —
+    for tools (e.g. Multimodal RAG) whose whole point is answering from a
+    specific uploaded document, where silently blending in the general
+    knowledge base would be a wrong answer, not a helpful fallback.
     """
     has_uploads = session_id and any(
         state.source_sessions.get(s) == session_id for s in state.uploaded_sources
     )
     if not has_uploads:
-        return hybrid_retrieve(query, state, top_k=top_k, use_jina=use_jina, session_id=session_id)
+        return hybrid_retrieve(query, state, top_k=top_k, use_jina=use_jina, session_id=session_id) if kb_fallback else []
 
     query_emb = embed_query(query, state, use_jina=use_jina)
     collection = state.jina_collection if (use_jina and state.jina_ready) else state.collection
@@ -207,6 +213,9 @@ def tiered_hybrid_retrieve(
     tier1 = reciprocal_rank_fusion([l for l in [dense_up, bm25_up] if l]) if (dense_up or bm25_up) else []
     for c in tier1:
         c["uploaded"] = True
+
+    if not kb_fallback:
+        return tier1[:top_k]
 
     if tier1 and tier1[0].get("score", 0.0) >= 0.15:
         return tier1[:top_k]
@@ -222,7 +231,8 @@ def tiered_hybrid_retrieve(
     return reciprocal_rank_fusion([tier1, tier2])[:top_k]
 
 
-def multi_query_retrieve(queries: list[str], state, top_k: int = 50, use_jina: bool = False, session_id: str = "") -> list[dict]:
+def multi_query_retrieve(queries: list[str], state, top_k: int = 50, use_jina: bool = False,
+                         session_id: str = "", kb_fallback: bool = True) -> list[dict]:
     """Run hybrid_retrieve for each query variant, then RRF-merge across all
     variants' result lists. A chunk surfaced by multiple phrasings of the
     same question ranks higher than one found by only the original wording.
@@ -231,7 +241,11 @@ def multi_query_retrieve(queries: list[str], state, top_k: int = 50, use_jina: b
         return []
 
     retrieve_fn = tiered_hybrid_retrieve if session_id else hybrid_retrieve
-    per_query_lists = [retrieve_fn(q, state, top_k=top_k, use_jina=use_jina, session_id=session_id) for q in queries]
+    per_query_lists = [
+        retrieve_fn(q, state, top_k=top_k, use_jina=use_jina, session_id=session_id, kb_fallback=kb_fallback)
+        if session_id else retrieve_fn(q, state, top_k=top_k, use_jina=use_jina, session_id=session_id)
+        for q in queries
+    ]
     per_query_lists = [lst for lst in per_query_lists if lst]
 
     if not per_query_lists:
