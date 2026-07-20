@@ -42,9 +42,9 @@ _CACHE_MAX = 4
 _cache: dict[str, tuple[float, dict]] = {}
 
 
-def _cache_key(file_bytes: bytes, embedding_mode: str, save_scope: str) -> str:
+def _cache_key(file_bytes: bytes, embedding_mode: str) -> str:
     digest = hashlib.sha256(file_bytes).hexdigest()
-    return f"{digest}:{embedding_mode}:{save_scope}"
+    return f"{digest}:{embedding_mode}"
 
 
 def _cache_get(key: str) -> dict | None:
@@ -184,15 +184,9 @@ def _sse(data: dict) -> str:
 
 
 async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
-                  save_scope: str) -> AsyncGenerator[str, None]:
+                  save_scope: str, session_id: str) -> AsyncGenerator[str, None]:
     import asyncio
     from routers.rag import get_rag_state
-
-    cache_key = _cache_key(file_bytes, embedding_mode, save_scope)
-    cached = _cache_get(cache_key)
-    if cached:
-        yield _sse({"step": "ingest", "status": "done", "cached": True, **cached})
-        return
 
     try:
         state = get_rag_state()
@@ -202,21 +196,38 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
 
     # UUID suffix avoids the process-global "already uploaded" 409 that would
     # otherwise block repeated test/demo uploads of the same fixture file.
+    # Minted fresh on every call — even a cache hit — so two different chat
+    # sessions uploading the same bytes never collide over one source string.
     source = f"user:{filename}:{_uuid.uuid4().hex[:8]}"
-    session_id = str(_uuid.uuid4())
+    if not session_id:
+        session_id = str(_uuid.uuid4())
 
-    yield _sse({"step": "extract", "status": "running"})
-    loop = asyncio.get_event_loop()
-    events: list[dict] = []
-    try:
-        chunks, page_images, summary = await loop.run_in_executor(
-            _executor, lambda: build_multimodal_chunks(file_bytes, source, events.append)
-        )
-    except Exception as exc:
-        logger.error("Multimodal ingestion failed: %s", exc)
-        yield _sse({"error": f"Failed to process file: {exc}"})
-        return
-    yield _sse({"step": "extract", "status": "done", "chunk_summary": summary})
+    # Cache only the EXPENSIVE-to-produce artifacts (vision captioning is the
+    # slow/costly step). Indexing is always redone fresh per call — cheap,
+    # and required so re-uploads land under the caller's own session_id
+    # instead of replaying a stale one no query would ever match again.
+    cache_key = _cache_key(file_bytes, embedding_mode)
+    cached = _cache_get(cache_key)
+    if cached:
+        chunks = [dict(c, source=source) for c in cached["chunks"]]
+        page_images = cached["page_images"]
+        summary = cached["chunk_summary"]
+        yield _sse({"step": "extract", "status": "done", "chunk_summary": summary, "cached": True})
+    else:
+        yield _sse({"step": "extract", "status": "running"})
+        loop = asyncio.get_event_loop()
+        events: list[dict] = []
+        try:
+            chunks, page_images, summary = await loop.run_in_executor(
+                _executor, lambda: build_multimodal_chunks(file_bytes, source, events.append)
+            )
+        except Exception as exc:
+            logger.error("Multimodal ingestion failed: %s", exc)
+            yield _sse({"error": f"Failed to process file: {exc}"})
+            return
+        yield _sse({"step": "extract", "status": "done", "chunk_summary": summary})
+        if chunks:
+            _cache_put(cache_key, {"chunks": chunks, "page_images": page_images, "chunk_summary": summary})
 
     if not chunks:
         yield _sse({"error": "No extractable content found (text, tables, or figures)."})
@@ -224,6 +235,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
 
     yield _sse({"step": "embed", "status": "running"})
     uploaded = save_scope != "shared"
+    loop = asyncio.get_event_loop()
     await loop.run_in_executor(
         _executor,
         lambda: index_chunks(chunks, state, uploaded=uploaded,
@@ -240,7 +252,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         except Exception as exc:
             logger.warning("CLIP figure indexing skipped: %s", exc)
 
-    done = {
+    yield _sse({
         "done": True,
         "source": source,
         "session_id": session_id,
@@ -248,9 +260,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         "chunks_added": len(chunks),
         "chunk_summary": summary,
         "page_images": page_images,
-    }
-    _cache_put(cache_key, {k: v for k, v in done.items() if k != "done"})
-    yield _sse(done)
+    })
 
 
 @router.post("/mm-ingest")
@@ -258,9 +268,12 @@ async def mm_ingest(
     file: UploadFile = File(...),
     embedding_mode: str = Form(default="caption"),   # "caption" | "caption+clip"
     save_scope: str = Form(default="session"),        # "session" | "shared"
+    session_id: str = Form(default=""),               # reuse the caller's chat session_id
 ):
     """Ingest a PDF with tables/figures into the multimodal RAG index.
-    Streams progress as SSE; final event carries page_images for citation thumbnails."""
+    Streams progress as SSE; final event carries page_images for citation thumbnails.
+    Pass the same session_id your /rag/query calls use so the uploaded document
+    is retrievable from that chat session; a fresh one is generated if omitted."""
     file_bytes = await file.read()
     if len(file_bytes) > MAX_FILE_BYTES:
         raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
@@ -268,7 +281,7 @@ async def mm_ingest(
         raise HTTPException(status_code=400, detail="Only PDF is supported for multimodal ingestion.")
 
     return StreamingResponse(
-        _stream(file_bytes, file.filename or "document.pdf", embedding_mode, save_scope),
+        _stream(file_bytes, file.filename or "document.pdf", embedding_mode, save_scope, session_id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
