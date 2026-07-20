@@ -17,7 +17,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from routers.rag.llm import stream_groq_openai, stream_claude, stream_gemini, stream_cohere
-from routers.rag.query import _build_system_prompt, _resolve_key
+from routers.rag.query import _resolve_key
+from routers.rag.citations import build_system_prompt as _build_system_prompt
 from routers.rag.agent_nodes import (
     node_router, node_retrieve, node_grade, node_rewrite,
     edge_after_retrieve, edge_after_grade,
