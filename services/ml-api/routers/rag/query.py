@@ -80,10 +80,14 @@ def _cosine_sim(a: list[float], b: list[float]) -> float:
     return float(np.dot(va, vb) / denom) if denom > 0 else 0.0
 
 
-def _ctx_hash(tool_context: str) -> str:
-    """Short hash of tool_context so cache entries are dataset-specific."""
+def _ctx_hash(tool_context: str, session_id: str = "") -> str:
+    """Short hash of tool_context + session_id so cache entries are both
+    dataset- and session-specific. tool_context alone isn't enough for tools
+    whose context string is a fixed constant (e.g. Multimodal RAG) — without
+    session_id, every session/uploaded-document would share one cache slot."""
     import hashlib
-    return hashlib.md5(tool_context.strip().encode(), usedforsecurity=False).hexdigest()[:8] if tool_context.strip() else ""
+    key = f"{tool_context.strip()}::{session_id.strip()}"
+    return hashlib.md5(key.encode(), usedforsecurity=False).hexdigest()[:8] if key.strip(":") else ""
 
 
 def _cache_lookup(query_emb: list[float], state, provider: str, ctx_hash: str) -> dict | None:
@@ -165,11 +169,19 @@ def _sse_generator(req: QueryRequest):
 
     has_dataset = bool(req.tool_context.strip())
 
-    # 0. Semantic cache check (embed with MiniLM regardless of embedding_model setting)
-    ctx_hash = _ctx_hash(req.tool_context)
+    # 0. Semantic cache check (embed with MiniLM regardless of embedding_model setting).
+    # ctx_hash previously derived only from tool_context, which is a FIXED
+    # constant for tools like Multimodal RAG — every session/document shared
+    # one cache slot, so one user's uploaded-document answer could leak into
+    # a different session's differently-uploaded document if the two
+    # questions happened to embed as similar enough. Folding session_id in
+    # fixes that for every tool that sets one; restrict_to_uploads mode
+    # additionally skips the cache outright, since correctness for a
+    # single-document Q&A tool matters more than the latency savings.
+    ctx_hash = _ctx_hash(req.tool_context, req.session_id)
     try:
         query_emb = state.embedding_fn([req.query])[0]
-        cached = _cache_lookup(query_emb, state, provider, ctx_hash)
+        cached = None if req.restrict_to_uploads else _cache_lookup(query_emb, state, provider, ctx_hash)
     except Exception:
         query_emb = None
         cached = None
@@ -267,9 +279,10 @@ def _sse_generator(req: QueryRequest):
         yield _sse({"type": "error", "message": f"Generation failed ({provider}/{model}): {exc}"})
         return
 
-    # 5. Store in semantic cache — skip on provider errors to avoid caching error strings
+    # 5. Store in semantic cache — skip on provider errors, and skip entirely
+    # for restrict_to_uploads (correctness over latency for single-doc Q&A).
     full_text = "".join(full_text_parts)
-    if query_emb is not None and full_text and not generation_failed:
+    if query_emb is not None and full_text and not generation_failed and not req.restrict_to_uploads:
         try:
             _cache_store(query_emb, full_text, seen_sources, chunks, state, provider, ctx_hash, answer_source, confidence)
         except Exception as exc:
