@@ -20,6 +20,7 @@ from routers.rag.rerank import rerank
 from routers.rag.expand import expand_query
 from routers.rag.llm import stream_groq_openai, stream_claude, stream_gemini, stream_cohere
 from routers.rag.crag import web_search_fallback
+from routers.rag.citations import build_system_prompt, build_source_doc
 
 logger = logging.getLogger(__name__)
 
@@ -64,23 +65,6 @@ def _resolve_key(provider: str, user_key: Optional[str]) -> str:
 
 def _sse(obj: Any) -> str:
     return f"data: {json.dumps(obj)}\n\n"
-
-
-def _build_system_prompt(tool_context: str, chunks: list[dict]) -> str:
-    parts: list[str] = []
-    if tool_context:
-        parts.append(tool_context.strip())
-
-    if chunks:
-        parts.append("Use the following retrieved knowledge to answer the user's question:")
-        parts.append("---")
-        for c in chunks:
-            src = c.get("source", "unknown")
-            text = c.get("text", "")
-            parts.append(f"[{src}]\n{text}")
-            parts.append("---")
-
-    return "\n\n".join(parts) if parts else "You are a helpful AI assistant."
 
 
 # ── Semantic cache ─────────────────────────────────────────────────────────────
@@ -197,15 +181,7 @@ def _sse_generator(req: QueryRequest):
 
     if cached:
         for chunk in cached["chunks"]:
-            yield _sse({
-                "type": "source",
-                "doc": {
-                    "text": chunk["text"],
-                    "source": chunk.get("source", ""),
-                    "score": round(chunk.get("score", 0.0), 4),
-                    "display_score": round(chunk.get("display_score", chunk.get("score", 0.0)), 4),
-                },
-            })
+            yield _sse({"type": "source", "doc": build_source_doc(chunk)})
         yield _sse({"type": "token", "text": cached["full_text"]})
         jina_status = "ready" if state.jina_ready else ("loading" if state.jina_loading else "idle")
         yield _sse({
@@ -247,21 +223,13 @@ def _sse_generator(req: QueryRequest):
     # 2b. Stream source events
     seen_sources: list[str] = []
     for chunk in chunks:
-        yield _sse({
-            "type": "source",
-            "doc": {
-                "text": chunk["text"],
-                "source": chunk.get("source", ""),
-                "score": round(chunk.get("score", 0.0), 4),
-                "display_score": round(chunk.get("display_score", chunk.get("score", 0.0)), 4),
-            },
-        })
+        yield _sse({"type": "source", "doc": build_source_doc(chunk)})
         src = chunk.get("source", "")
         if src and src not in seen_sources:
             seen_sources.append(src)
 
     # 3. Build prompt
-    system_prompt = _build_system_prompt(req.tool_context, chunks)
+    system_prompt = build_system_prompt(req.tool_context, chunks)
     messages: list[dict] = list(req.history or [])
     messages.append({"role": "user", "content": req.query})
 

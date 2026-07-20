@@ -108,6 +108,10 @@ def index_chunks(chunks: list[dict], state, uploaded: bool = False, session_id: 
 
     texts = [c["text"] for c in chunks]
     sources = [c["source"] for c in chunks]
+    # Additive: chunk_type/page/bbox default to absent for plain text/KB chunks —
+    # existing chunk_document() output and old-shaped chunks are unaffected.
+    metas = [{"chunk_type": c.get("chunk_type"), "page": c.get("page"), "bbox": c.get("bbox")}
+             for c in chunks]
     ids = [str(uuid.uuid4()) for _ in chunks]
 
     # Embed
@@ -120,13 +124,15 @@ def index_chunks(chunks: list[dict], state, uploaded: bool = False, session_id: 
             ids=ids[i : i + batch_size],
             embeddings=embeddings[i : i + batch_size],
             documents=texts[i : i + batch_size],
-            metadatas=[{"source": s, "uploaded": uploaded, "session_id": session_id}
-                       for s in sources[i : i + batch_size]],
+            metadatas=[{"source": s, "uploaded": uploaded, "session_id": session_id,
+                        **{k: v for k, v in m.items() if v is not None}}
+                       for s, m in zip(sources[i : i + batch_size], metas[i : i + batch_size])],
         )
 
     # Extend in-memory corpus
     state.corpus_chunks.extend(texts)
     state.chunk_sources.extend(sources)
+    state.chunk_meta.extend(metas)
     if uploaded:
         state.uploaded_sources.update(sources)
         if session_id:
@@ -172,6 +178,7 @@ def delete_source(source: str, state) -> int:
     removed = len(state.chunk_sources) - len(keep_idx)
     state.corpus_chunks = [state.corpus_chunks[i] for i in keep_idx]
     state.chunk_sources = [state.chunk_sources[i] for i in keep_idx]
+    state.chunk_meta = [state.chunk_meta[i] for i in keep_idx if i < len(state.chunk_meta)]
     state.uploaded_sources.discard(source)
     state.source_sessions.pop(source, None)
 

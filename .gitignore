@@ -11,6 +11,7 @@ build/
 vision_cache/
 services/ml-api/data/*.json
 !services/ml-api/data/rag_eval_qa.json
+!services/ml-api/data/rag_eval_mm_qa.json
 services/ml-api/routers/document/_corrections_store.json
 
 # Local artifacts

@@ -48,6 +48,9 @@ def dense_retrieve(query_embedding: list[float], state, k: int = 50, use_jina: b
             "score": float(1.0 - dist),   # cosine similarity
             "id": rid,
             "uploaded": bool(meta.get("uploaded", False)),
+            "chunk_type": meta.get("chunk_type"),
+            "page": meta.get("page"),
+            "bbox": meta.get("bbox"),
         })
 
     return hits
@@ -92,12 +95,16 @@ def bm25_retrieve(
             if state.source_sessions.get(src, "") != session_id:
                 continue
 
+        meta = state.chunk_meta[idx] if idx < len(state.chunk_meta) else {}
         hits.append({
             "text": state.corpus_chunks[idx],
             "source": src,
             "score": float(score),
             "id": f"bm25_{idx}",
             "uploaded": is_uploaded,
+            "chunk_type": meta.get("chunk_type"),
+            "page": meta.get("page"),
+            "bbox": meta.get("bbox"),
         })
 
     return hits

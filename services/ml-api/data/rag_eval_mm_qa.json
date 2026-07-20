@@ -1,0 +1,31 @@
+{
+  "fixture_pdf": "data/fixtures/mm_rag_sample.pdf",
+  "qa": [
+    {
+      "question": "What was North region's Q3 revenue?",
+      "expected_answer": "$482,000",
+      "expected_chunk_type": "table"
+    },
+    {
+      "question": "Which region had negative year-over-year growth in Q3?",
+      "expected_answer": "West",
+      "expected_chunk_type": "table"
+    },
+    {
+      "question": "What does the bar chart in this report show?",
+      "expected_answer": "Revenue by region (North, South, East, West)",
+      "expected_chunk_type": "figure"
+    },
+    {
+      "question": "Why did West region sales dip in Q3?",
+      "expected_answer": "seasonal dip due to distributor restocking delays",
+      "expected_chunk_type": "text"
+    },
+    {
+      "question": "What was the company's total headcount at the end of Q3?",
+      "expected_answer": null,
+      "expected_chunk_type": null,
+      "note": "Intentionally unanswerable — document contains no headcount data. Correct behavior is to say so, not fabricate a citation."
+    }
+  ]
+}

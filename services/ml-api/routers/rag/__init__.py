@@ -19,6 +19,7 @@ class RagState:
     reranker: object = None            # sentence_transformers.CrossEncoder
     corpus_chunks: list[str] = field(default_factory=list)
     chunk_sources: list[str] = field(default_factory=list)
+    chunk_meta: list[dict] = field(default_factory=list)  # parallel to corpus_chunks; {chunk_type, page, bbox}
     uploaded_sources: set[str] = field(default_factory=set)
     source_sessions: dict[str, str] = field(default_factory=dict)  # source → session_id
     initialized: bool = False
@@ -90,7 +91,9 @@ def initialize_jina(state: RagState) -> None:
                     "source": src,
                     "uploaded": src in state.uploaded_sources,
                     "session_id": state.source_sessions.get(src, ""),
-                } for src in state.chunk_sources],
+                    **{k: v for k, v in (state.chunk_meta[i] if i < len(state.chunk_meta) else {}).items()
+                       if v is not None},
+                } for i, src in enumerate(state.chunk_sources)],
             )
             logger.info("Jina collection ready — %d chunks indexed.", len(state.corpus_chunks))
         state.jina_ready = True
