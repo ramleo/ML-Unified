@@ -117,11 +117,23 @@ def _caption_prompt() -> str:
     )
 
 
+def _strip_thinking(text: str) -> str:
+    """Some reasoning models (e.g. Qwen) prefix output with a <think>...</think>
+    block even when only asked for JSON. Drop it — it's internal monologue,
+    not a caption, and would otherwise pollute the retrievable chunk text."""
+    if "<think>" not in text:
+        return text
+    if "</think>" in text:
+        return text.split("</think>", 1)[1].strip()
+    return ""  # unterminated — the whole response was reasoning, nothing usable
+
+
 def _extract_caption(raw: str, fallback_len: int) -> str:
     """Pull {"caption": "..."} out of a vision response. Falls back to the raw
     text whenever JSON parsing fails OR succeeds without a usable caption —
     a valid-but-differently-shaped JSON response should not discard an
     otherwise-good description."""
+    raw = _strip_thinking(raw)
     if not raw.strip():
         return ""
     try:
