@@ -18,9 +18,9 @@ from routers.rag import get_rag_state, initialize_jina
 from routers.rag.retrieve import multi_query_retrieve
 from routers.rag.rerank import rerank
 from routers.rag.expand import expand_query
-from routers.rag.llm import stream_groq_openai, stream_claude, stream_gemini, stream_cohere
 from routers.rag.crag import web_search_fallback
 from routers.rag.citations import build_system_prompt, build_source_doc
+from routers.rag.generation import build_provider_candidates, stream_with_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -255,35 +255,32 @@ def _sse_generator(req: QueryRequest):
     messages: list[dict] = list(req.history or [])
     messages.append({"role": "user", "content": req.query})
 
-    # 4. Stream token events; collect full text for cache
+    # 4. Stream token events; collect full text for cache. Provider fallback
+    # cascade lives in generation.py — if the selected provider fails before
+    # any token is produced, it silently retries with another provider
+    # rather than surfacing a raw API error; a failure AFTER tokens have
+    # started streaming is not retried (would garble the response) and comes
+    # back via meta['mid_stream_error'] instead.
     full_text_parts: list[str] = []
     generation_failed = False
-    try:
-        if provider in ("groq", "openai"):
-            full_messages = [{"role": "system", "content": system_prompt}] + messages if system_prompt else messages
-            token_iter = stream_groq_openai(provider, model, key, full_messages)
-        elif provider == "claude":
-            token_iter = stream_claude(model, key, messages, system_prompt)
-        elif provider == "gemini":
-            token_iter = stream_gemini(model, key, messages, system_prompt)
-        elif provider == "cohere":
-            token_iter = stream_cohere(model, key, messages, system_prompt)
-        else:
-            yield _sse({"type": "error", "message": f"Unknown provider '{provider}'."})
-            return
+    meta: dict = {}
 
-        for token in token_iter:
-            if token:
-                # Provider error strings (e.g. "[Cohere error 429]") must not be cached
-                if token.startswith("[") and "error" in token.lower():
-                    generation_failed = True
-                full_text_parts.append(token)
-                yield _sse({"type": "token", "text": token})
+    provider_candidates = build_provider_candidates(provider, model, key, _resolve_key)
+    for token in stream_with_fallback(provider_candidates, messages, system_prompt, meta):
+        if token.startswith("[") and "error" in token.lower():  # e.g. "[Cohere error 429]" — must not be cached
+            generation_failed = True
+        full_text_parts.append(token)
+        yield _sse({"type": "token", "text": token})
 
-    except Exception as exc:
-        logger.exception("LLM streaming error: %s", exc)
-        yield _sse({"type": "error", "message": f"Generation failed ({provider}/{model}): {exc}"})
+    if meta.get("mid_stream_error"):
+        yield _sse({"type": "error", "message": meta["mid_stream_error"]})
         return
+    if meta.get("error") and not full_text_parts:
+        yield _sse({"type": "error", "message": meta["error"]})
+        return
+
+    served_provider = meta.get("served_provider", provider)
+    served_model = meta.get("served_model", model)
 
     # 5. Store in semantic cache — skip on provider errors, and skip entirely
     # for restrict_to_uploads (correctness over latency for single-doc Q&A).
@@ -311,6 +308,8 @@ def _sse_generator(req: QueryRequest):
         "candidates_retrieved": len(candidates),
         "answer_source": answer_source,
         "confidence": confidence,
+        "served_provider": served_provider,
+        "served_model": served_model,
     })
 
 
