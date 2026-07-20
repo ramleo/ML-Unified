@@ -36,8 +36,9 @@ _executor = ThreadPoolExecutor(max_workers=2)
 MAX_FILE_BYTES = 10 * 1024 * 1024  # 10 MB
 _MAX_PAGES = 8
 _DENSE_TEXT_THRESHOLD = 80  # chars; below this + has images/drawings → caption it
-_RENDER_DPI = 2.0           # ~144 DPI — higher than Document Intelligence's preview
-                            # renders since this feeds the vision cascade, not just a thumbnail
+_RENDER_ZOOM = 2.0          # fitz zoom factor (~144 DPI, since PDF base is 72 DPI) —
+                            # higher than Document Intelligence's 1.2x preview renders
+                            # since this feeds the vision cascade, not just a thumbnail
 
 # ── Tiny ingestion cache (separate from document/_cache.py — own capacity) ────
 _CACHE_TTL = 24 * 3600
@@ -70,10 +71,10 @@ def _cache_put(key: str, payload: dict) -> None:
 
 # ── Page rendering + density heuristic ────────────────────────────────────────
 
-def _render_page(page, dpi: float = _RENDER_DPI) -> str:
+def _render_page(page, zoom: float = _RENDER_ZOOM) -> str:
     import base64
     import fitz
-    mat = fitz.Matrix(dpi / 72, dpi / 72)
+    mat = fitz.Matrix(zoom, zoom)
     pix = page.get_pixmap(matrix=mat)
     return base64.b64encode(pix.tobytes("png")).decode()
 
