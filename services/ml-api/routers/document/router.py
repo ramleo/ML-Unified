@@ -121,6 +121,9 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
     yield _sse({"step": "analyze", "label": "Extracting fields with AI", "status": "running"})
     await asyncio.sleep(0)
 
+    from ._preprocess import complexity_tier
+    tier = complexity_tier(text, pages, processing_mode)
+
     schema_fields = list(DOC_TYPES[doc_type]["fields"])
     # User-requested extra fields: "GST Number, HSN Code" → schema entries
     for cf in custom_fields.split(","):
@@ -136,7 +139,7 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
         loop = asyncio.get_event_loop()
         if text.strip():
             fields = await loop.run_in_executor(
-                _executor, lambda: extract_fields_from_text(text, doc_type, schema_fields, provider)
+                _executor, lambda: extract_fields_from_text(text, doc_type, schema_fields, provider, tier)
             )
             # Capture attribution for the MAIN extraction now — the visual
             # sections pass and validation below also run the cascades and
@@ -230,6 +233,7 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
         "field_count": len(fields),
         "classification_confidence": round(class_confidence, 3),
         "provider": served_by,
+        "routing": tier,  # complexity-based model routing: "simple" | "complex"
         "doc_text": text[:14000],  # context for the chat-with-document feature
     }
     yield _sse(done_evt)

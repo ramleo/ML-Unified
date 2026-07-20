@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 
 # ── Provider implementations ──────────────────────────────────────────────────
 
-def _groq(messages: list[dict], system: str) -> str:
+def _groq(messages: list[dict], system: str,
+          model: str = "llama-3.3-70b-versatile", max_tokens: int = 4096) -> str:
     key = os.environ.get("GROQ_API_KEY", "")
     if not key:
         return ""
@@ -25,7 +26,7 @@ def _groq(messages: list[dict], system: str) -> str:
         full = ([{"role": "system", "content": system}] if system else []) + messages
         client = openai.OpenAI(api_key=key, base_url="https://api.groq.com/openai/v1")
         resp = client.chat.completions.create(
-            model="llama-3.3-70b-versatile", messages=full, max_tokens=4096,
+            model=model, messages=full, max_tokens=max_tokens,
             response_format={"type": "json_object"}, temperature=0,
         )
         return resp.choices[0].message.content or ""
@@ -205,8 +206,10 @@ def classify_document(text_sample: str, known_types: list[str],
 
 
 def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict],
-                             provider: str = "auto") -> list[dict]:
-    """Extract fields from document text using the LLM cascade (or a forced provider)."""
+                             provider: str = "auto", tier: str = "complex") -> list[dict]:
+    """Extract fields from document text using the LLM cascade (or a forced provider).
+    tier="simple" routes to a small fast model first (complexity-based routing);
+    any failure falls through to the normal cascade."""
     field_names = [f["name"] for f in schema_fields]
     field_meta = {f["name"]: f for f in schema_fields}
     system = "You are a document data extraction expert. Respond only with valid JSON."
@@ -223,15 +226,26 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
         f'If per-role dates are not stated, use null.\n\n'
         f"Document text:\n{text[:14000]}"
     )
+    global last_provider
     _provider_map = {"groq": _groq, "mistral": _mistral, "gemini": _gemini_text, "cohere": _cohere}
     fn = _provider_map.get(provider)
+    messages = [{"role": "user", "content": prompt}]
     if fn:
-        raw = fn([{"role": "user", "content": prompt}], system)
+        raw = fn(messages, system)
         if raw.strip():
-            global last_provider
             last_provider = provider
     else:
-        raw = _cascade([{"role": "user", "content": prompt}], system)
+        raw = ""
+        if tier == "simple":
+            # Simple doc → small fast model (fits well under free-tier limits);
+            # empty/invalid JSON falls through to the full cascade below.
+            raw = _groq(messages, system, model="llama-3.1-8b-instant", max_tokens=2500)
+            if raw.strip() and _parse_json(raw).get("fields"):
+                last_provider = "groq · fast"
+            else:
+                raw = ""
+        if not raw:
+            raw = _cascade(messages, system)
     data = _parse_json(raw)
     return _normalize_fields(data.get("fields", []), field_meta)
 

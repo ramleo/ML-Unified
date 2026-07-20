@@ -125,6 +125,14 @@ def _extract_pdf(file_bytes: bytes) -> dict[str, Any]:
     pages = len(doc)
     page_images = _render_pages(doc)
 
+    # 0. Multi-column layouts: pymupdf4llm interleaves columns line-by-line —
+    # use column-aware block ordering instead ("" when single-column).
+    from ._preprocess import multicolumn_pdf_text
+    mc_text = multicolumn_pdf_text(doc)
+    if len(mc_text.strip()) > _TEXT_THRESHOLD:
+        doc.close()
+        return {"text": mc_text, "page_images": page_images, "processing_mode": "digital", "pages": pages}
+
     # 1. Try pymupdf4llm for high-quality markdown
     try:
         import pymupdf4llm
@@ -152,7 +160,8 @@ def _extract_pdf(file_bytes: bytes) -> dict[str, Any]:
 def _extract_image(file_bytes: bytes) -> dict[str, Any]:
     try:
         from PIL import Image
-        img = Image.open(io.BytesIO(file_bytes))
+        from ._preprocess import correct_image_orientation
+        img = correct_image_orientation(Image.open(io.BytesIO(file_bytes)))
         buf = io.BytesIO()
         img.convert("RGB").save(buf, format="PNG", optimize=True)
         b64 = base64.b64encode(buf.getvalue()).decode()
