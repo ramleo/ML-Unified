@@ -117,17 +117,26 @@ def _caption_prompt() -> str:
     )
 
 
-def _caption_page(b64: str) -> str:
-    raw = _vision_cascade_raw(b64, _caption_prompt())
+def _extract_caption(raw: str, fallback_len: int) -> str:
+    """Pull {"caption": "..."} out of a vision response. Falls back to the raw
+    text whenever JSON parsing fails OR succeeds without a usable caption —
+    a valid-but-differently-shaped JSON response should not discard an
+    otherwise-good description."""
     if not raw.strip():
         return ""
     try:
         start, end = raw.find("{"), raw.rfind("}") + 1
         if start >= 0 and end > start:
-            return str(json.loads(raw[start:end]).get("caption", "")).strip()
-    except Exception:
-        pass
-    return raw.strip()[:500]  # non-JSON fallback — still usable as a caption
+            parsed = json.loads(raw[start:end]).get("caption", "")
+            if str(parsed).strip():
+                return str(parsed).strip()
+    except Exception as exc:
+        logger.warning("Caption JSON parse failed (%s), using raw text: %r", exc, raw[:200])
+    return raw.strip()[:fallback_len]
+
+
+def _caption_page(b64: str) -> str:
+    return _extract_caption(_vision_cascade_raw(b64, _caption_prompt()), 500)
 
 
 def _image_prompt() -> str:
@@ -158,14 +167,7 @@ def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[
     img.save(buf, format="PNG", optimize=True)
     b64 = base64.b64encode(buf.getvalue()).decode()
 
-    raw = _vision_cascade_raw(b64, _image_prompt())
-    caption = ""
-    if raw.strip():
-        try:
-            start, end = raw.find("{"), raw.rfind("}") + 1
-            caption = str(json.loads(raw[start:end]).get("caption", "")).strip() if start >= 0 and end > start else ""
-        except Exception:
-            caption = raw.strip()[:800]
+    caption = _extract_caption(_vision_cascade_raw(b64, _image_prompt()), 800)
 
     summary = {"text": 0, "table": 0, "figure": 0, "image": 1 if caption else 0}
     if not caption:
