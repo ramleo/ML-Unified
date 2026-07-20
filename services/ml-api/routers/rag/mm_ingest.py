@@ -151,14 +151,19 @@ def _caption_page(b64: str) -> str:
     return _extract_caption(_vision_cascade_raw(b64, _caption_prompt()), 500)
 
 
-def _image_prompt() -> str:
+def _image_prompt(terse: bool = False) -> str:
+    if terse:
+        # Fallback for reasoning models that exhaust their token budget
+        # thinking before answering a more demanding ask — short and direct
+        # leaves it little room to ramble before the JSON is due.
+        return (
+            "In 2-3 short sentences, describe this image and transcribe any "
+            'visible text or numbers exactly. Return JSON only: {"caption": "..."}.'
+        )
     return (
-        "Describe this image thoroughly for someone who cannot see it. Cover: "
-        "what the main subject(s) are, any people/objects/animals and what "
-        "they're doing, the setting or background, colors, and any visible "
-        "text, numbers, or signage — transcribe text exactly as shown. If it "
-        "is a chart, diagram, or screenshot, describe its data/content in "
-        "detail rather than just its visual style. Be factual, 4-6 sentences. "
+        "Describe this image for someone who cannot see it: main subject, "
+        "setting, colors, and any visible text/numbers (transcribe exactly). "
+        "Be factual, 3-4 sentences. "
         'Return JSON only: {"caption": "<your description>"}.'
     )
 
@@ -180,6 +185,11 @@ def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[
     b64 = base64.b64encode(buf.getvalue()).decode()
 
     caption = _extract_caption(_vision_cascade_raw(b64, _image_prompt()), 800)
+    if not caption:
+        # First attempt likely got cut off mid-reasoning before reaching the
+        # JSON — one bounded retry with a terser ask that leaves less room
+        # for a reasoning model to exhaust its token budget before answering.
+        caption = _extract_caption(_vision_cascade_raw(b64, _image_prompt(terse=True)), 400)
 
     summary = {"text": 0, "table": 0, "figure": 0, "image": 1 if caption else 0}
     if not caption:
