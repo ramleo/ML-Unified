@@ -1,9 +1,12 @@
-"""Multimodal RAG ingestion — PDFs with tables/figures → typed chunks.
+"""Multimodal RAG ingestion — PDFs with tables/figures, or standalone images,
+→ typed chunks.
 
 Reuses document/_extract.py (table extraction) and document/_vision.py (the
 provider-agnostic vision cascade) as library calls rather than duplicating
-PDF/vision logic. Per page: text chunk (if substantial), table chunk(s) (via
-find_tables()), figure chunk (AI caption, only for visually-dense pages).
+PDF/vision logic. Per PDF page: text chunk (if substantial), table chunk(s)
+(via find_tables()), figure chunk (AI caption, only for visually-dense
+pages). A standalone image upload gets one "image" chunk_type — the same
+vision cascade, described thoroughly rather than as a document page's figure.
 Feeds the same chunk_document()/index_chunks() pipeline the plain-text RAG
 upload uses — same Chroma collection, same hybrid retrieval, same citations.
 """
@@ -127,6 +130,52 @@ def _caption_page(b64: str) -> str:
     return raw.strip()[:500]  # non-JSON fallback — still usable as a caption
 
 
+def _image_prompt() -> str:
+    return (
+        "Describe this image thoroughly for someone who cannot see it. Cover: "
+        "what the main subject(s) are, any people/objects/animals and what "
+        "they're doing, the setting or background, colors, and any visible "
+        "text, numbers, or signage — transcribe text exactly as shown. If it "
+        "is a chart, diagram, or screenshot, describe its data/content in "
+        "detail rather than just its visual style. Be factual, 4-6 sentences. "
+        'Return JSON only: {"caption": "<your description>"}.'
+    )
+
+
+def _looks_like_image(file_bytes: bytes) -> bool:
+    sigs = (b"\x89PNG", b"\xff\xd8\xff", b"GIF8", b"RIFF")  # PNG, JPEG, GIF, WEBP(RIFF)
+    return any(file_bytes.startswith(s) for s in sigs)
+
+
+def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[str], dict]:
+    """A standalone image upload — one 'image' chunk_type, described thoroughly
+    (not the terser 'figure on a document page' framing used for PDF pages)."""
+    from PIL import Image
+    import io, base64
+
+    img = Image.open(io.BytesIO(file_bytes)).convert("RGB")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    b64 = base64.b64encode(buf.getvalue()).decode()
+
+    raw = _vision_cascade_raw(b64, _image_prompt())
+    caption = ""
+    if raw.strip():
+        try:
+            start, end = raw.find("{"), raw.rfind("}") + 1
+            caption = str(json.loads(raw[start:end]).get("caption", "")).strip() if start >= 0 and end > start else ""
+        except Exception:
+            caption = raw.strip()[:800]
+
+    summary = {"text": 0, "table": 0, "figure": 0, "image": 1 if caption else 0}
+    if not caption:
+        return [], [b64], summary
+
+    chunk = {"text": f"[Image: {source}] {caption}", "source": source, "chunk_index": 0,
+             "chunk_type": "image", "page": 1}
+    return [chunk], [b64], summary
+
+
 # ── Chunk builder ──────────────────────────────────────────────────────────────
 
 def build_multimodal_chunks(file_bytes: bytes, source: str,
@@ -216,11 +265,17 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
     else:
         yield _sse({"step": "extract", "status": "running"})
         loop = asyncio.get_event_loop()
+        is_image = _looks_like_image(file_bytes)
         events: list[dict] = []
         try:
-            chunks, page_images, summary = await loop.run_in_executor(
-                _executor, lambda: build_multimodal_chunks(file_bytes, source, events.append)
-            )
+            if is_image:
+                chunks, page_images, summary = await loop.run_in_executor(
+                    _executor, lambda: build_image_chunk(file_bytes, source)
+                )
+            else:
+                chunks, page_images, summary = await loop.run_in_executor(
+                    _executor, lambda: build_multimodal_chunks(file_bytes, source, events.append)
+                )
         except Exception as exc:
             logger.error("Multimodal ingestion failed: %s", exc)
             yield _sse({"error": f"Failed to process file: {exc}"})
@@ -230,7 +285,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
             _cache_put(cache_key, {"chunks": chunks, "page_images": page_images, "chunk_summary": summary})
 
     if not chunks:
-        yield _sse({"error": "No extractable content found (text, tables, or figures)."})
+        yield _sse({"error": "No extractable content found (text, tables, figures, or a describable image)."})
         return
 
     yield _sse({"step": "embed", "status": "running"})
@@ -247,7 +302,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         try:
             from routers.rag.mm_similar import index_figures_clip
             figure_pages = [(c["page"], page_images[c["page"] - 1]) for c in chunks
-                            if c["chunk_type"] == "figure"]
+                            if c["chunk_type"] in ("figure", "image")]
             await loop.run_in_executor(_executor, lambda: index_figures_clip(source, figure_pages))
         except Exception as exc:
             logger.warning("CLIP figure indexing skipped: %s", exc)
@@ -270,15 +325,17 @@ async def mm_ingest(
     save_scope: str = Form(default="session"),        # "session" | "shared"
     session_id: str = Form(default=""),               # reuse the caller's chat session_id
 ):
-    """Ingest a PDF with tables/figures into the multimodal RAG index.
-    Streams progress as SSE; final event carries page_images for citation thumbnails.
-    Pass the same session_id your /rag/query calls use so the uploaded document
-    is retrievable from that chat session; a fresh one is generated if omitted."""
+    """Ingest a PDF (tables/figures) or a standalone image (PNG/JPG/GIF/WEBP)
+    into the multimodal RAG index. Streams progress as SSE; final event
+    carries page_images for citation thumbnails. Pass the same session_id
+    your /rag/query calls use so the upload is retrievable from that chat
+    session; a fresh one is generated if omitted."""
     file_bytes = await file.read()
     if len(file_bytes) > MAX_FILE_BYTES:
         raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
-    if not file_bytes or file_bytes[:4] != b"%PDF":
-        raise HTTPException(status_code=400, detail="Only PDF is supported for multimodal ingestion.")
+    if not file_bytes or not (file_bytes[:4] == b"%PDF" or _looks_like_image(file_bytes)):
+        raise HTTPException(status_code=400,
+                            detail="Only PDF or image files (PNG/JPG/GIF/WEBP) are supported.")
 
     return StreamingResponse(
         _stream(file_bytes, file.filename or "document.pdf", embedding_mode, save_scope, session_id),
