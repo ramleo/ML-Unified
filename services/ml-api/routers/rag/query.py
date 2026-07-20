@@ -217,7 +217,13 @@ def _sse_generator(req: QueryRequest):
     queries = expand_query(req.query, provider, model, key)
     candidates = multi_query_retrieve(queries, state, top_k=20, use_jina=use_jina,
                                       session_id=req.session_id, kb_fallback=not req.restrict_to_uploads)
-    chunks = rerank(req.query, candidates, state, top_k=5)
+    # The default absolute floor is tuned to filter noise out of a large,
+    # mixed general corpus. In restrict_to_uploads mode, tier-1 retrieval has
+    # already scoped candidates to just the user's own small uploaded
+    # document — the same floor can discard the ONLY relevant candidate that
+    # exists (observed directly: candidates_retrieved=1, chunks_retrieved=0).
+    chunks = rerank(req.query, candidates, state, top_k=5,
+                    abs_floor=0.0 if req.restrict_to_uploads else None)
 
     top_raw = chunks[0].get("score", 0.0) if chunks else 0.0
     low_confidence = not chunks or top_raw < 0.05
