@@ -206,10 +206,12 @@ def classify_document(text_sample: str, known_types: list[str],
 
 
 def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict],
-                             provider: str = "auto", tier: str = "complex") -> list[dict]:
+                             provider: str = "auto", tier: str = "complex",
+                             hints: str = "") -> list[dict]:
     """Extract fields from document text using the LLM cascade (or a forced provider).
     tier="simple" routes to a small fast model first (complexity-based routing);
-    any failure falls through to the normal cascade."""
+    any failure falls through to the normal cascade.
+    hints: optional few-shot guidance block (e.g. past human corrections)."""
     field_names = [f["name"] for f in schema_fields]
     field_meta = {f["name"]: f for f in schema_fields}
     system = "You are a document data extraction expert. Respond only with valid JSON."
@@ -224,7 +226,8 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
         f'employment histories contain gaps. Sum each listed period individually (per-role start to end) '
         f'and show the working in the value, e.g. "~11 years (sum of listed roles; gaps excluded)". '
         f'If per-role dates are not stated, use null.\n\n'
-        f"Document text:\n{text[:14000]}"
+        + (f"{hints}\n\n" if hints else "")
+        + f"Document text:\n{text[:14000]}"
     )
     global last_provider
     _provider_map = {"groq": _groq, "mistral": _mistral, "gemini": _gemini_text, "cohere": _cohere}

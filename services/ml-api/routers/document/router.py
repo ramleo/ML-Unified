@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 from ._schema import DOC_TYPES
 from ._extract import extract_document, search_bbox_in_doc, extract_tables_markdown
 from . import _cache
+from . import _corrections
 from . import _llm as _llm_state
 from ._llm import classify_document, extract_fields_from_text
 from ._vision import (extract_fields_from_image, extract_visual_sections,
@@ -138,8 +139,11 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
     try:
         loop = asyncio.get_event_loop()
         if text.strip():
+            hints = _corrections.guidance(doc_type)
+            if hints:
+                logger.info("Injecting correction hints for %s (%d chars)", doc_type, len(hints))
             fields = await loop.run_in_executor(
-                _executor, lambda: extract_fields_from_text(text, doc_type, schema_fields, provider, tier)
+                _executor, lambda: extract_fields_from_text(text, doc_type, schema_fields, provider, tier, hints)
             )
             # Capture attribution for the MAIN extraction now — the visual
             # sections pass and validation below also run the cascades and
@@ -311,6 +315,22 @@ async def chat_with_document(payload: dict):
         raise HTTPException(status_code=503, detail="AI providers unavailable — try again shortly")
     return {"answer": answer, "provider": _llm_state.last_provider}
 
+
+
+@router.post("/correction")
+async def submit_correction(payload: dict):
+    """Record a human field correction (HITL feedback loop).
+    payload: {doc_type, name, label?, original_value, corrected_value}
+    Recent corrections per doc type are injected into future extraction
+    prompts as few-shot guidance. In-memory; resets on restart."""
+    stored = _corrections.add(
+        str(payload.get("doc_type", ""))[:40],
+        str(payload.get("name", ""))[:60],
+        str(payload.get("label", ""))[:80],
+        str(payload.get("original_value", ""))[:300],
+        str(payload.get("corrected_value", ""))[:300],
+    )
+    return {"stored": stored}
 
 
 @router.get("/types")
