@@ -115,10 +115,16 @@ def bm25_retrieve(
 def reciprocal_rank_fusion(
     ranked_lists: list[list[dict]],
     k: int = 60,
+    type_boost: dict[str, float] | None = None,
 ) -> list[dict]:
     """Merge multiple ranked lists using Reciprocal Rank Fusion.
 
-    Formula: score(d) = sum over lists of 1 / (rank + k)
+    Formula: score(d) = sum over lists of boost(chunk_type) / (rank + k)
+    type_boost multiplies each contribution by the doc's chunk_type (default
+    1.0 for unlisted types) — corrects for table/figure/image chunks being
+    short (a caption or a table's own text) and so structurally weaker
+    dense/BM25 matches than verbose prose, even when they're the right answer.
+    None (default) preserves today's unweighted behavior.
     Deduplication key: (text, source).
     Returns list sorted by descending RRF score.
     """
@@ -128,7 +134,8 @@ def reciprocal_rank_fusion(
     for ranked in ranked_lists:
         for rank, doc in enumerate(ranked, start=1):
             key = (doc["text"], doc["source"])
-            rrf_scores[key] += 1.0 / (rank + k)
+            boost = (type_boost or {}).get(doc.get("chunk_type"), 1.0)
+            rrf_scores[key] += boost / (rank + k)
             if key not in doc_store:
                 doc_store[key] = doc
 
@@ -143,7 +150,8 @@ def reciprocal_rank_fusion(
 
 # ── Hybrid retrieval ───────────────────────────────────────────────────────────
 
-def hybrid_retrieve(query: str, state, top_k: int = 8, use_jina: bool = False, session_id: str = "") -> list[dict]:
+def hybrid_retrieve(query: str, state, top_k: int = 8, use_jina: bool = False, session_id: str = "",
+                    type_boost: dict[str, float] | None = None) -> list[dict]:
     """Run dense + BM25 retrieval, fuse with RRF, return top_k results.
 
     Returns list of {text, source, score, id}.
@@ -176,13 +184,13 @@ def hybrid_retrieve(query: str, state, top_k: int = 8, use_jina: bool = False, s
     if bm25_hits:
         ranked_lists.append(bm25_hits)
 
-    fused = reciprocal_rank_fusion(ranked_lists)
+    fused = reciprocal_rank_fusion(ranked_lists, type_boost=type_boost)
     return fused[:top_k]
 
 
 def tiered_hybrid_retrieve(
     query: str, state, top_k: int = 8, use_jina: bool = False, session_id: str = "",
-    kb_fallback: bool = True,
+    kb_fallback: bool = True, type_boost: dict[str, float] | None = None,
 ) -> list[dict]:
     """Two-tier retrieval: session-uploaded docs first, KB fallback if weak match.
 
@@ -200,7 +208,8 @@ def tiered_hybrid_retrieve(
         state.source_sessions.get(s) == session_id for s in state.uploaded_sources
     )
     if not has_uploads:
-        return hybrid_retrieve(query, state, top_k=top_k, use_jina=use_jina, session_id=session_id) if kb_fallback else []
+        return hybrid_retrieve(query, state, top_k=top_k, use_jina=use_jina, session_id=session_id,
+                               type_boost=type_boost) if kb_fallback else []
 
     query_emb = embed_query(query, state, use_jina=use_jina)
     collection = state.jina_collection if (use_jina and state.jina_ready) else state.collection
@@ -210,7 +219,7 @@ def tiered_hybrid_retrieve(
     where_up = {"$and": [{"uploaded": {"$eq": True}}, {"session_id": {"$eq": session_id}}]}
     dense_up = dense_retrieve(query_emb, state, k=20, use_jina=use_jina, where=where_up) if count > 0 else []
     bm25_up = bm25_retrieve(query, state, k=20, session_id=session_id, uploaded_only=True)
-    tier1 = reciprocal_rank_fusion([l for l in [dense_up, bm25_up] if l]) if (dense_up or bm25_up) else []
+    tier1 = reciprocal_rank_fusion([l for l in [dense_up, bm25_up] if l], type_boost=type_boost) if (dense_up or bm25_up) else []
     for c in tier1:
         c["uploaded"] = True
 
@@ -232,7 +241,8 @@ def tiered_hybrid_retrieve(
 
 
 def multi_query_retrieve(queries: list[str], state, top_k: int = 50, use_jina: bool = False,
-                         session_id: str = "", kb_fallback: bool = True) -> list[dict]:
+                         session_id: str = "", kb_fallback: bool = True,
+                         type_boost: dict[str, float] | None = None) -> list[dict]:
     """Run hybrid_retrieve for each query variant, then RRF-merge across all
     variants' result lists. A chunk surfaced by multiple phrasings of the
     same question ranks higher than one found by only the original wording.
@@ -242,8 +252,10 @@ def multi_query_retrieve(queries: list[str], state, top_k: int = 50, use_jina: b
 
     retrieve_fn = tiered_hybrid_retrieve if session_id else hybrid_retrieve
     per_query_lists = [
-        retrieve_fn(q, state, top_k=top_k, use_jina=use_jina, session_id=session_id, kb_fallback=kb_fallback)
-        if session_id else retrieve_fn(q, state, top_k=top_k, use_jina=use_jina, session_id=session_id)
+        retrieve_fn(q, state, top_k=top_k, use_jina=use_jina, session_id=session_id, kb_fallback=kb_fallback,
+                    type_boost=type_boost)
+        if session_id else retrieve_fn(q, state, top_k=top_k, use_jina=use_jina, session_id=session_id,
+                                       type_boost=type_boost)
         for q in queries
     ]
     per_query_lists = [lst for lst in per_query_lists if lst]
@@ -253,4 +265,4 @@ def multi_query_retrieve(queries: list[str], state, top_k: int = 50, use_jina: b
     if len(per_query_lists) == 1:
         return per_query_lists[0]
 
-    return reciprocal_rank_fusion(per_query_lists)[:top_k]
+    return reciprocal_rank_fusion(per_query_lists, type_boost=type_boost)[:top_k]

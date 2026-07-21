@@ -7,7 +7,6 @@ import os
 import time
 from typing import Any, Optional
 
-import numpy as np
 import threading
 
 from fastapi import APIRouter
@@ -21,6 +20,7 @@ from routers.rag.expand import expand_query
 from routers.rag.crag import web_search_fallback
 from routers.rag.citations import build_system_prompt, build_source_doc
 from routers.rag.generation import build_provider_candidates, stream_with_fallback
+from routers.rag.cache import ctx_hash as _ctx_hash, cache_lookup as _cache_lookup, cache_store as _cache_store
 
 logger = logging.getLogger(__name__)
 
@@ -78,56 +78,6 @@ def _resolve_key(provider: str, user_key: Optional[str]) -> str:
 
 def _sse(obj: Any) -> str:
     return f"data: {json.dumps(obj)}\n\n"
-
-
-# ── Semantic cache ─────────────────────────────────────────────────────────────
-
-_CACHE_THRESHOLD = 0.95
-_CACHE_MAX = 100
-
-
-def _cosine_sim(a: list[float], b: list[float]) -> float:
-    va, vb = np.array(a, dtype=np.float32), np.array(b, dtype=np.float32)
-    denom = np.linalg.norm(va) * np.linalg.norm(vb)
-    return float(np.dot(va, vb) / denom) if denom > 0 else 0.0
-
-
-def _ctx_hash(tool_context: str, session_id: str = "") -> str:
-    """Short hash of tool_context + session_id so cache entries are both
-    dataset- and session-specific. tool_context alone isn't enough for tools
-    whose context string is a fixed constant (e.g. Multimodal RAG) — without
-    session_id, every session/uploaded-document would share one cache slot."""
-    import hashlib
-    key = f"{tool_context.strip()}::{session_id.strip()}"
-    return hashlib.md5(key.encode(), usedforsecurity=False).hexdigest()[:8] if key.strip(":") else ""
-
-
-def _cache_lookup(query_emb: list[float], state, provider: str, ctx_hash: str) -> dict | None:
-    best_score, best = 0.0, None
-    for entry in state.semantic_cache:
-        if entry.get("provider") != provider:
-            continue
-        if entry.get("ctx_hash", "") != ctx_hash:
-            continue
-        sim = _cosine_sim(query_emb, entry["embedding"])
-        if sim > best_score:
-            best_score, best = sim, entry
-    return best if best_score >= _CACHE_THRESHOLD else None
-
-
-def _cache_store(query_emb: list[float], full_text: str, sources: list[str], chunks: list[dict], state, provider: str, ctx_hash: str = "", answer_source: str = "knowledge_base", confidence: str = "medium") -> None:
-    if len(state.semantic_cache) >= _CACHE_MAX:
-        state.semantic_cache.pop(0)
-    state.semantic_cache.append({
-        "embedding": query_emb,
-        "full_text": full_text,
-        "sources": sources,
-        "chunks": chunks,
-        "provider": provider,
-        "ctx_hash": ctx_hash,
-        "answer_source": answer_source,
-        "confidence": confidence,
-    })
 
 
 def _determine_answer_source(chunks: list[dict], web_fallback_used: bool, has_dataset: bool) -> str:
@@ -228,8 +178,17 @@ def _sse_generator(req: QueryRequest):
     use_jina = req.embedding_model == "jina" and state.jina_ready
     expansion_key = _resolve_key(_EXPANSION_PROVIDER, None)
     queries = expand_query(req.query, _EXPANSION_PROVIDER, _EXPANSION_MODEL, expansion_key)
+    # Table/figure/image chunks are short (a caption, a table's own text) and so
+    # structurally weaker dense/BM25 matches than verbose prose — without a
+    # boost they can lose the RRF fusion race even when they hold the answer
+    # (observed: a resume's short timeline caption losing to a longer prose
+    # chunk). Only applied in restrict_to_uploads mode (Multimodal RAG), where
+    # every non-text chunk_type is a first-class citizen of the answer, not
+    # noise in a large general corpus.
+    type_boost = {"table": 1.2, "figure": 1.2, "image": 1.2} if req.restrict_to_uploads else None
     candidates = multi_query_retrieve(queries, state, top_k=20, use_jina=use_jina,
-                                      session_id=req.session_id, kb_fallback=not req.restrict_to_uploads)
+                                      session_id=req.session_id, kb_fallback=not req.restrict_to_uploads,
+                                      type_boost=type_boost)
     # The default absolute floor is tuned to filter noise out of a large,
     # mixed general corpus. In restrict_to_uploads mode, tier-1 retrieval has
     # already scoped candidates to just the user's own small uploaded
