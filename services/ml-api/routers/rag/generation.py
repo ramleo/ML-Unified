@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 # provider's own server-side key.
 FALLBACK_CANDIDATES = [
     ("groq", "llama-3.3-70b-versatile"),
+    ("mistral", "mistral-small-latest"),  # proven reliable fallback elsewhere in this codebase (vision captioning)
     ("gemini", "gemini-2.0-flash"),
     ("cohere", "command-a-03-2025"),
 ]
@@ -25,7 +26,7 @@ def open_stream(provider: str, model: str, key: str, messages: list[dict], syste
     """Dispatch to the right streaming client. Raises ValueError for an
     unrecognized provider — caught by stream_with_fallback like any other
     failure, so a bad/typo'd provider still cascades to a known-good one."""
-    if provider in ("groq", "openai"):
+    if provider in ("groq", "openai", "mistral", "perplexity"):
         full_messages = [{"role": "system", "content": system_prompt}] + messages if system_prompt else messages
         return stream_groq_openai(provider, model, key, full_messages)
     if provider == "claude":

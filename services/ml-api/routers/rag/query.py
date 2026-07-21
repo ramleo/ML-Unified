@@ -37,6 +37,9 @@ _ENV_KEYS = {
     "claude": "ANTHROPIC_API_KEY",
     "gemini": "GEMINI_API_KEY",
     "cohere": "COHERE_API_KEY",
+    "mistral": "MISTRAL_API_KEY",
+    # perplexity intentionally has no server default — BYOK only, matching
+    # its frontend envKeyNote ("Paste your Perplexity API key").
 }
 
 

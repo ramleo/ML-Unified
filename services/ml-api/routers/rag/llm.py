@@ -9,9 +9,20 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# Providers whose API is Chat-Completions-compatible with the openai SDK —
+# same request/response shape, different base_url. Matches agent.py's
+# _OPENAI_COMPAT_BASES (kept in sync manually; agent.py has its own inline
+# copy rather than importing this, to avoid coupling the two call paths).
+OPENAI_COMPAT_BASES = {
+    "groq":       "https://api.groq.com/openai/v1",
+    "mistral":    "https://api.mistral.ai/v1",
+    "perplexity": "https://api.perplexity.ai",
+}
+
+
 def stream_groq_openai(provider: str, model: str, key: str, messages: list[dict]):
     import openai
-    base_url = "https://api.groq.com/openai/v1" if provider == "groq" else None
+    base_url = OPENAI_COMPAT_BASES.get(provider)  # None => real OpenAI's own API
     client = openai.OpenAI(api_key=key, **({"base_url": base_url} if base_url else {}))
     with client.chat.completions.create(
         model=model, messages=messages, stream=True
