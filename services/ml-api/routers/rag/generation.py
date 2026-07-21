@@ -22,6 +22,20 @@ FALLBACK_CANDIDATES = [
 ]
 
 
+def classify_error(exc: object) -> str:
+    """Short, user-facing reason for a provider failure — the raw exception
+    text (status codes, full URLs) is logged in full server-side but isn't
+    fit to show in the UI as "why did it fall back to X"."""
+    text = str(exc).lower()
+    if "429" in text or "rate limit" in text or "too many requests" in text:
+        return "rate limited"
+    if "401" in text or "403" in text or "unauthorized" in text or "invalid api key" in text or "incorrect api key" in text:
+        return "invalid or unauthorized key"
+    if "timeout" in text or "timed out" in text:
+        return "timed out"
+    return "unavailable"
+
+
 def open_stream(provider: str, model: str, key: str, messages: list[dict], system_prompt: str):
     """Dispatch to the right streaming client. Raises ValueError for an
     unrecognized provider — caught by stream_with_fallback like any other
@@ -65,11 +79,15 @@ def stream_with_fallback(provider_candidates: list[tuple[str, str, str]], messag
 
     meta is populated with 'served_provider'/'served_model' as soon as the
     winning candidate starts producing tokens, and with 'error' if every
-    candidate failed before any output.
+    candidate failed before any output. If the CALLER'S OWN selection (the
+    first candidate) failed and a fallback served instead, meta also gets
+    'primary_provider'/'primary_failure' (short, user-facing reason) so the
+    UI can say *why* — e.g. "cohere unavailable: rate limited" — instead of
+    silently showing a different provider than the one picked.
     """
     started = False
     last_error: object = "No provider candidates."
-    for cand_provider, cand_model, cand_key in provider_candidates:
+    for i, (cand_provider, cand_model, cand_key) in enumerate(provider_candidates):
         try:
             for token in open_stream(cand_provider, cand_model, cand_key, messages, system_prompt):
                 if token:
@@ -83,6 +101,9 @@ def stream_with_fallback(provider_candidates: list[tuple[str, str, str]], messag
                 logger.exception("LLM streaming error mid-response (%s/%s): %s", cand_provider, cand_model, exc)
                 meta["mid_stream_error"] = f"Generation failed ({cand_provider}/{cand_model}): {exc}"
                 return
+            if i == 0:
+                meta["primary_provider"] = cand_provider
+                meta["primary_failure"] = classify_error(exc)
             last_error = exc
             logger.warning("Provider %s/%s failed before any output, trying next: %s",
                            cand_provider, cand_model, exc)

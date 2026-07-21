@@ -30,6 +30,15 @@ router = APIRouter()
 _DEFAULT_PROVIDER = "groq"
 _DEFAULT_MODEL = "llama-3.3-70b-versatile"
 
+# Query expansion always uses its own fixed, fast, server-key-only provider —
+# NEVER the user's selected/BYOK provider. It's an optional quality boost
+# (expand.py degrades to [query] alone on any failure), so it must not spend
+# the same rate-limit budget the user's actual answer generation needs right
+# after it. Found live: selecting Cohere fired two real Cohere calls per
+# question (expansion + generation) against the same limit, both 429ing.
+_EXPANSION_PROVIDER = "groq"
+_EXPANSION_MODEL = "llama-3.1-8b-instant"
+
 # ── Env var fallbacks ──────────────────────────────────────────────────────────
 _ENV_KEYS = {
     "groq": "GROQ_API_KEY",
@@ -217,7 +226,8 @@ def _sse_generator(req: QueryRequest):
 
     # 1. Expand query, retrieve top-50 candidates per variant (RRF-merged), rerank to top-8
     use_jina = req.embedding_model == "jina" and state.jina_ready
-    queries = expand_query(req.query, provider, model, key)
+    expansion_key = _resolve_key(_EXPANSION_PROVIDER, None)
+    queries = expand_query(req.query, _EXPANSION_PROVIDER, _EXPANSION_MODEL, expansion_key)
     candidates = multi_query_retrieve(queries, state, top_k=20, use_jina=use_jina,
                                       session_id=req.session_id, kb_fallback=not req.restrict_to_uploads)
     # The default absolute floor is tuned to filter noise out of a large,
@@ -313,6 +323,8 @@ def _sse_generator(req: QueryRequest):
         "confidence": confidence,
         "served_provider": served_provider,
         "served_model": served_model,
+        "primary_provider": meta.get("primary_provider"),
+        "primary_failure": meta.get("primary_failure"),
     })
 
 
