@@ -39,6 +39,22 @@ _DEFAULT_MODEL = "llama-3.3-70b-versatile"
 _EXPANSION_PROVIDER = "groq"
 _EXPANSION_MODEL = "llama-3.1-8b-instant"
 
+# A flat boost on every restrict_to_uploads query would over-promote a figure
+# caption even on a purely textual question. Instead, only boost the specific
+# chunk_type(s) the question itself seems to be asking about.
+_TYPE_KEYWORDS = {
+    "table": ("table", "row", "column", "spreadsheet", "cell"),
+    "figure": ("chart", "graph", "diagram", "figure", "plot", "trend", "visual"),
+    "image": ("image", "photo", "picture", "photograph"),
+}
+
+
+def _detect_type_boost(query: str) -> dict[str, float] | None:
+    q = query.lower()
+    boost = {t: 1.3 for t, kws in _TYPE_KEYWORDS.items() if any(kw in q for kw in kws)}
+    return boost or None
+
+
 # ── Env var fallbacks ──────────────────────────────────────────────────────────
 _ENV_KEYS = {
     "groq": "GROQ_API_KEY",
@@ -182,10 +198,9 @@ def _sse_generator(req: QueryRequest):
     # structurally weaker dense/BM25 matches than verbose prose — without a
     # boost they can lose the RRF fusion race even when they hold the answer
     # (observed: a resume's short timeline caption losing to a longer prose
-    # chunk). Only applied in restrict_to_uploads mode (Multimodal RAG), where
-    # every non-text chunk_type is a first-class citizen of the answer, not
-    # noise in a large general corpus.
-    type_boost = {"table": 1.2, "figure": 1.2, "image": 1.2} if req.restrict_to_uploads else None
+    # chunk). Only applied in restrict_to_uploads mode (Multimodal RAG) AND
+    # only for the chunk_type(s) the question actually seems to be about.
+    type_boost = _detect_type_boost(req.query) if req.restrict_to_uploads else None
     candidates = multi_query_retrieve(queries, state, top_k=20, use_jina=use_jina,
                                       session_id=req.session_id, kb_fallback=not req.restrict_to_uploads,
                                       type_boost=type_boost)
