@@ -130,6 +130,44 @@ def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[
     return [chunk], [b64], summary
 
 
+# ── Standalone CSV ────────────────────────────────────────────────────────────
+
+MAX_CSV_ROWS = 500   # bounds cost/latency the same way MAX_PAGES bounds PDFs
+_CSV_CHUNK_ROWS = 50  # rows per chunk — keeps each chunk's embedding focused
+
+
+def _looks_like_csv(filename: str, content_type: str) -> bool:
+    return filename.lower().endswith(".csv") or content_type in ("text/csv", "application/csv")
+
+
+def _rows_to_markdown(header: list[str], rows: list[list[str]]) -> str:
+    lines = ["| " + " | ".join(header) + " |", "|" + "|".join(["---"] * len(header)) + "|"]
+    for row in rows:
+        lines.append("| " + " | ".join(str(c).replace("|", " ") for c in row) + " |")
+    return "\n".join(lines)
+
+
+def build_csv_chunks(file_bytes: bytes, source: str) -> tuple[list[dict], list[str], dict]:
+    """A standalone CSV upload — same 'table' chunk_type as a PDF's embedded
+    tables, so it flows through the identical retrieval/citation path.
+    No page_images (there's nothing to render as a thumbnail)."""
+    import io
+    import pandas as pd
+
+    df = pd.read_csv(io.BytesIO(file_bytes))
+    df = df.head(MAX_CSV_ROWS)
+    header = [str(c) for c in df.columns]
+
+    chunks: list[dict] = []
+    for i in range(0, len(df), _CSV_CHUNK_ROWS):
+        rows = df.iloc[i:i + _CSV_CHUNK_ROWS].astype(str).values.tolist()
+        md = _rows_to_markdown(header, rows)
+        chunks.append({"text": md, "source": source, "chunk_index": len(chunks),
+                       "chunk_type": "table", "page": len(chunks) + 1})
+
+    return chunks, [], {"text": 0, "table": len(chunks), "figure": 0}
+
+
 # ── SSE endpoint ────────────────────────────────────────────────────────────────
 
 def _sse(data: dict) -> str:
@@ -168,9 +206,20 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         yield _sse({"step": "extract", "status": "done", "chunk_summary": summary, "cached": True})
     else:
         loop = asyncio.get_event_loop()
-        is_image = file_bytes[:4] != b"%PDF" and _looks_like_image(file_bytes, content_type)
+        is_csv = file_bytes[:4] != b"%PDF" and _looks_like_csv(filename, content_type)
+        is_image = not is_csv and file_bytes[:4] != b"%PDF" and _looks_like_image(file_bytes, content_type)
 
-        if is_image:
+        if is_csv:
+            yield _sse({"step": "extract", "status": "running", "indeterminate": True})
+            try:
+                chunks, page_images, summary = await loop.run_in_executor(
+                    _executor, lambda: build_csv_chunks(file_bytes, source)
+                )
+            except Exception as exc:
+                logger.error("Multimodal ingestion failed: %s", exc)
+                yield _sse({"error": f"Failed to process file: {exc}"})
+                return
+        elif is_image:
             # One atomic vision call — no sub-steps to report, so the
             # frontend shows an indeterminate (not percentage) bar.
             yield _sse({"step": "extract", "status": "running", "indeterminate": True})
@@ -261,21 +310,24 @@ async def mm_ingest(
     save_scope: str = Form(default="session"),        # "session" | "shared"
     session_id: str = Form(default=""),               # reuse the caller's chat session_id
 ):
-    """Ingest a PDF (tables/figures) or a standalone image (PNG/JPG/GIF/WEBP)
-    into the multimodal RAG index. Streams progress as SSE; final event
-    carries page_images for citation thumbnails. Pass the same session_id
-    your /rag/query calls use so the upload is retrievable from that chat
-    session; a fresh one is generated if omitted."""
+    """Ingest a PDF (tables/figures), a standalone image (PNG/JPG/GIF/WEBP),
+    or a CSV into the multimodal RAG index. Streams progress as SSE; final
+    event carries page_images for citation thumbnails (empty for CSV — no
+    page to render). Pass the same session_id your /rag/query calls use so
+    the upload is retrievable from that chat session; a fresh one is
+    generated if omitted."""
     file_bytes = await file.read()
     content_type = file.content_type or ""
+    filename = file.filename or "document.pdf"
     if len(file_bytes) > MAX_FILE_BYTES:
         raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
-    if not file_bytes or not (file_bytes[:4] == b"%PDF" or _looks_like_image(file_bytes, content_type)):
+    if not file_bytes or not (file_bytes[:4] == b"%PDF" or _looks_like_image(file_bytes, content_type)
+                              or _looks_like_csv(filename, content_type)):
         raise HTTPException(status_code=400,
-                            detail="Only PDF or image files (PNG/JPG/GIF/WEBP/BMP/TIFF) are supported.")
+                            detail="Only PDF, image (PNG/JPG/GIF/WEBP/BMP/TIFF), or CSV files are supported.")
 
     return StreamingResponse(
-        _stream(file_bytes, file.filename or "document.pdf", embedding_mode, save_scope, session_id, content_type),
+        _stream(file_bytes, filename, embedding_mode, save_scope, session_id, content_type),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
