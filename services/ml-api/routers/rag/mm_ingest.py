@@ -300,6 +300,14 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         "chunks_added": len(chunks),
         "chunk_summary": summary,
         "page_images": page_images,
+        # Non-text chunks only (tables/figures/images) — powers a per-document
+        # summary view without a separate query. Plain text chunks are
+        # excluded: often numerous/large, and not what a "what did we
+        # extract" glance actually needs.
+        "notable_chunks": [
+            {"chunk_type": c.get("chunk_type"), "page": c.get("page"), "text": c.get("text")}
+            for c in chunks if c.get("chunk_type") != "text"
+        ],
     })
 
 
