@@ -14,7 +14,6 @@ from routers.rag.ingest import chunk_document
 from routers.rag.mm_caption import extract_caption
 
 MAX_PAGES = 8
-_DENSE_TEXT_THRESHOLD = 80  # chars; below this + has images/drawings → caption it
 _RENDER_ZOOM = 2.0          # fitz zoom factor (~144 DPI, since PDF base is 72 DPI) —
                             # higher than Document Intelligence's 1.2x preview renders
                             # since this feeds the vision cascade, not just a thumbnail
@@ -28,9 +27,10 @@ def _render_page(page, zoom: float = _RENDER_ZOOM) -> str:
     return base64.b64encode(pix.tobytes("png")).decode()
 
 
-def _is_visually_dense(page, text: str) -> bool:
-    if len(text.strip()) >= _DENSE_TEXT_THRESHOLD:
-        return False
+def _is_visually_dense(page) -> bool:
+    # Caption whenever the page carries an image/drawing at all — even a
+    # text-heavy page (e.g. a resume with a text sidebar plus a timeline
+    # graphic), since get_text() extracts nothing from the image region.
     try:
         return bool(page.get_images()) or bool(page.get_drawings())
     except Exception:
@@ -98,7 +98,7 @@ def process_page(doc, page_num: int, tables_by_page: dict, source: str) -> tuple
                             "chunk_type": "table", "page": page_num})
         page_summary["table"] += 1
 
-    if _is_visually_dense(page, text):
+    if _is_visually_dense(page):
         caption = _caption_page(b64)
         if caption:
             page_chunks.append({"text": caption, "source": source, "chunk_index": len(page_chunks),
