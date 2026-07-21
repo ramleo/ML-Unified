@@ -9,9 +9,13 @@ from __future__ import annotations
 import re
 
 from routers.document._extract import extract_tables_markdown
-from routers.document._vision import _vision_cascade_raw
+from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.ingest import chunk_document
 from routers.rag.mm_caption import extract_caption
+
+_OCR_TEXT_CAP = 2000  # chars; dedicated OCR reads exact text (e.g. every date
+                      # in a dense timeline graphic) that a short prose caption
+                      # would otherwise summarize away
 
 MAX_PAGES = 8
 _RENDER_ZOOM = 2.0          # fitz zoom factor (~144 DPI, since PDF base is 72 DPI) —
@@ -64,7 +68,14 @@ def _caption_prompt() -> str:
 
 
 def _caption_page(b64: str) -> str:
-    return extract_caption(_vision_cascade_raw(b64, _caption_prompt()), 500)
+    caption = extract_caption(_vision_cascade_raw(b64, _caption_prompt()), 500)
+    ocr_md, _ = mistral_ocr_pages([b64])
+    ocr_text = ocr_md.strip()[:_OCR_TEXT_CAP]
+    if not ocr_text:
+        return caption
+    if not caption:
+        return ocr_text
+    return f"{caption}\n\nExact text from image (OCR):\n{ocr_text}"
 
 
 # ── Per-page (streaming path) ───────────────────────────────────────────────────
