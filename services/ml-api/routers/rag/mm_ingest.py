@@ -1,12 +1,9 @@
 """Multimodal RAG ingestion — PDFs with tables/figures, or standalone images,
 → typed chunks.
 
-Reuses document/_extract.py (table extraction) and document/_vision.py (the
-provider-agnostic vision cascade) as library calls rather than duplicating
-PDF/vision logic. Per PDF page: text chunk (if substantial), table chunk(s)
-(via find_tables()), figure chunk (AI caption, only for visually-dense
-pages). A standalone image upload gets one "image" chunk_type — the same
-vision cascade, described thoroughly rather than as a document page's figure.
+PDF page extraction lives in mm_pdf.py (own module — kept this file under the
+project's file-length limit); this file owns the SSE endpoint/streaming
+orchestration, the standalone-image path, and the ingestion cache.
 Feeds the same chunk_document()/index_chunks() pipeline the plain-text RAG
 upload uses — same Chroma collection, same hybrid retrieval, same citations.
 """
@@ -15,7 +12,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import re
 import time
 import uuid as _uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -24,9 +20,10 @@ from typing import AsyncGenerator
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
-from routers.document._extract import extract_tables_markdown
 from routers.document._vision import _vision_cascade_raw
-from routers.rag.ingest import chunk_document, index_chunks
+from routers.rag.ingest import index_chunks
+from routers.rag.mm_caption import extract_caption
+from routers.rag.mm_pdf import prepare_pdf, process_page
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +31,6 @@ router = APIRouter()
 _executor = ThreadPoolExecutor(max_workers=2)
 
 MAX_FILE_BYTES = 10 * 1024 * 1024  # 10 MB
-_MAX_PAGES = 8
-_DENSE_TEXT_THRESHOLD = 80  # chars; below this + has images/drawings → caption it
-_RENDER_ZOOM = 2.0          # fitz zoom factor (~144 DPI, since PDF base is 72 DPI) —
-                            # higher than Document Intelligence's 1.2x preview renders
-                            # since this feeds the vision cascade, not just a thumbnail
 
 # ── Tiny ingestion cache (separate from document/_cache.py — own capacity) ────
 _CACHE_TTL = 24 * 3600
@@ -69,88 +61,7 @@ def _cache_put(key: str, payload: dict) -> None:
         del _cache[oldest]
 
 
-# ── Page rendering + density heuristic ────────────────────────────────────────
-
-def _render_page(page, zoom: float = _RENDER_ZOOM) -> str:
-    import base64
-    import fitz
-    mat = fitz.Matrix(zoom, zoom)
-    pix = page.get_pixmap(matrix=mat)
-    return base64.b64encode(pix.tobytes("png")).decode()
-
-
-def _is_visually_dense(page, text: str) -> bool:
-    if len(text.strip()) >= _DENSE_TEXT_THRESHOLD:
-        return False
-    try:
-        return bool(page.get_images()) or bool(page.get_drawings())
-    except Exception:
-        return False
-
-
-# ── Table markdown, split per page ────────────────────────────────────────────
-
-def _split_tables_by_page(tables_md: str) -> dict[int, list[str]]:
-    """extract_tables_markdown() prefixes each table with '### Table (Page N)'
-    — split its whole-doc output back into per-page blocks without re-parsing
-    the PDF a second time."""
-    if not tables_md.strip():
-        return {}
-    blocks = re.split(r"(?=### Table \(Page \d+\))", tables_md)
-    by_page: dict[int, list[str]] = {}
-    for block in blocks:
-        m = re.match(r"### Table \(Page (\d+)\)", block.strip())
-        if m:
-            by_page.setdefault(int(m.group(1)), []).append(block.strip())
-    return by_page
-
-
-# ── Figure captioning ──────────────────────────────────────────────────────────
-
-def _caption_prompt() -> str:
-    return (
-        "This is a page from a document, shown because it appears to be a "
-        "chart, diagram, photo, or other visual content rather than plain text. "
-        "Write a factual 2-4 sentence description for someone who cannot see "
-        "it: what type of visual it is, what it shows, and transcribe any "
-        "axis labels, legend values, or numbers that are visible. "
-        'Return JSON only: {"caption": "<your description>"}.'
-    )
-
-
-def _strip_thinking(text: str) -> str:
-    """Some reasoning models (e.g. Qwen) prefix output with a <think>...</think>
-    block even when only asked for JSON. Drop it — it's internal monologue,
-    not a caption, and would otherwise pollute the retrievable chunk text."""
-    if "<think>" not in text:
-        return text
-    if "</think>" in text:
-        return text.split("</think>", 1)[1].strip()
-    return ""  # unterminated — the whole response was reasoning, nothing usable
-
-
-def _extract_caption(raw: str, fallback_len: int) -> str:
-    """Pull {"caption": "..."} out of a vision response. Falls back to the raw
-    text whenever JSON parsing fails OR succeeds without a usable caption —
-    a valid-but-differently-shaped JSON response should not discard an
-    otherwise-good description."""
-    raw = _strip_thinking(raw)
-    if not raw.strip():
-        return ""
-    try:
-        start, end = raw.find("{"), raw.rfind("}") + 1
-        if start >= 0 and end > start:
-            parsed = json.loads(raw[start:end]).get("caption", "")
-            if str(parsed).strip():
-                return str(parsed).strip()
-    except Exception as exc:
-        logger.warning("Caption JSON parse failed (%s), using raw text: %r", exc, raw[:200])
-    return raw.strip()[:fallback_len]
-
-
-def _caption_page(b64: str) -> str:
-    return _extract_caption(_vision_cascade_raw(b64, _caption_prompt()), 500)
-
+# ── Standalone image captioning ─────────────────────────────────────────────────
 
 def _image_prompt(terse: bool = False) -> str:
     if terse:
@@ -199,70 +110,24 @@ def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[
     img.save(buf, format="PNG", optimize=True)
     b64 = base64.b64encode(buf.getvalue()).decode()
 
-    caption = _extract_caption(_vision_cascade_raw(b64, _image_prompt()), 800)
+    caption = extract_caption(_vision_cascade_raw(b64, _image_prompt()), 800)
     if not caption:
         # First attempt likely got cut off mid-reasoning before reaching the
         # JSON — one bounded retry with a terser ask that leaves less room
         # for a reasoning model to exhaust its token budget before answering.
-        caption = _extract_caption(_vision_cascade_raw(b64, _image_prompt(terse=True)), 400)
+        caption = extract_caption(_vision_cascade_raw(b64, _image_prompt(terse=True)), 400)
 
     summary = {"text": 0, "table": 0, "figure": 0, "image": 1 if caption else 0}
     if not caption:
         return [], [b64], summary
 
-    chunk = {"text": f"[Image: {source}] {caption}", "source": source, "chunk_index": 0,
+    # No embedded "[Image: source]" prefix — citations.py's build_system_prompt
+    # already labels this chunk with source/page/type when building the LLM's
+    # context, so baking it into the stored text would only be redundant
+    # noise in the citation UI's raw-text preview.
+    chunk = {"text": caption, "source": source, "chunk_index": 0,
              "chunk_type": "image", "page": 1}
     return [chunk], [b64], summary
-
-
-# ── Chunk builder ──────────────────────────────────────────────────────────────
-
-def build_multimodal_chunks(file_bytes: bytes, source: str,
-                            progress_cb=None) -> tuple[list[dict], list[str], dict]:
-    """Returns (chunks, page_images, chunk_summary). chunks carry chunk_type/page."""
-    import fitz
-    doc = fitz.open(stream=file_bytes, filetype="pdf")
-    n_pages = min(_MAX_PAGES, len(doc))
-
-    tables_by_page = _split_tables_by_page(extract_tables_markdown(file_bytes, max_pages=n_pages))
-
-    chunks: list[dict] = []
-    page_images: list[str] = []
-    summary = {"text": 0, "table": 0, "figure": 0}
-
-    for i in range(n_pages):
-        page = doc[i]
-        page_num = i + 1
-        text = page.get_text()
-        b64 = _render_page(page)
-        page_images.append(b64)
-
-        if progress_cb:
-            progress_cb({"step": "extract", "page": page_num, "pages": n_pages})
-
-        if len(text.strip()) >= 20:
-            for c in chunk_document(text, source):
-                c["chunk_type"] = "text"
-                c["page"] = page_num
-                chunks.append(c)
-            summary["text"] += 1
-
-        for table_md in tables_by_page.get(page_num, []):
-            chunks.append({"text": table_md, "source": source, "chunk_index": len(chunks),
-                            "chunk_type": "table", "page": page_num})
-            summary["table"] += 1
-
-        if _is_visually_dense(page, text):
-            if progress_cb:
-                progress_cb({"step": "caption", "page": page_num, "pages": n_pages})
-            caption = _caption_page(b64)
-            if caption:
-                chunks.append({"text": f"[Figure, page {page_num}] {caption}", "source": source,
-                                "chunk_index": len(chunks), "chunk_type": "figure", "page": page_num})
-                summary["figure"] += 1
-
-    doc.close()
-    return chunks, page_images, summary
 
 
 # ── SSE endpoint ────────────────────────────────────────────────────────────────
@@ -302,23 +167,55 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         summary = cached["chunk_summary"]
         yield _sse({"step": "extract", "status": "done", "chunk_summary": summary, "cached": True})
     else:
-        yield _sse({"step": "extract", "status": "running"})
         loop = asyncio.get_event_loop()
         is_image = file_bytes[:4] != b"%PDF" and _looks_like_image(file_bytes, content_type)
-        events: list[dict] = []
-        try:
-            if is_image:
+
+        if is_image:
+            # One atomic vision call — no sub-steps to report, so the
+            # frontend shows an indeterminate (not percentage) bar.
+            yield _sse({"step": "extract", "status": "running", "indeterminate": True})
+            try:
                 chunks, page_images, summary = await loop.run_in_executor(
                     _executor, lambda: build_image_chunk(file_bytes, source)
                 )
-            else:
-                chunks, page_images, summary = await loop.run_in_executor(
-                    _executor, lambda: build_multimodal_chunks(file_bytes, source, events.append)
+            except Exception as exc:
+                logger.error("Multimodal ingestion failed: %s", exc)
+                yield _sse({"error": f"Failed to process file: {exc}"})
+                return
+        else:
+            # Page-by-page, awaiting each one individually so a real
+            # "page X of N" event can be yielded between pages, instead of
+            # one opaque executor call for the whole document.
+            try:
+                doc, n_pages, tables_by_page = await loop.run_in_executor(
+                    _executor, lambda: prepare_pdf(file_bytes)
                 )
-        except Exception as exc:
-            logger.error("Multimodal ingestion failed: %s", exc)
-            yield _sse({"error": f"Failed to process file: {exc}"})
-            return
+            except Exception as exc:
+                logger.error("Multimodal ingestion failed: %s", exc)
+                yield _sse({"error": f"Failed to process file: {exc}"})
+                return
+
+            yield _sse({"step": "extract", "status": "running", "page": 0, "pages": n_pages})
+            chunks = []
+            page_images = []
+            summary = {"text": 0, "table": 0, "figure": 0}
+            try:
+                for page_num in range(1, n_pages + 1):
+                    page_chunks, b64, page_summary = await loop.run_in_executor(
+                        _executor, lambda pn=page_num: process_page(doc, pn, tables_by_page, source)
+                    )
+                    chunks.extend(page_chunks)
+                    page_images.append(b64)
+                    for k in summary:
+                        summary[k] += page_summary[k]
+                    yield _sse({"step": "extract", "status": "running", "page": page_num, "pages": n_pages})
+            except Exception as exc:
+                logger.error("Multimodal ingestion failed: %s", exc)
+                yield _sse({"error": f"Failed to process file: {exc}"})
+                return
+            finally:
+                await loop.run_in_executor(_executor, doc.close)
+
         yield _sse({"step": "extract", "status": "done", "chunk_summary": summary})
         if chunks:
             _cache_put(cache_key, {"chunks": chunks, "page_images": page_images, "chunk_summary": summary})

@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse
 from routers.rag import get_rag_state
 from routers.rag.retrieve import tiered_hybrid_retrieve
 from routers.rag.rerank import rerank
-from routers.rag.mm_ingest import build_multimodal_chunks
+from routers.rag.mm_pdf import build_multimodal_chunks
 from routers.rag.ingest import index_chunks, delete_source
 from routers.rag.evaluate import _faithfulness, _answer_relevancy, _context_precision, _context_recall
 from routers.rag.llm import complete
