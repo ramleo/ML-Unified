@@ -210,7 +210,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
             # Frame-by-frame, same "page X of N" progress pattern as the PDF
             # path — N here is the number of SAMPLED frames, not video frames.
             try:
-                cap, tmp_path, n_frames, total_frames, fps = await loop.run_in_executor(
+                cap, tmp_path, n_frames, duration_s = await loop.run_in_executor(
                     _executor, lambda: prepare_video(file_bytes)
                 )
             except Exception as exc:
@@ -225,7 +225,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
             try:
                 for frame_idx in range(1, n_frames + 1):
                     frame_chunks, b64, page_summary = await loop.run_in_executor(
-                        _executor, lambda fi=frame_idx: process_frame(cap, fi, n_frames, total_frames, fps, source)
+                        _executor, lambda fi=frame_idx: process_frame(cap, fi, n_frames, duration_s, source)
                     )
                     chunks.extend(frame_chunks)
                     if b64:

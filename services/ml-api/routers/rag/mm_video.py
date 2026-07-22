@@ -60,7 +60,7 @@ def _caption_frame(b64: str, timestamp_s: float) -> str:
 
 def prepare_video(file_bytes: bytes):
     """Write to a temp file (cv2 needs a real path, not bytes) and open it.
-    Returns (cap, tmp_path, n_frames, total_frames, fps)."""
+    Returns (cap, tmp_path, n_frames, duration_s)."""
     import cv2
 
     tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
@@ -74,18 +74,26 @@ def prepare_video(file_bytes: bytes):
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    duration_s = (total_frames / fps) if (total_frames > 0 and fps > 0) else 0.0
     n_frames = min(MAX_VIDEO_FRAMES, total_frames) if total_frames > 0 else MAX_VIDEO_FRAMES
-    return cap, tmp.name, n_frames, total_frames, fps
+    return cap, tmp.name, n_frames, duration_s
 
 
-def process_frame(cap, frame_idx: int, n_frames: int, total_frames: int, fps: float,
+def process_frame(cap, frame_idx: int, n_frames: int, duration_s: float,
                   source: str) -> tuple[list[dict], str, dict]:
     """Seek to and caption ONE evenly-spaced sampled frame (1-indexed).
-    Returns (chunks, frame_b64, page_summary)."""
+    Returns (chunks, frame_b64, page_summary).
+
+    Seeks by TIMESTAMP (CAP_PROP_POS_MSEC), not frame count
+    (CAP_PROP_POS_FRAMES) — observed live: frame-index seeking on a
+    real H.264 (inter-frame-compressed) video silently returned the
+    SAME frame for three different target indices, producing
+    byte-identical captions. Timestamp-based seeking is the standard,
+    much more reliable fix for this class of OpenCV/ffmpeg behavior."""
     import cv2
 
-    target = int((frame_idx - 1) * total_frames / n_frames) if total_frames > 0 else 0
-    cap.set(cv2.CAP_PROP_POS_FRAMES, target)
+    target_ms = (frame_idx - 1) * (duration_s * 1000 / n_frames) if duration_s > 0 else 0
+    cap.set(cv2.CAP_PROP_POS_MSEC, target_ms)
     ok, frame = cap.read()
     page_summary = {"text": 0, "table": 0, "figure": 0, "video": 0}
     if not ok:
@@ -96,7 +104,7 @@ def process_frame(cap, frame_idx: int, n_frames: int, total_frames: int, fps: fl
         return [], "", page_summary
     b64 = base64.b64encode(buf.tobytes()).decode()
 
-    timestamp_s = target / fps if fps else 0.0
+    timestamp_s = target_ms / 1000
     caption = _caption_frame(b64, timestamp_s)
     if not caption:
         return [], b64, page_summary
