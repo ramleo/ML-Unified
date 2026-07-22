@@ -23,8 +23,9 @@ from fastapi.responses import StreamingResponse
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.ingest import index_chunks
 from routers.rag.mm_caption import extract_caption
+from routers.rag.mm_csv import build_csv_chunks, looks_like_csv
 from routers.rag.mm_pdf import prepare_pdf, process_page
-from routers.rag.mm_video import close_video, looks_like_video, prepare_video, process_frame
+from routers.rag.mm_video import close_video, looks_like_video, prepare_video, process_frame, transcribe_video
 
 logger = logging.getLogger(__name__)
 
@@ -140,44 +141,6 @@ def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[
     return [chunk], [b64], summary
 
 
-# ── Standalone CSV ────────────────────────────────────────────────────────────
-
-MAX_CSV_ROWS = 500   # bounds cost/latency the same way MAX_PAGES bounds PDFs
-_CSV_CHUNK_ROWS = 50  # rows per chunk — keeps each chunk's embedding focused
-
-
-def _looks_like_csv(filename: str, content_type: str) -> bool:
-    return filename.lower().endswith(".csv") or content_type in ("text/csv", "application/csv")
-
-
-def _rows_to_markdown(header: list[str], rows: list[list[str]]) -> str:
-    lines = ["| " + " | ".join(header) + " |", "|" + "|".join(["---"] * len(header)) + "|"]
-    for row in rows:
-        lines.append("| " + " | ".join(str(c).replace("|", " ") for c in row) + " |")
-    return "\n".join(lines)
-
-
-def build_csv_chunks(file_bytes: bytes, source: str) -> tuple[list[dict], list[str], dict]:
-    """A standalone CSV upload — same 'table' chunk_type as a PDF's embedded
-    tables, so it flows through the identical retrieval/citation path.
-    No page_images (there's nothing to render as a thumbnail)."""
-    import io
-    import pandas as pd
-
-    df = pd.read_csv(io.BytesIO(file_bytes))
-    df = df.head(MAX_CSV_ROWS)
-    header = [str(c) for c in df.columns]
-
-    chunks: list[dict] = []
-    for i in range(0, len(df), _CSV_CHUNK_ROWS):
-        rows = df.iloc[i:i + _CSV_CHUNK_ROWS].astype(str).values.tolist()
-        md = _rows_to_markdown(header, rows)
-        chunks.append({"text": md, "source": source, "chunk_index": len(chunks),
-                       "chunk_type": "table", "page": len(chunks) + 1})
-
-    return chunks, [], {"text": 0, "table": len(chunks), "figure": 0}
-
-
 # ── SSE endpoint ────────────────────────────────────────────────────────────────
 
 def _sse(data: dict) -> str:
@@ -216,7 +179,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         yield _sse({"step": "extract", "status": "done", "chunk_summary": summary, "cached": True})
     else:
         loop = asyncio.get_event_loop()
-        is_csv = file_bytes[:4] != b"%PDF" and _looks_like_csv(filename, content_type)
+        is_csv = file_bytes[:4] != b"%PDF" and looks_like_csv(filename, content_type)
         is_video = not is_csv and looks_like_video(filename, content_type)
         is_image = (not is_csv and not is_video and file_bytes[:4] != b"%PDF"
                    and _looks_like_image(file_bytes, content_type))
@@ -270,6 +233,16 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
                     for k in summary:
                         summary[k] += page_summary[k]
                     yield _sse({"step": "extract", "status": "running", "page": frame_idx, "pages": n_frames})
+
+                # Audio transcript, if any — never fails the upload; a
+                # silent/audio-less video still keeps its visual frames.
+                yield _sse({"step": "transcribe", "status": "running"})
+                transcript_chunks, transcript_count = await loop.run_in_executor(
+                    _executor, lambda: transcribe_video(tmp_path, source)
+                )
+                chunks.extend(transcript_chunks)
+                summary["text"] += transcript_count
+                yield _sse({"step": "transcribe", "status": "done", "chunks": transcript_count})
             except Exception as exc:
                 logger.error("Multimodal ingestion failed: %s", exc)
                 yield _sse({"error": f"Failed to process file: {exc}"})
@@ -376,7 +349,7 @@ async def mm_ingest(
     if len(file_bytes) > MAX_FILE_BYTES:
         raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
     if not file_bytes or not (file_bytes[:4] == b"%PDF" or _looks_like_image(file_bytes, content_type)
-                              or _looks_like_csv(filename, content_type)
+                              or looks_like_csv(filename, content_type)
                               or looks_like_video(filename, content_type)):
         raise HTTPException(status_code=400,
                             detail="Only PDF, image (PNG/JPG/GIF/WEBP/BMP/TIFF), CSV, or video "
