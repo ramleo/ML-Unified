@@ -23,7 +23,13 @@ def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploa
         )
 
     if chunks:
-        parts.append("Use the following retrieved knowledge to answer the user's question:")
+        parts.append(
+            "Use the following retrieved knowledge to answer the user's question. "
+            "The [source, page, type] labels below are for your reference only — "
+            "the interface already shows citations separately, so do NOT repeat, "
+            "quote, or append any [source...] label in your answer text. Write a "
+            "plain, direct answer with no bracketed references at all."
+        )
         parts.append("---")
         for c in chunks:
             src = c.get("source", "unknown")
