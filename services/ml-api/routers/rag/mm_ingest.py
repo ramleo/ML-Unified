@@ -22,7 +22,7 @@ from fastapi.responses import StreamingResponse
 
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.ingest import index_chunks
-from routers.rag.mm_caption import extract_caption
+from routers.rag.mm_caption import clean_ocr_text, extract_caption
 from routers.rag.mm_csv import build_csv_chunks, looks_like_csv
 from routers.rag.mm_pdf import prepare_pdf, process_page
 from routers.rag.mm_video import close_video, looks_like_video, prepare_video, process_frame, transcribe_video
@@ -124,7 +124,7 @@ def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[
         caption = extract_caption(_vision_cascade_raw(b64, _image_prompt(terse=True)), 400)
 
     ocr_md, _ = mistral_ocr_pages([b64])
-    ocr_text = ocr_md.strip()[:_OCR_TEXT_CAP]
+    ocr_text = clean_ocr_text(ocr_md)[:_OCR_TEXT_CAP]
     if ocr_text:
         caption = f"{caption}\n\nExact text from image (OCR):\n{ocr_text}" if caption else ocr_text
 

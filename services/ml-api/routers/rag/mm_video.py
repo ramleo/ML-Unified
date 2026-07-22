@@ -21,7 +21,7 @@ import tempfile
 
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.ingest import chunk_document
-from routers.rag.mm_caption import extract_caption
+from routers.rag.mm_caption import clean_ocr_text, extract_caption
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ def _frame_prompt(timestamp_s: float) -> str:
 def _caption_frame(b64: str, timestamp_s: float) -> str:
     caption = extract_caption(_vision_cascade_raw(b64, _frame_prompt(timestamp_s)), 600)
     ocr_md, _ = mistral_ocr_pages([b64])
-    ocr_text = ocr_md.strip()[:_OCR_TEXT_CAP]
+    ocr_text = clean_ocr_text(ocr_md)[:_OCR_TEXT_CAP]
     if not ocr_text:
         return caption
     if not caption:
