@@ -21,7 +21,8 @@ def _sigmoid(x: float) -> float:
     return 1.0 / (1.0 + math.exp(-x))
 
 
-def rerank(query: str, chunks: list[dict], state, top_k: int = 8, abs_floor: float | None = None) -> list[dict]:
+def rerank(query: str, chunks: list[dict], state, top_k: int = 8, abs_floor: float | None = None,
+          keep_all: bool = False) -> list[dict]:
     """Re-score candidate chunks with a cross-encoder, drop irrelevant ones, return top_k.
 
     Falls back to the input order (already RRF-ranked) if no reranker is loaded.
@@ -29,6 +30,14 @@ def rerank(query: str, chunks: list[dict], state, top_k: int = 8, abs_floor: flo
     sigmoid relevance, "display_score" becomes that score relative to the top
     match (top match = 1.0) — display_score is what the UI should render as a
     percentage, since absolute scores for this model rarely look intuitive.
+
+    keep_all=True skips the relative-ratio pruning below (still requires the
+    top candidate to clear abs_floor) — for broad "what is this document
+    about" style questions, where no single chunk is semantically "the
+    answer" so ordinary relevance scoring rejects everything, including the
+    genuinely relevant content. Meant only for small candidate pools (a
+    single small uploaded document), paired with a top_k large enough to
+    not truncate before this even runs.
     """
     if not chunks:
         return []
@@ -58,7 +67,7 @@ def rerank(query: str, chunks: list[dict], state, top_k: int = 8, abs_floor: flo
         return []
 
     top_score = scored[0][1]
-    min_keep = top_score * _RELATIVE_RATIO
+    min_keep = 0.0 if keep_all else top_score * _RELATIVE_RATIO
 
     reranked: list[dict] = []
     for chunk, score in scored[:top_k]:
