@@ -29,6 +29,24 @@ MAX_VIDEO_FRAMES = 6
 _OCR_TEXT_CAP = 2000
 _TRANSCRIBE_MODEL = "whisper-large-v3-turbo"
 
+MIN_FRAMES_WITH_TRANSCRIPT = 2   # once real speech content exists, frames
+                                 # mostly just confirm "still the same
+                                 # scene" for a talking-head video — cut
+                                 # sampling down rather than caption 6
+                                 # near-identical moments
+_SUBSTANTIAL_TRANSCRIPT_CHARS = 100
+
+
+def reduced_frame_count(n_frames: int, transcript_chunks: list[dict]) -> int:
+    """A real transcript means the audio, not the frames, carries the
+    content — visual sampling adds little beyond confirming the scene
+    hasn't changed. No transcript (silent/failed audio) keeps the full
+    frame count, since frames are then the ONLY signal available."""
+    total_chars = sum(len(c["text"]) for c in transcript_chunks)
+    if total_chars >= _SUBSTANTIAL_TRANSCRIPT_CHARS:
+        return min(n_frames, MIN_FRAMES_WITH_TRANSCRIPT)
+    return n_frames
+
 VIDEO_EXTENSIONS = (".mp4", ".mov", ".webm", ".avi", ".mkv")
 VIDEO_CONTENT_TYPES = ("video/mp4", "video/quicktime", "video/webm",
                        "video/x-msvideo", "video/x-matroska")

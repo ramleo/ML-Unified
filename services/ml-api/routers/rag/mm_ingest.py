@@ -25,7 +25,8 @@ from routers.rag.ingest import index_chunks
 from routers.rag.mm_caption import clean_ocr_text, extract_caption
 from routers.rag.mm_csv import build_csv_chunks, looks_like_csv
 from routers.rag.mm_pdf import prepare_pdf, process_page
-from routers.rag.mm_video import close_video, looks_like_video, prepare_video, process_frame, transcribe_video
+from routers.rag.mm_video import (close_video, looks_like_video, prepare_video, process_frame,
+                                  reduced_frame_count, transcribe_video)
 
 logger = logging.getLogger(__name__)
 
@@ -218,11 +219,25 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
                 yield _sse({"error": f"Failed to process file: {exc}"})
                 return
 
-            yield _sse({"step": "extract", "status": "running", "page": 0, "pages": n_frames})
             chunks = []
             page_images = []
             summary = {"text": 0, "table": 0, "figure": 0, "video": 0}
             try:
+                # Audio transcript FIRST — for a talking-head video, this is
+                # what actually carries the content. Whether it succeeds (and
+                # how much it has to say) decides how many visual frames are
+                # still worth sampling (see reduced_frame_count).
+                yield _sse({"step": "transcribe", "status": "running"})
+                transcript_chunks, transcript_count = await loop.run_in_executor(
+                    _executor, lambda: transcribe_video(tmp_path, source)
+                )
+                chunks.extend(transcript_chunks)
+                summary["text"] += transcript_count
+                yield _sse({"step": "transcribe", "status": "done", "chunks": transcript_count})
+
+                n_frames = reduced_frame_count(n_frames, transcript_chunks)
+
+                yield _sse({"step": "extract", "status": "running", "page": 0, "pages": n_frames})
                 for frame_idx in range(1, n_frames + 1):
                     frame_chunks, b64, page_summary = await loop.run_in_executor(
                         _executor, lambda fi=frame_idx: process_frame(cap, fi, n_frames, duration_s, source)
@@ -233,16 +248,6 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
                     for k in summary:
                         summary[k] += page_summary[k]
                     yield _sse({"step": "extract", "status": "running", "page": frame_idx, "pages": n_frames})
-
-                # Audio transcript, if any — never fails the upload; a
-                # silent/audio-less video still keeps its visual frames.
-                yield _sse({"step": "transcribe", "status": "running"})
-                transcript_chunks, transcript_count = await loop.run_in_executor(
-                    _executor, lambda: transcribe_video(tmp_path, source)
-                )
-                chunks.extend(transcript_chunks)
-                summary["text"] += transcript_count
-                yield _sse({"step": "transcribe", "status": "done", "chunks": transcript_count})
             except Exception as exc:
                 logger.error("Multimodal ingestion failed: %s", exc)
                 yield _sse({"error": f"Failed to process file: {exc}"})
