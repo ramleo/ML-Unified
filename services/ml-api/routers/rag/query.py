@@ -55,27 +55,21 @@ def _detect_type_boost(query: str) -> dict[str, float] | None:
     return boost or None
 
 
-# A broad "what is this about" style question has no single chunk that's
+# Many phrasings ("what's this about", "what is he saying", "summarize",
+# "did she say anything about X"...) have no single chunk that's
 # semantically "the answer" — ordinary relevance-based rerank filtering
-# rejects everything, including genuinely relevant content (observed live:
-# a real video transcript scored 0.007, well below the usual keep-threshold,
-# for "what is the person talking about?"). Detected by keyword, not asked
-# to a model — cheap, and false positives just mean "send a bit more
-# context than strictly necessary," never a wrong answer.
-_BROAD_QUERY_PATTERNS = (
-    "what is this about", "what's this about", "talking about", "talk about",
-    "what is this document about", "what is this video about", "summarize",
-    "summary", "give me an overview", "overview of", "what does this cover",
-    "what is covered", "what happens in",
-)
-_BROAD_QUERY_MAX_CANDIDATES = 15  # cap so a broad question on a LARGER
-                                  # uploaded corpus doesn't dump everything
-                                  # into the LLM's context
-
-
-def _is_broad_query(query: str) -> bool:
-    q = query.lower()
-    return any(p in q for p in _BROAD_QUERY_PATTERNS)
+# rejects everything, including genuinely relevant content (observed live,
+# twice: a real video transcript scored 0.007 for "what is the person
+# talking about?", then got dropped again for "what is he saying?" because
+# that phrasing wasn't on a keyword list). A keyword list for this is
+# inherently a losing game — there's no bounded set of ways to ask a broad
+# question. Instead: for a SMALL uploaded corpus, always send everything to
+# the LLM regardless of query wording. There's no real cost (the pool is
+# tiny) and it removes this whole class of bug rather than growing a list
+# one missed phrasing at a time.
+_SMALL_CORPUS_MAX_CANDIDATES = 15  # cap so this doesn't dump an unbounded
+                                   # amount of context for a LARGER uploaded
+                                   # corpus (multi-document Q&A)
 
 
 # ── Env var fallbacks ──────────────────────────────────────────────────────────
@@ -232,11 +226,11 @@ def _sse_generator(req: QueryRequest):
     # already scoped candidates to just the user's own small uploaded
     # document — the same floor can discard the ONLY relevant candidate that
     # exists (observed directly: candidates_retrieved=1, chunks_retrieved=0).
-    is_broad = req.restrict_to_uploads and _is_broad_query(req.query)
+    is_small_corpus = req.restrict_to_uploads and len(candidates) <= _SMALL_CORPUS_MAX_CANDIDATES
     chunks = rerank(req.query, candidates, state,
-                    top_k=min(len(candidates), _BROAD_QUERY_MAX_CANDIDATES) if is_broad else 5,
+                    top_k=len(candidates) if is_small_corpus else 5,
                     abs_floor=0.0 if req.restrict_to_uploads else None,
-                    keep_all=is_broad)
+                    keep_all=is_small_corpus)
 
     top_raw = chunks[0].get("score", 0.0) if chunks else 0.0
     low_confidence = not chunks or top_raw < 0.05
