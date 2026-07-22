@@ -20,7 +20,7 @@ from typing import AsyncGenerator
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
-from routers.document._vision import _vision_cascade_raw
+from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.ingest import index_chunks
 from routers.rag.mm_caption import extract_caption
 from routers.rag.mm_pdf import prepare_pdf, process_page
@@ -31,6 +31,10 @@ router = APIRouter()
 _executor = ThreadPoolExecutor(max_workers=2)
 
 MAX_FILE_BYTES = 10 * 1024 * 1024  # 10 MB
+_OCR_TEXT_CAP = 2000  # chars; same rationale as mm_pdf.py's — a dedicated OCR
+                      # pass reads exact text (e.g. an invoice's line-item
+                      # numbers) that a general "describe this image" caption
+                      # only paraphrases
 
 # ── Tiny ingestion cache (separate from document/_cache.py — own capacity) ────
 _CACHE_TTL = 24 * 3600
@@ -116,6 +120,11 @@ def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[
         # JSON — one bounded retry with a terser ask that leaves less room
         # for a reasoning model to exhaust its token budget before answering.
         caption = extract_caption(_vision_cascade_raw(b64, _image_prompt(terse=True)), 400)
+
+    ocr_md, _ = mistral_ocr_pages([b64])
+    ocr_text = ocr_md.strip()[:_OCR_TEXT_CAP]
+    if ocr_text:
+        caption = f"{caption}\n\nExact text from image (OCR):\n{ocr_text}" if caption else ocr_text
 
     summary = {"text": 0, "table": 0, "figure": 0, "image": 1 if caption else 0}
     if not caption:
