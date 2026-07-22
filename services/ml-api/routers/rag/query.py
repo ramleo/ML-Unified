@@ -18,7 +18,7 @@ from routers.rag.retrieve import multi_query_retrieve
 from routers.rag.rerank import rerank
 from routers.rag.expand import expand_query
 from routers.rag.crag import web_search_fallback
-from routers.rag.citations import build_system_prompt, build_source_doc
+from routers.rag.citations import build_system_prompt, build_source_doc, likely_used_indices
 from routers.rag.generation import build_provider_candidates, stream_with_fallback
 from routers.rag.cache import ctx_hash as _ctx_hash, cache_lookup as _cache_lookup, cache_store as _cache_store
 
@@ -300,9 +300,11 @@ def _sse_generator(req: QueryRequest):
 
     # 6. Done event with metadata
     jina_status = "ready" if state.jina_ready else ("loading" if state.jina_loading else "idle")
+    likely_used = likely_used_indices(chunks, full_text)
     yield _sse({
         "type": "done",
         "sources": seen_sources,
+        "likely_used_sources": likely_used,
         "low_confidence": low_confidence,
         "jina_status": jina_status,
         "embedding_used": "jina" if use_jina else "minilm",

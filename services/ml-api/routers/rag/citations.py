@@ -1,8 +1,11 @@
-"""Citation formatting shared by rag/query.py — system-prompt injection labels
-and the SSE 'source' doc payload. Split out of query.py to stay under the
-project's file-length limit and to de-duplicate the doc-payload construction
-that previously appeared twice (cached-hit path and live path)."""
+"""Citation formatting shared by rag/query.py — system-prompt injection labels,
+the SSE 'source' doc payload, and post-hoc "was this chunk actually used"
+detection. Split out of query.py to stay under the project's file-length
+limit and to de-duplicate the doc-payload construction that previously
+appeared twice (cached-hit path and live path)."""
 from __future__ import annotations
+
+import re
 
 
 def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploads: bool = False) -> str:
@@ -52,3 +55,39 @@ def build_source_doc(chunk: dict) -> dict:
         "page": chunk.get("page"),
         "bbox": chunk.get("bbox"),
     }
+
+
+# The citation list shows every chunk sent to the LLM as context — in
+# restrict_to_uploads mode that can include chunks the model never actually
+# drew from (observed live: a video frame's appearance description sitting
+# next to a quote that came entirely from a different, transcript chunk).
+# Rerank score is NOT a usable proxy for "was this used" — the transcript in
+# that exact case scored LOWER than the unused frames. Instead, measure
+# whether the chunk's own words actually appear in the generated answer:
+# what fraction of the answer's 4-word phrases are found verbatim in this
+# chunk. A real quote/close paraphrase scores high; unrelated context scores
+# near zero, regardless of what the reranker thought of it beforehand.
+_CITATION_OVERLAP_THRESHOLD = 0.2
+
+
+def _ngrams(text: str, n: int = 4) -> set[tuple[str, ...]]:
+    words = re.findall(r"\w+", text.lower())
+    return {tuple(words[i:i + n]) for i in range(len(words) - n + 1)}
+
+
+def likely_used_indices(chunks: list[dict], answer: str) -> list[int]:
+    """Indices into `chunks` whose text substantially overlaps the generated
+    answer — the citations that actually appear to back the answer, as
+    opposed to context that was merely available."""
+    answer_ngrams = _ngrams(answer)
+    if not answer_ngrams:
+        return []
+    used = []
+    for i, c in enumerate(chunks):
+        chunk_ngrams = _ngrams(c.get("text", ""))
+        if not chunk_ngrams:
+            continue
+        overlap = len(answer_ngrams & chunk_ngrams) / len(answer_ngrams)
+        if overlap >= _CITATION_OVERLAP_THRESHOLD:
+            used.append(i)
+    return used
