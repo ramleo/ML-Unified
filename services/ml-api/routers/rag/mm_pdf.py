@@ -21,10 +21,10 @@ MAX_PAGES = 8
 _RENDER_ZOOM = 2.0          # fitz zoom factor (~144 DPI, since PDF base is 72 DPI) —
                             # higher than Document Intelligence's 1.2x preview renders
                             # since this feeds the vision cascade, not just a thumbnail
-_MIN_VISUAL_AREA_RATIO = 0.05  # an image/drawing must cover ≥5% of the page area
+_MIN_VISUAL_AREA_RATIO = 0.05  # a raster image must cover ≥5% of the page area
                                # to count as "worth captioning" — filters small
-                               # decorative marks (icons, divider lines, logos)
-                               # that aren't actually a chart/photo/diagram
+                               # decorative marks (icons, small logos) that
+                               # aren't actually a chart/photo/diagram
 
 
 def _render_page(page, zoom: float = _RENDER_ZOOM) -> str:
@@ -36,13 +36,17 @@ def _render_page(page, zoom: float = _RENDER_ZOOM) -> str:
 
 
 def _is_visually_dense(page) -> bool:
-    # Caption a page whenever it carries an image/drawing large enough to be
-    # an actual chart/photo/diagram — even a text-heavy page (e.g. a resume
-    # with a text sidebar plus a timeline graphic), since get_text() extracts
-    # nothing from the image region. Small marks (icons, divider lines, a
-    # logo) are excluded by the area check — captioning those produced
-    # noise like a "figure" whose own caption said "this is a text document,
-    # not a visual."
+    # Caption a page whenever it carries a raster image large enough to be an
+    # actual chart/photo/diagram — even a text-heavy page (e.g. a resume with
+    # a text sidebar plus a timeline graphic), since get_text() extracts
+    # nothing from the image region. Deliberately checks ONLY get_images()
+    # (real embedded raster images), not get_drawings() (vector paths) — a
+    # plain color-fill rectangle used as a section-header banner/divider is a
+    # vector drawing that can easily exceed the area threshold while being
+    # pure decoration; real timeline/chart graphics come in as raster images.
+    # Observed live: a resume's solid-color "PERSONAL DETAILS" banner was
+    # triggering a "figure" caption that said "this is a text document, not
+    # a visual" — dropping get_drawings() removes that false positive.
     try:
         page_area = page.rect.width * page.rect.height
         if page_area <= 0:
@@ -54,11 +58,6 @@ def _is_visually_dense(page) -> bool:
             except Exception:
                 continue
             if bbox and (bbox.width * bbox.height) / page_area >= _MIN_VISUAL_AREA_RATIO:
-                return True
-
-        for d in page.get_drawings():
-            rect = d.get("rect")
-            if rect and (rect.width * rect.height) / page_area >= _MIN_VISUAL_AREA_RATIO:
                 return True
 
         return False
