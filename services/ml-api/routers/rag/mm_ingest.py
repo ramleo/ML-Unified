@@ -24,6 +24,7 @@ from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.ingest import index_chunks
 from routers.rag.mm_caption import extract_caption
 from routers.rag.mm_pdf import prepare_pdf, process_page
+from routers.rag.mm_video import close_video, looks_like_video, prepare_video, process_frame
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +217,9 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
     else:
         loop = asyncio.get_event_loop()
         is_csv = file_bytes[:4] != b"%PDF" and _looks_like_csv(filename, content_type)
-        is_image = not is_csv and file_bytes[:4] != b"%PDF" and _looks_like_image(file_bytes, content_type)
+        is_video = not is_csv and looks_like_video(filename, content_type)
+        is_image = (not is_csv and not is_video and file_bytes[:4] != b"%PDF"
+                   and _looks_like_image(file_bytes, content_type))
 
         if is_csv:
             yield _sse({"step": "extract", "status": "running", "indeterminate": True})
@@ -240,6 +243,39 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
                 logger.error("Multimodal ingestion failed: %s", exc)
                 yield _sse({"error": f"Failed to process file: {exc}"})
                 return
+        elif is_video:
+            # Frame-by-frame, same "page X of N" progress pattern as the PDF
+            # path — N here is the number of SAMPLED frames, not video frames.
+            try:
+                cap, tmp_path, n_frames, total_frames, fps = await loop.run_in_executor(
+                    _executor, lambda: prepare_video(file_bytes)
+                )
+            except Exception as exc:
+                logger.error("Multimodal ingestion failed: %s", exc)
+                yield _sse({"error": f"Failed to process file: {exc}"})
+                return
+
+            yield _sse({"step": "extract", "status": "running", "page": 0, "pages": n_frames})
+            chunks = []
+            page_images = []
+            summary = {"text": 0, "table": 0, "figure": 0, "video": 0}
+            try:
+                for frame_idx in range(1, n_frames + 1):
+                    frame_chunks, b64, page_summary = await loop.run_in_executor(
+                        _executor, lambda fi=frame_idx: process_frame(cap, fi, n_frames, total_frames, fps, source)
+                    )
+                    chunks.extend(frame_chunks)
+                    if b64:
+                        page_images.append(b64)
+                    for k in summary:
+                        summary[k] += page_summary[k]
+                    yield _sse({"step": "extract", "status": "running", "page": frame_idx, "pages": n_frames})
+            except Exception as exc:
+                logger.error("Multimodal ingestion failed: %s", exc)
+                yield _sse({"error": f"Failed to process file: {exc}"})
+                return
+            finally:
+                await loop.run_in_executor(_executor, lambda: close_video(cap, tmp_path))
         else:
             # Page-by-page, awaiting each one individually so a real
             # "page X of N" event can be yielded between pages, instead of
@@ -327,10 +363,11 @@ async def mm_ingest(
     save_scope: str = Form(default="session"),        # "session" | "shared"
     session_id: str = Form(default=""),               # reuse the caller's chat session_id
 ):
-    """Ingest a PDF (tables/figures), a standalone image (PNG/JPG/GIF/WEBP),
-    or a CSV into the multimodal RAG index. Streams progress as SSE; final
-    event carries page_images for citation thumbnails (empty for CSV — no
-    page to render). Pass the same session_id your /rag/query calls use so
+    """Ingest a PDF (tables/figures), a standalone image (PNG/JPG/GIF/WEBP), a
+    CSV, or a short video (MP4/MOV/WEBM/AVI/MKV — visual key frames only, no
+    audio transcript) into the multimodal RAG index. Streams progress as SSE;
+    final event carries page_images for citation thumbnails (empty for CSV —
+    no page to render). Pass the same session_id your /rag/query calls use so
     the upload is retrievable from that chat session; a fresh one is
     generated if omitted."""
     file_bytes = await file.read()
@@ -339,9 +376,11 @@ async def mm_ingest(
     if len(file_bytes) > MAX_FILE_BYTES:
         raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
     if not file_bytes or not (file_bytes[:4] == b"%PDF" or _looks_like_image(file_bytes, content_type)
-                              or _looks_like_csv(filename, content_type)):
+                              or _looks_like_csv(filename, content_type)
+                              or looks_like_video(filename, content_type)):
         raise HTTPException(status_code=400,
-                            detail="Only PDF, image (PNG/JPG/GIF/WEBP/BMP/TIFF), or CSV files are supported.")
+                            detail="Only PDF, image (PNG/JPG/GIF/WEBP/BMP/TIFF), CSV, or video "
+                                   "(MP4/MOV/WEBM/AVI/MKV) files are supported.")
 
     return StreamingResponse(
         _stream(file_bytes, filename, embedding_mode, save_scope, session_id, content_type),

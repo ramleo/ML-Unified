@@ -2,9 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# libgomp1 is required by LightGBM and XGBoost for OpenMP parallelism
+# libgomp1 is required by LightGBM and XGBoost for OpenMP parallelism.
+# ffmpeg is required by opencv-python-headless to decode most video codecs
+# (MP4/MOV/WEBM/etc.) for the Multimodal RAG video-upload key-frame path.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgomp1 \
+    && apt-get install -y --no-install-recommends libgomp1 ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 RUN adduser --disabled-password --gecos "" appuser
