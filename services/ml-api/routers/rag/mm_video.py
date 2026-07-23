@@ -166,10 +166,13 @@ def _extract_audio_wav(video_path: str) -> bytes | None:
             pass
 
 
-def _transcribe_audio(wav_bytes: bytes) -> str:
+def _transcribe_audio(wav_bytes: bytes) -> tuple[str, list[dict]]:
+    """Returns (full_text, segments) where each segment is
+    {"start": float, "end": float, "text": str} in source order — the data
+    a timestamped view or an .srt export needs. Both empty on any failure."""
     key = os.environ.get("GROQ_API_KEY", "")
     if not key:
-        return ""
+        return "", []
     try:
         import httpx
         with httpx.Client(timeout=90) as client:
@@ -177,39 +180,38 @@ def _transcribe_audio(wav_bytes: bytes) -> str:
                 "https://api.groq.com/openai/v1/audio/transcriptions",
                 headers={"Authorization": f"Bearer {key}"},
                 files={"file": ("audio.wav", wav_bytes, "audio/wav")},
-                # verbose_json (not plain "text") so we can log segment
-                # coverage — needed to diagnose/confirm the transcript
-                # actually covers the full audio duration, not just however
-                # much Whisper considered confident speech.
                 data={"model": _TRANSCRIBE_MODEL, "response_format": "verbose_json"},
             )
             r.raise_for_status()
             data = r.json()
-            segments = data.get("segments", [])
-            last_end = segments[-1].get("end", 0) if segments else 0
+            raw_segments = data.get("segments", [])
+            segments = [{"start": s.get("start", 0.0), "end": s.get("end", 0.0),
+                        "text": (s.get("text") or "").strip()} for s in raw_segments]
+            last_end = segments[-1]["end"] if segments else 0
             logger.info("Whisper transcription: %d segments, audio_duration=%.1fs, last_segment_end=%.1fs",
                        len(segments), data.get("duration", 0), last_end)
-            return (data.get("text") or "").strip()
+            return (data.get("text") or "").strip(), segments
     except Exception as exc:
         logger.warning("Audio transcription failed: %s", exc)
-        return ""
+        return "", []
 
 
-def transcribe_video(video_path: str, source: str) -> tuple[list[dict], int, str]:
+def transcribe_video(video_path: str, source: str) -> tuple[list[dict], int, str, list[dict]]:
     """Extract + transcribe the audio track, chunked the same way plain-text
     documents are (chunk_document) for retrieval, PLUS the full unchunked
-    transcript for display/download. Returns (chunks, chunk_count,
-    transcript_text); all empty if there's no audio or transcription
-    failed — callers should treat that as "visual-only," not an error."""
+    transcript and its timestamped segments for display/download. Returns
+    (chunks, chunk_count, transcript_text, segments); all empty if there's
+    no audio or transcription failed — callers should treat that as
+    "visual-only," not an error."""
     wav_bytes = _extract_audio_wav(video_path)
     if not wav_bytes:
-        return [], 0, ""
+        return [], 0, "", []
 
-    transcript = _transcribe_audio(wav_bytes)
+    transcript, segments = _transcribe_audio(wav_bytes)
     if not transcript.strip():
-        return [], 0, ""
+        return [], 0, "", []
 
     chunks = chunk_document(transcript, source)
     for c in chunks:
         c["chunk_type"] = "text"
-    return chunks, len(chunks), transcript
+    return chunks, len(chunks), transcript, segments

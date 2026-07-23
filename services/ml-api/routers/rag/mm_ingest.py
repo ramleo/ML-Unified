@@ -174,11 +174,13 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
     cache_key = _cache_key(file_bytes, embedding_mode)
     cached = _cache_get(cache_key)
     transcript_text = ""
+    transcript_segments: list[dict] = []
     if cached:
         chunks = [dict(c, source=source) for c in cached["chunks"]]
         page_images = cached["page_images"]
         summary = cached["chunk_summary"]
         transcript_text = cached.get("transcript_text", "")
+        transcript_segments = cached.get("transcript_segments", [])
         yield _sse({"step": "extract", "status": "done", "chunk_summary": summary, "cached": True})
     else:
         loop = asyncio.get_event_loop()
@@ -230,7 +232,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
                 # how much it has to say) decides how many visual frames are
                 # still worth sampling (see reduced_frame_count).
                 yield _sse({"step": "transcribe", "status": "running"})
-                transcript_chunks, transcript_count, transcript_text = await loop.run_in_executor(
+                transcript_chunks, transcript_count, transcript_text, transcript_segments = await loop.run_in_executor(
                     _executor, lambda: transcribe_video(tmp_path, source)
                 )
                 chunks.extend(transcript_chunks)
@@ -293,7 +295,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         yield _sse({"step": "extract", "status": "done", "chunk_summary": summary})
         if chunks:
             _cache_put(cache_key, {"chunks": chunks, "page_images": page_images, "chunk_summary": summary,
-                                   "transcript_text": transcript_text})
+                                   "transcript_text": transcript_text, "transcript_segments": transcript_segments})
 
     if not chunks:
         yield _sse({"error": "No extractable content found (text, tables, figures, or a describable image)."})
@@ -339,6 +341,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         # in the summary view and downloading, separate from the chunked
         # copy used for retrieval.
         "transcript": transcript_text or None,
+        "transcript_segments": transcript_segments,
     })
 
 
