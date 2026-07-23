@@ -284,4 +284,11 @@ def delete_upload(source: str) -> JSONResponse:
         raise HTTPException(status_code=404, detail=f"No uploaded document named '{source}'.")
 
     removed = delete_source(source, state)
+
+    # Lazy import avoids a circular import (mm_video_store has no reason to
+    # know about this router) — evicts the raw video bytes, if any, kept for
+    # click-to-seek playback.
+    from routers.rag.mm_video_store import evict_video
+    evict_video(source)
+
     return JSONResponse({"status": "ok", "removed": removed, "source": source})

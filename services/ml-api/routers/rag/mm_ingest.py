@@ -1,9 +1,9 @@
 """Multimodal RAG ingestion — PDFs with tables/figures, or standalone images,
 → typed chunks.
 
-PDF page extraction lives in mm_pdf.py (own module — kept this file under the
-project's file-length limit); this file owns the SSE endpoint/streaming
-orchestration, the standalone-image path, and the ingestion cache.
+PDF page extraction lives in mm_pdf.py, standalone images in mm_image.py
+(own modules — kept this file under the project's file-length limit); this
+file owns the SSE endpoint/streaming orchestration and the ingestion cache.
 Feeds the same chunk_document()/index_chunks() pipeline the plain-text RAG
 upload uses — same Chroma collection, same hybrid retrieval, same citations.
 """
@@ -20,10 +20,9 @@ from typing import AsyncGenerator
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
-from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.ingest import index_chunks
-from routers.rag.mm_caption import clean_ocr_text, extract_caption
 from routers.rag.mm_csv import build_csv_chunks, looks_like_csv
+from routers.rag.mm_image import build_image_chunk, looks_like_image
 from routers.rag.mm_pdf import prepare_pdf, process_page
 from routers.rag.mm_video import (close_video, generate_chapters, looks_like_video, prepare_video,
                                   process_frame, reduced_frame_count, transcribe_video)
@@ -38,10 +37,6 @@ MAX_FILE_BYTES = 20 * 1024 * 1024  # 20 MB — video audio now chunks past
                                     # (see mm_video.py's _transcribe_long_audio),
                                     # so this ceiling is about upload/ingestion
                                     # cost, not a transcription hard limit
-_OCR_TEXT_CAP = 2000  # chars; same rationale as mm_pdf.py's — a dedicated OCR
-                      # pass reads exact text (e.g. an invoice's line-item
-                      # numbers) that a general "describe this image" caption
-                      # only paraphrases
 
 # ── Tiny ingestion cache (separate from document/_cache.py — own capacity) ────
 _CACHE_TTL = 24 * 3600
@@ -72,80 +67,6 @@ def _cache_put(key: str, payload: dict) -> None:
         del _cache[oldest]
 
 
-# ── Standalone image captioning ─────────────────────────────────────────────────
-
-def _image_prompt(terse: bool = False) -> str:
-    if terse:
-        # Fallback for reasoning models that exhaust their token budget
-        # thinking before answering a more demanding ask — short and direct
-        # leaves it little room to ramble before the JSON is due.
-        return (
-            "In 2-3 short sentences, describe this image and transcribe any "
-            'visible text or numbers exactly. Return JSON only: {"caption": "..."}.'
-        )
-    return (
-        "Describe this image for someone who cannot see it: main subject, "
-        "setting, colors, and any visible text/numbers (transcribe exactly). "
-        "Be factual, 3-4 sentences. "
-        'Return JSON only: {"caption": "<your description>"}.'
-    )
-
-
-def _looks_like_image(file_bytes: bytes, content_type: str = "") -> bool:
-    if content_type.startswith("image/"):
-        return True
-    sigs = (b"\x89PNG", b"\xff\xd8\xff", b"GIF8", b"RIFF",  # PNG, JPEG, GIF, WEBP(RIFF)
-            b"BM", b"II*\x00", b"MM\x00*")                    # BMP, TIFF (little/big-endian)
-    if any(file_bytes.startswith(s) for s in sigs):
-        return True
-    # Last resort: let PIL make the call — covers real image files whose exact
-    # header a fixed signature list doesn't anticipate (e.g. unusual PNG/TIFF
-    # variants exported by some invoice/office tools).
-    try:
-        from PIL import Image
-        import io
-        Image.open(io.BytesIO(file_bytes)).verify()
-        return True
-    except Exception:
-        return False
-
-
-def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[str], dict]:
-    """A standalone image upload — one 'image' chunk_type, described thoroughly
-    (not the terser 'figure on a document page' framing used for PDF pages)."""
-    from PIL import Image
-    import io, base64
-
-    img = Image.open(io.BytesIO(file_bytes)).convert("RGB")
-    buf = io.BytesIO()
-    img.save(buf, format="PNG", optimize=True)
-    b64 = base64.b64encode(buf.getvalue()).decode()
-
-    caption = extract_caption(_vision_cascade_raw(b64, _image_prompt()), 800)
-    if not caption:
-        # First attempt likely got cut off mid-reasoning before reaching the
-        # JSON — one bounded retry with a terser ask that leaves less room
-        # for a reasoning model to exhaust its token budget before answering.
-        caption = extract_caption(_vision_cascade_raw(b64, _image_prompt(terse=True)), 400)
-
-    ocr_md, _ = mistral_ocr_pages([b64])
-    ocr_text = clean_ocr_text(ocr_md)[:_OCR_TEXT_CAP]
-    if ocr_text:
-        caption = f"{caption}\n\nExact text from image (OCR):\n{ocr_text}" if caption else ocr_text
-
-    summary = {"text": 0, "table": 0, "figure": 0, "image": 1 if caption else 0}
-    if not caption:
-        return [], [b64], summary
-
-    # No embedded "[Image: source]" prefix — citations.py's build_system_prompt
-    # already labels this chunk with source/page/type when building the LLM's
-    # context, so baking it into the stored text would only be redundant
-    # noise in the citation UI's raw-text preview.
-    chunk = {"text": caption, "source": source, "chunk_index": 0,
-             "chunk_type": "image", "page": 1}
-    return [chunk], [b64], summary
-
-
 # ── SSE endpoint ────────────────────────────────────────────────────────────────
 
 def _sse(data: dict) -> str:
@@ -171,6 +92,15 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
     if not session_id:
         session_id = str(_uuid.uuid4())
 
+    # Keep the raw bytes (small in-memory cap, evicted on document removal)
+    # so the frontend can play the actual video with click-to-seek, not
+    # just show static frame thumbnails. Stored unconditionally here —
+    # unlike the chunk cache below, this doesn't depend on a cache hit/miss,
+    # since file_bytes is fresh from THIS upload call either way.
+    if looks_like_video(filename, content_type):
+        from routers.rag.mm_video_store import store_video
+        store_video(source, file_bytes, content_type)
+
     # Cache only the EXPENSIVE-to-produce artifacts (vision captioning is the
     # slow/costly step). Indexing is always redone fresh per call — cheap,
     # and required so re-uploads land under the caller's own session_id
@@ -193,7 +123,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         is_csv = file_bytes[:4] != b"%PDF" and looks_like_csv(filename, content_type)
         is_video = not is_csv and looks_like_video(filename, content_type)
         is_image = (not is_csv and not is_video and file_bytes[:4] != b"%PDF"
-                   and _looks_like_image(file_bytes, content_type))
+                   and looks_like_image(file_bytes, content_type))
 
         if is_csv:
             yield _sse({"step": "extract", "status": "running", "indeterminate": True})
@@ -380,7 +310,7 @@ async def mm_ingest(
     filename = file.filename or "document.pdf"
     if len(file_bytes) > MAX_FILE_BYTES:
         raise HTTPException(status_code=400, detail="File too large (max 20 MB)")
-    if not file_bytes or not (file_bytes[:4] == b"%PDF" or _looks_like_image(file_bytes, content_type)
+    if not file_bytes or not (file_bytes[:4] == b"%PDF" or looks_like_image(file_bytes, content_type)
                               or looks_like_csv(filename, content_type)
                               or looks_like_video(filename, content_type)):
         raise HTTPException(status_code=400,
