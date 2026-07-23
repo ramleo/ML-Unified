@@ -265,6 +265,13 @@ def transcribe_video(video_path: str, source: str) -> tuple[list[dict], int, str
 
     try:
         transcript, segments = _transcribe_long_audio(wav_path)
+        if segments:
+            # Enhancement, not a requirement — adds a "speaker" key to each
+            # segment in place. Runs before cleanup, on the SAME full wav
+            # (not the per-chunk splits _transcribe_long_audio already
+            # deleted) so diarization sees the entire recording at once.
+            from routers.rag.mm_diarize import assign_speakers
+            assign_speakers(segments, wav_path)
     finally:
         try:
             os.unlink(wav_path)
