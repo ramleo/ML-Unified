@@ -141,29 +141,84 @@ def close_video(cap, tmp_path: str) -> None:
         pass
 
 
-def _extract_audio_wav(video_path: str) -> bytes | None:
-    """16kHz mono WAV, the format Whisper expects. Returns None if there's
-    no audio track or extraction otherwise fails — never raises."""
-    wav_path = video_path + ".wav"
+_MAX_WHISPER_BYTES = 24 * 1024 * 1024  # Groq's cap is 25MB; keep a safety margin
+_WAV_BYTES_PER_SEC = 16000 * 2         # 16kHz mono 16-bit PCM = 32000 bytes/sec
+
+
+def _extract_audio_wav_to_file(video_path: str, wav_path: str) -> bool:
+    """16kHz mono WAV, the format Whisper expects, written to wav_path (not
+    returned as bytes — a real file is needed so a long recording's audio
+    can be measured and split before transcription). False if there's no
+    audio track or extraction otherwise fails — never raises."""
     try:
         result = subprocess.run(
             ["ffmpeg", "-y", "-i", video_path, "-vn", "-acodec", "pcm_s16le",
              "-ar", "16000", "-ac", "1", wav_path],
-            capture_output=True, timeout=60,
+            capture_output=True, timeout=120,
         )
-        if result.returncode != 0 or not os.path.exists(wav_path):
-            return None
-        with open(wav_path, "rb") as f:
-            data = f.read()
-        return data if len(data) > 44 else None  # 44 bytes = empty WAV header only
+        return result.returncode == 0 and os.path.exists(wav_path) and os.path.getsize(wav_path) > 44
     except Exception as exc:
         logger.warning("Audio extraction failed: %s", exc)
-        return None
-    finally:
+        return False
+
+
+def _wav_duration_s(wav_path: str) -> float:
+    return max(0.0, (os.path.getsize(wav_path) - 44) / _WAV_BYTES_PER_SEC)  # 44-byte WAV header
+
+
+def _split_wav(wav_path: str, chunk_duration_s: float) -> list[str]:
+    """Slice a long WAV into sequential sub-files of ~chunk_duration_s each,
+    via ffmpeg (re-encodes the actual audio at each cut point, not a raw
+    byte split — every chunk is its own valid, independently-decodable
+    WAV). Only called when the full file already exceeds Groq's size cap."""
+    total_s = _wav_duration_s(wav_path)
+    paths = []
+    start, idx = 0.0, 0
+    while start < total_s:
+        out_path = f"{wav_path}.part{idx}.wav"
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", wav_path, "-ss", str(start), "-t", str(chunk_duration_s),
+             "-c", "copy", out_path],
+            capture_output=True, timeout=60,
+        )
+        if os.path.exists(out_path) and os.path.getsize(out_path) > 44:
+            paths.append(out_path)
+        start += chunk_duration_s
+        idx += 1
+    return paths
+
+
+def _transcribe_long_audio(wav_path: str) -> tuple[str, list[dict]]:
+    """Transcribes a WAV of any length — splitting into Groq-size-limited
+    chunks only when the file actually exceeds the cap, transcribing each
+    sequentially, and stitching results back together with each chunk's
+    segment timestamps offset by its real position in the full recording."""
+    if os.path.getsize(wav_path) <= _MAX_WHISPER_BYTES:
+        with open(wav_path, "rb") as f:
+            return _transcribe_audio(f.read())
+
+    chunk_duration_s = (_MAX_WHISPER_BYTES / _WAV_BYTES_PER_SEC) * 0.95  # margin for WAV header/encoding overhead
+    chunk_paths = _split_wav(wav_path, chunk_duration_s)
+    logger.info("Audio exceeds Whisper's size cap — split into %d chunks of ~%.0fs each",
+               len(chunk_paths), chunk_duration_s)
+
+    full_text_parts: list[str] = []
+    all_segments: list[dict] = []
+    offset = 0.0
+    for chunk_path in chunk_paths:
         try:
-            os.unlink(wav_path)
-        except OSError:
-            pass
+            with open(chunk_path, "rb") as f:
+                text, segments = _transcribe_audio(f.read())
+            full_text_parts.append(text)
+            for seg in segments:
+                all_segments.append({"start": seg["start"] + offset, "end": seg["end"] + offset, "text": seg["text"]})
+            offset += _wav_duration_s(chunk_path)
+        finally:
+            try:
+                os.unlink(chunk_path)
+            except OSError:
+                pass
+    return " ".join(p for p in full_text_parts if p), all_segments
 
 
 def _transcribe_audio(wav_bytes: bytes) -> tuple[str, list[dict]]:
@@ -203,11 +258,18 @@ def transcribe_video(video_path: str, source: str) -> tuple[list[dict], int, str
     (chunks, chunk_count, transcript_text, segments); all empty if there's
     no audio or transcription failed — callers should treat that as
     "visual-only," not an error."""
-    wav_bytes = _extract_audio_wav(video_path)
-    if not wav_bytes:
+    wav_path = video_path + ".wav"
+    if not _extract_audio_wav_to_file(video_path, wav_path):
         return [], 0, "", []
 
-    transcript, segments = _transcribe_audio(wav_bytes)
+    try:
+        transcript, segments = _transcribe_long_audio(wav_path)
+    finally:
+        try:
+            os.unlink(wav_path)
+        except OSError:
+            pass
+
     if not transcript.strip():
         return [], 0, "", []
 

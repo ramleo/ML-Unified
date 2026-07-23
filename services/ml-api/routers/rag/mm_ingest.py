@@ -33,7 +33,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 _executor = ThreadPoolExecutor(max_workers=2)
 
-MAX_FILE_BYTES = 10 * 1024 * 1024  # 10 MB
+MAX_FILE_BYTES = 20 * 1024 * 1024  # 20 MB — video audio now chunks past
+                                    # Groq Whisper's own 25MB-per-call cap
+                                    # (see mm_video.py's _transcribe_long_audio),
+                                    # so this ceiling is about upload/ingestion
+                                    # cost, not a transcription hard limit
 _OCR_TEXT_CAP = 2000  # chars; same rationale as mm_pdf.py's — a dedicated OCR
                       # pass reads exact text (e.g. an invoice's line-item
                       # numbers) that a general "describe this image" caption
@@ -363,7 +367,7 @@ async def mm_ingest(
     content_type = file.content_type or ""
     filename = file.filename or "document.pdf"
     if len(file_bytes) > MAX_FILE_BYTES:
-        raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
+        raise HTTPException(status_code=400, detail="File too large (max 20 MB)")
     if not file_bytes or not (file_bytes[:4] == b"%PDF" or _looks_like_image(file_bytes, content_type)
                               or looks_like_csv(filename, content_type)
                               or looks_like_video(filename, content_type)):
