@@ -8,6 +8,18 @@ from __future__ import annotations
 import re
 
 
+_VISUAL_CHUNK_TYPES = {"video", "figure", "image"}
+
+
+def _has_multiple_visual_chunks_per_source(chunks: list[dict]) -> bool:
+    counts: dict[str, int] = {}
+    for c in chunks:
+        if c.get("chunk_type") in _VISUAL_CHUNK_TYPES:
+            src = c.get("source", "")
+            counts[src] = counts.get(src, 0) + 1
+    return any(n >= 2 for n in counts.values())
+
+
 def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploads: bool = False) -> str:
     parts: list[str] = []
     if tool_context:
@@ -30,6 +42,24 @@ def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploa
             "quote, or append any [source...] label in your answer text. Write a "
             "plain, direct answer with no bracketed references at all."
         )
+        if _has_multiple_visual_chunks_per_source(chunks):
+            # Observed live: a video's two independently-captioned frames
+            # described the same speaker with different wording/focus (one
+            # mentioned the pocket square, the other the gray hair/beard) —
+            # the model, reading only text, concluded there were "two men."
+            # Each caption is generated in isolation with no cross-frame
+            # identity link, so this caveat is needed whenever a source
+            # contributes 2+ visual chunks — never assumed away by chunk
+            # count alone, since a real multi-subject video is possible too.
+            parts.append(
+                "Note: multiple video-frame, figure, or image chunks below from the "
+                "SAME source are very likely different moments/angles of the SAME "
+                "subject(s), captioned independently — their wording can differ "
+                "(what's mentioned, level of detail) without meaning they show "
+                "different people or objects. Do not conclude there are multiple "
+                "distinct people/items just because two descriptions read "
+                "differently — only do so if they are clearly incompatible."
+            )
         parts.append("---")
         for c in chunks:
             src = c.get("source", "unknown")
