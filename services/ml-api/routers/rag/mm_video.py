@@ -21,7 +21,6 @@ import subprocess
 import tempfile
 
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
-from routers.rag.ingest import chunk_document
 from routers.rag.mm_caption import clean_ocr_text, extract_caption
 
 logger = logging.getLogger(__name__)
@@ -252,10 +251,36 @@ def _transcribe_audio(wav_bytes: bytes) -> tuple[str, list[dict]]:
         return "", []
 
 
+_CHUNK_WORD_SIZE = 450  # matches chunk_document()'s default chunk_size
+
+
+def _chunk_segments_with_speakers(segments: list[dict], source: str) -> list[dict]:
+    """Groups consecutive timestamped segments into word-count-bounded
+    chunks, prefixing each segment's text with its speaker label when
+    known — carries the "who said what" signal into retrieval, instead of
+    a flat, speaker-agnostic slice of the transcript."""
+    chunks: list[dict] = []
+    parts: list[str] = []
+    words = 0
+    for seg in segments:
+        piece = f"{seg['speaker']}: {seg['text']}" if seg.get("speaker") else seg["text"]
+        parts.append(piece)
+        words += len(piece.split())
+        if words >= _CHUNK_WORD_SIZE:
+            chunks.append({"text": " ".join(parts), "source": source, "chunk_index": len(chunks)})
+            parts, words = [], 0
+    if parts:
+        chunks.append({"text": " ".join(parts), "source": source, "chunk_index": len(chunks)})
+    return chunks
+
+
 def transcribe_video(video_path: str, source: str) -> tuple[list[dict], int, str, list[dict]]:
-    """Extract + transcribe the audio track, chunked the same way plain-text
-    documents are (chunk_document) for retrieval, PLUS the full unchunked
-    transcript and its timestamped segments for display/download. Returns
+    """Extract + transcribe the audio track. Retrieval chunks are built from
+    the timestamped, speaker-labeled segments (not a flat re-chunk of the
+    transcript string) so the LLM's context carries "who said what," the
+    same signal the frontend's transcript view already shows. Also returns
+    the full unchunked transcript and its segments for display/download.
+    Returns
     (chunks, chunk_count, transcript_text, segments); all empty if there's
     no audio or transcription failed — callers should treat that as
     "visual-only," not an error."""
@@ -281,7 +306,14 @@ def transcribe_video(video_path: str, source: str) -> tuple[list[dict], int, str
     if not transcript.strip():
         return [], 0, "", []
 
-    chunks = chunk_document(transcript, source)
+    # Built from `segments` (with speaker prefixes), NOT chunk_document() on
+    # the flat `transcript` string — a flat chunk carries no speaker info at
+    # all, so the LLM answering a chat question never saw who said what,
+    # only the frontend's transcript panel did (a real, separate gap from
+    # the visual-identity confusion citations.py now also guards against —
+    # this one specifically means "only one speaker throughout" is a signal
+    # the model could use but previously never received).
+    chunks = _chunk_segments_with_speakers(segments, source)
     for c in chunks:
         c["chunk_type"] = "text"
     return chunks, len(chunks), transcript, segments
