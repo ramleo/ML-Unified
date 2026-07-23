@@ -177,10 +177,19 @@ def _transcribe_audio(wav_bytes: bytes) -> str:
                 "https://api.groq.com/openai/v1/audio/transcriptions",
                 headers={"Authorization": f"Bearer {key}"},
                 files={"file": ("audio.wav", wav_bytes, "audio/wav")},
-                data={"model": _TRANSCRIBE_MODEL, "response_format": "text"},
+                # verbose_json (not plain "text") so we can log segment
+                # coverage — needed to diagnose/confirm the transcript
+                # actually covers the full audio duration, not just however
+                # much Whisper considered confident speech.
+                data={"model": _TRANSCRIBE_MODEL, "response_format": "verbose_json"},
             )
             r.raise_for_status()
-            return r.text.strip()
+            data = r.json()
+            segments = data.get("segments", [])
+            last_end = segments[-1].get("end", 0) if segments else 0
+            logger.info("Whisper transcription: %d segments, audio_duration=%.1fs, last_segment_end=%.1fs",
+                       len(segments), data.get("duration", 0), last_end)
+            return (data.get("text") or "").strip()
     except Exception as exc:
         logger.warning("Audio transcription failed: %s", exc)
         return ""
