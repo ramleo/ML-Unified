@@ -11,7 +11,7 @@ import re
 from routers.document._extract import extract_tables_markdown
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.ingest import chunk_document
-from routers.rag.mm_caption import clean_ocr_text, extract_caption
+from routers.rag.mm_caption import clean_ocr_text, extract_caption, numbers_disagree
 
 _OCR_TEXT_CAP = 2000  # chars; dedicated OCR reads exact text (e.g. every date
                       # in a dense timeline graphic) that a short prose caption
@@ -91,15 +91,19 @@ def _caption_prompt() -> str:
     )
 
 
-def _caption_page(b64: str) -> str:
+def _caption_page(b64: str) -> tuple[str, bool]:
+    """Returns (chunk_text, number_mismatch) — mismatch flags when the
+    caption and the OCR pass cite disjoint numbers for the same figure, a
+    real sign one of the two misread a value rather than a generic caveat."""
     caption = extract_caption(_vision_cascade_raw(b64, _caption_prompt()), 500)
     ocr_md, _ = mistral_ocr_pages([b64])
     ocr_text = clean_ocr_text(ocr_md)[:_OCR_TEXT_CAP]
+    mismatch = numbers_disagree(caption, ocr_text)
     if not ocr_text:
-        return caption
+        return caption, False
     if not caption:
-        return ocr_text
-    return f"{caption}\n\nExact text from image (OCR):\n{ocr_text}"
+        return ocr_text, False
+    return f"{caption}\n\nExact text from image (OCR):\n{ocr_text}", mismatch
 
 
 # ── Per-page (streaming path) ───────────────────────────────────────────────────
@@ -134,10 +138,13 @@ def process_page(doc, page_num: int, tables_by_page: dict, source: str) -> tuple
         page_summary["table"] += 1
 
     if _is_visually_dense(page):
-        caption = _caption_page(b64)
+        caption, mismatch = _caption_page(b64)
         if caption:
-            page_chunks.append({"text": caption, "source": source, "chunk_index": len(page_chunks),
-                                "chunk_type": "figure", "page": page_num})
+            chunk = {"text": caption, "source": source, "chunk_index": len(page_chunks),
+                     "chunk_type": "figure", "page": page_num}
+            if mismatch:
+                chunk["number_mismatch"] = True
+            page_chunks.append(chunk)
             page_summary["figure"] = 1
 
     return page_chunks, b64, page_summary

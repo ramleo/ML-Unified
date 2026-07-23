@@ -54,3 +54,23 @@ def clean_ocr_text(md: str) -> str:
     if len(text) < 3:
         return ""
     return text
+
+
+_SIG_NUMBER_RE = re.compile(r"\d+(?:\.\d+)?%?")
+
+
+def numbers_disagree(caption: str, ocr_text: str) -> bool:
+    """True when the caption and OCR read of the SAME figure cite completely
+    disjoint numbers — e.g. the vision model's caption says "revenue grew to
+    $42M" while OCR transcribed "$24M" off the same chart. Only "significant"
+    numbers count (2+ digits, a decimal, or a percent sign) so incidental
+    single digits (list markers, "a 2-bar chart") don't cause false flags.
+    Silent when either side has no significant numbers at all — nothing to
+    compare, not a disagreement."""
+    def sig_numbers(text: str) -> set[str]:
+        return {t for t in _SIG_NUMBER_RE.findall(text) if len(t.rstrip("%")) >= 2 or "." in t}
+
+    cap_nums, ocr_nums = sig_numbers(caption), sig_numbers(ocr_text)
+    if not cap_nums or not ocr_nums:
+        return False
+    return cap_nums.isdisjoint(ocr_nums)

@@ -275,7 +275,8 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         # excluded: often numerous/large, and not what a "what did we
         # extract" glance actually needs.
         "notable_chunks": [
-            {"chunk_type": c.get("chunk_type"), "page": c.get("page"), "text": c.get("text")}
+            {"chunk_type": c.get("chunk_type"), "page": c.get("page"), "text": c.get("text"),
+             "number_mismatch": c.get("number_mismatch") or None}
             for c in chunks if c.get("chunk_type") != "text"
         ],
         # Full, unchunked video transcript (empty/absent for non-video

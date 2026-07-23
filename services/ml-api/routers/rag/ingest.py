@@ -110,7 +110,8 @@ def index_chunks(chunks: list[dict], state, uploaded: bool = False, session_id: 
     sources = [c["source"] for c in chunks]
     # Additive: chunk_type/page/bbox default to absent for plain text/KB chunks —
     # existing chunk_document() output and old-shaped chunks are unaffected.
-    metas = [{"chunk_type": c.get("chunk_type"), "page": c.get("page"), "bbox": c.get("bbox")}
+    metas = [{"chunk_type": c.get("chunk_type"), "page": c.get("page"), "bbox": c.get("bbox"),
+              "number_mismatch": c.get("number_mismatch")}
              for c in chunks]
     ids = [str(uuid.uuid4()) for _ in chunks]
 
@@ -268,6 +269,29 @@ def list_uploads() -> JSONResponse:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     return JSONResponse({"sources": sorted(state.uploaded_sources)})
+
+
+@router.get("/page-chunks/{source}")
+def get_page_chunks(source: str, page: int) -> JSONResponse:
+    """All chunks (text/table/figure/image) sharing one source+page — powers
+    a citation's "show everything else on this page" drill-down."""
+    from routers.rag import get_rag_state
+
+    try:
+        state = get_rag_state()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    chunks = []
+    for i, src in enumerate(state.chunk_sources):
+        if src != source:
+            continue
+        meta = state.chunk_meta[i] if i < len(state.chunk_meta) else {}
+        if meta.get("page") != page:
+            continue
+        chunks.append({"text": state.corpus_chunks[i], "chunk_type": meta.get("chunk_type"), "page": page})
+
+    return JSONResponse({"source": source, "page": page, "chunks": chunks})
 
 
 @router.delete("/uploads/{source}")

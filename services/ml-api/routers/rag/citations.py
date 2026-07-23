@@ -72,6 +72,16 @@ def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploa
             elif page:
                 label += f", page {page}"
             parts.append(f"[{label}]\n{text}")
+            if c.get("number_mismatch"):
+                # The figure's AI caption and its OCR pass cited different
+                # numbers for the same visual — a real sign one of the two
+                # misread a value, not a generic hedge added to every figure.
+                parts.append(
+                    "(Note: the description above and a separate OCR reading of "
+                    "this same figure disagree on at least one number — if your "
+                    "answer relies on a number from this source, say it's "
+                    "uncertain and should be verified against the original.)"
+                )
             parts.append("---")
     elif restrict_to_uploads:
         parts.append("No relevant content was retrieved from the uploaded document for this question.")
@@ -90,6 +100,7 @@ def build_source_doc(chunk: dict) -> dict:
         "chunk_type": chunk.get("chunk_type"),
         "page": chunk.get("page"),
         "bbox": chunk.get("bbox"),
+        "number_mismatch": chunk.get("number_mismatch") or None,
     }
 
 
