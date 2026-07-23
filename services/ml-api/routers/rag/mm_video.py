@@ -186,20 +186,21 @@ def _transcribe_audio(wav_bytes: bytes) -> str:
         return ""
 
 
-def transcribe_video(video_path: str, source: str) -> tuple[list[dict], int]:
+def transcribe_video(video_path: str, source: str) -> tuple[list[dict], int, str]:
     """Extract + transcribe the audio track, chunked the same way plain-text
-    documents are (chunk_document). Returns (chunks, chunk_count); both empty
-    if there's no audio or transcription failed — callers should treat that
-    as "visual-only," not an error."""
+    documents are (chunk_document) for retrieval, PLUS the full unchunked
+    transcript for display/download. Returns (chunks, chunk_count,
+    transcript_text); all empty if there's no audio or transcription
+    failed — callers should treat that as "visual-only," not an error."""
     wav_bytes = _extract_audio_wav(video_path)
     if not wav_bytes:
-        return [], 0
+        return [], 0, ""
 
     transcript = _transcribe_audio(wav_bytes)
     if not transcript.strip():
-        return [], 0
+        return [], 0, ""
 
     chunks = chunk_document(transcript, source)
     for c in chunks:
         c["chunk_type"] = "text"
-    return chunks, len(chunks)
+    return chunks, len(chunks), transcript
