@@ -14,6 +14,7 @@ visual frames.
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import os
 import subprocess
@@ -277,3 +278,47 @@ def transcribe_video(video_path: str, source: str) -> tuple[list[dict], int, str
     for c in chunks:
         c["chunk_type"] = "text"
     return chunks, len(chunks), transcript, segments
+
+
+_MIN_SEGMENTS_FOR_CHAPTERS = 4  # a handful of short segments isn't worth chaptering
+_MAX_CHAPTERS = 6
+
+
+def generate_chapters(segments: list[dict]) -> list[dict]:
+    """One LLM call over the timestamped transcript to produce a handful of
+    chapter markers (like YouTube auto-chapters) — {"time": seconds,
+    "label": short title}. Returns [] on any failure or too little content;
+    never blocks ingestion on this being unavailable."""
+    if len(segments) < _MIN_SEGMENTS_FOR_CHAPTERS:
+        return []
+    key = os.environ.get("GROQ_API_KEY", "")
+    if not key:
+        return []
+
+    transcript_lines = "\n".join(f"[{s['start']:.0f}s] {s['text']}" for s in segments)
+    prompt = (
+        f"Here is a timestamped transcript:\n{transcript_lines}\n\n"
+        f"Identify up to {_MAX_CHAPTERS} distinct topic changes/chapters in it. "
+        'Return JSON only: {"chapters": [{"time": <seconds, integer>, "label": '
+        '"<short 3-6 word title>"}]}. Each time must be one of the timestamps '
+        "that actually appears above. Order chapters chronologically. If the "
+        "whole transcript is really just one topic, return a single chapter."
+    )
+    try:
+        import httpx
+        with httpx.Client(timeout=60) as client:
+            r = client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {key}"},
+                json={"model": "llama-3.3-70b-versatile",
+                      "messages": [{"role": "user", "content": prompt}],
+                      "max_tokens": 500, "response_format": {"type": "json_object"}},
+            )
+            r.raise_for_status()
+            raw = r.json()["choices"][0]["message"]["content"]
+            data = json.loads(raw)
+            return [{"time": float(c["time"]), "label": str(c["label"])[:60]}
+                    for c in data.get("chapters", []) if "time" in c and "label" in c]
+    except Exception as exc:
+        logger.warning("Chapter generation failed: %s", exc)
+        return []

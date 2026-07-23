@@ -25,8 +25,8 @@ from routers.rag.ingest import index_chunks
 from routers.rag.mm_caption import clean_ocr_text, extract_caption
 from routers.rag.mm_csv import build_csv_chunks, looks_like_csv
 from routers.rag.mm_pdf import prepare_pdf, process_page
-from routers.rag.mm_video import (close_video, looks_like_video, prepare_video, process_frame,
-                                  reduced_frame_count, transcribe_video)
+from routers.rag.mm_video import (close_video, generate_chapters, looks_like_video, prepare_video,
+                                  process_frame, reduced_frame_count, transcribe_video)
 
 logger = logging.getLogger(__name__)
 
@@ -179,12 +179,14 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
     cached = _cache_get(cache_key)
     transcript_text = ""
     transcript_segments: list[dict] = []
+    chapters: list[dict] = []
     if cached:
         chunks = [dict(c, source=source) for c in cached["chunks"]]
         page_images = cached["page_images"]
         summary = cached["chunk_summary"]
         transcript_text = cached.get("transcript_text", "")
         transcript_segments = cached.get("transcript_segments", [])
+        chapters = cached.get("chapters", [])
         yield _sse({"step": "extract", "status": "done", "chunk_summary": summary, "cached": True})
     else:
         loop = asyncio.get_event_loop()
@@ -243,6 +245,11 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
                 summary["text"] += transcript_count
                 yield _sse({"step": "transcribe", "status": "done", "chunks": transcript_count})
 
+                if transcript_segments:
+                    chapters = await loop.run_in_executor(
+                        _executor, lambda: generate_chapters(transcript_segments)
+                    )
+
                 n_frames = reduced_frame_count(n_frames, transcript_chunks)
 
                 yield _sse({"step": "extract", "status": "running", "page": 0, "pages": n_frames})
@@ -299,7 +306,8 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         yield _sse({"step": "extract", "status": "done", "chunk_summary": summary})
         if chunks:
             _cache_put(cache_key, {"chunks": chunks, "page_images": page_images, "chunk_summary": summary,
-                                   "transcript_text": transcript_text, "transcript_segments": transcript_segments})
+                                   "transcript_text": transcript_text, "transcript_segments": transcript_segments,
+                                   "chapters": chapters})
 
     if not chunks:
         yield _sse({"error": "No extractable content found (text, tables, figures, or a describable image)."})
@@ -346,6 +354,10 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         # copy used for retrieval.
         "transcript": transcript_text or None,
         "transcript_segments": transcript_segments,
+        # Auto-generated chapter markers (empty for non-video uploads, a
+        # short/silent transcript, or if the one extra LLM call failed —
+        # never blocks ingestion on this being unavailable).
+        "chapters": chapters,
     })
 
 
