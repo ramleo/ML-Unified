@@ -52,6 +52,7 @@ def dense_retrieve(query_embedding: list[float], state, k: int = 50, use_jina: b
             "page": meta.get("page"),
             "bbox": meta.get("bbox"),
             "number_mismatch": meta.get("number_mismatch"),
+            "pii_types": meta.get("pii_types"),
         })
 
     return hits
@@ -107,6 +108,7 @@ def bm25_retrieve(
             "page": meta.get("page"),
             "bbox": meta.get("bbox"),
             "number_mismatch": meta.get("number_mismatch"),
+            "pii_types": meta.get("pii_types"),
         })
 
     return hits

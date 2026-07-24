@@ -101,6 +101,7 @@ def build_source_doc(chunk: dict) -> dict:
         "page": chunk.get("page"),
         "bbox": chunk.get("bbox"),
         "number_mismatch": chunk.get("number_mismatch") or None,
+        "pii_types": chunk.get("pii_types") or None,
     }
 
 

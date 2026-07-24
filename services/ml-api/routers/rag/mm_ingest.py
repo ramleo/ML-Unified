@@ -22,6 +22,7 @@ from fastapi.responses import StreamingResponse
 
 from routers.rag.ingest import index_chunks
 from routers.rag.mm_csv import build_csv_chunks, looks_like_csv
+from routers.rag.pii import detect_pii_types
 from routers.rag.mm_image import build_image_chunk, looks_like_image
 from routers.rag.mm_pdf import prepare_pdf, process_page
 from routers.rag.mm_video import (close_video, generate_chapters, looks_like_video, prepare_video,
@@ -276,7 +277,8 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         # extract" glance actually needs.
         "notable_chunks": [
             {"chunk_type": c.get("chunk_type"), "page": c.get("page"), "text": c.get("text"),
-             "number_mismatch": c.get("number_mismatch") or None}
+             "number_mismatch": c.get("number_mismatch") or None,
+             "pii_types": ",".join(detect_pii_types(c.get("text", ""))) or None}
             for c in chunks if c.get("chunk_type") != "text"
         ],
         # Full, unchunked video transcript (empty/absent for non-video
