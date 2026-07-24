@@ -20,10 +20,24 @@ def _has_multiple_visual_chunks_per_source(chunks: list[dict]) -> bool:
     return any(n >= 2 for n in counts.values())
 
 
-def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploads: bool = False) -> str:
+_ANSWER_LENGTH_INSTRUCTIONS = {
+    "concise": "Answer in 1-3 sentences — the shortest answer that fully addresses the "
+               "question, no preamble, no extra context beyond what was asked.",
+    "detailed": "Answer thoroughly — include relevant context, explain reasoning where "
+                "useful, and cover related details from the source rather than the bare "
+                "minimum, while staying grounded in the retrieved content.",
+}
+
+
+def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploads: bool = False,
+                        answer_length: str = "normal") -> str:
     parts: list[str] = []
     if tool_context:
         parts.append(tool_context.strip())
+
+    length_instruction = _ANSWER_LENGTH_INSTRUCTIONS.get(answer_length)
+    if length_instruction:
+        parts.append(length_instruction)
 
     if restrict_to_uploads:
         parts.append(

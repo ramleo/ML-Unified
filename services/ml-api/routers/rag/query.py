@@ -98,6 +98,7 @@ class QueryRequest(BaseModel):
     session_id: str = ""
     force_web: bool = False
     restrict_to_uploads: bool = False  # answer ONLY from this session's uploads — no KB, no web
+    answer_length: str = "normal"  # "concise" | "normal" | "detailed"
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -258,7 +259,8 @@ def _sse_generator(req: QueryRequest):
             seen_sources.append(src)
 
     # 3. Build prompt
-    system_prompt = build_system_prompt(req.tool_context, chunks, restrict_to_uploads=req.restrict_to_uploads)
+    system_prompt = build_system_prompt(req.tool_context, chunks, restrict_to_uploads=req.restrict_to_uploads,
+                                        answer_length=req.answer_length)
     messages: list[dict] = list(req.history or [])
     messages.append({"role": "user", "content": req.query})
 
