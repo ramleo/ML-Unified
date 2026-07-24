@@ -30,6 +30,14 @@ _FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 # quote is optional specifically for that truncation case, so a caption that
 # was 95% generated is still usable instead of being thrown away entirely.
 _CAPTION_FIELD_RE = re.compile(r'"caption"\s*:\s*"((?:[^"\\]|\\.)*)"?')
+# Some providers (observed: Mistral under its forced JSON mode) ignore the
+# requested {"caption": ...} shape and answer with their own key names
+# instead — the JSON itself is perfectly valid, so a missing "caption" key
+# shouldn't fall all the way to dumping the raw JSON when a plausible
+# substitute is right there. "text" is deliberately last: in the observed
+# case it just re-transcribed on-image text that the separate OCR pass
+# already covers, so it's a worse pick than a real "description"/"summary".
+_ALT_CAPTION_KEYS = ("description", "summary", "caption_text", "text")
 
 
 def extract_caption(raw: str, fallback_len: int) -> str:
@@ -47,9 +55,16 @@ def extract_caption(raw: str, fallback_len: int) -> str:
     start, end = fenced.find("{"), fenced.rfind("}") + 1
     if start >= 0 and end > start:
         try:
-            parsed = json.loads(fenced[start:end]).get("caption", "")
-            if str(parsed).strip():
-                return str(parsed).strip()
+            parsed = json.loads(fenced[start:end])
+            value = parsed.get("caption", "")
+            if not str(value).strip():
+                for key in _ALT_CAPTION_KEYS:
+                    alt = parsed.get(key, "")
+                    if str(alt).strip():
+                        value = alt
+                        break
+            if str(value).strip():
+                return str(value).strip()
         except Exception as exc:
             logger.warning("Caption JSON parse failed (%s), trying regex fallback: %r", exc, raw[:200])
 
