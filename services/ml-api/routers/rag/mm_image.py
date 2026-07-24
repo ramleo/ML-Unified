@@ -6,7 +6,7 @@ file-length limit.
 from __future__ import annotations
 
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
-from routers.rag.mm_caption import clean_ocr_text, extract_caption
+from routers.rag.mm_caption import clean_ocr_text, extract_caption, split_pipe_tables
 
 _OCR_TEXT_CAP = 2000
 
@@ -66,18 +66,26 @@ def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[
         caption = extract_caption(_vision_cascade_raw(b64, _image_prompt(terse=True)), 400)
 
     ocr_md, _ = mistral_ocr_pages([b64])
-    ocr_text = clean_ocr_text(ocr_md)[:_OCR_TEXT_CAP]
+    # A flat image can still have a real tabular layout (e.g. a photographed
+    # or screenshotted invoice) — Mistral OCR reconstructs that as markdown
+    # pipe-table syntax even with no PDF structure behind it. Surface that as
+    # its own "table" chunk instead of only ever a flattened caption/OCR blob.
+    table_blocks, remaining_md = split_pipe_tables(ocr_md)
+    ocr_text = clean_ocr_text(remaining_md)[:_OCR_TEXT_CAP]
     if ocr_text:
         caption = f"{caption}\n\nExact text from image (OCR):\n{ocr_text}" if caption else ocr_text
-
-    summary = {"text": 0, "table": 0, "figure": 0, "image": 1 if caption else 0}
-    if not caption:
-        return [], [b64], summary
 
     # No embedded "[Image: source]" prefix — citations.py's build_system_prompt
     # already labels this chunk with source/page/type when building the LLM's
     # context, so baking it into the stored text would only be redundant
     # noise in the citation UI's raw-text preview.
-    chunk = {"text": caption, "source": source, "chunk_index": 0,
-             "chunk_type": "image", "page": 1}
-    return [chunk], [b64], summary
+    chunks: list[dict] = []
+    if caption:
+        chunks.append({"text": caption, "source": source, "chunk_index": 0,
+                       "chunk_type": "image", "page": 1})
+    for tbl in table_blocks:
+        chunks.append({"text": tbl, "source": source, "chunk_index": len(chunks),
+                       "chunk_type": "table", "page": 1})
+
+    summary = {"text": 0, "table": len(table_blocks), "figure": 0, "image": 1 if caption else 0}
+    return chunks, [b64], summary
