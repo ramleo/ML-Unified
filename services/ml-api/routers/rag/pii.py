@@ -1,8 +1,9 @@
 """PII awareness for user-uploaded documents (resumes, invoices, etc.) — flags
 common personally-identifiable patterns on a citation so a user knows a chunk
-contains one before sharing/screenshotting it. Detection only: nothing is
-masked or stripped from the stored text or the LLM's context, since the
-uploader already has (and needs) full access to their own document."""
+contains one before sharing/screenshotting it. detect_pii_types() is
+detection-only, used for the owner's own view. redact_pii() actually removes
+matched text — used only for shared-link viewers (see query.py), never for
+the document's own uploader, who already has full access to their document."""
 from __future__ import annotations
 
 import re
@@ -42,3 +43,20 @@ def detect_pii_types(text: str) -> list[str]:
             types.append("credit_card")
             break
     return types
+
+
+def redact_pii(text: str) -> str:
+    """Replace detected PII with a labeled placeholder. Applied only to what
+    a shared-link viewer's query sees (both the LLM's context and the
+    citation text shown to them) — never to the uploader's own view."""
+    text = _EMAIL_RE.sub("[REDACTED EMAIL]", text)
+    text = _SSN_RE.sub("[REDACTED SSN]", text)
+    text = _PHONE_RE.sub("[REDACTED PHONE]", text)
+
+    def _card_sub(m: re.Match) -> str:
+        digits = re.sub(r"[ -]", "", m.group())
+        if len(digits) in range(13, 20) and _luhn_valid(digits):
+            return "[REDACTED CARD]"
+        return m.group()
+
+    return _CARD_RE.sub(_card_sub, text)

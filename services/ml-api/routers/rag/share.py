@@ -16,14 +16,25 @@ router = APIRouter()
 _TTL_SECONDS = 24 * 60 * 60
 
 
-def resolve_share_token(token: str, state) -> str | None:
+def resolve_share_token(token: str, state, client_ip: str = "") -> str | None:
     """Return the owning session_id if `token` is valid, not revoked, and not
-    expired. Returns None otherwise — callers should treat that as no access."""
+    expired. Returns None otherwise — callers should treat that as no access.
+
+    First successful resolution binds the token to that client_ip; later
+    resolutions from a different IP are rejected, so forwarding the link to
+    a third party doesn't extend access beyond whoever opened it first. An
+    empty client_ip (can't be determined) never binds or blocks — avoids
+    false lockouts when the caller has no way to know the real IP."""
     entry = state.share_links.get(token)
     if not entry or entry["revoked"]:
         return None
     if time.time() - entry["created_at"] > _TTL_SECONDS:
         return None
+    if client_ip:
+        if entry["bound_ip"] is None:
+            entry["bound_ip"] = client_ip
+        elif entry["bound_ip"] != client_ip:
+            return None
     return entry["session_id"]
 
 
@@ -47,6 +58,7 @@ def create_share(req: CreateShareRequest) -> dict:
         "session_id": req.session_id,
         "created_at": created_at,
         "revoked": False,
+        "bound_ip": None,
     }
     return {"token": token, "expires_at": created_at + _TTL_SECONDS}
 
@@ -62,6 +74,7 @@ def share_status(token: str) -> dict:
         "active": active,
         "revoked": entry["revoked"],
         "expires_at": entry["created_at"] + _TTL_SECONDS,
+        "bound": entry["bound_ip"] is not None,
     }
 
 

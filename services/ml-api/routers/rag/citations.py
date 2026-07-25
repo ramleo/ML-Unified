@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import re
 
+from routers.rag.pii import redact_pii
+
 
 _VISUAL_CHUNK_TYPES = {"video", "figure", "image"}
 
@@ -30,7 +32,7 @@ _ANSWER_LENGTH_INSTRUCTIONS = {
 
 
 def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploads: bool = False,
-                        answer_length: str = "normal") -> str:
+                        answer_length: str = "normal", redact: bool = False) -> str:
     parts: list[str] = []
     if tool_context:
         parts.append(tool_context.strip())
@@ -77,7 +79,7 @@ def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploa
         parts.append("---")
         for c in chunks:
             src = c.get("source", "unknown")
-            text = c.get("text", "")
+            text = redact_pii(c.get("text", "")) if redact else c.get("text", "")
             chunk_type = c.get("chunk_type")
             page = c.get("page")
             label = src
@@ -103,11 +105,14 @@ def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploa
     return "\n\n".join(parts) if parts else "You are a helpful AI assistant."
 
 
-def build_source_doc(chunk: dict) -> dict:
+def build_source_doc(chunk: dict, redact: bool = False) -> dict:
     """The SSE 'source' event's 'doc' payload — includes multimodal fields
-    (chunk_type/page/bbox) additively; None for chunks that lack them."""
+    (chunk_type/page/bbox) additively; None for chunks that lack them.
+    redact=True (shared-link viewers only) also masks PII in the citation
+    text itself, not just what's sent to the LLM — a screenshot of the
+    citation card would otherwise still show the real value."""
     return {
-        "text": chunk["text"],
+        "text": redact_pii(chunk["text"]) if redact else chunk["text"],
         "source": chunk.get("source", ""),
         "score": round(chunk.get("score", 0.0), 4),
         "display_score": round(chunk.get("display_score", chunk.get("score", 0.0)), 4),

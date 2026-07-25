@@ -7,13 +7,11 @@ import os
 import time
 from typing import Any, Optional
 
-import threading
-
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from routers.rag import get_rag_state, initialize_jina
+from routers.rag import get_rag_state
 from routers.rag.retrieve import multi_query_retrieve
 from routers.rag.rerank import rerank
 from routers.rag.expand import expand_query
@@ -148,7 +146,7 @@ def _determine_confidence(chunks: list[dict], answer_source: str, has_dataset: b
 
 # ── SSE generator ──────────────────────────────────────────────────────────────
 
-def _sse_generator(req: QueryRequest):
+def _sse_generator(req: QueryRequest, client_ip: str = ""):
     t0 = time.time()
 
     try:
@@ -157,9 +155,13 @@ def _sse_generator(req: QueryRequest):
         yield _sse({"type": "error", "message": str(exc)})
         return
 
+    # A shared-link viewer (share_token set) never sees the raw session_id
+    # and gets PII redacted from both the LLM's context and the citation
+    # text itself — the owner's own requests (no share_token) are untouched.
+    redact = bool(req.share_token)
     if req.share_token:
         from routers.rag.share import resolve_share_token
-        resolved = resolve_share_token(req.share_token, state)
+        resolved = resolve_share_token(req.share_token, state, client_ip)
         if not resolved:
             yield _sse({"type": "error", "message": "This shared link has expired or been revoked."})
             return
@@ -200,7 +202,7 @@ def _sse_generator(req: QueryRequest):
 
     if cached:
         for chunk in cached["chunks"]:
-            yield _sse({"type": "source", "doc": build_source_doc(chunk)})
+            yield _sse({"type": "source", "doc": build_source_doc(chunk, redact=redact)})
         yield _sse({"type": "token", "text": cached["full_text"]})
         jina_status = "ready" if state.jina_ready else ("loading" if state.jina_loading else "idle")
         yield _sse({
@@ -263,14 +265,14 @@ def _sse_generator(req: QueryRequest):
     # 2b. Stream source events
     seen_sources: list[str] = []
     for chunk in chunks:
-        yield _sse({"type": "source", "doc": build_source_doc(chunk)})
+        yield _sse({"type": "source", "doc": build_source_doc(chunk, redact=redact)})
         src = chunk.get("source", "")
         if src and src not in seen_sources:
             seen_sources.append(src)
 
     # 3. Build prompt
     system_prompt = build_system_prompt(req.tool_context, chunks, restrict_to_uploads=req.restrict_to_uploads,
-                                        answer_length=req.answer_length)
+                                        answer_length=req.answer_length, redact=redact)
     messages: list[dict] = list(req.history or [])
     messages.append({"role": "user", "content": req.query})
 
@@ -338,64 +340,18 @@ def _sse_generator(req: QueryRequest):
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
-@router.get("/health")
-def rag_health():
-    """Return RAG subsystem status."""
-    import os
-    tavily_key = os.environ.get("TAVILY_API_KEY", "")
-    tavily_status = "not_set"
-    if tavily_key:
-        try:
-            from tavily import TavilyClient
-            TavilyClient(api_key=tavily_key).search("test", max_results=1)
-            tavily_status = "ok"
-        except Exception as exc:
-            tavily_status = f"error: {exc}"
-    try:
-        state = get_rag_state()
-        return {
-            "status": "ok" if not state.init_error else "error",
-            "chunks_indexed": state.collection.count() if state.collection is not None else 0,
-            "embedding_model": "all-MiniLM-L6-v2",
-            "jina_ready": state.jina_ready,
-            "jina_loading": state.jina_loading,
-            "jina_error": state.jina_error,
-            "init_error": state.init_error,
-            "initialized": state.initialized,
-            "tavily": tavily_status,
-        }
-    except RuntimeError:
-        return {
-            "status": "initializing",
-            "chunks_indexed": 0,
-            "embedding_model": "all-MiniLM-L6-v2",
-            "jina_ready": False,
-            "jina_loading": False,
-            "initialized": False,
-            "tavily": tavily_status,
-        }
-
-
-@router.post("/prepare-jina")
-def prepare_jina():
-    """Trigger lazy loading of Jina v3 in a background thread."""
-    try:
-        state = get_rag_state()
-    except RuntimeError as exc:
-        return {"status": "error", "message": str(exc)}
-    if state.jina_ready:
-        return {"status": "ready"}
-    if state.jina_loading:
-        return {"status": "loading"}
-    threading.Thread(target=initialize_jina, args=(state,), daemon=True).start()
-    return {"status": "loading"}
+def _client_ip(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else ""
 
 
 @router.post("/query")
-def rag_query(req: QueryRequest):
+def rag_query(req: QueryRequest, request: Request):
     """Hybrid-retrieve relevant chunks then stream an LLM response as SSE."""
     return StreamingResponse(
-        _sse_generator(req),
+        _sse_generator(req, client_ip=_client_ip(request)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
