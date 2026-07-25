@@ -33,6 +33,8 @@ class RagState:
     init_error: Optional[str] = None
     # Semantic cache — list of {embedding, full_text, sources, chunks}
     semantic_cache: list[dict] = field(default_factory=list)
+    # Shareable session links — token → {session_id, created_at, revoked}
+    share_links: dict[str, dict] = field(default_factory=dict)
 
 
 _state = RagState()

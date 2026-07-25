@@ -26,6 +26,7 @@ from routers.rag.mm_similar import router as rag_mm_similar_router
 from routers.rag.evaluate_mm import router as rag_mm_eval_router
 from routers.rag.evaluate import router as rag_eval_router
 from routers.rag.agent import router as rag_agent_router
+from routers.rag.share import router as rag_share_router
 from routers.rag import initialize_rag
 from routers.vision import router as vision_router, init_vision_models
 from routers.document import router as document_router
@@ -158,6 +159,7 @@ app.include_router(rag_mm_similar_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_eval_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_eval_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_agent_router, prefix="/rag", tags=["rag"])
+app.include_router(rag_share_router, prefix="/rag", tags=["rag"])
 app.include_router(vision_router)
 app.include_router(document_router)
 

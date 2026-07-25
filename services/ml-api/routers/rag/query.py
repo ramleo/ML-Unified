@@ -100,6 +100,7 @@ class QueryRequest(BaseModel):
     restrict_to_uploads: bool = False  # answer ONLY from this session's uploads — no KB, no web
     answer_length: str = "normal"  # "concise" | "normal" | "detailed"
     chunk_type_filter: Optional[list[str]] = None  # e.g. ["table"] — restrict retrieval to these chunk_type(s)
+    share_token: Optional[str] = None  # resolves to the owning session_id if valid, not revoked, not expired
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -155,6 +156,14 @@ def _sse_generator(req: QueryRequest):
     except RuntimeError as exc:
         yield _sse({"type": "error", "message": str(exc)})
         return
+
+    if req.share_token:
+        from routers.rag.share import resolve_share_token
+        resolved = resolve_share_token(req.share_token, state)
+        if not resolved:
+            yield _sse({"type": "error", "message": "This shared link has expired or been revoked."})
+            return
+        req.session_id = resolved
 
     provider = (req.provider or _DEFAULT_PROVIDER).lower()
     model = req.model or _DEFAULT_MODEL
