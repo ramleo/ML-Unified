@@ -6,6 +6,7 @@ file-length limit.
 from __future__ import annotations
 
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
+from routers.rag.blur import blur_score
 from routers.rag.mm_caption import clean_ocr_text, extract_caption, split_pipe_tables
 
 _OCR_TEXT_CAP = 2000
@@ -79,10 +80,12 @@ def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[
     # already labels this chunk with source/page/type when building the LLM's
     # context, so baking it into the stored text would only be redundant
     # noise in the citation UI's raw-text preview.
+    quality = blur_score(b64)
+
     chunks: list[dict] = []
     if caption:
         chunks.append({"text": caption, "source": source, "chunk_index": 0,
-                       "chunk_type": "image", "page": 1})
+                       "chunk_type": "image", "page": 1, "quality": quality})
     for tbl in table_blocks:
         chunks.append({"text": tbl, "source": source, "chunk_index": len(chunks),
                        "chunk_type": "table", "page": 1})

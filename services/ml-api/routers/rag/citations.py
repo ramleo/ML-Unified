@@ -121,6 +121,7 @@ def build_source_doc(chunk: dict, redact: bool = False) -> dict:
         "bbox": chunk.get("bbox"),
         "number_mismatch": chunk.get("number_mismatch") or None,
         "pii_types": chunk.get("pii_types") or None,
+        "blurry": chunk.get("blurry") or None,
     }
 
 

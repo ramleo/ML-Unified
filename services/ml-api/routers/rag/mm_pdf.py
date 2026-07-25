@@ -10,6 +10,7 @@ import re
 
 from routers.document._extract import extract_tables_markdown
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
+from routers.rag.blur import blur_score
 from routers.rag.ingest import chunk_document
 from routers.rag.mm_caption import clean_ocr_text, extract_caption, numbers_disagree
 
@@ -141,7 +142,7 @@ def process_page(doc, page_num: int, tables_by_page: dict, source: str) -> tuple
         caption, mismatch = _caption_page(b64)
         if caption:
             chunk = {"text": caption, "source": source, "chunk_index": len(page_chunks),
-                     "chunk_type": "figure", "page": page_num}
+                     "chunk_type": "figure", "page": page_num, "quality": blur_score(b64)}
             if mismatch:
                 chunk["number_mismatch"] = True
             page_chunks.append(chunk)

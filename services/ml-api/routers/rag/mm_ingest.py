@@ -344,7 +344,8 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         "notable_chunks": [
             {"chunk_type": c.get("chunk_type"), "page": c.get("page"), "text": c.get("text"),
              "number_mismatch": c.get("number_mismatch") or None,
-             "pii_types": ",".join(detect_pii_types(c.get("text", ""))) or None}
+             "pii_types": ",".join(detect_pii_types(c.get("text", ""))) or None,
+             "blurry": (c.get("quality") or {}).get("blurry") or None}
             for c in chunks if c.get("chunk_type") != "text"
         ],
         # Full, unchunked video transcript (empty/absent for non-video
