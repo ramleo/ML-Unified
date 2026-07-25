@@ -159,6 +159,16 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
     transcript_text = ""
     transcript_segments: list[dict] = []
     chapters: list[dict] = []
+    if file_bytes[:4] == b"%PDF":
+        file_type = "pdf"
+    elif looks_like_csv(filename, content_type):
+        file_type = "csv"
+    elif looks_like_video(filename, content_type):
+        file_type = "video"
+    elif looks_like_image(file_bytes, content_type):
+        file_type = "image"
+    else:
+        file_type = "unknown"
     if cached:
         chunks = [dict(c, source=source) for c in cached["chunks"]]
         page_images = cached["page_images"]
@@ -291,6 +301,9 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
     if not chunks:
         yield _sse({"error": "No extractable content found (text, tables, figures, or a describable image)."})
         return
+
+    from routers.rag.analytics import record_upload
+    record_upload(file_type)
 
     yield _sse({"step": "embed", "status": "running"})
     uploaded = save_scope != "shared"

@@ -205,13 +205,16 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
             yield _sse({"type": "source", "doc": build_source_doc(chunk, redact=redact)})
         yield _sse({"type": "token", "text": cached["full_text"]})
         jina_status = "ready" if state.jina_ready else ("loading" if state.jina_loading else "idle")
+        cached_latency_ms = round((time.time() - t0) * 1000)
+        from routers.rag.analytics import record_query
+        record_query(cached_latency_ms, cache_hit=True, provider=None)
         yield _sse({
             "type": "done",
             "sources": cached["sources"],
             "low_confidence": False,
             "jina_status": jina_status,
             "embedding_used": "cache",
-            "latency_ms": round((time.time() - t0) * 1000),
+            "latency_ms": cached_latency_ms,
             "chunks_retrieved": len(cached["chunks"]),
             "rerank_scores": [round(c.get("score", 0.0), 4) for c in cached["chunks"]],
             "cache_hit": True,
@@ -315,6 +318,9 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
     # 6. Done event with metadata
     jina_status = "ready" if state.jina_ready else ("loading" if state.jina_loading else "idle")
     likely_used = likely_used_indices(chunks, full_text)
+    final_latency_ms = round((time.time() - t0) * 1000)
+    from routers.rag.analytics import record_query
+    record_query(final_latency_ms, cache_hit=False, provider=served_provider)
     yield _sse({
         "type": "done",
         "sources": seen_sources,
@@ -322,7 +328,7 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
         "low_confidence": low_confidence,
         "jina_status": jina_status,
         "embedding_used": "jina" if use_jina else "minilm",
-        "latency_ms": round((time.time() - t0) * 1000),
+        "latency_ms": final_latency_ms,
         "chunks_retrieved": len(chunks),
         "rerank_scores": [round(c.get("score", 0.0), 4) for c in chunks],
         "cache_hit": False,
