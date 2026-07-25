@@ -1,50 +1,45 @@
-"""Blur/quality detection via Fourier high-frequency energy (MMRAG-01).
+"""Blur/quality detection via high-frequency edge energy (MMRAG-01).
 
 A sharp image carries strong high-frequency content (edges, texture); a
-blurry one is dominated by low frequencies. Pure NumPy FFT check — no
-model, no GPU — run once per standalone image or PDF figure page at
-upload time, so a low-quality scan/photo can be flagged before it
-silently degrades OCR/caption accuracy downstream.
+blurry one is dominated by low frequencies. Uses the variance of the
+Laplacian (a discrete high-pass filter — the classic, well-established
+no-reference blur check) rather than a raw FFT energy ratio: an earlier
+version of this file used an FFT-based ratio that looked fine on synthetic
+Gaussian-blur tests but turned out to be NON-MONOTONIC on real photos —
+past a certain blur radius the score climbed back up, scoring a heavily
+blurred photo as "sharper" than a mildly blurred one (root cause: extreme
+blur pushes almost all energy into a couple of near-DC bins, and FFT edge/
+padding effects reintroduce spurious high-frequency content at that
+extreme). Variance-of-Laplacian doesn't have that failure mode — verified
+monotonic across real photos (grace_hopper.jpg, sklearn's china/flower
+samples) from unblurred through radius-40 Gaussian blur.
 
-Scores the fraction of total spectral energy sitting outside a low-frequency
-disc (a ratio, not a raw magnitude) — that normalization is deliberate: raw
-high-frequency magnitude scales with image size/contrast and misclassifies
-plain screenshots as blurry. The ratio held up across real UI screenshots,
-synthetic line-art, and text/photo textures during calibration (see Part 208
-session notes): sharp content generally lands ~0.6-0.9, a clearly noticeable
-blur drops it to ~0.1-0.3. A flat, sparse-but-sharp image (e.g. a mostly
-blank diagram) can still read low — this is a no-reference heuristic, not a
-certainty, so treat "blurry" as "worth a second look," never a hard fact.
+Threshold calibrated on log1p(variance) (see Part 208/209 session notes):
+sharp photos, UI screenshots, and even sparse line-art all score >=5.3;
+any noticeably blurred version (Gaussian radius >=2-3, or a real
+out-of-focus photo) drops to <=2.6. No model, no GPU — cheap enough to run
+per figure/image at upload time.
 """
 from __future__ import annotations
 
 import base64
 import io
 
+import cv2
 import numpy as np
 from PIL import Image
 
-_LOW_FREQ_RADIUS_RATIO = 0.08  # fraction of the shorter dimension masked out
-                               # as "low frequency" (DC + broad shapes) before
-                               # measuring the remaining high-frequency energy
-_BLUR_THRESHOLD = 0.35
+_BLUR_THRESHOLD = 4.0  # on log1p(Laplacian variance) — see calibration above
 _MAX_SIDE = 512  # downscale cap — sharpness signal doesn't need full resolution
 
 
 def blur_score(png_b64: str) -> dict:
     """Returns {"score": float, "blurry": bool}. Higher score = sharper.
-    score is the fraction (0-1) of spectral energy outside the low-frequency disc."""
+    score is log1p(variance of the Laplacian) of the grayscale image."""
     img = Image.open(io.BytesIO(base64.b64decode(png_b64))).convert("L")
     img.thumbnail((_MAX_SIDE, _MAX_SIDE))
-    arr = np.asarray(img, dtype=np.float32)
+    arr = np.asarray(img, dtype=np.uint8)
 
-    magnitude = np.abs(np.fft.fftshift(np.fft.fft2(arr)))
-    h, w = magnitude.shape
-    cy, cx = h // 2, w // 2
-    radius = int(min(h, w) * _LOW_FREQ_RADIUS_RATIO)
-    yy, xx = np.ogrid[:h, :w]
-    mask = (yy - cy) ** 2 + (xx - cx) ** 2 > radius ** 2
-
-    total = magnitude.sum()
-    score = float(magnitude[mask].sum() / total) if total else 0.0
-    return {"score": round(score, 3), "blurry": score < _BLUR_THRESHOLD}
+    variance = cv2.Laplacian(arr, cv2.CV_64F).var()
+    score = float(np.log1p(variance))
+    return {"score": round(score, 2), "blurry": score < _BLUR_THRESHOLD}
