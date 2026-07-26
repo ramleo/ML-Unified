@@ -294,6 +294,15 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         # processors; keeping this separate avoids touching that surface
         # just to answer "should the entity filter chips even show."
         "entity_types": sorted({e["type"] for c in chunks for e in extract_entities(c.get("text", ""))}),
+        # Plain-text chunks, in order — powers a live search/highlight box
+        # in the summary panel for non-video docs. Excluded for video: its
+        # audio transcript is ALSO tagged chunk_type "text", but already has
+        # a richer, timestamped view (transcript_segments below) — this
+        # would just duplicate it under a second search box.
+        "text_segments": (
+            [{"page": c.get("page"), "text": c.get("text", "")} for c in chunks if c.get("chunk_type") == "text"]
+            if file_type != "video" else []
+        ),
         "page_images": page_images,
         # Informational only — the frontend asks the user before doing
         # anything; nothing is ever auto-replaced.
