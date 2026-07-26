@@ -22,10 +22,19 @@ MAX_PAGES = 8
 _RENDER_ZOOM = 2.0          # fitz zoom factor (~144 DPI, since PDF base is 72 DPI) —
                             # higher than Document Intelligence's 1.2x preview renders
                             # since this feeds the vision cascade, not just a thumbnail
-_MIN_VISUAL_AREA_RATIO = 0.05  # a raster image must cover ≥5% of the page area
+_MIN_VISUAL_AREA_RATIO = 0.02  # a raster image must cover ≥2% of the page area
                                # to count as "worth captioning" — filters small
                                # decorative marks (icons, small logos) that
-                               # aren't actually a chart/photo/diagram
+                               # aren't actually a chart/photo/diagram.
+                               # Was 0.05 until a real resume's "Soft Skills"
+                               # donut infographic (labels baked into the raster
+                               # image, invisible to get_text()) measured only
+                               # ~2.96% of the page and was silently dropped
+                               # entirely — neither extracted as text nor
+                               # captioned. Confirmed decorative icons on the
+                               # same page measure ~0.06%, so 0.02 sits with
+                               # wide margin above real noise and below a real,
+                               # content-bearing graphic.
 
 
 def _render_page(page, zoom: float = _RENDER_ZOOM) -> str:

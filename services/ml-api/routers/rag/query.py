@@ -187,7 +187,7 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
     # fixes that for every tool that sets one; restrict_to_uploads mode
     # additionally skips the cache outright, since correctness for a
     # single-document Q&A tool matters more than the latency savings.
-    ctx_hash = _ctx_hash(req.tool_context, req.session_id)
+    ctx_hash = _ctx_hash(req.tool_context, req.session_id, req.answer_length)
     try:
         query_emb = state.embedding_fn([req.query])[0]
         cached = None if req.restrict_to_uploads else _cache_lookup(query_emb, state, provider, ctx_hash)

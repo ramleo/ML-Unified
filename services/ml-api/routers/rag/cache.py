@@ -14,14 +14,18 @@ def cosine_sim(a: list[float], b: list[float]) -> float:
     return float(np.dot(va, vb) / denom) if denom > 0 else 0.0
 
 
-def ctx_hash(tool_context: str, session_id: str = "") -> str:
-    """Short hash of tool_context + session_id so cache entries are both
-    dataset- and session-specific. tool_context alone isn't enough for tools
-    whose context string is a fixed constant (e.g. Multimodal RAG) — without
-    session_id, every session/uploaded-document would share one cache slot."""
+def ctx_hash(tool_context: str, session_id: str = "", answer_length: str = "normal") -> str:
+    """Short hash of tool_context + session_id + answer_length so cache
+    entries are dataset-, session-, AND length-specific. tool_context alone
+    isn't enough for tools whose context string is a fixed constant (e.g.
+    Multimodal RAG) — without session_id, every session/uploaded-document
+    would share one cache slot. answer_length was missing entirely until a
+    real bug was caught live: asking the same question as "concise" then
+    "detailed" returned the byte-identical cached answer both times, because
+    the cache had no way to know the request wanted a different length."""
     import hashlib
-    key = f"{tool_context.strip()}::{session_id.strip()}"
-    return hashlib.md5(key.encode(), usedforsecurity=False).hexdigest()[:8] if key.strip(":") else ""
+    key = f"{tool_context.strip()}::{session_id.strip()}::{answer_length.strip()}"
+    return hashlib.md5(key.encode(), usedforsecurity=False).hexdigest()[:8]
 
 
 def cache_lookup(query_emb: list[float], state, provider: str, hash_: str) -> dict | None:
