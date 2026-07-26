@@ -67,3 +67,17 @@ def decode_entities(raw: Optional[str]) -> list[dict]:
         return json.loads(raw)
     except (json.JSONDecodeError, TypeError):
         return []
+
+
+ENTITY_TYPES = ("money", "date", "percent")
+
+
+def entity_type_flags(entities: list[dict]) -> dict[str, bool]:
+    """Scalar has_<type> booleans for the types actually present — Chroma
+    metadata must be scalar, so the JSON entity list itself can't be
+    filtered on directly. Only set (True) for types that occur; a type
+    with no match simply has no key, the same "absent means doesn't
+    match" convention chunk_type_filter already relies on, rather than
+    every chunk needing an explicit has_money: False stored everywhere."""
+    present = {e["type"] for e in entities}
+    return {f"has_{t}": True for t in ENTITY_TYPES if t in present}

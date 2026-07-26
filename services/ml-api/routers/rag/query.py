@@ -99,6 +99,7 @@ class QueryRequest(BaseModel):
     restrict_to_uploads: bool = False  # answer ONLY from this session's uploads — no KB, no web
     answer_length: str = "normal"  # "concise" | "normal" | "detailed"
     chunk_type_filter: Optional[list[str]] = None  # e.g. ["table"] — restrict retrieval to these chunk_type(s)
+    entity_type_filter: Optional[list[str]] = None  # e.g. ["money", "date"] — restrict to chunks containing these
     share_token: Optional[str] = None  # resolves to the owning session_id if valid, not revoked, not expired
 
 
@@ -238,7 +239,8 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
     type_boost = _detect_type_boost(req.query) if req.restrict_to_uploads else None
     candidates = multi_query_retrieve(queries, state, top_k=20, use_jina=use_jina,
                                       session_id=req.session_id, kb_fallback=not req.restrict_to_uploads,
-                                      type_boost=type_boost, chunk_type_filter=req.chunk_type_filter)
+                                      type_boost=type_boost, chunk_type_filter=req.chunk_type_filter,
+                                      entity_type_filter=req.entity_type_filter)
     # The default absolute floor is tuned to filter noise out of a large,
     # mixed general corpus. In restrict_to_uploads mode, tier-1 retrieval has
     # already scoped candidates to just the user's own small uploaded

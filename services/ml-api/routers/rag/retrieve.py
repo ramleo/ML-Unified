@@ -20,7 +20,8 @@ def embed_query(query: str, state, use_jina: bool = False) -> list[float]:
 # ── Dense retrieval ────────────────────────────────────────────────────────────
 
 def dense_retrieve(query_embedding: list[float], state, k: int = 50, use_jina: bool = False, where: dict | None = None,
-                   chunk_type_filter: list[str] | None = None) -> list[dict]:
+                   chunk_type_filter: list[str] | None = None,
+                   entity_type_filter: list[str] | None = None) -> list[dict]:
     """Query ChromaDB for the top-k nearest neighbours.
 
     Returns list of {text, source, score, id}.
@@ -32,6 +33,18 @@ def dense_retrieve(query_embedding: list[float], state, k: int = 50, use_jina: b
     if chunk_type_filter:
         type_clause = {"chunk_type": {"$in": chunk_type_filter}}
         where = {"$and": [where, type_clause]} if where else type_clause
+
+    if entity_type_filter:
+        # Each entity type is its own scalar has_<type> boolean (see
+        # entities.py) — Chroma metadata can't filter on the JSON entity
+        # list directly. $or across the requested types' flags — Chroma
+        # requires $or to have 2+ clauses, so a single type skips the
+        # wrapper (same reason chunk_type_filter uses $in, not $or, above).
+        entity_clause = (
+            {f"has_{entity_type_filter[0]}": {"$eq": True}} if len(entity_type_filter) == 1
+            else {"$or": [{f"has_{t}": {"$eq": True}} for t in entity_type_filter]}
+        )
+        where = {"$and": [where, entity_clause]} if where else entity_clause
 
     results = collection.query(
         query_embeddings=[query_embedding],
@@ -71,6 +84,7 @@ def bm25_retrieve(
     query: str, state, k: int = 50, session_id: str = "",
     uploaded_only: bool = False, kb_only: bool = False,
     chunk_type_filter: list[str] | None = None,
+    entity_type_filter: list[str] | None = None,
 ) -> list[dict]:
     """Score all corpus chunks with BM25Okapi and return top-k.
 
@@ -81,6 +95,8 @@ def bm25_retrieve(
     (e.g. ["table"] for "only look in tables") — a hard filter applied
     before scoring is even considered, unlike the soft type_boost used
     elsewhere, since a manual filter means "don't show me anything else."
+    entity_type_filter   → only chunks containing at least one of these
+    entity types (money/date/percent), same hard-filter semantics.
     Returns list of {text, source, score, id, uploaded}.
     """
     if not state.corpus_chunks:
@@ -90,7 +106,8 @@ def bm25_retrieve(
     scores = state.bm25.get_scores(tokenized_query)
 
     indexed = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)
-    top = indexed[:k] if not chunk_type_filter else indexed
+    has_hard_filter = bool(chunk_type_filter or entity_type_filter)
+    top = indexed[:k] if not has_hard_filter else indexed
 
     hits: list[dict] = []
     for idx, score in top:
@@ -112,7 +129,9 @@ def bm25_retrieve(
         meta = state.chunk_meta[idx] if idx < len(state.chunk_meta) else {}
         if chunk_type_filter and meta.get("chunk_type") not in chunk_type_filter:
             continue
-        if chunk_type_filter and len(hits) >= k:
+        if entity_type_filter and not any(meta.get(f"has_{t}") for t in entity_type_filter):
+            continue
+        if has_hard_filter and len(hits) >= k:
             break
         hits.append({
             "text": state.corpus_chunks[idx],
@@ -174,7 +193,8 @@ def reciprocal_rank_fusion(
 
 def hybrid_retrieve(query: str, state, top_k: int = 8, use_jina: bool = False, session_id: str = "",
                     type_boost: dict[str, float] | None = None,
-                    chunk_type_filter: list[str] | None = None) -> list[dict]:
+                    chunk_type_filter: list[str] | None = None,
+                    entity_type_filter: list[str] | None = None) -> list[dict]:
     """Run dense + BM25 retrieval, fuse with RRF, return top_k results.
 
     Returns list of {text, source, score, id}.
@@ -195,9 +215,10 @@ def hybrid_retrieve(query: str, state, top_k: int = 8, use_jina: bool = False, s
     dense_hits = []
     if collection.count() > 0:
         dense_hits = dense_retrieve(query_embedding, state, k=50, use_jina=use_jina, where=where,
-                                    chunk_type_filter=chunk_type_filter)
+                                    chunk_type_filter=chunk_type_filter, entity_type_filter=entity_type_filter)
 
-    bm25_hits = bm25_retrieve(query, state, k=50, session_id=session_id, chunk_type_filter=chunk_type_filter)
+    bm25_hits = bm25_retrieve(query, state, k=50, session_id=session_id, chunk_type_filter=chunk_type_filter,
+                              entity_type_filter=entity_type_filter)
 
     if not dense_hits and not bm25_hits:
         return []
@@ -216,6 +237,7 @@ def tiered_hybrid_retrieve(
     query: str, state, top_k: int = 8, use_jina: bool = False, session_id: str = "",
     kb_fallback: bool = True, type_boost: dict[str, float] | None = None,
     chunk_type_filter: list[str] | None = None,
+    entity_type_filter: list[str] | None = None,
 ) -> list[dict]:
     """Two-tier retrieval: session-uploaded docs first, KB fallback if weak match.
 
@@ -234,7 +256,8 @@ def tiered_hybrid_retrieve(
     )
     if not has_uploads:
         return hybrid_retrieve(query, state, top_k=top_k, use_jina=use_jina, session_id=session_id,
-                               type_boost=type_boost, chunk_type_filter=chunk_type_filter) if kb_fallback else []
+                               type_boost=type_boost, chunk_type_filter=chunk_type_filter,
+                               entity_type_filter=entity_type_filter) if kb_fallback else []
 
     query_emb = embed_query(query, state, use_jina=use_jina)
     collection = state.jina_collection if (use_jina and state.jina_ready) else state.collection
@@ -243,9 +266,10 @@ def tiered_hybrid_retrieve(
     # Tier 1: uploaded docs for this session
     where_up = {"$and": [{"uploaded": {"$eq": True}}, {"session_id": {"$eq": session_id}}]}
     dense_up = dense_retrieve(query_emb, state, k=20, use_jina=use_jina, where=where_up,
-                              chunk_type_filter=chunk_type_filter) if count > 0 else []
+                              chunk_type_filter=chunk_type_filter,
+                              entity_type_filter=entity_type_filter) if count > 0 else []
     bm25_up = bm25_retrieve(query, state, k=20, session_id=session_id, uploaded_only=True,
-                            chunk_type_filter=chunk_type_filter)
+                            chunk_type_filter=chunk_type_filter, entity_type_filter=entity_type_filter)
     tier1 = reciprocal_rank_fusion([l for l in [dense_up, bm25_up] if l], type_boost=type_boost) if (dense_up or bm25_up) else []
     for c in tier1:
         c["uploaded"] = True
@@ -259,8 +283,10 @@ def tiered_hybrid_retrieve(
     # Tier 2: KB-only
     where_kb = {"uploaded": {"$eq": False}}
     dense_kb = dense_retrieve(query_emb, state, k=50, use_jina=use_jina, where=where_kb,
-                              chunk_type_filter=chunk_type_filter) if count > 0 else []
-    bm25_kb = bm25_retrieve(query, state, k=50, kb_only=True, chunk_type_filter=chunk_type_filter)
+                              chunk_type_filter=chunk_type_filter,
+                              entity_type_filter=entity_type_filter) if count > 0 else []
+    bm25_kb = bm25_retrieve(query, state, k=50, kb_only=True, chunk_type_filter=chunk_type_filter,
+                            entity_type_filter=entity_type_filter)
     tier2 = reciprocal_rank_fusion([l for l in [dense_kb, bm25_kb] if l]) if (dense_kb or bm25_kb) else []
 
     if not tier1:
@@ -271,7 +297,8 @@ def tiered_hybrid_retrieve(
 def multi_query_retrieve(queries: list[str], state, top_k: int = 50, use_jina: bool = False,
                          session_id: str = "", kb_fallback: bool = True,
                          type_boost: dict[str, float] | None = None,
-                         chunk_type_filter: list[str] | None = None) -> list[dict]:
+                         chunk_type_filter: list[str] | None = None,
+                         entity_type_filter: list[str] | None = None) -> list[dict]:
     """Run hybrid_retrieve for each query variant, then RRF-merge across all
     variants' result lists. A chunk surfaced by multiple phrasings of the
     same question ranks higher than one found by only the original wording.
@@ -282,9 +309,10 @@ def multi_query_retrieve(queries: list[str], state, top_k: int = 50, use_jina: b
     retrieve_fn = tiered_hybrid_retrieve if session_id else hybrid_retrieve
     per_query_lists = [
         retrieve_fn(q, state, top_k=top_k, use_jina=use_jina, session_id=session_id, kb_fallback=kb_fallback,
-                    type_boost=type_boost, chunk_type_filter=chunk_type_filter)
+                    type_boost=type_boost, chunk_type_filter=chunk_type_filter, entity_type_filter=entity_type_filter)
         if session_id else retrieve_fn(q, state, top_k=top_k, use_jina=use_jina, session_id=session_id,
-                                       type_boost=type_boost, chunk_type_filter=chunk_type_filter)
+                                       type_boost=type_boost, chunk_type_filter=chunk_type_filter,
+                                       entity_type_filter=entity_type_filter)
         for q in queries
     ]
     per_query_lists = [lst for lst in per_query_lists if lst]

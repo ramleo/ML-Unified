@@ -9,11 +9,9 @@ upload uses — same Chroma collection, same hybrid retrieval, same citations.
 """
 from __future__ import annotations
 
-import difflib
 import hashlib
 import json
 import logging
-import re
 import time
 import uuid as _uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -25,10 +23,12 @@ from fastapi.responses import StreamingResponse
 from routers.rag.ingest import index_chunks
 from routers.rag.mm_csv import build_csv_chunks, looks_like_csv
 from routers.rag.pii import detect_pii_types
+from routers.rag.entities import extract_entities
 from routers.rag.mm_image import build_image_chunk, looks_like_image
 from routers.rag.mm_pdf import prepare_pdf, process_page
 from routers.rag.mm_video import (close_video, generate_chapters, looks_like_video, prepare_video,
                                   process_frame, reduced_frame_count, transcribe_video)
+from routers.rag.mm_revision import find_revision_candidate
 
 logger = logging.getLogger(__name__)
 
@@ -68,52 +68,6 @@ def _cache_put(key: str, payload: dict) -> None:
     while len(_cache) > _CACHE_MAX:
         oldest = min(_cache, key=lambda k: _cache[k][0])
         del _cache[oldest]
-
-
-# ── Ingestion diffing — flag a likely revision of an existing session doc ──────
-# Deliberately conservative: only ever informational (surfaced to the user to
-# decide), never auto-replaces anything. Matches on same filename OR high
-# content-similarity so a rename doesn't slip past detection, at the cost of
-# comparing text against every other doc still in this session (small in
-# practice — session uploads, not the whole KB).
-_SOURCE_SUFFIX_RE = re.compile(r":[0-9a-f]{8}$")
-_REVISION_SIMILARITY_THRESHOLD = 0.65
-_REVISION_COMPARE_CHARS = 4000
-
-
-def _display_filename(source: str) -> str:
-    name = source[len("user:"):] if source.startswith("user:") else source
-    return _SOURCE_SUFFIX_RE.sub("", name)
-
-
-def _find_revision_candidate(source: str, session_id: str, chunks: list[dict], state) -> dict | None:
-    if not session_id:
-        return None
-    new_name = _display_filename(source).lower()
-    new_text = " ".join(c.get("text", "") for c in chunks)[:_REVISION_COMPARE_CHARS]
-
-    best: dict | None = None
-    for other_source in state.uploaded_sources:
-        if other_source == source or state.source_sessions.get(other_source) != session_id:
-            continue
-        same_filename = _display_filename(other_source).lower() == new_name
-        old_text = " ".join(
-            text for text, src in zip(state.corpus_chunks, state.chunk_sources) if src == other_source
-        )[:_REVISION_COMPARE_CHARS]
-        similarity = (
-            difflib.SequenceMatcher(None, new_text, old_text).ratio() if new_text and old_text else 0.0
-        )
-        if not same_filename and similarity < _REVISION_SIMILARITY_THRESHOLD:
-            continue
-        reason = "same_filename" if same_filename else "similar_content"
-        candidate = {
-            "source": other_source, "filename": _display_filename(other_source),
-            "reason": reason, "similarity": round(similarity, 2),
-        }
-        if best is None or (reason == "same_filename" and best["reason"] != "same_filename") \
-                or (reason == best["reason"] and similarity > best["similarity"]):
-            best = candidate
-    return best
 
 
 # ── SSE endpoint ────────────────────────────────────────────────────────────────
@@ -315,7 +269,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
     )
     yield _sse({"step": "embed", "status": "done"})
 
-    revision_candidate = _find_revision_candidate(source, session_id, chunks, state) if uploaded else None
+    revision_candidate = find_revision_candidate(source, session_id, chunks, state) if uploaded else None
 
     if "clip" in embedding_mode:
         try:
@@ -333,6 +287,13 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         "save_scope": save_scope,
         "chunks_added": len(chunks),
         "chunk_summary": summary,
+        # Which entity types (MMRAG-03: money/date/percent) appear ANYWHERE
+        # in this document, computed once here rather than folded into
+        # `summary` above — that dict already powers the "N chunks" count
+        # badge and per-page aggregation across 4 different file-type
+        # processors; keeping this separate avoids touching that surface
+        # just to answer "should the entity filter chips even show."
+        "entity_types": sorted({e["type"] for c in chunks for e in extract_entities(c.get("text", ""))}),
         "page_images": page_images,
         # Informational only — the frontend asks the user before doing
         # anything; nothing is ever auto-replaced.
