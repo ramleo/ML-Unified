@@ -115,12 +115,14 @@ def index_chunks(chunks: list[dict], state, uploaded: bool = False, session_id: 
     # user's own upload, including "shared" uploads (which pass uploaded=False
     # below, same as the KB, so this can't be gated on that flag).
     from routers.rag.pii import detect_pii_types
+    from routers.rag.entities import extract_entities, encode_entities
     # Additive: chunk_type/page/bbox default to absent for plain text/KB chunks —
     # existing chunk_document() output and old-shaped chunks are unaffected.
     metas = [{"chunk_type": c.get("chunk_type"), "page": c.get("page"), "bbox": c.get("bbox"),
               "number_mismatch": c.get("number_mismatch"),
               "pii_types": ",".join(detect_pii_types(c["text"])) or None,
-              "blurry": (c.get("quality") or {}).get("blurry")}
+              "blurry": (c.get("quality") or {}).get("blurry"),
+              "entities": encode_entities(extract_entities(c["text"]))}
              for c in chunks]
     ids = [str(uuid.uuid4()) for _ in chunks]
 

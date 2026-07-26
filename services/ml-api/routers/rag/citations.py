@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 
 from routers.rag.pii import redact_pii
+from routers.rag.entities import decode_entities
 
 
 _VISUAL_CHUNK_TYPES = {"video", "figure", "image"}
@@ -122,6 +123,7 @@ def build_source_doc(chunk: dict, redact: bool = False) -> dict:
         "number_mismatch": chunk.get("number_mismatch") or None,
         "pii_types": chunk.get("pii_types") or None,
         "blurry": chunk.get("blurry") or None,
+        "entities": decode_entities(chunk.get("entities")) or None,
     }
 
 
