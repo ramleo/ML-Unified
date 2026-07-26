@@ -105,17 +105,48 @@ def node_router(state: dict) -> dict:
     return {"route": route}
 
 
+def node_decompose(state: dict) -> dict:
+    """Split a compound query (comparison / multi-part) into 2-3 standalone
+    search queries. Simple single-fact queries pass through unchanged — this
+    only runs on the 'complex' route, so the common case pays no extra cost.
+    """
+    query = state.get("final_query") or state["query"]
+    try:
+        prompt = (
+            "If this query asks about multiple distinct things that need separate "
+            "lookups (e.g. comparing two documents, or asking two unrelated questions "
+            "in one sentence), split it into 2-3 standalone search queries, one per "
+            "line, no numbering. If it's really just one question, reply with the "
+            "query unchanged and nothing else.\n"
+            f"Query: {query}"
+        )
+        result = _meta_call(prompt, state["user_key"], state["provider"], preserve_case=True)
+        sub_queries = [s.strip("-•* ").strip() for s in result.splitlines() if s.strip()]
+        sub_queries = sub_queries[:3] or [query]
+    except Exception as exc:
+        logger.warning("decompose node failed, using original query: %s", exc)
+        sub_queries = [query]
+    logger.debug("decompose: %r → %d sub-queries", query[:50], len(sub_queries))
+    return {"sub_queries": sub_queries}
+
+
 def node_retrieve(state: dict) -> dict:
-    """Hybrid BM25 + dense retrieval, cross-encoder reranked to top-6."""
+    """Hybrid BM25 + dense retrieval, cross-encoder reranked to top-6.
+
+    Runs one retrieval pass per sub-query (from node_decompose, if any) and
+    RRF-merges them via multi_query_retrieve's existing multi-query support
+    — no new retrieval logic needed for decomposition.
+    """
     try:
         from routers.rag import get_rag_state
         from routers.rag.retrieve import multi_query_retrieve
         from routers.rag.rerank import rerank
         rs = get_rag_state()
         q = state.get("final_query") or state["query"]
-        raw = multi_query_retrieve([q], rs, top_k=20, session_id=state.get("session_id", ""))
+        sub_queries = state.get("sub_queries") or [q]
+        raw = multi_query_retrieve(sub_queries, rs, top_k=20, session_id=state.get("session_id", ""))
         chunks = rerank(q, raw, rs, top_k=5)
-        logger.debug("retrieve: %r → %d chunks", q[:50], len(chunks))
+        logger.debug("retrieve: %r (%d sub-queries) → %d chunks", q[:50], len(sub_queries), len(chunks))
         return {"chunks": chunks}
     except Exception as exc:
         logger.error("retrieve node failed: %s", exc)
@@ -175,6 +206,10 @@ def node_rewrite(state: dict) -> dict:
     }
 
 # ── Conditional edges ──────────────────────────────────────────────────────────
+
+def edge_after_router(state: dict) -> str:
+    return "decompose" if state.get("route") == "complex" else "retrieve"
+
 
 def edge_after_retrieve(state: dict) -> str:
     return "generate" if state.get("route") == "simple" else "grade"

@@ -20,8 +20,8 @@ from routers.rag.llm import stream_groq_openai, stream_claude, stream_gemini, st
 from routers.rag.query import _resolve_key
 from routers.rag.citations import build_system_prompt as _build_system_prompt
 from routers.rag.agent_nodes import (
-    node_router, node_retrieve, node_grade, node_rewrite,
-    edge_after_retrieve, edge_after_grade,
+    node_router, node_decompose, node_retrieve, node_grade, node_rewrite,
+    edge_after_router, edge_after_retrieve, edge_after_grade,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,6 +38,7 @@ class AgentState(TypedDict):
     loop_count:   int
     route:        str
     grade:        str
+    sub_queries:  list
     provider:     str
     model:        str
     user_key:     str
@@ -52,12 +53,15 @@ try:
     from langgraph.graph import StateGraph, END as _END
 
     _g = StateGraph(AgentState)
-    _g.add_node("router",   node_router)
-    _g.add_node("retrieve", node_retrieve)
-    _g.add_node("grade",    node_grade)
-    _g.add_node("rewrite",  node_rewrite)
+    _g.add_node("router",    node_router)
+    _g.add_node("decompose", node_decompose)
+    _g.add_node("retrieve",  node_retrieve)
+    _g.add_node("grade",     node_grade)
+    _g.add_node("rewrite",   node_rewrite)
     _g.set_entry_point("router")
-    _g.add_edge("router",  "retrieve")
+    _g.add_conditional_edges("router", edge_after_router,
+                             {"decompose": "decompose", "retrieve": "retrieve"})
+    _g.add_edge("decompose", "retrieve")
     _g.add_conditional_edges("retrieve", edge_after_retrieve,
                              {"grade": "grade", "generate": _END})
     _g.add_conditional_edges("grade",    edge_after_grade,
@@ -74,10 +78,11 @@ except Exception as exc:
 # ── SSE helper ─────────────────────────────────────────────────────────────────
 
 _STEP_MAP = {
-    "router":   "routing",
-    "retrieve": "retrieving",
-    "grade":    "grading",
-    "rewrite":  "rewriting",
+    "router":    "routing",
+    "decompose": "decomposing",
+    "retrieve":  "retrieving",
+    "grade":     "grading",
+    "rewrite":   "rewriting",
 }
 
 _OPENAI_COMPAT_BASES = {
@@ -115,6 +120,7 @@ def _agent_generator(
         "loop_count":   0,
         "route":        "complex",
         "grade":        "good",
+        "sub_queries":  [],
         "provider":     provider,
         "model":        model,
         "user_key":     user_key,
@@ -135,6 +141,8 @@ def _agent_generator(
                                                   final_state.get("loop_count", 0)),
                         "query": state_update.get("final_query",
                                                   final_state["final_query"]),
+                        **({"sub_queries": state_update["sub_queries"]}
+                           if len(state_update.get("sub_queries") or []) > 1 else {}),
                     })
                     final_state.update(state_update)
         except Exception as exc:
@@ -280,6 +288,8 @@ def _agent_generator(
         "low_confidence":     web_fallback_tried and not web_used,
         "latency_ms":         round((time.time() - t0) * 1000),
         "expanded_queries":   expanded,
+        "sub_queries":        (final_state.get("sub_queries") or [])
+                               if len(final_state.get("sub_queries") or []) > 1 else [],
         "candidates_retrieved": len(chunks),
         "answer_source":      answer_source,
         "confidence":         confidence,
