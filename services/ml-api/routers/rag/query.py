@@ -19,6 +19,7 @@ from routers.rag.crag import web_search_fallback
 from routers.rag.citations import build_system_prompt, build_source_doc, likely_used_indices
 from routers.rag.generation import build_provider_candidates, stream_with_fallback
 from routers.rag.cache import ctx_hash as _ctx_hash, cache_lookup as _cache_lookup, cache_store as _cache_store
+from routers.rag.groundedness import score_groundedness
 
 logger = logging.getLogger(__name__)
 
@@ -220,6 +221,7 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
             "cache_hit": True,
             "answer_source": cached.get("answer_source", "knowledge_base"),
             "confidence": cached.get("confidence", "medium"),
+            "groundedness": cached.get("groundedness"),
         })
         return
 
@@ -306,12 +308,22 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
     served_provider = meta.get("served_provider", provider)
     served_model = meta.get("served_model", model)
 
+    # 4b. Groundedness (MMRAG-04) — cheap, reuses the already-loaded embedder,
+    # so it's computed unconditionally rather than gated behind a flag.
+    full_text = "".join(full_text_parts)
+    groundedness = None
+    if full_text and not generation_failed:
+        try:
+            groundedness = score_groundedness(full_text, chunks, state.embedding_fn)
+        except Exception as exc:
+            logger.warning("Groundedness scoring failed: %s", exc)
+
     # 5. Store in semantic cache — skip on provider errors, and skip entirely
     # for restrict_to_uploads (correctness over latency for single-doc Q&A).
-    full_text = "".join(full_text_parts)
     if query_emb is not None and full_text and not generation_failed and not req.restrict_to_uploads:
         try:
-            _cache_store(query_emb, full_text, seen_sources, chunks, state, provider, ctx_hash, answer_source, confidence)
+            _cache_store(query_emb, full_text, seen_sources, chunks, state, provider, ctx_hash, answer_source,
+                        confidence, groundedness)
         except Exception as exc:
             logger.warning("Cache store failed: %s", exc)
 
@@ -341,6 +353,7 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
         "served_model": served_model,
         "primary_provider": meta.get("primary_provider"),
         "primary_failure": meta.get("primary_failure"),
+        "groundedness": groundedness,
     })
 
 

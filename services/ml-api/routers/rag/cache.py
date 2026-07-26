@@ -39,7 +39,7 @@ def cache_lookup(query_emb: list[float], state, provider: str, hash_: str) -> di
 
 def cache_store(query_emb: list[float], full_text: str, sources: list[str], chunks: list[dict], state,
                 provider: str, hash_: str = "", answer_source: str = "knowledge_base",
-                confidence: str = "medium") -> None:
+                confidence: str = "medium", groundedness: dict | None = None) -> None:
     if len(state.semantic_cache) >= _CACHE_MAX:
         state.semantic_cache.pop(0)
     state.semantic_cache.append({
@@ -51,4 +51,5 @@ def cache_store(query_emb: list[float], full_text: str, sources: list[str], chun
         "ctx_hash": hash_,
         "answer_source": answer_source,
         "confidence": confidence,
+        "groundedness": groundedness,
     })
