@@ -22,6 +22,24 @@ def _decode_bbox(raw) -> list[float] | None:
         return None
 
 
+def _spatial_phrase(bbox: list[float]) -> str:
+    """A detected object's bbox has real position data, but a bare label
+    list ("contains: Bus") only tells the model something exists, not
+    where — observed live: "where is the bus" still got answered from
+    caption prose alone ("in Madrid") because no spatial words were ever
+    given to it. Coarse on purpose (a 3x3 grid, not coordinates) — the
+    model needs a phrase to work with, not numbers to (mis)interpret."""
+    x, y, w, h = bbox
+    if w * h >= 0.35:
+        return "spans most of the frame"
+    cx, cy = x + w / 2, y + h / 2
+    horiz = "left" if cx < 1 / 3 else "right" if cx > 2 / 3 else "center"
+    vert = "top" if cy < 1 / 3 else "bottom" if cy > 2 / 3 else None
+    if not vert:
+        return horiz
+    return vert if horiz == "center" else f"{vert}-{horiz}"
+
+
 _VISUAL_CHUNK_TYPES = {"video", "figure", "image"}
 
 
@@ -106,10 +124,7 @@ def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploa
             # list, so "person (×3)" reads as one fact, not noise.
             objects = decode_objects(c.get("objects"))
             if objects:
-                counts: dict[str, int] = {}
-                for o in objects:
-                    counts[o["label"]] = counts.get(o["label"], 0) + 1
-                obj_desc = ", ".join(f"{lbl} (×{n})" if n > 1 else lbl for lbl, n in counts.items())
+                obj_desc = ", ".join(f"{o['label']} ({_spatial_phrase(o['bbox'])})" for o in objects)
                 label += f" — contains: {obj_desc}"
             parts.append(f"[{label}]\n{text}")
             if c.get("number_mismatch"):
