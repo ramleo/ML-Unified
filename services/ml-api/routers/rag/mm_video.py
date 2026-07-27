@@ -22,6 +22,7 @@ import tempfile
 
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.mm_caption import clean_ocr_text, extract_caption
+from routers.rag.mm_objects import detect_objects
 
 logger = logging.getLogger(__name__)
 
@@ -127,8 +128,11 @@ def process_frame(cap, frame_idx: int, n_frames: int, duration_s: float,
     if not caption:
         return [], b64, page_summary
 
+    # Closed-vocabulary object detection (MMRAG-07 follow-up) — precomputed
+    # here so a later "where is the X" chat question is a free metadata
+    # lookup, not a fresh vision call. See mm_objects.py for scope/rationale.
     chunk = {"text": caption, "source": source, "chunk_index": frame_idx - 1,
-             "chunk_type": "video", "page": frame_idx}
+             "chunk_type": "video", "page": frame_idx, "objects": detect_objects(b64)}
     page_summary["video"] = 1
     return [chunk], b64, page_summary
 

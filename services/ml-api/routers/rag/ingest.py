@@ -117,8 +117,10 @@ def index_chunks(chunks: list[dict], state, uploaded: bool = False, session_id: 
     # below, same as the KB, so this can't be gated on that flag).
     from routers.rag.pii import detect_pii_types
     from routers.rag.entities import extract_entities, encode_entities, entity_type_flags
-    # Additive: chunk_type/page/bbox default to absent for plain text/KB chunks —
-    # existing chunk_document() output and old-shaped chunks are unaffected.
+    from routers.rag.mm_objects import encode_objects
+    # Additive: chunk_type/page/bbox/objects default to absent for plain
+    # text/KB chunks — existing chunk_document() output and old-shaped
+    # chunks are unaffected.
     metas = []
     for c in chunks:
         ents = extract_entities(c["text"])
@@ -128,6 +130,10 @@ def index_chunks(chunks: list[dict], state, uploaded: bool = False, session_id: 
             # (MMRAG-07), so it's JSON-encoded here and decoded back in
             # citations.py, the same pattern encode_entities() already uses.
             "bbox": json.dumps(c["bbox"]) if c.get("bbox") else None,
+            # Detected objects (MMRAG-07 follow-up) — same scalar-safe
+            # JSON-encode/decode pattern, own codec since the shape differs
+            # from bbox (a list of {label,confidence,bbox} dicts, not one box).
+            "objects": encode_objects(c.get("objects")),
             "number_mismatch": c.get("number_mismatch"),
             "pii_types": ",".join(detect_pii_types(c["text"])) or None,
             "blurry": (c.get("quality") or {}).get("blurry"),

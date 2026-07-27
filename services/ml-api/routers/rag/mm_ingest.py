@@ -337,6 +337,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
              # response, not through Chroma (unlike ingest.py's copy, which
              # must be scalar), so no encode/decode round-trip needed here.
              "bbox": c.get("bbox"),
+             "objects": c.get("objects") or None,
              "number_mismatch": c.get("number_mismatch") or None,
              "pii_types": ",".join(detect_pii_types(c.get("text", ""))) or None,
              "blurry": (c.get("quality") or {}).get("blurry") or None}

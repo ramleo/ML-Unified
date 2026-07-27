@@ -8,6 +8,7 @@ from __future__ import annotations
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.blur import blur_score
 from routers.rag.mm_caption import clean_ocr_text, extract_caption, split_pipe_tables
+from routers.rag.mm_objects import detect_objects
 
 _OCR_TEXT_CAP = 2000
 
@@ -82,10 +83,15 @@ def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[
     # noise in the citation UI's raw-text preview.
     quality = blur_score(b64)
 
+    # Closed-vocabulary object detection (MMRAG-07 follow-up) — precomputed
+    # here so a later "where is the X" chat question is a free metadata
+    # lookup, not a fresh vision call. See mm_objects.py for scope/rationale.
+    objects = detect_objects(b64)
+
     chunks: list[dict] = []
     if caption:
         chunks.append({"text": caption, "source": source, "chunk_index": 0,
-                       "chunk_type": "image", "page": 1, "quality": quality})
+                       "chunk_type": "image", "page": 1, "quality": quality, "objects": objects})
     for tbl in table_blocks:
         chunks.append({"text": tbl, "source": source, "chunk_index": len(chunks),
                        "chunk_type": "table", "page": 1})

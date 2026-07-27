@@ -10,6 +10,7 @@ import re
 
 from routers.rag.pii import redact_pii
 from routers.rag.entities import decode_entities
+from routers.rag.mm_objects import decode_objects
 
 
 def _decode_bbox(raw) -> list[float] | None:
@@ -130,6 +131,7 @@ def build_source_doc(chunk: dict, redact: bool = False) -> dict:
         "chunk_type": chunk.get("chunk_type"),
         "page": chunk.get("page"),
         "bbox": _decode_bbox(chunk.get("bbox")),
+        "objects": decode_objects(chunk.get("objects")) or None,
         "number_mismatch": chunk.get("number_mismatch") or None,
         "pii_types": chunk.get("pii_types") or None,
         "blurry": chunk.get("blurry") or None,
