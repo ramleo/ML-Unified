@@ -99,6 +99,18 @@ def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploa
                 label += f", page {page}, {chunk_type}" if page else f", {chunk_type}"
             elif page:
                 label += f", page {page}"
+            # Detected objects (MMRAG-07 follow-up) — the bounding-box overlay
+            # is a frontend-only visual, invisible to the model; without this,
+            # a "where is X" question gets answered from caption prose alone,
+            # which rarely describes position. Counts, not a flat repeated
+            # list, so "person (×3)" reads as one fact, not noise.
+            objects = decode_objects(c.get("objects"))
+            if objects:
+                counts: dict[str, int] = {}
+                for o in objects:
+                    counts[o["label"]] = counts.get(o["label"], 0) + 1
+                obj_desc = ", ".join(f"{lbl} (×{n})" if n > 1 else lbl for lbl, n in counts.items())
+                label += f" — contains: {obj_desc}"
             parts.append(f"[{label}]\n{text}")
             if c.get("number_mismatch"):
                 # The figure's AI caption and its OCR pass cited different
