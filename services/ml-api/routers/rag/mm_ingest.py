@@ -28,6 +28,7 @@ from routers.rag.mm_image import build_image_chunk, looks_like_image
 from routers.rag.mm_pdf import prepare_pdf, process_page
 from routers.rag.mm_video import (close_video, generate_chapters, looks_like_video, prepare_video,
                                   process_frame, reduced_frame_count, transcribe_video)
+from routers.rag.mm_audio import looks_like_audio, transcribe_audio_upload
 from routers.rag.mm_revision import find_revision_candidate
 
 logger = logging.getLogger(__name__)
@@ -100,7 +101,10 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
     # just show static frame thumbnails. Stored unconditionally here —
     # unlike the chunk cache below, this doesn't depend on a cache hit/miss,
     # since file_bytes is fresh from THIS upload call either way.
-    if looks_like_video(filename, content_type):
+    if looks_like_video(filename, content_type) or looks_like_audio(filename, content_type):
+        # store_video()/its /rag/video/{source} endpoint are generic byte+
+        # content_type serving — reused as-is for audio playback, no new
+        # storage/serving code needed.
         from routers.rag.mm_video_store import store_video
         store_video(source, file_bytes, content_type)
 
@@ -119,6 +123,8 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         file_type = "csv"
     elif looks_like_video(filename, content_type):
         file_type = "video"
+    elif looks_like_audio(filename, content_type):
+        file_type = "audio"
     elif looks_like_image(file_bytes, content_type):
         file_type = "image"
     else:
@@ -135,7 +141,8 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         loop = asyncio.get_event_loop()
         is_csv = file_bytes[:4] != b"%PDF" and looks_like_csv(filename, content_type)
         is_video = not is_csv and looks_like_video(filename, content_type)
-        is_image = (not is_csv and not is_video and file_bytes[:4] != b"%PDF"
+        is_audio = not is_csv and not is_video and looks_like_audio(filename, content_type)
+        is_image = (not is_csv and not is_video and not is_audio and file_bytes[:4] != b"%PDF"
                    and looks_like_image(file_bytes, content_type))
 
         if is_csv:
@@ -155,6 +162,19 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
             try:
                 chunks, page_images, summary = await loop.run_in_executor(
                     _executor, lambda: build_image_chunk(file_bytes, source)
+                )
+            except Exception as exc:
+                logger.error("Multimodal ingestion failed: %s", exc)
+                yield _sse({"error": f"Failed to process file: {exc}"})
+                return
+        elif is_audio:
+            # One atomic call (like the image branch) — no sub-steps to
+            # report, so the frontend shows an indeterminate progress bar.
+            yield _sse({"step": "extract", "status": "running", "indeterminate": True})
+            page_images = []
+            try:
+                chunks, summary, transcript_text, transcript_segments, chapters = await loop.run_in_executor(
+                    _executor, lambda: transcribe_audio_upload(file_bytes, filename, source)
                 )
             except Exception as exc:
                 logger.error("Multimodal ingestion failed: %s", exc)
@@ -253,7 +273,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
                                    "chapters": chapters})
 
     if not chunks:
-        yield _sse({"error": "No extractable content found (text, tables, figures, or a describable image)."})
+        yield _sse({"error": "No extractable content found (text, tables, figures, a describable image, or speech)."})
         return
 
     from routers.rag.analytics import record_upload
@@ -301,7 +321,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         # would just duplicate it under a second search box.
         "text_segments": (
             [{"page": c.get("page"), "text": c.get("text", "")} for c in chunks if c.get("chunk_type") == "text"]
-            if file_type != "video" else []
+            if file_type not in ("video", "audio") else []
         ),
         "page_images": page_images,
         # Informational only — the frontend asks the user before doing
@@ -339,12 +359,13 @@ async def mm_ingest(
     session_id: str = Form(default=""),               # reuse the caller's chat session_id
 ):
     """Ingest a PDF (tables/figures), a standalone image (PNG/JPG/GIF/WEBP), a
-    CSV, or a short video (MP4/MOV/WEBM/AVI/MKV — visual key frames only, no
-    audio transcript) into the multimodal RAG index. Streams progress as SSE;
-    final event carries page_images for citation thumbnails (empty for CSV —
-    no page to render). Pass the same session_id your /rag/query calls use so
-    the upload is retrievable from that chat session; a fresh one is
-    generated if omitted."""
+    CSV, a short video (MP4/MOV/WEBM/AVI/MKV), or a standalone audio file
+    (MP3/WAV/M4A/OGG/FLAC/AAC — transcribed the same way as a video's audio
+    track, just with no frames to sample) into the multimodal RAG index.
+    Streams progress as SSE; final event carries page_images for citation
+    thumbnails (empty for CSV/audio — no page to render). Pass the same
+    session_id your /rag/query calls use so the upload is retrievable from
+    that chat session; a fresh one is generated if omitted."""
     file_bytes = await file.read()
     content_type = file.content_type or ""
     filename = file.filename or "document.pdf"
@@ -352,10 +373,12 @@ async def mm_ingest(
         raise HTTPException(status_code=400, detail="File too large (max 20 MB)")
     if not file_bytes or not (file_bytes[:4] == b"%PDF" or looks_like_image(file_bytes, content_type)
                               or looks_like_csv(filename, content_type)
-                              or looks_like_video(filename, content_type)):
+                              or looks_like_video(filename, content_type)
+                              or looks_like_audio(filename, content_type)):
         raise HTTPException(status_code=400,
-                            detail="Only PDF, image (PNG/JPG/GIF/WEBP/BMP/TIFF), CSV, or video "
-                                   "(MP4/MOV/WEBM/AVI/MKV) files are supported.")
+                            detail="Only PDF, image (PNG/JPG/GIF/WEBP/BMP/TIFF), CSV, video "
+                                   "(MP4/MOV/WEBM/AVI/MKV), or audio (MP3/WAV/M4A/OGG/FLAC/AAC) "
+                                   "files are supported.")
 
     return StreamingResponse(
         _stream(file_bytes, filename, embedding_mode, save_scope, session_id, content_type),
