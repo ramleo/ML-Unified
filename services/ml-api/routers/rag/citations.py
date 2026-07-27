@@ -117,16 +117,26 @@ def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploa
                 label += f", page {page}, {chunk_type}" if page else f", {chunk_type}"
             elif page:
                 label += f", page {page}"
+            chunk_block = f"[{label}]\n{text}"
             # Detected objects (MMRAG-07 follow-up) — the bounding-box overlay
             # is a frontend-only visual, invisible to the model; without this,
             # a "where is X" question gets answered from caption prose alone,
-            # which rarely describes position. Counts, not a flat repeated
-            # list, so "person (×3)" reads as one fact, not noise.
+            # which rarely describes position. Deliberately appended to the
+            # TEXT, not folded into the "[...]" label above — verified live
+            # that putting it in the bracket got it ignored: the system
+            # prompt tells the model the "[source, page, type]" labels are
+            # "for your reference only... do NOT repeat, quote" (so it won't
+            # echo a citation tag back in prose), and the model applied that
+            # instruction to the object list too when it lived in the same
+            # brackets, answering "where is the bus" from caption prose
+            # alone even though "Bus (spans most of the frame)" was right
+            # there. As ordinary trailing text instead, it's just more
+            # retrieved content to read and use, not a tag to ignore.
             objects = decode_objects(c.get("objects"))
             if objects:
-                obj_desc = ", ".join(f"{o['label']} ({_spatial_phrase(o['bbox'])})" for o in objects)
-                label += f" — contains: {obj_desc}"
-            parts.append(f"[{label}]\n{text}")
+                obj_desc = "; ".join(f"{o['label']} — {_spatial_phrase(o['bbox'])}" for o in objects)
+                chunk_block += f"\nObjects detected in this image, with their approximate position: {obj_desc}."
+            parts.append(chunk_block)
             if c.get("number_mismatch"):
                 # The figure's AI caption and its OCR pass cited different
                 # numbers for the same visual — a real sign one of the two
