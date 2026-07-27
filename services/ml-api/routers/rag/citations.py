@@ -5,10 +5,20 @@ limit and to de-duplicate the doc-payload construction that previously
 appeared twice (cached-hit path and live path)."""
 from __future__ import annotations
 
+import json
 import re
 
 from routers.rag.pii import redact_pii
 from routers.rag.entities import decode_entities
+
+
+def _decode_bbox(raw) -> list[float] | None:
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except (TypeError, ValueError):
+        return None
 
 
 _VISUAL_CHUNK_TYPES = {"video", "figure", "image"}
@@ -119,7 +129,7 @@ def build_source_doc(chunk: dict, redact: bool = False) -> dict:
         "display_score": round(chunk.get("display_score", chunk.get("score", 0.0)), 4),
         "chunk_type": chunk.get("chunk_type"),
         "page": chunk.get("page"),
-        "bbox": chunk.get("bbox"),
+        "bbox": _decode_bbox(chunk.get("bbox")),
         "number_mismatch": chunk.get("number_mismatch") or None,
         "pii_types": chunk.get("pii_types") or None,
         "blurry": chunk.get("blurry") or None,

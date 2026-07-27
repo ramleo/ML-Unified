@@ -6,9 +6,6 @@ mm_ingest.py to stay under the project's file-length limit.
 """
 from __future__ import annotations
 
-import re
-
-from routers.document._extract import extract_tables_markdown
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.blur import blur_score
 from routers.rag.ingest import chunk_document
@@ -45,49 +42,51 @@ def _render_page(page, zoom: float = _RENDER_ZOOM) -> str:
     return base64.b64encode(pix.tobytes("png")).decode()
 
 
-def _is_visually_dense(page) -> bool:
-    # Caption a page whenever it carries a raster image large enough to be an
-    # actual chart/photo/diagram — even a text-heavy page (e.g. a resume with
-    # a text sidebar plus a timeline graphic), since get_text() extracts
-    # nothing from the image region. Deliberately checks ONLY get_images()
-    # (real embedded raster images), not get_drawings() (vector paths) — a
-    # plain color-fill rectangle used as a section-header banner/divider is a
-    # vector drawing that can easily exceed the area threshold while being
-    # pure decoration; real timeline/chart graphics come in as raster images.
-    # Observed live: a resume's solid-color "PERSONAL DETAILS" banner was
-    # triggering a "figure" caption that said "this is a text document, not
-    # a visual" — dropping get_drawings() removes that false positive.
+def _norm_box(page, x0: float, y0: float, x1: float, y1: float) -> list[float]:
+    """Page-relative [x, y, w, h], each 0-1 — resolution-independent so the
+    frontend can draw it over a page thumbnail of any rendered size."""
+    w, h = page.rect.width, page.rect.height
+    return [round(x0 / w, 4), round(y0 / h, 4),
+            round((x1 - x0) / w, 4), round((y1 - y0) / h, 4)]
+
+
+def _visual_bbox(page) -> list[float] | None:
+    """Bbox (normalized) of the largest raster image large enough to be an
+    actual chart/photo/diagram — None if the page has nothing qualifying.
+    Also doubles as "is this page visually dense" (a page is captioned only
+    when this returns non-None) — even a text-heavy page (e.g. a resume with
+    a text sidebar plus a timeline graphic) gets captioned, since get_text()
+    extracts nothing from the image region. Deliberately checks ONLY
+    get_images() (real embedded raster images), not get_drawings() (vector
+    paths) — a plain color-fill rectangle used as a section-header
+    banner/divider is a vector drawing that can easily exceed the area
+    threshold while being pure decoration; real timeline/chart graphics come
+    in as raster images. Observed live: a resume's solid-color "PERSONAL
+    DETAILS" banner was triggering a "figure" caption that said "this is a
+    text document, not a visual" — dropping get_drawings() removes that
+    false positive."""
     try:
         page_area = page.rect.width * page.rect.height
         if page_area <= 0:
-            return False
+            return None
 
+        best_bbox, best_area = None, 0.0
         for img in page.get_images(full=True):
             try:
                 bbox = page.get_image_bbox(img)
             except Exception:
                 continue
-            if bbox and (bbox.width * bbox.height) / page_area >= _MIN_VISUAL_AREA_RATIO:
-                return True
+            if not bbox:
+                continue
+            area = bbox.width * bbox.height
+            if area / page_area >= _MIN_VISUAL_AREA_RATIO and area > best_area:
+                best_bbox, best_area = bbox, area
 
-        return False
+        if best_bbox is None:
+            return None
+        return _norm_box(page, best_bbox.x0, best_bbox.y0, best_bbox.x1, best_bbox.y1)
     except Exception:
-        return False
-
-
-def _split_tables_by_page(tables_md: str) -> dict[int, list[str]]:
-    """extract_tables_markdown() prefixes each table with '### Table (Page N)'
-    — split its whole-doc output back into per-page blocks without re-parsing
-    the PDF a second time."""
-    if not tables_md.strip():
-        return {}
-    blocks = re.split(r"(?=### Table \(Page \d+\))", tables_md)
-    by_page: dict[int, list[str]] = {}
-    for block in blocks:
-        m = re.match(r"### Table \(Page (\d+)\)", block.strip())
-        if m:
-            by_page.setdefault(int(m.group(1)), []).append(block.strip())
-    return by_page
+        return None
 
 
 def _caption_prompt() -> str:
@@ -119,16 +118,30 @@ def _caption_page(b64: str) -> tuple[str, bool]:
 # ── Per-page (streaming path) ───────────────────────────────────────────────────
 
 def prepare_pdf(file_bytes: bytes):
-    """Open the PDF and extract table markdown once. Returns (doc, n_pages, tables_by_page)."""
+    """Open the PDF. Returns (doc, n_pages)."""
     import fitz
     doc = fitz.open(stream=file_bytes, filetype="pdf")
     n_pages = min(MAX_PAGES, len(doc))
-    tables_by_page = _split_tables_by_page(extract_tables_markdown(file_bytes, max_pages=n_pages))
-    return doc, n_pages, tables_by_page
+    return doc, n_pages
 
 
-def process_page(doc, page_num: int, tables_by_page: dict, source: str) -> tuple[list[dict], str, dict]:
-    """Extract chunks for ONE page. Returns (chunks, page_b64, page_summary)."""
+def _table_markdown(rows: list[list]) -> str:
+    lines: list[str] = []
+    for j, row in enumerate(rows):
+        cells = [str(c or "").strip().replace("|", " ") for c in row]
+        lines.append("| " + " | ".join(cells) + " |")
+        if j == 0:
+            lines.append("|" + "|".join(["---"] * len(row)) + "|")
+    return "\n".join(lines)
+
+
+def process_page(doc, page_num: int, source: str) -> tuple[list[dict], str, dict]:
+    """Extract chunks for ONE page. Returns (chunks, page_b64, page_summary).
+
+    Tables are found here directly (page.find_tables(), same call
+    extract_tables_markdown() used to make in a separate whole-doc pre-pass)
+    so each table's own bbox is available right where its chunk is built —
+    MMRAG-07 visual grounding for citations."""
     page = doc[page_num - 1]
     text = page.get_text()
     b64 = _render_page(page)
@@ -142,16 +155,25 @@ def process_page(doc, page_num: int, tables_by_page: dict, source: str) -> tuple
             page_chunks.append(c)
         page_summary["text"] = 1
 
-    for table_md in tables_by_page.get(page_num, []):
-        page_chunks.append({"text": table_md, "source": source, "chunk_index": len(page_chunks),
-                            "chunk_type": "table", "page": page_num})
+    for tab in page.find_tables():
+        rows = tab.extract()
+        if not rows:
+            continue
+        # tab.bbox is a plain 4-tuple in some PyMuPDF versions, a Rect-like
+        # object with .x0/.y0/.x1/.y1 in others — index access works for both.
+        x0, y0, x1, y1 = tab.bbox[0], tab.bbox[1], tab.bbox[2], tab.bbox[3]
+        page_chunks.append({"text": _table_markdown(rows), "source": source, "chunk_index": len(page_chunks),
+                            "chunk_type": "table", "page": page_num,
+                            "bbox": _norm_box(page, x0, y0, x1, y1)})
         page_summary["table"] += 1
 
-    if _is_visually_dense(page):
+    visual_bbox = _visual_bbox(page)
+    if visual_bbox is not None:
         caption, mismatch = _caption_page(b64)
         if caption:
             chunk = {"text": caption, "source": source, "chunk_index": len(page_chunks),
-                     "chunk_type": "figure", "page": page_num, "quality": blur_score(b64)}
+                     "chunk_type": "figure", "page": page_num, "quality": blur_score(b64),
+                     "bbox": visual_bbox}
             if mismatch:
                 chunk["number_mismatch"] = True
             page_chunks.append(chunk)
@@ -164,8 +186,8 @@ def process_page(doc, page_num: int, tables_by_page: dict, source: str) -> tuple
 
 def build_multimodal_chunks(file_bytes: bytes, source: str,
                             progress_cb=None) -> tuple[list[dict], list[str], dict]:
-    """Returns (chunks, page_images, chunk_summary). chunks carry chunk_type/page."""
-    doc, n_pages, tables_by_page = prepare_pdf(file_bytes)
+    """Returns (chunks, page_images, chunk_summary). chunks carry chunk_type/page/bbox."""
+    doc, n_pages = prepare_pdf(file_bytes)
 
     chunks: list[dict] = []
     page_images: list[str] = []
@@ -174,7 +196,7 @@ def build_multimodal_chunks(file_bytes: bytes, source: str,
     for page_num in range(1, n_pages + 1):
         if progress_cb:
             progress_cb({"step": "extract", "page": page_num, "pages": n_pages})
-        page_chunks, b64, page_summary = process_page(doc, page_num, tables_by_page, source)
+        page_chunks, b64, page_summary = process_page(doc, page_num, source)
         chunks.extend(page_chunks)
         page_images.append(b64)
         for k in summary:

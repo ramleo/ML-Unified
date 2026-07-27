@@ -1,6 +1,7 @@
 """RAG ingest — KB loading, chunking, indexing, and /ingest endpoint."""
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -122,7 +123,11 @@ def index_chunks(chunks: list[dict], state, uploaded: bool = False, session_id: 
     for c in chunks:
         ents = extract_entities(c["text"])
         metas.append({
-            "chunk_type": c.get("chunk_type"), "page": c.get("page"), "bbox": c.get("bbox"),
+            "chunk_type": c.get("chunk_type"), "page": c.get("page"),
+            # Chroma metadata must be scalar — bbox is a [x,y,w,h] list
+            # (MMRAG-07), so it's JSON-encoded here and decoded back in
+            # citations.py, the same pattern encode_entities() already uses.
+            "bbox": json.dumps(c["bbox"]) if c.get("bbox") else None,
             "number_mismatch": c.get("number_mismatch"),
             "pii_types": ",".join(detect_pii_types(c["text"])) or None,
             "blurry": (c.get("quality") or {}).get("blurry"),

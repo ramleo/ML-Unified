@@ -237,7 +237,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
             # "page X of N" event can be yielded between pages, instead of
             # one opaque executor call for the whole document.
             try:
-                doc, n_pages, tables_by_page = await loop.run_in_executor(
+                doc, n_pages = await loop.run_in_executor(
                     _executor, lambda: prepare_pdf(file_bytes)
                 )
             except Exception as exc:
@@ -252,7 +252,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
             try:
                 for page_num in range(1, n_pages + 1):
                     page_chunks, b64, page_summary = await loop.run_in_executor(
-                        _executor, lambda pn=page_num: process_page(doc, pn, tables_by_page, source)
+                        _executor, lambda pn=page_num: process_page(doc, pn, source)
                     )
                     chunks.extend(page_chunks)
                     page_images.append(b64)
@@ -333,6 +333,10 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         # extract" glance actually needs.
         "notable_chunks": [
             {"chunk_type": c.get("chunk_type"), "page": c.get("page"), "text": c.get("text"),
+             # Raw list, not JSON-encoded — this goes straight into the SSE
+             # response, not through Chroma (unlike ingest.py's copy, which
+             # must be scalar), so no encode/decode round-trip needed here.
+             "bbox": c.get("bbox"),
              "number_mismatch": c.get("number_mismatch") or None,
              "pii_types": ",".join(detect_pii_types(c.get("text", ""))) or None,
              "blurry": (c.get("quality") or {}).get("blurry") or None}
