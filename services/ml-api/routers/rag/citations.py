@@ -22,24 +22,6 @@ def _decode_bbox(raw) -> list[float] | None:
         return None
 
 
-def _spatial_phrase(bbox: list[float]) -> str:
-    """A detected object's bbox has real position data, but a bare label
-    list ("contains: Bus") only tells the model something exists, not
-    where — observed live: "where is the bus" still got answered from
-    caption prose alone ("in Madrid") because no spatial words were ever
-    given to it. Coarse on purpose (a 3x3 grid, not coordinates) — the
-    model needs a phrase to work with, not numbers to (mis)interpret."""
-    x, y, w, h = bbox
-    if w * h >= 0.35:
-        return "spans most of the frame"
-    cx, cy = x + w / 2, y + h / 2
-    horiz = "left" if cx < 1 / 3 else "right" if cx > 2 / 3 else "center"
-    vert = "top" if cy < 1 / 3 else "bottom" if cy > 2 / 3 else None
-    if not vert:
-        return horiz
-    return vert if horiz == "center" else f"{vert}-{horiz}"
-
-
 _VISUAL_CHUNK_TYPES = {"video", "figure", "image"}
 
 
@@ -117,25 +99,14 @@ def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploa
                 label += f", page {page}, {chunk_type}" if page else f", {chunk_type}"
             elif page:
                 label += f", page {page}"
+            # Detected-object descriptions are baked into `text` itself at
+            # ingest time (see mm_objects.describe_objects) — not injected
+            # here — so the same sentence backs both the LLM's answer AND
+            # groundedness/citation-overlap scoring, which only ever read
+            # chunk["text"]. Earlier versions appended it to a local,
+            # prompt-only variable here; that worked for the chat answer but
+            # left the score checks blind to it (real bug, fixed).
             chunk_block = f"[{label}]\n{text}"
-            # Detected objects (MMRAG-07 follow-up) — the bounding-box overlay
-            # is a frontend-only visual, invisible to the model; without this,
-            # a "where is X" question gets answered from caption prose alone,
-            # which rarely describes position. Deliberately appended to the
-            # TEXT, not folded into the "[...]" label above — verified live
-            # that putting it in the bracket got it ignored: the system
-            # prompt tells the model the "[source, page, type]" labels are
-            # "for your reference only... do NOT repeat, quote" (so it won't
-            # echo a citation tag back in prose), and the model applied that
-            # instruction to the object list too when it lived in the same
-            # brackets, answering "where is the bus" from caption prose
-            # alone even though "Bus (spans most of the frame)" was right
-            # there. As ordinary trailing text instead, it's just more
-            # retrieved content to read and use, not a tag to ignore.
-            objects = decode_objects(c.get("objects"))
-            if objects:
-                obj_desc = "; ".join(f"{o['label']} — {_spatial_phrase(o['bbox'])}" for o in objects)
-                chunk_block += f"\nObjects detected in this image, with their approximate position: {obj_desc}."
             parts.append(chunk_block)
             if c.get("number_mismatch"):
                 # The figure's AI caption and its OCR pass cited different

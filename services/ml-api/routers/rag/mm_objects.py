@@ -235,6 +235,34 @@ def detect_objects(b64: str) -> list[dict]:
         return []
 
 
+def _spatial_phrase(bbox: list[float]) -> str:
+    """Coarse on purpose (a 3x3 grid, not coordinates) — a chat model needs a
+    phrase to work with, not numbers to (mis)interpret."""
+    x, y, w, h = bbox
+    if w * h >= 0.35:
+        return "spans most of the frame"
+    cx, cy = x + w / 2, y + h / 2
+    horiz = "left" if cx < 1 / 3 else "right" if cx > 2 / 3 else "center"
+    vert = "top" if cy < 1 / 3 else "bottom" if cy > 2 / 3 else None
+    if not vert:
+        return horiz
+    return vert if horiz == "center" else f"{vert}-{horiz}"
+
+
+def describe_objects(objects: list[dict] | None) -> str:
+    """A sentence naming each detected object and its coarse position, meant
+    to be appended to the chunk's stored `text` at INGEST time (not just
+    injected into the LLM prompt at query time) — a "where is the X"
+    question needs this to be part of the same text both the LLM context
+    AND the groundedness/citation-overlap scorers read, since those only
+    ever look at `chunk["text"]`, never at prompt-time-only content. Empty
+    string when there's nothing detected."""
+    if not objects:
+        return ""
+    obj_desc = "; ".join(f"{o['label']} — {_spatial_phrase(o['bbox'])}" for o in objects)
+    return f"Objects detected in this image, with their approximate position: {obj_desc}."
+
+
 def encode_objects(objects: list[dict] | None) -> str | None:
     return json.dumps(objects) if objects else None
 

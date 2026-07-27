@@ -8,7 +8,7 @@ from __future__ import annotations
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.blur import blur_score
 from routers.rag.mm_caption import clean_ocr_text, extract_caption, split_pipe_tables
-from routers.rag.mm_objects import detect_objects
+from routers.rag.mm_objects import describe_objects, detect_objects
 
 _OCR_TEXT_CAP = 2000
 
@@ -87,6 +87,13 @@ def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[
     # here so a later "where is the X" chat question is a free metadata
     # lookup, not a fresh vision call. See mm_objects.py for scope/rationale.
     objects = detect_objects(b64)
+    obj_desc = describe_objects(objects)
+    if obj_desc:
+        # Baked into the stored text itself (not just the LLM prompt) so a
+        # "where is the X" answer stays backed by groundedness/citation
+        # scoring, both of which only ever read chunk["text"] — see
+        # mm_objects.describe_objects for why.
+        caption = f"{caption}\n\n{obj_desc}" if caption else obj_desc
 
     chunks: list[dict] = []
     if caption:
