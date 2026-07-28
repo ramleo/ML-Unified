@@ -70,6 +70,19 @@ def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploa
             "quote, or append any [source...] label in your answer text. Write a "
             "plain, direct answer with no bracketed references at all."
         )
+        # MMRAG-12: the retrieved knowledge is virtually always in English
+        # (captions/transcripts are generated/transcribed in English by
+        # default) regardless of what language the user asks in — without
+        # this, a non-English question risks getting an English answer just
+        # because the context happened to be in English. Most models already
+        # mirror the question's language on their own (observed live via
+        # Groq's llama-3.3-70b), but this makes it an explicit instruction
+        # rather than relying on that being consistent across providers.
+        parts.append(
+            "Answer in the same language the user's question is written in, "
+            "even though the retrieved knowledge below is in English — "
+            "translate the relevant facts, don't just answer in English."
+        )
         if _has_multiple_visual_chunks_per_source(chunks):
             # Observed live: a video's two independently-captioned frames
             # described the same speaker with different wording/focus (one

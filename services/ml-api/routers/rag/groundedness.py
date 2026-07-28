@@ -30,12 +30,37 @@ _UNGROUNDED_THRESHOLD = 0.40
 _HIGH_THRESHOLD = 0.55
 _MEDIUM_THRESHOLD = 0.35
 
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+# Devanagari danda (।), Arabic question mark (؟), and full-width CJK
+# terminators (。！？) alongside the original ASCII ones — a non-English
+# answer (MMRAG-12) that only ever gets split on ".!?" collapses into ONE
+# giant "sentence" for scoring, the same dilution bug already fixed for the
+# source-chunk side (see score_groundedness's docstring below). \s* (not
+# \s+) because CJK text often has no space after its terminator at all.
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?।؟。！？])\s*")
 
 
 def _split_sentences(text: str) -> list[str]:
     sentences = [s.strip() for s in _SENTENCE_SPLIT_RE.split(text.strip())]
     return [s for s in sentences if len(s) >= 8]  # drop stray fragments/whitespace
+
+
+# MiniLM (all-MiniLM-L6-v2, this project's retrieval embedder — see
+# score_groundedness's docstring) is English-centric; its cross-lingual
+# similarity between a correct non-English answer and its true English
+# source is unreliably low, not just "somewhat lower." Observed live
+# (2026-07-28): a Hindi answer ("दीवार हरे रंग की है...", correctly
+# translated and grounded in the English source caption) scored 0.185 —
+# "low" / flagged unsupported — despite being accurate. Rather than show a
+# confidently wrong badge, detect a script mismatch between answer and
+# source and skip scoring entirely (None — the frontend already renders
+# nothing for that) instead of asserting a number this embedder can't
+# actually back up.
+_SCRIPT_MISMATCH_RATIO = 0.3
+
+
+def _non_ascii_letter_ratio(text: str) -> float:
+    letters = [c for c in text if c.isalpha()]
+    return (sum(1 for c in letters if ord(c) > 127) / len(letters)) if letters else 0.0
 
 
 def score_groundedness(answer: str, chunks: list[dict], embed_fn: Callable[[list[str]], list]) -> dict | None:
@@ -65,6 +90,11 @@ def score_groundedness(answer: str, chunks: list[dict], embed_fn: Callable[[list
         if text:
             chunk_sentences.extend(_split_sentences(text) or [text])
     if not chunk_sentences:
+        return None
+
+    # MMRAG-12 — see _SCRIPT_MISMATCH_RATIO above.
+    if (_non_ascii_letter_ratio(answer) > _SCRIPT_MISMATCH_RATIO
+            and _non_ascii_letter_ratio(" ".join(chunk_sentences)) <= _SCRIPT_MISMATCH_RATIO):
         return None
 
     sentence_embs = embed_fn(sentences)
