@@ -74,6 +74,12 @@ def rerank(query: str, chunks: list[dict], state, top_k: int = 8, abs_floor: flo
         if score < min_keep:
             break  # scored is sorted descending — everything after this is worse
         entry = dict(chunk)
+        # "score" gets overwritten with the rerank result below — stash it
+        # first under "hybrid_score" (MMRAG-08, "why was this cited") if not
+        # already set by an RRF pass upstream, so the trace panel can show
+        # what retrieval handed to the reranker, not just its final verdict.
+        entry.setdefault("hybrid_score", round(float(chunk.get("score", 0.0)), 5))
+        entry["rerank_score"] = round(score, 4)
         entry["score"] = score
         entry["display_score"] = score / top_score
         reranked.append(entry)

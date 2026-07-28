@@ -19,6 +19,14 @@ def embed_query(query: str, state, use_jina: bool = False) -> list[float]:
 
 # ── Dense retrieval ────────────────────────────────────────────────────────────
 
+def _labeled(*pairs: tuple[str, list[dict]]) -> tuple[list[list[dict]], list[str]]:
+    """Drops empty lists while keeping each surviving list's label aligned —
+    reciprocal_rank_fusion's `labels` param must line up 1:1 with
+    `ranked_lists`, but callers only ever include non-empty lists."""
+    kept = [(label, lst) for label, lst in pairs if lst]
+    return [lst for _, lst in kept], [label for label, _ in kept]
+
+
 def dense_retrieve(query_embedding: list[float], state, k: int = 50, use_jina: bool = False, where: dict | None = None,
                    chunk_type_filter: list[str] | None = None,
                    entity_type_filter: list[str] | None = None) -> list[dict]:
@@ -159,6 +167,7 @@ def reciprocal_rank_fusion(
     ranked_lists: list[list[dict]],
     k: int = 60,
     type_boost: dict[str, float] | None = None,
+    labels: list[str] | None = None,
 ) -> list[dict]:
     """Merge multiple ranked lists using Reciprocal Rank Fusion.
 
@@ -170,22 +179,40 @@ def reciprocal_rank_fusion(
     None (default) preserves today's unweighted behavior.
     Deduplication key: (text, source).
     Returns list sorted by descending RRF score.
+
+    labels (MMRAG-08, "why was this cited") — when given, one label per
+    entry in ranked_lists (e.g. ["dense", "bm25"]), each merged doc gets a
+    `retrieval_trace` dict recording that list's raw score/rank for it, plus
+    `hybrid_score` (the RRF score before any later rerank overwrites
+    "score") and `type_boost`. Omit at an OUTER fusion pass (e.g. merging
+    already-hybrid results across query variants or retrieval tiers) so an
+    inner pass's trace survives untouched — only "score" gets replaced by
+    the outer RRF value, since `dict(doc_store[key])` copies existing keys
+    through unless labels asks this pass to add its own.
     """
     rrf_scores: dict[tuple, float] = defaultdict(float)
     doc_store: dict[tuple, dict] = {}
+    trace: dict[tuple, dict] = defaultdict(dict)
 
-    for ranked in ranked_lists:
+    for list_idx, ranked in enumerate(ranked_lists):
+        label = labels[list_idx] if labels else None
         for rank, doc in enumerate(ranked, start=1):
             key = (doc["text"], doc["source"])
             boost = (type_boost or {}).get(doc.get("chunk_type"), 1.0)
             rrf_scores[key] += boost / (rank + k)
             if key not in doc_store:
                 doc_store[key] = doc
+            if label:
+                trace[key][label] = {"score": round(float(doc.get("score", 0.0)), 4), "rank": rank}
 
     merged: list[dict] = []
     for key, rrf_score in sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True):
         entry = dict(doc_store[key])
         entry["score"] = rrf_score
+        if labels:
+            entry["retrieval_trace"] = trace.get(key, {})
+            entry["hybrid_score"] = round(rrf_score, 5)
+            entry["type_boost"] = (type_boost or {}).get(entry.get("chunk_type"), 1.0)
         merged.append(entry)
 
     return merged
@@ -225,13 +252,8 @@ def hybrid_retrieve(query: str, state, top_k: int = 8, use_jina: bool = False, s
     if not dense_hits and not bm25_hits:
         return []
 
-    ranked_lists: list[list[dict]] = []
-    if dense_hits:
-        ranked_lists.append(dense_hits)
-    if bm25_hits:
-        ranked_lists.append(bm25_hits)
-
-    fused = reciprocal_rank_fusion(ranked_lists, type_boost=type_boost)
+    ranked_lists, labels = _labeled(("dense", dense_hits), ("bm25", bm25_hits))
+    fused = reciprocal_rank_fusion(ranked_lists, type_boost=type_boost, labels=labels)
     return fused[:top_k]
 
 
@@ -272,7 +294,8 @@ def tiered_hybrid_retrieve(
                               entity_type_filter=entity_type_filter) if count > 0 else []
     bm25_up = bm25_retrieve(query, state, k=20, session_id=session_id, uploaded_only=True,
                             chunk_type_filter=chunk_type_filter, entity_type_filter=entity_type_filter)
-    tier1 = reciprocal_rank_fusion([l for l in [dense_up, bm25_up] if l], type_boost=type_boost) if (dense_up or bm25_up) else []
+    tier1_lists, tier1_labels = _labeled(("dense", dense_up), ("bm25", bm25_up))
+    tier1 = reciprocal_rank_fusion(tier1_lists, type_boost=type_boost, labels=tier1_labels) if (dense_up or bm25_up) else []
     for c in tier1:
         c["uploaded"] = True
 
@@ -289,7 +312,8 @@ def tiered_hybrid_retrieve(
                               entity_type_filter=entity_type_filter) if count > 0 else []
     bm25_kb = bm25_retrieve(query, state, k=50, kb_only=True, chunk_type_filter=chunk_type_filter,
                             entity_type_filter=entity_type_filter)
-    tier2 = reciprocal_rank_fusion([l for l in [dense_kb, bm25_kb] if l]) if (dense_kb or bm25_kb) else []
+    tier2_lists, tier2_labels = _labeled(("dense", dense_kb), ("bm25", bm25_kb))
+    tier2 = reciprocal_rank_fusion(tier2_lists, labels=tier2_labels) if (dense_kb or bm25_kb) else []
 
     if not tier1:
         return tier2[:top_k]

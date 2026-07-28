@@ -144,6 +144,19 @@ def build_source_doc(chunk: dict, redact: bool = False) -> dict:
         "pii_types": chunk.get("pii_types") or None,
         "blurry": chunk.get("blurry") or None,
         "entities": decode_entities(chunk.get("entities")) or None,
+        # "Why was this cited" trace (MMRAG-08) — retrieval_trace has
+        # per-signal {score, rank} for whichever of dense/BM25 actually
+        # surfaced this chunk (absent if only one ran, e.g. no BM25 corpus
+        # yet); hybrid_score is the RRF-fused score BEFORE reranking;
+        # rerank_score is the cross-encoder's verdict (same value "score"
+        # above already carries, repeated here so the trace panel doesn't
+        # need to know that "score" means something different post-rerank
+        # than pre-rerank). type_boost is 1.0 (omitted) unless a
+        # restrict_to_uploads query's wording matched this chunk's type.
+        "retrieval_trace": chunk.get("retrieval_trace") or None,
+        "hybrid_score": round(chunk["hybrid_score"], 5) if "hybrid_score" in chunk else None,
+        "rerank_score": round(chunk["rerank_score"], 4) if "rerank_score" in chunk else None,
+        "type_boost": chunk["type_boost"] if chunk.get("type_boost", 1.0) != 1.0 else None,
     }
 
 
