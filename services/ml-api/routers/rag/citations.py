@@ -138,6 +138,13 @@ def build_source_doc(chunk: dict, redact: bool = False) -> dict:
         "display_score": round(chunk.get("display_score", chunk.get("score", 0.0)), 4),
         "chunk_type": chunk.get("chunk_type"),
         "page": chunk.get("page"),
+        # Seconds into the source video (MMRAG-09) — only present on
+        # frame-captioned "video" chunks; absent (None) for everything else,
+        # including audio-transcript chunks, which the frontend instead
+        # locates by matching this citation's text against the transcript's
+        # own timestamped segments (a chunk here spans many spoken words, so
+        # no single timestamp would represent it as precisely).
+        "timestamp_s": chunk.get("timestamp_s"),
         "bbox": _decode_bbox(chunk.get("bbox")),
         "objects": decode_objects(chunk.get("objects")) or None,
         "number_mismatch": chunk.get("number_mismatch") or None,

@@ -140,7 +140,13 @@ def process_frame(cap, frame_idx: int, n_frames: int, duration_s: float,
         caption = f"{caption}\n\n{obj_desc}"
 
     chunk = {"text": caption, "source": source, "chunk_index": frame_idx - 1,
-             "chunk_type": "video", "page": frame_idx, "objects": objects}
+             "chunk_type": "video", "page": frame_idx, "objects": objects,
+             # Real seconds into the video (not the 1-indexed sample number
+             # above) — MMRAG-09: lets a citation for a visual-only frame
+             # (nothing spoken at that moment) jump the player to the exact
+             # instant it was captured, the same way a transcript citation
+             # already jumps to its spoken segment.
+             "timestamp_s": round(timestamp_s, 1)}
     page_summary["video"] = 1
     return [chunk], b64, page_summary
 

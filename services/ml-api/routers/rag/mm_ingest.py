@@ -9,10 +9,8 @@ upload uses — same Chroma collection, same hybrid retrieval, same citations.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
-import time
 import uuid as _uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import AsyncGenerator
@@ -22,14 +20,14 @@ from fastapi.responses import StreamingResponse
 
 from routers.rag.ingest import index_chunks
 from routers.rag.mm_csv import build_csv_chunks, looks_like_csv
-from routers.rag.pii import detect_pii_types
-from routers.rag.entities import extract_entities
 from routers.rag.mm_image import build_image_chunk, looks_like_image
 from routers.rag.mm_pdf import prepare_pdf, process_page
 from routers.rag.mm_video import (close_video, generate_chapters, looks_like_video, prepare_video,
                                   process_frame, reduced_frame_count, transcribe_video)
 from routers.rag.mm_audio import looks_like_audio, transcribe_audio_upload
 from routers.rag.mm_revision import find_revision_candidate
+from routers.rag.mm_ingest_cache import cache_get, cache_key, cache_put
+from routers.rag.mm_ingest_payload import build_done_event
 
 logger = logging.getLogger(__name__)
 
@@ -41,34 +39,6 @@ MAX_FILE_BYTES = 20 * 1024 * 1024  # 20 MB — video audio now chunks past
                                     # (see mm_video.py's _transcribe_long_audio),
                                     # so this ceiling is about upload/ingestion
                                     # cost, not a transcription hard limit
-
-# ── Tiny ingestion cache (separate from document/_cache.py — own capacity) ────
-_CACHE_TTL = 24 * 3600
-_CACHE_MAX = 4
-_cache: dict[str, tuple[float, dict]] = {}
-
-
-def _cache_key(file_bytes: bytes, embedding_mode: str) -> str:
-    digest = hashlib.sha256(file_bytes).hexdigest()
-    return f"{digest}:{embedding_mode}"
-
-
-def _cache_get(key: str) -> dict | None:
-    item = _cache.get(key)
-    if not item:
-        return None
-    ts, payload = item
-    if time.time() - ts > _CACHE_TTL:
-        del _cache[key]
-        return None
-    return payload
-
-
-def _cache_put(key: str, payload: dict) -> None:
-    _cache[key] = (time.time(), payload)
-    while len(_cache) > _CACHE_MAX:
-        oldest = min(_cache, key=lambda k: _cache[k][0])
-        del _cache[oldest]
 
 
 # ── SSE endpoint ────────────────────────────────────────────────────────────────
@@ -112,8 +82,8 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
     # slow/costly step). Indexing is always redone fresh per call — cheap,
     # and required so re-uploads land under the caller's own session_id
     # instead of replaying a stale one no query would ever match again.
-    cache_key = _cache_key(file_bytes, embedding_mode)
-    cached = _cache_get(cache_key)
+    ckey = cache_key(file_bytes, embedding_mode)
+    cached = cache_get(ckey)
     transcript_text = ""
     transcript_segments: list[dict] = []
     chapters: list[dict] = []
@@ -268,7 +238,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
 
         yield _sse({"step": "extract", "status": "done", "chunk_summary": summary})
         if chunks:
-            _cache_put(cache_key, {"chunks": chunks, "page_images": page_images, "chunk_summary": summary,
+            cache_put(ckey, {"chunks": chunks, "page_images": page_images, "chunk_summary": summary,
                                    "transcript_text": transcript_text, "transcript_segments": transcript_segments,
                                    "chapters": chapters})
 
@@ -300,60 +270,12 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         except Exception as exc:
             logger.warning("CLIP figure indexing skipped: %s", exc)
 
-    yield _sse({
-        "done": True,
-        "source": source,
-        "session_id": session_id,
-        "save_scope": save_scope,
-        "chunks_added": len(chunks),
-        "chunk_summary": summary,
-        # Which entity types (MMRAG-03: money/date/percent) appear ANYWHERE
-        # in this document, computed once here rather than folded into
-        # `summary` above — that dict already powers the "N chunks" count
-        # badge and per-page aggregation across 4 different file-type
-        # processors; keeping this separate avoids touching that surface
-        # just to answer "should the entity filter chips even show."
-        "entity_types": sorted({e["type"] for c in chunks for e in extract_entities(c.get("text", ""))}),
-        # Plain-text chunks, in order — powers a live search/highlight box
-        # in the summary panel for non-video docs. Excluded for video: its
-        # audio transcript is ALSO tagged chunk_type "text", but already has
-        # a richer, timestamped view (transcript_segments below) — this
-        # would just duplicate it under a second search box.
-        "text_segments": (
-            [{"page": c.get("page"), "text": c.get("text", "")} for c in chunks if c.get("chunk_type") == "text"]
-            if file_type not in ("video", "audio") else []
-        ),
-        "page_images": page_images,
-        # Informational only — the frontend asks the user before doing
-        # anything; nothing is ever auto-replaced.
-        "possible_revision_of": revision_candidate,
-        # Non-text chunks only (tables/figures/images) — powers a per-document
-        # summary view without a separate query. Plain text chunks are
-        # excluded: often numerous/large, and not what a "what did we
-        # extract" glance actually needs.
-        "notable_chunks": [
-            {"chunk_type": c.get("chunk_type"), "page": c.get("page"), "text": c.get("text"),
-             # Raw list, not JSON-encoded — this goes straight into the SSE
-             # response, not through Chroma (unlike ingest.py's copy, which
-             # must be scalar), so no encode/decode round-trip needed here.
-             "bbox": c.get("bbox"),
-             "objects": c.get("objects") or None,
-             "number_mismatch": c.get("number_mismatch") or None,
-             "pii_types": ",".join(detect_pii_types(c.get("text", ""))) or None,
-             "blurry": (c.get("quality") or {}).get("blurry") or None}
-            for c in chunks if c.get("chunk_type") != "text"
-        ],
-        # Full, unchunked video transcript (empty/absent for non-video
-        # uploads or a silent/failed-audio video) — for reading end-to-end
-        # in the summary view and downloading, separate from the chunked
-        # copy used for retrieval.
-        "transcript": transcript_text or None,
-        "transcript_segments": transcript_segments,
-        # Auto-generated chapter markers (empty for non-video uploads, a
-        # short/silent transcript, or if the one extra LLM call failed —
-        # never blocks ingestion on this being unavailable).
-        "chapters": chapters,
-    })
+    yield _sse(build_done_event(
+        source=source, session_id=session_id, save_scope=save_scope, chunks=chunks,
+        summary=summary, file_type=file_type, page_images=page_images,
+        revision_candidate=revision_candidate, transcript_text=transcript_text,
+        transcript_segments=transcript_segments, chapters=chapters,
+    ))
 
 
 @router.post("/mm-ingest")

@@ -1,0 +1,69 @@
+"""Builds the final SSE 'done' event payload for mm_ingest.py — split out
+to stay under the project's file-length limit."""
+from __future__ import annotations
+
+from routers.rag.pii import detect_pii_types
+from routers.rag.entities import extract_entities
+
+
+def build_done_event(*, source: str, session_id: str, save_scope: str, chunks: list[dict],
+                     summary: dict, file_type: str, page_images: list[str],
+                     revision_candidate: dict | None, transcript_text: str,
+                     transcript_segments: list[dict], chapters: list[dict]) -> dict:
+    return {
+        "done": True,
+        "source": source,
+        "session_id": session_id,
+        "save_scope": save_scope,
+        "chunks_added": len(chunks),
+        "chunk_summary": summary,
+        # Which entity types (MMRAG-03: money/date/percent) appear ANYWHERE
+        # in this document, computed once here rather than folded into
+        # `summary` above — that dict already powers the "N chunks" count
+        # badge and per-page aggregation across 4 different file-type
+        # processors; keeping this separate avoids touching that surface
+        # just to answer "should the entity filter chips even show."
+        "entity_types": sorted({e["type"] for c in chunks for e in extract_entities(c.get("text", ""))}),
+        # Plain-text chunks, in order — powers a live search/highlight box
+        # in the summary panel for non-video docs. Excluded for video: its
+        # audio transcript is ALSO tagged chunk_type "text", but already has
+        # a richer, timestamped view (transcript_segments below) — this
+        # would just duplicate it under a second search box.
+        "text_segments": (
+            [{"page": c.get("page"), "text": c.get("text", "")} for c in chunks if c.get("chunk_type") == "text"]
+            if file_type not in ("video", "audio") else []
+        ),
+        "page_images": page_images,
+        # Informational only — the frontend asks the user before doing
+        # anything; nothing is ever auto-replaced.
+        "possible_revision_of": revision_candidate,
+        # Non-text chunks only (tables/figures/images) — powers a per-document
+        # summary view without a separate query. Plain text chunks are
+        # excluded: often numerous/large, and not what a "what did we
+        # extract" glance actually needs.
+        "notable_chunks": [
+            {"chunk_type": c.get("chunk_type"), "page": c.get("page"), "text": c.get("text"),
+             # Real seconds into the video for a frame chunk (MMRAG-09) —
+             # None for every other chunk type.
+             "timestamp_s": c.get("timestamp_s"),
+             # Raw list, not JSON-encoded — this goes straight into the SSE
+             # response, not through Chroma (unlike ingest.py's copy, which
+             # must be scalar), so no encode/decode round-trip needed here.
+             "bbox": c.get("bbox"),
+             "objects": c.get("objects") or None,
+             "number_mismatch": c.get("number_mismatch") or None,
+             "pii_types": ",".join(detect_pii_types(c.get("text", ""))) or None,
+             "blurry": (c.get("quality") or {}).get("blurry") or None}
+            for c in chunks if c.get("chunk_type") != "text"
+        ],
+        # Full, unchunked video transcript (empty/absent for non-video
+        # uploads or a silent/failed-audio video) — for reading end-to-end
+        # in the summary view and downloading, separate from the chunked
+        # copy used for retrieval.
+        "transcript": transcript_text or None,
+        "transcript_segments": transcript_segments,
+        # Auto-generated chapter markers (empty for non-video uploads, a
+        # short/silent transcript, or if the one extra LLM call failed —
+        # never blocks ingestion on this being unavailable).
+        "chapters": chapters,
+    }

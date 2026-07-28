@@ -126,6 +126,9 @@ def index_chunks(chunks: list[dict], state, uploaded: bool = False, session_id: 
         ents = extract_entities(c["text"])
         metas.append({
             "chunk_type": c.get("chunk_type"), "page": c.get("page"),
+            # Seconds into the source video for a frame chunk (MMRAG-09) —
+            # None for every other chunk type/document.
+            "timestamp_s": c.get("timestamp_s"),
             # Chroma metadata must be scalar — bbox is a [x,y,w,h] list
             # (MMRAG-07), so it's JSON-encoded here and decoded back in
             # citations.py, the same pattern encode_entities() already uses.
