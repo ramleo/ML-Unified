@@ -41,17 +41,34 @@ def _split_sentences(text: str) -> list[str]:
 def score_groundedness(answer: str, chunks: list[dict], embed_fn: Callable[[list[str]], list]) -> dict | None:
     """Returns {"score": float, "level": "high"|"medium"|"low",
     "ungrounded_sentences": list[str]}, or None if there's nothing to score
-    (no answer text, or no chunks were retrieved to check against)."""
+    (no answer text, or no chunks were retrieved to check against).
+
+    Matches the answer side's sentence-level granularity on the SOURCE side
+    too — each chunk is split into sentences and embedded individually,
+    not embedded whole. Real bug found live: a car photo's chunk mixed a
+    long appearance description ("teal-colored SUV... reads 'DATSUN'") with
+    one short trailing spatial fact ("Car — spans most of the frame").
+    Embedding that whole chunk as ONE vector averaged the spatial fact away
+    under the longer, unrelated appearance text, so the correct answer "The
+    car spans most of the frame" scored well below a bicycle photo whose
+    chunk was mostly spatial content already (multiple detected objects,
+    most naming a side) and so diluted much less. Splitting the chunk into
+    sentences lets a short factual answer match its one relevant source
+    sentence directly, instead of an entire diluted paragraph."""
     sentences = _split_sentences(answer)
     if not sentences or not chunks:
         return None
 
-    chunk_texts = [c.get("text", "") for c in chunks if c.get("text", "").strip()]
-    if not chunk_texts:
+    chunk_sentences: list[str] = []
+    for c in chunks:
+        text = c.get("text", "").strip()
+        if text:
+            chunk_sentences.extend(_split_sentences(text) or [text])
+    if not chunk_sentences:
         return None
 
     sentence_embs = embed_fn(sentences)
-    chunk_embs = embed_fn(chunk_texts)
+    chunk_embs = embed_fn(chunk_sentences)
 
     ungrounded: list[str] = []
     per_sentence_max: list[float] = []
