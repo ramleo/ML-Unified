@@ -24,6 +24,7 @@ from routers.rag.mm_image import build_image_chunk, looks_like_image
 from routers.rag.mm_pdf import prepare_pdf, process_page
 from routers.rag.mm_video import (close_video, generate_chapters, looks_like_video, prepare_video,
                                   process_frame, reduced_frame_count, transcribe_video)
+from routers.rag.mm_scenecut import detect_scene_cut_timestamps
 from routers.rag.mm_audio import looks_like_audio, transcribe_audio_upload
 from routers.rag.mm_revision import find_revision_candidate
 from routers.rag.mm_ingest_cache import cache_get, cache_key, cache_put
@@ -185,17 +186,25 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
 
                 n_frames = reduced_frame_count(n_frames, transcript_chunks)
 
-                yield _sse({"step": "extract", "status": "running", "page": 0, "pages": n_frames})
-                for frame_idx in range(1, n_frames + 1):
+                # MMRAG-11: prefer sampling at real scene changes (FFT
+                # spectral diffing) over blind uniform spacing — falls back
+                # to uniform on its own when the video shows no distinct
+                # scene structure (e.g. a static talking-head shot).
+                sample_times = await loop.run_in_executor(
+                    _executor, lambda: detect_scene_cut_timestamps(cap, duration_s, n_frames)
+                )
+
+                yield _sse({"step": "extract", "status": "running", "page": 0, "pages": len(sample_times)})
+                for frame_idx, ts in enumerate(sample_times, start=1):
                     frame_chunks, b64, page_summary = await loop.run_in_executor(
-                        _executor, lambda fi=frame_idx: process_frame(cap, fi, n_frames, duration_s, source)
+                        _executor, lambda fi=frame_idx, t=ts: process_frame(cap, t, fi, source)
                     )
                     chunks.extend(frame_chunks)
                     if b64:
                         page_images.append(b64)
                     for k in summary:
                         summary[k] += page_summary[k]
-                    yield _sse({"step": "extract", "status": "running", "page": frame_idx, "pages": n_frames})
+                    yield _sse({"step": "extract", "status": "running", "page": frame_idx, "pages": len(sample_times)})
             except Exception as exc:
                 logger.error("Multimodal ingestion failed: %s", exc)
                 yield _sse({"error": f"Failed to process file: {exc}"})

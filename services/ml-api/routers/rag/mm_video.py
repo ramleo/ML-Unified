@@ -98,10 +98,12 @@ def prepare_video(file_bytes: bytes):
     return cap, tmp.name, n_frames, duration_s
 
 
-def process_frame(cap, frame_idx: int, n_frames: int, duration_s: float,
-                  source: str) -> tuple[list[dict], str, dict]:
-    """Seek to and caption ONE evenly-spaced sampled frame (1-indexed).
-    Returns (chunks, frame_b64, page_summary).
+def process_frame(cap, timestamp_s: float, frame_idx: int, source: str) -> tuple[list[dict], str, dict]:
+    """Seek to and caption ONE sampled frame at the given timestamp
+    (frame_idx is just its 1-indexed display/citation order, no longer used
+    to derive the timestamp itself — the caller decides WHERE to sample,
+    via either uniform spacing or FFT scene-cut detection (MMRAG-11), see
+    mm_scenecut.py). Returns (chunks, frame_b64, page_summary).
 
     Seeks by TIMESTAMP (CAP_PROP_POS_MSEC), not frame count
     (CAP_PROP_POS_FRAMES) — observed live: frame-index seeking on a
@@ -111,8 +113,7 @@ def process_frame(cap, frame_idx: int, n_frames: int, duration_s: float,
     much more reliable fix for this class of OpenCV/ffmpeg behavior."""
     import cv2
 
-    target_ms = (frame_idx - 1) * (duration_s * 1000 / n_frames) if duration_s > 0 else 0
-    cap.set(cv2.CAP_PROP_POS_MSEC, target_ms)
+    cap.set(cv2.CAP_PROP_POS_MSEC, timestamp_s * 1000)
     ok, frame = cap.read()
     page_summary = {"text": 0, "table": 0, "figure": 0, "video": 0}
     if not ok:
@@ -123,7 +124,6 @@ def process_frame(cap, frame_idx: int, n_frames: int, duration_s: float,
         return [], "", page_summary
     b64 = base64.b64encode(buf.tobytes()).decode()
 
-    timestamp_s = target_ms / 1000
     caption = _caption_frame(b64, timestamp_s)
     if not caption:
         return [], b64, page_summary
