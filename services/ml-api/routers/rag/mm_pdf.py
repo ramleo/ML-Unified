@@ -50,45 +50,6 @@ def _norm_box(page, x0: float, y0: float, x1: float, y1: float) -> list[float]:
             round((x1 - x0) / w, 4), round((y1 - y0) / h, 4)]
 
 
-def _visual_bbox(page) -> list[float] | None:
-    """Bbox (normalized) of the largest raster image large enough to be an
-    actual chart/photo/diagram — None if the page has nothing qualifying.
-    Also doubles as "is this page visually dense" (a page is captioned only
-    when this returns non-None) — even a text-heavy page (e.g. a resume with
-    a text sidebar plus a timeline graphic) gets captioned, since get_text()
-    extracts nothing from the image region. Deliberately checks ONLY
-    get_images() (real embedded raster images), not get_drawings() (vector
-    paths) — a plain color-fill rectangle used as a section-header
-    banner/divider is a vector drawing that can easily exceed the area
-    threshold while being pure decoration; real timeline/chart graphics come
-    in as raster images. Observed live: a resume's solid-color "PERSONAL
-    DETAILS" banner was triggering a "figure" caption that said "this is a
-    text document, not a visual" — dropping get_drawings() removes that
-    false positive."""
-    try:
-        page_area = page.rect.width * page.rect.height
-        if page_area <= 0:
-            return None
-
-        best_bbox, best_area = None, 0.0
-        for img in page.get_images(full=True):
-            try:
-                bbox = page.get_image_bbox(img)
-            except Exception:
-                continue
-            if not bbox:
-                continue
-            area = bbox.width * bbox.height
-            if area / page_area >= _MIN_VISUAL_AREA_RATIO and area > best_area:
-                best_bbox, best_area = bbox, area
-
-        if best_bbox is None:
-            return None
-        return _norm_box(page, best_bbox.x0, best_bbox.y0, best_bbox.x1, best_bbox.y1)
-    except Exception:
-        return None
-
-
 _REGION_OVERLAP_MERGE_RATIO = 0.5  # two raster images overlapping more than
                                     # this fraction of the smaller one's area
                                     # are the same real region (duplicate/
@@ -96,6 +57,24 @@ _REGION_OVERLAP_MERGE_RATIO = 0.5  # two raster images overlapping more than
                                     # spot) — merged into one, not captioned twice
 _MAX_REGIONS_PER_PAGE = 3           # bounds vision-call cost on a page with
                                     # many qualifying images
+_CLUSTER_GAP_PT = 30.0              # max edge-to-edge gap between two
+                                    # images for them to count as one visual
+                                    # group (e.g. a chart with a column of
+                                    # small skill icons right beside it, or
+                                    # a row of small logos in a career
+                                    # timeline) — small enough that unrelated
+                                    # icons/bullets scattered far down a
+                                    # page (typically 100+pt apart) never get
+                                    # pulled together. Tuned against a real
+                                    # resume: a donut chart and its adjacent
+                                    # skill-icon column, clearly one section,
+                                    # measured a 21pt real gap — 20pt missed
+                                    # it, 30pt covers it with margin
+_MIN_CLUSTER_SIZE = 3               # need at least this many small images
+                                    # grouped together before treating the
+                                    # group as one meaningful region — 2
+                                    # nearby small icons could still just be
+                                    # decoration, not a real graphic
 
 
 def _rect_overlap_ratio(a, b) -> float:
@@ -108,29 +87,95 @@ def _rect_overlap_ratio(a, b) -> float:
     return inter / smaller if smaller > 0 else 0.0
 
 
+def _rect_gap(a, b) -> float:
+    """Real edge-to-edge gap between two rects — 0 if they overlap on both
+    axes. (An expand-one-side-then-check-intersects approach undercounts:
+    expanding only `a` by `gap` and checking against raw `b` only actually
+    tolerates a `gap`-sized separation, not `gap`-or-less as intended —
+    caught live: a real 21pt gap wasn't merging under a 20pt threshold.)"""
+    dx = max(a.x0 - b.x1, b.x0 - a.x1, 0.0)
+    dy = max(a.y0 - b.y1, b.y0 - a.y1, 0.0)
+    return max(dx, dy)
+
+
+def _cluster_images(rects: list, gap: float) -> list[list]:
+    """Union-find via pairwise proximity, not a fixed grid — handles
+    irregular layouts: groups rects into connected components where any
+    two members within `gap` of each other end up in the same cluster,
+    including transitively through a chain of others."""
+    clusters: list[list] = []
+    for r in rects:
+        target = next((c for c in clusters if any(_rect_gap(r, m) <= gap for m in c)), None)
+        if target is not None:
+            target.append(r)
+        else:
+            clusters.append([r])
+
+    merged = True
+    while merged:
+        merged = False
+        for i in range(len(clusters)):
+            for j in range(i + 1, len(clusters)):
+                if any(_rect_gap(a, b) <= gap for a in clusters[i] for b in clusters[j]):
+                    clusters[i].extend(clusters[j])
+                    del clusters[j]
+                    merged = True
+                    break
+            if merged:
+                break
+    return clusters
+
+
 def _visual_regions(page, max_regions: int = _MAX_REGIONS_PER_PAGE) -> list:
-    """Distinct, large-enough raster-image regions on the page (real Rect
-    objects), largest-first, capped at max_regions, with heavily-
-    overlapping duplicates merged away. MMRAG-13: when a page has 2+ of
-    these, each gets its own focused caption instead of _visual_bbox's
-    single whole-page one — a chart and an unrelated logo on the same page
-    shouldn't get blended into one description. _visual_bbox (single
-    largest) stays the "is this page visually dense at all" gate and the
-    caption path for the overwhelmingly common single-figure page, so that
-    case's caption quality (which sees the whole page, not just a tight
-    crop — real surrounding context like a chart's title) is unchanged."""
+    """Distinct, meaningful visual regions on the page (real Rect objects),
+    largest-first, capped at max_regions. A single unified proximity
+    clustering pass over EVERY raster image on the page (not two separate
+    passes for "big" vs. "small" images) — a qualifying big image and a
+    small image sitting right next to it (e.g. a donut chart with a
+    column of small skill icons beside it, part of the same visual) merge
+    into ONE region, not two; a cluster of nearby small images with
+    nothing large nearby (e.g. a career-timeline row of ~6 small company
+    logos, each individually below _MIN_VISUAL_AREA_RATIO) still forms its
+    own region if there are enough of them. Observed live: doing this as
+    two separate passes (big images alone, small images alone) wrongly
+    split a resume's donut chart and its adjacent skill-icon column into
+    two separately-captioned regions, even though they're clearly one
+    section — unifying the clustering fixed it, merging them back into one.
+    A cluster qualifies as a region if it contains any single image
+    ≥_MIN_VISUAL_AREA_RATIO on its own, OR has ≥_MIN_CLUSTER_SIZE members.
+
+    Deliberately checks ONLY get_images() (real embedded raster images),
+    not get_drawings() (vector paths) — a plain color-fill rectangle used
+    as a section-header banner/divider is a vector drawing that can easily
+    exceed the area threshold while being pure decoration; real
+    chart/timeline graphics come in as raster images. Observed live: a
+    resume's solid-color "PERSONAL DETAILS" banner was triggering a
+    "figure" caption that said "this is a text document, not a visual" —
+    dropping get_drawings() removes that false positive."""
     try:
         page_area = page.rect.width * page.rect.height
         if page_area <= 0:
             return []
-        candidates = []
+        rects = []
         for img in page.get_images(full=True):
             try:
                 bbox = page.get_image_bbox(img)
             except Exception:
                 continue
-            if bbox and bbox.width * bbox.height / page_area >= _MIN_VISUAL_AREA_RATIO:
-                candidates.append(bbox)
+            if bbox:
+                rects.append(bbox)
+
+        candidates = []
+        for cluster in _cluster_images(rects, _CLUSTER_GAP_PT):
+            has_big = any(r.width * r.height / page_area >= _MIN_VISUAL_AREA_RATIO for r in cluster)
+            if not has_big and len(cluster) < _MIN_CLUSTER_SIZE:
+                continue
+            import fitz
+            candidates.append(fitz.Rect(
+                min(r.x0 for r in cluster), min(r.y0 for r in cluster),
+                max(r.x1 for r in cluster), max(r.y1 for r in cluster),
+            ))
+
         candidates.sort(key=lambda r: -(r.width * r.height))
         regions: list = []
         for c in candidates:
@@ -247,18 +292,24 @@ def process_page(doc, page_num: int, source: str) -> tuple[list[dict], str, dict
                 chunk["number_mismatch"] = True
             page_chunks.append(chunk)
             page_summary["figure"] += 1
-    else:
-        visual_bbox = _visual_bbox(page)
-        if visual_bbox is not None:
-            caption, mismatch = _caption_page(b64)
-            if caption:
-                chunk = {"text": caption, "source": source, "chunk_index": len(page_chunks),
-                         "chunk_type": "figure", "page": page_num, "quality": blur_score(b64),
-                         "bbox": visual_bbox}
-                if mismatch:
-                    chunk["number_mismatch"] = True
-                page_chunks.append(chunk)
-                page_summary["figure"] = 1
+    elif len(regions) == 1:
+        # Exactly one qualifying visual (whether a single standalone image
+        # or one cluster of small ones, e.g. a timeline row with nothing
+        # else competing for attention on the page) — caption the WHOLE
+        # page, not a tight crop, so real surrounding context (a chart's
+        # title sitting just outside its own raster bbox, or date labels
+        # near a timeline) isn't lost. Unchanged from this feature's
+        # original single-figure behavior.
+        rect = regions[0]
+        caption, mismatch = _caption_page(b64)
+        if caption:
+            chunk = {"text": caption, "source": source, "chunk_index": len(page_chunks),
+                     "chunk_type": "figure", "page": page_num, "quality": blur_score(b64),
+                     "bbox": _norm_box(page, rect.x0, rect.y0, rect.x1, rect.y1)}
+            if mismatch:
+                chunk["number_mismatch"] = True
+            page_chunks.append(chunk)
+            page_summary["figure"] = 1
 
     return page_chunks, b64, page_summary
 
