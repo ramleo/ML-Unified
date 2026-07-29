@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.blur import blur_score
-from routers.rag.mm_caption import clean_ocr_text, extract_caption, split_pipe_tables
+from routers.rag.mm_caption import (build_table_markdown, clean_ocr_text, extract_caption,
+                                    extract_chart_data, split_pipe_tables)
 from routers.rag.mm_objects import describe_objects, detect_objects
 
 _OCR_TEXT_CAP = 2000
@@ -25,8 +26,14 @@ def _image_prompt(terse: bool = False) -> str:
     return (
         "Describe this image for someone who cannot see it: main subject, "
         "setting, colors, and any visible text/numbers (transcribe exactly). "
-        "Be factual, 3-4 sentences. "
-        'Return JSON only: {"caption": "<your description>"}.'
+        "Be factual, 3-4 sentences. If this is a bar, line, or pie chart with "
+        "genuinely identifiable numeric values — whether printed as data "
+        "labels, or readable by judging bar heights/point positions against "
+        "the axis scale — ALSO extract them as rows: one [category, value] "
+        "pair per bar/point/slice. "
+        'Return JSON only: {"caption": "<your description>", "chart_type": '
+        '"bar"|"line"|"pie"|"none", "chart_data": [["<category>", "<value>"], '
+        '...] (empty list if not a chart with extractable values)}.'
     )
 
 
@@ -60,7 +67,13 @@ def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[
     img.save(buf, format="PNG", optimize=True)
     b64 = base64.b64encode(buf.getvalue()).decode()
 
-    caption = extract_caption(_vision_cascade_raw(b64, _image_prompt()), 800)
+    raw = _vision_cascade_raw(b64, _image_prompt())
+    caption = extract_caption(raw, 800)
+    # MMRAG-14: chart-data extraction only from the main (non-terse) prompt
+    # — the terser fallback below drops the ask entirely to keep leaving a
+    # token-exhausted reasoning model as little to do as possible, same
+    # reasoning that ask is terse in the first place.
+    chart = extract_chart_data(raw)
     if not caption:
         # First attempt likely got cut off mid-reasoning before reaching the
         # JSON — one bounded retry with a terser ask that leaves less room
@@ -102,6 +115,18 @@ def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[
     for tbl in table_blocks:
         chunks.append({"text": tbl, "source": source, "chunk_index": len(chunks),
                        "chunk_type": "table", "page": 1})
+    chart_table_count = 0
+    if chart:
+        # MMRAG-14: same shape a real extracted table gets — RagTableView.tsx
+        # already renders/plots/exports any "table"-typed chunk, no frontend
+        # change needed to treat this differently from an in-document table.
+        chart_type, rows = chart
+        table_md = build_table_markdown([["Category", "Value"], *rows])
+        chunks.append({"text": f"Data extracted from a {chart_type} chart:\n\n{table_md}",
+                       "source": source, "chunk_index": len(chunks),
+                       "chunk_type": "table", "page": 1})
+        chart_table_count = 1
 
-    summary = {"text": 0, "table": len(table_blocks), "figure": 0, "image": 1 if caption else 0}
+    summary = {"text": 0, "table": len(table_blocks) + chart_table_count, "figure": 0,
+              "image": 1 if caption else 0}
     return chunks, [b64], summary

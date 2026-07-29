@@ -9,7 +9,8 @@ from __future__ import annotations
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.blur import blur_score
 from routers.rag.ingest import chunk_document
-from routers.rag.mm_caption import clean_ocr_text, extract_caption, numbers_disagree
+from routers.rag.mm_caption import (build_table_markdown, clean_ocr_text, extract_caption,
+                                    extract_chart_data, numbers_disagree)
 
 _OCR_TEXT_CAP = 2000  # chars; dedicated OCR reads exact text (e.g. every date
                       # in a dense timeline graphic) that a short prose caption
@@ -203,24 +204,34 @@ def _caption_prompt() -> str:
         "chart, diagram, photo, or other visual content rather than plain text. "
         "Write a factual 2-4 sentence description for someone who cannot see "
         "it: what type of visual it is, what it shows, and transcribe any "
-        "axis labels, legend values, or numbers that are visible. "
-        'Return JSON only: {"caption": "<your description>"}.'
+        "axis labels, legend values, or numbers that are visible. If this is "
+        "a bar, line, or pie chart with genuinely identifiable numeric "
+        "values — whether printed as data labels, or readable by judging bar "
+        "heights/point positions against the axis scale — ALSO extract them "
+        "as rows: one [category, value] pair per bar/point/slice. "
+        'Return JSON only: {"caption": "<your description>", "chart_type": '
+        '"bar"|"line"|"pie"|"none", "chart_data": [["<category>", "<value>"], '
+        '...] (empty list if not a chart with extractable values)}.'
     )
 
 
-def _caption_page(b64: str) -> tuple[str, bool]:
-    """Returns (chunk_text, number_mismatch) — mismatch flags when the
-    caption and the OCR pass cite disjoint numbers for the same figure, a
-    real sign one of the two misread a value rather than a generic caveat."""
-    caption = extract_caption(_vision_cascade_raw(b64, _caption_prompt()), 500)
+def _caption_page(b64: str) -> tuple[str, bool, tuple[str, list[list[str]]] | None]:
+    """Returns (chunk_text, number_mismatch, chart) — mismatch flags when
+    the caption and the OCR pass cite disjoint numbers for the same
+    figure, a real sign one of the two misread a value rather than a
+    generic caveat. chart is (chart_type, rows) when the vision model
+    identified genuine extractable chart values (MMRAG-14), else None."""
+    raw = _vision_cascade_raw(b64, _caption_prompt())
+    caption = extract_caption(raw, 500)
+    chart = extract_chart_data(raw)
     ocr_md, _ = mistral_ocr_pages([b64])
     ocr_text = clean_ocr_text(ocr_md)[:_OCR_TEXT_CAP]
     mismatch = numbers_disagree(caption, ocr_text)
     if not ocr_text:
-        return caption, False
+        return caption, False, chart
     if not caption:
-        return ocr_text, False
-    return f"{caption}\n\nExact text from image (OCR):\n{ocr_text}", mismatch
+        return ocr_text, False, chart
+    return f"{caption}\n\nExact text from image (OCR):\n{ocr_text}", mismatch, chart
 
 
 # ── Per-page (streaming path) ───────────────────────────────────────────────────
@@ -233,14 +244,18 @@ def prepare_pdf(file_bytes: bytes):
     return doc, n_pages
 
 
-def _table_markdown(rows: list[list]) -> str:
-    lines: list[str] = []
-    for j, row in enumerate(rows):
-        cells = [str(c or "").strip().replace("|", " ") for c in row]
-        lines.append("| " + " | ".join(cells) + " |")
-        if j == 0:
-            lines.append("|" + "|".join(["---"] * len(row)) + "|")
-    return "\n".join(lines)
+def _chart_table_chunk(chart, source: str, page_num: int, bbox, chunk_index: int) -> dict:
+    """MMRAG-14: a chart's extracted numeric values as their own 'table'
+    chunk (not folded into the figure's prose text) — same chunk_type real
+    PDF-extracted tables use, so it gets the exact same citation treatment
+    for free: RagTableView.tsx's CSV download and mini bar-chart plot,
+    with no frontend change needed to recognize this came from a chart
+    rather than an actual in-document table."""
+    chart_type, rows = chart
+    table_md = build_table_markdown([["Category", "Value"], *rows])
+    return {"text": f"Data extracted from a {chart_type} chart:\n\n{table_md}",
+            "source": source, "chunk_index": chunk_index,
+            "chunk_type": "table", "page": page_num, "bbox": bbox}
 
 
 def process_page(doc, page_num: int, source: str) -> tuple[list[dict], str, dict]:
@@ -270,7 +285,7 @@ def process_page(doc, page_num: int, source: str) -> tuple[list[dict], str, dict
         # tab.bbox is a plain 4-tuple in some PyMuPDF versions, a Rect-like
         # object with .x0/.y0/.x1/.y1 in others — index access works for both.
         x0, y0, x1, y1 = tab.bbox[0], tab.bbox[1], tab.bbox[2], tab.bbox[3]
-        page_chunks.append({"text": _table_markdown(rows), "source": source, "chunk_index": len(page_chunks),
+        page_chunks.append({"text": build_table_markdown(rows), "source": source, "chunk_index": len(page_chunks),
                             "chunk_type": "table", "page": page_num,
                             "bbox": _norm_box(page, x0, y0, x1, y1)})
         page_summary["table"] += 1
@@ -282,16 +297,20 @@ def process_page(doc, page_num: int, source: str) -> tuple[list[dict], str, dict
         # blended whole-page description.
         for rect in regions:
             region_b64 = _crop_region_b64(page, rect)
-            caption, mismatch = _caption_page(region_b64)
+            caption, mismatch, chart = _caption_page(region_b64)
             if not caption:
                 continue
+            bbox = _norm_box(page, rect.x0, rect.y0, rect.x1, rect.y1)
             chunk = {"text": caption, "source": source, "chunk_index": len(page_chunks),
                      "chunk_type": "figure", "page": page_num, "quality": blur_score(region_b64),
-                     "bbox": _norm_box(page, rect.x0, rect.y0, rect.x1, rect.y1)}
+                     "bbox": bbox}
             if mismatch:
                 chunk["number_mismatch"] = True
             page_chunks.append(chunk)
             page_summary["figure"] += 1
+            if chart:
+                page_chunks.append(_chart_table_chunk(chart, source, page_num, bbox, len(page_chunks)))
+                page_summary["table"] += 1
     elif len(regions) == 1:
         # Exactly one qualifying visual (whether a single standalone image
         # or one cluster of small ones, e.g. a timeline row with nothing
@@ -301,15 +320,19 @@ def process_page(doc, page_num: int, source: str) -> tuple[list[dict], str, dict
         # near a timeline) isn't lost. Unchanged from this feature's
         # original single-figure behavior.
         rect = regions[0]
-        caption, mismatch = _caption_page(b64)
+        caption, mismatch, chart = _caption_page(b64)
         if caption:
+            bbox = _norm_box(page, rect.x0, rect.y0, rect.x1, rect.y1)
             chunk = {"text": caption, "source": source, "chunk_index": len(page_chunks),
                      "chunk_type": "figure", "page": page_num, "quality": blur_score(b64),
-                     "bbox": _norm_box(page, rect.x0, rect.y0, rect.x1, rect.y1)}
+                     "bbox": bbox}
             if mismatch:
                 chunk["number_mismatch"] = True
             page_chunks.append(chunk)
             page_summary["figure"] = 1
+            if chart:
+                page_chunks.append(_chart_table_chunk(chart, source, page_num, bbox, len(page_chunks)))
+                page_summary["table"] += 1
 
     return page_chunks, b64, page_summary
 

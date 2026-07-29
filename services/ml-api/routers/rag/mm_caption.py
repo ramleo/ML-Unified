@@ -80,6 +80,57 @@ def extract_caption(raw: str, fallback_len: int) -> str:
     return fenced[:fallback_len]
 
 
+def build_table_markdown(rows: list[list]) -> str:
+    """A pipe-table string from a header row + data rows — shared by real
+    PDF-extracted tables (mm_pdf.py) and MMRAG-14's chart-data extraction
+    below, so both land on the exact markdown shape RagTableView.tsx
+    already knows how to render/plot/export, without the frontend needing
+    to know these came from two different places."""
+    lines: list[str] = []
+    for j, row in enumerate(rows):
+        cells = [str(c or "").strip().replace("|", " ") for c in row]
+        lines.append("| " + " | ".join(cells) + " |")
+        if j == 0:
+            lines.append("|" + "|".join(["---"] * len(row)) + "|")
+    return "\n".join(lines)
+
+
+# MMRAG-14: a chart's prose caption ("revenue grew steadily across quarters")
+# is often not enough to actually answer a numeric question ("what was Q3
+# revenue") — the vision model is asked (via _caption_prompt/_image_prompt)
+# to ALSO read the chart's actual values, whether they're printed as data
+# labels or have to be read off bar heights/positions against the axis
+# scale, as a second field in the same JSON response (no extra vision
+# call). Parsed independently of extract_caption above — a chart_data
+# field breaking shouldn't cost the caption, and vice versa.
+def extract_chart_data(raw: str) -> tuple[str, list[list[str]]] | None:
+    """Returns (chart_type, rows) — rows as [[category, value], ...] — or
+    None whenever there's nothing genuinely extractable (a photo/diagram/
+    logo, a model that didn't include the field, or fewer than 2 usable
+    rows). Never fabricates a table where the visual isn't actually a
+    chart with real values."""
+    raw = strip_thinking(raw)
+    if not raw.strip():
+        return None
+    fenced = _FENCE_RE.sub("", raw.strip()).strip()
+    start, end = fenced.find("{"), fenced.rfind("}") + 1
+    if start < 0 or end <= start:
+        return None
+    try:
+        parsed = json.loads(fenced[start:end])
+    except Exception:
+        return None
+    raw_rows = parsed.get("chart_data")
+    if not isinstance(raw_rows, list):
+        return None
+    clean_rows = [[str(r[0]).strip(), str(r[1]).strip()] for r in raw_rows
+                  if isinstance(r, (list, tuple)) and len(r) >= 2]
+    if len(clean_rows) < 2:
+        return None
+    chart_type = str(parsed.get("chart_type") or "chart").strip() or "chart"
+    return chart_type, clean_rows
+
+
 def clean_ocr_text(md: str) -> str:
     """Mistral OCR returns markdown image-reference placeholders (e.g.
     "![img-0.jpeg](img-0.jpeg)") — sometimes ONLY that, no real transcribed
