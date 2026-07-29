@@ -26,12 +26,20 @@ _VISUAL_CHUNK_TYPES = {"video", "figure", "image"}
 
 
 def _has_multiple_visual_chunks_per_source(chunks: list[dict]) -> bool:
-    counts: dict[str, int] = {}
+    """True when a source contributes 2+ visual chunks from DIFFERENT
+    pages/frames — genuinely ambiguous whether they show the same subject
+    (see the caveat this gates, below). Keyed on (source, page), not just
+    source: MMRAG-13 region-level captioning can put 2+ figure chunks on
+    the SAME page (e.g. a chart and an unrelated logo) — those are
+    deliberately distinct regions by construction, not an ambiguous "is
+    this the same subject captioned twice" case, so they shouldn't trigger
+    this caveat the way two different video frames or PDF pages would."""
+    pages_by_source: dict[str, set] = {}
     for c in chunks:
         if c.get("chunk_type") in _VISUAL_CHUNK_TYPES:
             src = c.get("source", "")
-            counts[src] = counts.get(src, 0) + 1
-    return any(n >= 2 for n in counts.values())
+            pages_by_source.setdefault(src, set()).add(c.get("page"))
+    return any(len(pages) >= 2 for pages in pages_by_source.values())
 
 
 _ANSWER_LENGTH_INSTRUCTIONS = {

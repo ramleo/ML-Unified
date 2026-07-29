@@ -89,6 +89,69 @@ def _visual_bbox(page) -> list[float] | None:
         return None
 
 
+_REGION_OVERLAP_MERGE_RATIO = 0.5  # two raster images overlapping more than
+                                    # this fraction of the smaller one's area
+                                    # are the same real region (duplicate/
+                                    # layered embedded images at the same
+                                    # spot) — merged into one, not captioned twice
+_MAX_REGIONS_PER_PAGE = 3           # bounds vision-call cost on a page with
+                                    # many qualifying images
+
+
+def _rect_overlap_ratio(a, b) -> float:
+    ix0, iy0 = max(a.x0, b.x0), max(a.y0, b.y0)
+    ix1, iy1 = min(a.x1, b.x1), min(a.y1, b.y1)
+    if ix1 <= ix0 or iy1 <= iy0:
+        return 0.0
+    inter = (ix1 - ix0) * (iy1 - iy0)
+    smaller = min(a.width * a.height, b.width * b.height)
+    return inter / smaller if smaller > 0 else 0.0
+
+
+def _visual_regions(page, max_regions: int = _MAX_REGIONS_PER_PAGE) -> list:
+    """Distinct, large-enough raster-image regions on the page (real Rect
+    objects), largest-first, capped at max_regions, with heavily-
+    overlapping duplicates merged away. MMRAG-13: when a page has 2+ of
+    these, each gets its own focused caption instead of _visual_bbox's
+    single whole-page one — a chart and an unrelated logo on the same page
+    shouldn't get blended into one description. _visual_bbox (single
+    largest) stays the "is this page visually dense at all" gate and the
+    caption path for the overwhelmingly common single-figure page, so that
+    case's caption quality (which sees the whole page, not just a tight
+    crop — real surrounding context like a chart's title) is unchanged."""
+    try:
+        page_area = page.rect.width * page.rect.height
+        if page_area <= 0:
+            return []
+        candidates = []
+        for img in page.get_images(full=True):
+            try:
+                bbox = page.get_image_bbox(img)
+            except Exception:
+                continue
+            if bbox and bbox.width * bbox.height / page_area >= _MIN_VISUAL_AREA_RATIO:
+                candidates.append(bbox)
+        candidates.sort(key=lambda r: -(r.width * r.height))
+        regions: list = []
+        for c in candidates:
+            if any(_rect_overlap_ratio(c, r) >= _REGION_OVERLAP_MERGE_RATIO for r in regions):
+                continue
+            regions.append(c)
+            if len(regions) >= max_regions:
+                break
+        return regions
+    except Exception:
+        return []
+
+
+def _crop_region_b64(page, rect, zoom: float = _RENDER_ZOOM) -> str:
+    import base64
+    import fitz
+    mat = fitz.Matrix(zoom, zoom)
+    pix = page.get_pixmap(matrix=mat, clip=rect)
+    return base64.b64encode(pix.tobytes("png")).decode()
+
+
 def _caption_prompt() -> str:
     return (
         "This is a page from a document, shown because it appears to be a "
@@ -167,17 +230,35 @@ def process_page(doc, page_num: int, source: str) -> tuple[list[dict], str, dict
                             "bbox": _norm_box(page, x0, y0, x1, y1)})
         page_summary["table"] += 1
 
-    visual_bbox = _visual_bbox(page)
-    if visual_bbox is not None:
-        caption, mismatch = _caption_page(b64)
-        if caption:
+    regions = _visual_regions(page)
+    if len(regions) >= 2:
+        # MMRAG-13: 2+ distinct regions (e.g. a chart AND a separate photo
+        # or logo) — caption each on its own cropped region instead of one
+        # blended whole-page description.
+        for rect in regions:
+            region_b64 = _crop_region_b64(page, rect)
+            caption, mismatch = _caption_page(region_b64)
+            if not caption:
+                continue
             chunk = {"text": caption, "source": source, "chunk_index": len(page_chunks),
-                     "chunk_type": "figure", "page": page_num, "quality": blur_score(b64),
-                     "bbox": visual_bbox}
+                     "chunk_type": "figure", "page": page_num, "quality": blur_score(region_b64),
+                     "bbox": _norm_box(page, rect.x0, rect.y0, rect.x1, rect.y1)}
             if mismatch:
                 chunk["number_mismatch"] = True
             page_chunks.append(chunk)
-            page_summary["figure"] = 1
+            page_summary["figure"] += 1
+    else:
+        visual_bbox = _visual_bbox(page)
+        if visual_bbox is not None:
+            caption, mismatch = _caption_page(b64)
+            if caption:
+                chunk = {"text": caption, "source": source, "chunk_index": len(page_chunks),
+                         "chunk_type": "figure", "page": page_num, "quality": blur_score(b64),
+                         "bbox": visual_bbox}
+                if mismatch:
+                    chunk["number_mismatch"] = True
+                page_chunks.append(chunk)
+                page_summary["figure"] = 1
 
     return page_chunks, b64, page_summary
 
