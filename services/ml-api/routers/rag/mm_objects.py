@@ -135,6 +135,12 @@ OIV7_CLASSES = [
     'Woodpecker', 'Worm', 'Wrench', 'Zebra', 'Zucchini',
 ]
 
+_PERSON_LABELS = {"Man", "Woman", "Boy", "Girl", "Person"}
+_FACE_LABELS = {"Human face"}
+_FACE_CLASS_IDS = {i for i, name in enumerate(OIV7_CLASSES) if name in _FACE_LABELS}
+_MAX_PERSON_CROPS = 4  # bounds extra inference passes on a busy photo
+_CROP_PAD_RATIO = 0.15  # a little slack so a face near the person box's edge isn't clipped
+
 _session = None
 _session_lock = threading.Lock()
 
@@ -147,6 +153,93 @@ def _get_session():
                 import onnxruntime as ort
                 _session = ort.InferenceSession(_MODEL_PATH, providers=["CPUExecutionProvider"])
     return _session
+
+
+def _infer_raw(img: Image.Image):
+    """Letterboxes `img` to the model's fixed input size and runs the ONNX
+    session. Returns the raw per-anchor predictions plus everything needed
+    to map boxes back to `img`'s own pixel space — factored out so a
+    person-box crop can be run through the identical pipeline as the
+    full frame (see `_detect_faces_in_person_crops`)."""
+    orig_w, orig_h = img.size
+    scale = min(_INPUT_SIZE / orig_w, _INPUT_SIZE / orig_h)
+    new_w, new_h = max(1, round(orig_w * scale)), max(1, round(orig_h * scale))
+    resized = img.resize((new_w, new_h), Image.BILINEAR)
+    canvas = Image.new("RGB", (_INPUT_SIZE, _INPUT_SIZE), (114, 114, 114))
+    pad_x, pad_y = (_INPUT_SIZE - new_w) // 2, (_INPUT_SIZE - new_h) // 2
+    canvas.paste(resized, (pad_x, pad_y))
+
+    arr = np.asarray(canvas).astype(np.float32) / 255.0
+    arr = arr.transpose(2, 0, 1)[None, ...]
+
+    session = _get_session()
+    out = session.run(None, {session.get_inputs()[0].name: arr})[0]  # (1, 4+len(OIV7_CLASSES), 8400)
+    pred = out[0].T  # (8400, 4+601): 4 box coords + one score per class
+    return pred, orig_w, orig_h, scale, pad_x, pad_y
+
+
+def _decode_detections(pred, orig_w, orig_h, scale, pad_x, pad_y, conf_thresh, allowed_ids=None):
+    """Turns raw per-anchor predictions into (class_id, confidence,
+    box_xyxy) tuples in the ORIGINAL (un-padded) image's pixel space,
+    thresholded and NMS'd per class. `allowed_ids`, when given, restricts
+    which classes are kept (used to search a crop for faces only)."""
+    boxes_cxcywh = pred[:, :4]
+    class_ids = np.argmax(pred[:, 4:], axis=1)
+    confidences = np.max(pred[:, 4:], axis=1)
+
+    keep_mask = confidences >= conf_thresh
+    if allowed_ids is not None:
+        keep_mask &= np.isin(class_ids, list(allowed_ids))
+    if not keep_mask.any():
+        return []
+    boxes_cxcywh, class_ids, confidences = boxes_cxcywh[keep_mask], class_ids[keep_mask], confidences[keep_mask]
+
+    cx, cy, w, h = boxes_cxcywh[:, 0], boxes_cxcywh[:, 1], boxes_cxcywh[:, 2], boxes_cxcywh[:, 3]
+    # Undo the letterbox padding/scale to get coords back in the
+    # ORIGINAL image's pixel space, not the padded 640x640 input.
+    x0 = (cx - w / 2 - pad_x) / scale
+    x1 = (cx + w / 2 - pad_x) / scale
+    y0 = (cy - h / 2 - pad_y) / scale
+    y1 = (cy + h / 2 - pad_y) / scale
+    boxes_xyxy = np.stack([
+        np.clip(x0, 0, orig_w), np.clip(y0, 0, orig_h),
+        np.clip(x1, 0, orig_w), np.clip(y1, 0, orig_h),
+    ], axis=1)
+
+    results = []
+    for c in np.unique(class_ids):
+        mask = class_ids == c
+        b, s = boxes_xyxy[mask], confidences[mask]
+        for k in _nms(b, s):
+            results.append((int(c), float(s[k]), b[k]))
+    return results
+
+
+def _detect_faces_in_person_crops(img: Image.Image, person_boxes: list[tuple[int, float, np.ndarray]]) -> list[tuple[int, float, np.ndarray]]:
+    """Real gap this closes: a face that's a small fraction of a wide shot
+    (e.g. a UN General Assembly speaker filmed head-to-waist across a
+    whole hall) can score under `_CONF_THRESH` at full-frame 640x640
+    resolution even though the body around it detects fine — most of the
+    letterboxed input is background, not face. Cropping to each detected
+    person box BEFORE the same 640x640 resize gives the face far more
+    effective pixels, at the cost of one extra (bounded, capped) inference
+    pass per person box, only when the full-frame pass found no face at
+    all. No new model, no threshold change for the general case."""
+    orig_w, orig_h = img.size
+    found: list[tuple[int, float, np.ndarray]] = []
+    for _, _, box in sorted(person_boxes, key=lambda t: -t[1])[:_MAX_PERSON_CROPS]:
+        x0, y0, x1, y1 = box
+        pad_x, pad_y = (x1 - x0) * _CROP_PAD_RATIO, (y1 - y0) * _CROP_PAD_RATIO
+        cx0, cy0 = max(0, int(x0 - pad_x)), max(0, int(y0 - pad_y))
+        cx1, cy1 = min(orig_w, int(x1 + pad_x)), min(orig_h, int(y1 + pad_y))
+        if cx1 - cx0 < 4 or cy1 - cy0 < 4:
+            continue
+        crop = img.crop((cx0, cy0, cx1, cy1))
+        pred, cw, ch, scale, pad_x2, pad_y2 = _infer_raw(crop)
+        for class_id, conf, crop_box in _decode_detections(
+                pred, cw, ch, scale, pad_x2, pad_y2, _CONF_THRESH, allowed_ids=_FACE_CLASS_IDS):
+            found.append((class_id, conf, crop_box + np.array([cx0, cy0, cx0, cy0])))
+    return found
 
 
 def _nms(boxes: np.ndarray, scores: np.ndarray, iou_thresh: float = _IOU_THRESH) -> list[int]:
@@ -181,46 +274,15 @@ def detect_objects(b64: str) -> list[dict]:
         if orig_w == 0 or orig_h == 0:
             return []
 
-        scale = min(_INPUT_SIZE / orig_w, _INPUT_SIZE / orig_h)
-        new_w, new_h = max(1, round(orig_w * scale)), max(1, round(orig_h * scale))
-        resized = img.resize((new_w, new_h), Image.BILINEAR)
-        canvas = Image.new("RGB", (_INPUT_SIZE, _INPUT_SIZE), (114, 114, 114))
-        pad_x, pad_y = (_INPUT_SIZE - new_w) // 2, (_INPUT_SIZE - new_h) // 2
-        canvas.paste(resized, (pad_x, pad_y))
+        pred, ow, oh, scale, pad_x, pad_y = _infer_raw(img)
+        raw = _decode_detections(pred, ow, oh, scale, pad_x, pad_y, _CONF_THRESH)
 
-        arr = np.asarray(canvas).astype(np.float32) / 255.0
-        arr = arr.transpose(2, 0, 1)[None, ...]
+        person_boxes = [r for r in raw if OIV7_CLASSES[r[0]] in _PERSON_LABELS]
+        has_face = any(OIV7_CLASSES[r[0]] in _FACE_LABELS for r in raw)
+        if person_boxes and not has_face:
+            raw = raw + _detect_faces_in_person_crops(img, person_boxes)
 
-        session = _get_session()
-        out = session.run(None, {session.get_inputs()[0].name: arr})[0]  # (1, 4+len(OIV7_CLASSES), 8400)
-        pred = out[0].T  # (8400, 4+601): 4 box coords + one score per class
-        boxes_cxcywh = pred[:, :4]
-        class_ids = np.argmax(pred[:, 4:], axis=1)
-        confidences = np.max(pred[:, 4:], axis=1)
-
-        keep_mask = confidences >= _CONF_THRESH
-        if not keep_mask.any():
-            return []
-        boxes_cxcywh, class_ids, confidences = boxes_cxcywh[keep_mask], class_ids[keep_mask], confidences[keep_mask]
-
-        cx, cy, w, h = boxes_cxcywh[:, 0], boxes_cxcywh[:, 1], boxes_cxcywh[:, 2], boxes_cxcywh[:, 3]
-        # Undo the letterbox padding/scale to get coords back in the
-        # ORIGINAL image's pixel space, not the padded 640x640 input.
-        x0 = (cx - w / 2 - pad_x) / scale
-        x1 = (cx + w / 2 - pad_x) / scale
-        y0 = (cy - h / 2 - pad_y) / scale
-        y1 = (cy + h / 2 - pad_y) / scale
-        boxes_xyxy = np.stack([
-            np.clip(x0, 0, orig_w), np.clip(y0, 0, orig_h),
-            np.clip(x1, 0, orig_w), np.clip(y1, 0, orig_h),
-        ], axis=1)
-
-        results = []
-        for c in np.unique(class_ids):
-            mask = class_ids == c
-            b, s = boxes_xyxy[mask], confidences[mask]
-            for k in _nms(b, s):
-                results.append((OIV7_CLASSES[c], float(s[k]), b[k]))
+        results = [(OIV7_CLASSES[c], conf, box) for c, conf, box in raw]
         results.sort(key=lambda t: -t[1])
         results = results[:_MAX_DETECTIONS]
 
