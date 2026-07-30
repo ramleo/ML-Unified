@@ -27,6 +27,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from routers.rag.cache import cosine_sim
+from routers.rag.entities import decode_entities
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,20 @@ _JUDGE_SYSTEM = (
     '{"contradicts": true|false, "explanation": "one short sentence"}'
 )
 
+# MMRAG-20: same judge, same JSON shape, narrower question — a contract and
+# an invoice are EXPECTED to differ in most of their text (different
+# structure, different boilerplate); only a same-amount/date/term
+# disagreement actually matters here.
+_RECONCILE_JUDGE_SYSTEM = (
+    "Passage A is a clause from a CONTRACT. Passage B is a line from an "
+    "INVOICE. Decide whether they refer to the SAME amount, date, quantity, "
+    "or term but DISAGREE on its value (e.g. contract states one amount, "
+    "invoice bills a different amount). If they're about unrelated matters, "
+    "or they agree, that is NOT a discrepancy. Reply with ONLY a JSON "
+    "object, no other text: "
+    '{"contradicts": true|false, "explanation": "one short sentence"}'
+)
+
 
 def _collect_session_chunks(state, session_id: str) -> list[dict]:
     """All chunks uploaded by this session, across all its source documents,
@@ -70,7 +85,11 @@ def _collect_session_chunks(state, session_id: str) -> list[dict]:
         if not text.strip():
             continue
         meta = state.chunk_meta[idx] if idx < len(state.chunk_meta) else {}
-        chunks.append({"text": text, "source": src, "page": meta.get("page")})
+        # entities (MMRAG-03: money/date/percent) ride along unused by
+        # find_contradictions() — MMRAG-20's reconciliation pairing reads
+        # this to prioritize which candidate pairs are worth an LLM call.
+        chunks.append({"text": text, "source": src, "page": meta.get("page"),
+                       "entities": decode_entities(meta.get("entities"))})
     return chunks
 
 
@@ -131,10 +150,14 @@ def find_contradictions(
     return {"checked_pairs": len(candidates), "sources": sources, "contradictions": contradictions}
 
 
-def make_llm_judge(provider: str, model: str, key: str) -> Callable[[str, str], Optional[dict]]:
+def make_llm_judge(provider: str, model: str, key: str,
+                   system: str = _JUDGE_SYSTEM) -> Callable[[str, str], Optional[dict]]:
     """Builds a judge_fn bound to one provider/model/key — the concrete
     implementation find_contradictions() is deliberately kept ignorant of
-    (OCP: swap in a different judge later without touching that function)."""
+    (OCP: swap in a different judge later without touching that function).
+    `system` defaults to the generic contradiction prompt so the existing
+    /rag/contradictions endpoint is unaffected; MMRAG-20's reconciliation
+    endpoint passes _RECONCILE_JUDGE_SYSTEM instead."""
     from routers.rag.llm import complete
 
     def judge(text_a: str, text_b: str) -> Optional[dict]:
@@ -142,13 +165,67 @@ def make_llm_judge(provider: str, model: str, key: str) -> Callable[[str, str], 
             return None
         raw = complete(provider, model, key,
                        [{"role": "user", "content": f"Passage A: {text_a}\n\nPassage B: {text_b}"}],
-                       system=_JUDGE_SYSTEM)
+                       system=system)
         return _parse_judge_response(raw)
 
     return judge
 
 
-# ── Endpoint ───────────────────────────────────────────────────────────────────
+def find_reconciliation(
+    state, session_id: str, contract_source: str, invoice_sources: list[str],
+    embed_fn: Callable[[list[str]], list], judge_fn: Callable[[str, str], Optional[dict]],
+) -> dict:
+    """MMRAG-20: like find_contradictions(), but pairs are restricted to
+    (contract chunk, invoice chunk) ONLY — never invoice-vs-invoice, never
+    contract-vs-contract. Different invoices are SUPPOSED to differ from
+    each other (different vendors/dates/amounts); flagging that as a
+    "contradiction" the way the generic endpoint would is noise, not a
+    finding. Pairs where either side has a money/date entity (MMRAG-03,
+    already computed at ingest) are judged before pairs that don't, since
+    those are far more likely to be a genuine reconciliation-relevant
+    discrepancy — still capped at the same _MAX_PAIRS_TO_JUDGE budget."""
+    chunks = _collect_session_chunks(state, session_id)
+    contract_chunks = [c for c in chunks if c["source"] == contract_source]
+    invoice_chunks = [c for c in chunks if c["source"] in invoice_sources]
+    if not contract_chunks or not invoice_chunks:
+        return {"checked_pairs": 0, "contract_source": contract_source,
+                "invoice_sources": invoice_sources, "discrepancies": []}
+
+    texts = [c["text"] for c in contract_chunks] + [c["text"] for c in invoice_chunks]
+    embeddings = embed_fn(texts)
+    n_contract = len(contract_chunks)
+
+    def has_numeric_entity(chunk: dict) -> bool:
+        return any(e.get("type") in ("money", "date") for e in chunk.get("entities") or [])
+
+    candidates: list[tuple[bool, float, int, int]] = []
+    for i, c_chunk in enumerate(contract_chunks):
+        for j, inv_chunk in enumerate(invoice_chunks):
+            sim = cosine_sim(embeddings[i], embeddings[n_contract + j])
+            if _SIM_FLOOR <= sim <= _SIM_CEILING:
+                numeric = has_numeric_entity(c_chunk) or has_numeric_entity(inv_chunk)
+                candidates.append((numeric, sim, i, j))
+
+    candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    candidates = candidates[:_MAX_PAIRS_TO_JUDGE]
+
+    discrepancies = []
+    for _, sim, i, j in candidates:
+        c_chunk, inv_chunk = contract_chunks[i], invoice_chunks[j]
+        verdict = judge_fn(c_chunk["text"], inv_chunk["text"])
+        if verdict and verdict["contradicts"]:
+            discrepancies.append({
+                "similarity": round(sim, 3),
+                "explanation": verdict["explanation"],
+                "contract_chunk": {"text": c_chunk["text"], "source": c_chunk["source"], "page": c_chunk["page"]},
+                "invoice_chunk": {"text": inv_chunk["text"], "source": inv_chunk["source"], "page": inv_chunk["page"]},
+            })
+
+    return {"checked_pairs": len(candidates), "contract_source": contract_source,
+            "invoice_sources": invoice_sources, "discrepancies": discrepancies}
+
+
+# ── Endpoints ──────────────────────────────────────────────────────────────────
 
 class ContradictionsRequest(BaseModel):
     session_id: str
@@ -170,3 +247,28 @@ def check_contradictions(req: ContradictionsRequest):
     key = _resolve_key(_JUDGE_PROVIDER, None)
     judge_fn = make_llm_judge(_JUDGE_PROVIDER, _JUDGE_MODEL, key)
     return find_contradictions(state, req.session_id, state.embedding_fn, judge_fn)
+
+
+class ReconciliationRequest(BaseModel):
+    session_id: str
+    contract_source: str
+    invoice_sources: list[str]
+
+
+@router.post("/reconciliation")
+def check_reconciliation(req: ReconciliationRequest):
+    """MMRAG-20: scan one contract against one or more invoices (all from
+    this session's own uploads) for amount/date/term discrepancies. Same
+    fixed server-key-only judge provider as /rag/contradictions."""
+    from routers.rag import get_rag_state
+    from routers.rag.query import _resolve_key
+
+    try:
+        state = get_rag_state()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    key = _resolve_key(_JUDGE_PROVIDER, None)
+    judge_fn = make_llm_judge(_JUDGE_PROVIDER, _JUDGE_MODEL, key, system=_RECONCILE_JUDGE_SYSTEM)
+    return find_reconciliation(state, req.session_id, req.contract_source,
+                               req.invoice_sources, state.embedding_fn, judge_fn)
