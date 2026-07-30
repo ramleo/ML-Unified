@@ -63,6 +63,16 @@ def extract_caption(raw: str, fallback_len: int) -> str:
                     if str(alt).strip():
                         value = alt
                         break
+            if not str(value).strip() and isinstance(parsed, dict):
+                # Last resort before giving up on the parsed JSON entirely:
+                # a model can hallucinate its own key name outside even the
+                # known _ALT_CAPTION_KEYS list (observed: {"cnotation": "..."}
+                # instead of {"caption": "..."}) — the single LONGEST string
+                # value in an otherwise-valid JSON object is almost certainly
+                # that misnamed description, not a raw JSON dump.
+                string_values = [v for v in parsed.values() if isinstance(v, str) and v.strip()]
+                if string_values:
+                    value = max(string_values, key=len)
             if str(value).strip():
                 return str(value).strip()
         except Exception as exc:
