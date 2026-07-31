@@ -58,13 +58,41 @@ _JUDGE_SYSTEM = (
 # MMRAG-20: same judge, same JSON shape, narrower question — a contract and
 # an invoice are EXPECTED to differ in most of their text (different
 # structure, different boilerplate); only a same-amount/date/term
-# disagreement actually matters here.
+# disagreement actually matters here. The worked counter-example below is a
+# real false positive caught in live testing: llama-3.1-8b-instant flagged
+# "due within 30 days of invoice date" vs. "Due date: 30 days from issue" as
+# disagreeing, even though both state the same 30-day term in different
+# words — the model was pattern-matching on differing PHRASING, not
+# comparing the actual VALUE. Spelling that exact failure mode out is doing
+# real work here, not decorative.
 _RECONCILE_JUDGE_SYSTEM = (
     "Passage A is a clause from a CONTRACT. Passage B is a line from an "
     "INVOICE. Decide whether they refer to the SAME amount, date, quantity, "
-    "or term but DISAGREE on its value (e.g. contract states one amount, "
-    "invoice bills a different amount). If they're about unrelated matters, "
-    "or they agree, that is NOT a discrepancy. Reply with ONLY a JSON "
+    "or term but state a DIFFERENT VALUE for it (e.g. contract says "
+    "$50,000, invoice bills $52,500 — different values, IS a discrepancy). "
+    "Two passages that state the SAME value in different wording are NOT a "
+    "discrepancy — e.g. contract says 'due within 30 days of invoice date' "
+    "and invoice says 'Due date: 30 days from issue' both mean 30 days: "
+    "NOT a discrepancy, even though the sentences look different. Judge the "
+    "underlying value, not the phrasing. If they're about unrelated "
+    "matters, or state the same value, that is NOT a discrepancy. Reply "
+    "with ONLY a JSON object, no other text: "
+    '{"contradicts": true|false, "explanation": "one short sentence"}'
+)
+
+# A single small-model judge call is noisy enough that a real false positive
+# was observed live (see comment above) — for reconciliation specifically
+# (not the generic /rag/contradictions path, which keeps its original
+# single-call behavior unchanged), a positive verdict gets ONE independent
+# re-check with a differently-worded question before being reported. This
+# only doubles LLM calls for the rare candidates that got flagged in the
+# first place, not the whole judged set.
+_RECONCILE_CONFIRM_SYSTEM = (
+    "Passage A is a clause from a CONTRACT. Passage B is a line from an "
+    "INVOICE. A first pass flagged these as stating DIFFERENT values for "
+    "the same amount/date/quantity/term. Double-check carefully: do they "
+    "actually state a different VALUE, or do they state the SAME value in "
+    "different words (which is NOT a discrepancy)? Reply with ONLY a JSON "
     "object, no other text: "
     '{"contradicts": true|false, "explanation": "one short sentence"}'
 )
@@ -174,6 +202,7 @@ def make_llm_judge(provider: str, model: str, key: str,
 def find_reconciliation(
     state, session_id: str, contract_source: str, invoice_sources: list[str],
     embed_fn: Callable[[list[str]], list], judge_fn: Callable[[str, str], Optional[dict]],
+    confirm_fn: Optional[Callable[[str, str], Optional[dict]]] = None,
 ) -> dict:
     """MMRAG-20: like find_contradictions(), but pairs are restricted to
     (contract chunk, invoice chunk) ONLY — never invoice-vs-invoice, never
@@ -183,7 +212,15 @@ def find_reconciliation(
     finding. Pairs where either side has a money/date entity (MMRAG-03,
     already computed at ingest) are judged before pairs that don't, since
     those are far more likely to be a genuine reconciliation-relevant
-    discrepancy — still capped at the same _MAX_PAIRS_TO_JUDGE budget."""
+    discrepancy — still capped at the same _MAX_PAIRS_TO_JUDGE budget.
+
+    `confirm_fn`, when given, re-checks any pair `judge_fn` flags as a
+    discrepancy with a second, independently-worded question before it's
+    reported — a single small-model judge call was observed live to
+    false-positive on two passages that state the SAME value in different
+    wording (see _RECONCILE_JUDGE_SYSTEM's comment). Only re-checks the
+    rare flagged candidates, not the whole judged set, so it doesn't
+    meaningfully change the LLM-call budget."""
     chunks = _collect_session_chunks(state, session_id)
     contract_chunks = [c for c in chunks if c["source"] == contract_source]
     invoice_chunks = [c for c in chunks if c["source"] in invoice_sources]
@@ -213,13 +250,18 @@ def find_reconciliation(
     for _, sim, i, j in candidates:
         c_chunk, inv_chunk = contract_chunks[i], invoice_chunks[j]
         verdict = judge_fn(c_chunk["text"], inv_chunk["text"])
-        if verdict and verdict["contradicts"]:
-            discrepancies.append({
-                "similarity": round(sim, 3),
-                "explanation": verdict["explanation"],
-                "contract_chunk": {"text": c_chunk["text"], "source": c_chunk["source"], "page": c_chunk["page"]},
-                "invoice_chunk": {"text": inv_chunk["text"], "source": inv_chunk["source"], "page": inv_chunk["page"]},
-            })
+        if not (verdict and verdict["contradicts"]):
+            continue
+        if confirm_fn is not None:
+            confirmation = confirm_fn(c_chunk["text"], inv_chunk["text"])
+            if not (confirmation and confirmation["contradicts"]):
+                continue
+        discrepancies.append({
+            "similarity": round(sim, 3),
+            "explanation": verdict["explanation"],
+            "contract_chunk": {"text": c_chunk["text"], "source": c_chunk["source"], "page": c_chunk["page"]},
+            "invoice_chunk": {"text": inv_chunk["text"], "source": inv_chunk["source"], "page": inv_chunk["page"]},
+        })
 
     return {"checked_pairs": len(candidates), "contract_source": contract_source,
             "invoice_sources": invoice_sources, "discrepancies": discrepancies}
@@ -270,5 +312,6 @@ def check_reconciliation(req: ReconciliationRequest):
 
     key = _resolve_key(_JUDGE_PROVIDER, None)
     judge_fn = make_llm_judge(_JUDGE_PROVIDER, _JUDGE_MODEL, key, system=_RECONCILE_JUDGE_SYSTEM)
+    confirm_fn = make_llm_judge(_JUDGE_PROVIDER, _JUDGE_MODEL, key, system=_RECONCILE_CONFIRM_SYSTEM)
     return find_reconciliation(state, req.session_id, req.contract_source,
-                               req.invoice_sources, state.embedding_fn, judge_fn)
+                               req.invoice_sources, state.embedding_fn, judge_fn, confirm_fn)
