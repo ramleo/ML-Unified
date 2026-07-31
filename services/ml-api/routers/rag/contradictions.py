@@ -43,7 +43,13 @@ _SIM_CEILING = 0.93
 _MAX_PAIRS_TO_JUDGE = 6  # bounds LLM calls regardless of corpus size
 
 _JUDGE_PROVIDER = "groq"
-_JUDGE_MODEL = "llama-3.1-8b-instant"
+# Upgraded from llama-3.1-8b-instant (2026-07-31): the 8b model produced a
+# real false positive in live testing — "30 days from invoice date" vs. "30
+# days from issue" flagged as a discrepancy despite being the same term
+# worded differently. 70b-versatile is the same free Groq key already used
+# for main chat answers elsewhere in this app — no added cost, just more of
+# the shared free-tier budget and a slower per-call latency.
+_JUDGE_MODEL = "llama-3.3-70b-versatile"
 
 _JUDGE_SYSTEM = (
     "You are given two short passages from two different documents. Decide "

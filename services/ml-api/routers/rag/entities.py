@@ -26,7 +26,13 @@ _DATE_RE = re.compile(
     r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b"
     r"|\b(?:January|February|March|April|May|June|July|August|September|October|November|December)"
     r"\s+\d{1,2},?\s+\d{4}\b"
-    r"|\b\d{4}-\d{2}-\d{2}\b",
+    r"|\b\d{4}-\d{2}-\d{2}\b"
+    # relative payment/date terms ("net-30", "30 days", "45 days from issue") —
+    # calendar dates alone miss the exact term-mismatch phrasing contracts and
+    # invoices actually use (MMRAG-20 follow-up: entity-based candidate
+    # prioritization was blind to these, only ever matching on money).
+    r"|\bnet[\s-]?\d{1,3}\b"
+    r"|\b\d{1,3}\s?-?\s?days?\b",
     re.IGNORECASE,
 )
 
