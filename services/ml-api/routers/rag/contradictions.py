@@ -252,13 +252,21 @@ def find_reconciliation(
         verdict = judge_fn(c_chunk["text"], inv_chunk["text"])
         if not (verdict and verdict["contradicts"]):
             continue
+        # Never silently drop a flagged pair on confirm_fn's say-so alone —
+        # live testing showed BOTH calls can independently miss the same
+        # real discrepancy (the small judge model is noisy in both
+        # directions, not just toward false positives), and this report
+        # exists for a human to review, not to act on unattended. A
+        # disagreement is surfaced as `confirmed: false` instead, so the
+        # reader can weigh it themselves rather than have it vanish.
+        confirmed = True
         if confirm_fn is not None:
             confirmation = confirm_fn(c_chunk["text"], inv_chunk["text"])
-            if not (confirmation and confirmation["contradicts"]):
-                continue
+            confirmed = bool(confirmation and confirmation["contradicts"])
         discrepancies.append({
             "similarity": round(sim, 3),
             "explanation": verdict["explanation"],
+            "confirmed": confirmed,
             "contract_chunk": {"text": c_chunk["text"], "source": c_chunk["source"], "page": c_chunk["page"]},
             "invoice_chunk": {"text": inv_chunk["text"], "source": inv_chunk["source"], "page": inv_chunk["page"]},
         })
