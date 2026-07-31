@@ -1,15 +1,11 @@
 """RAG query router — /health and /query (streaming SSE) endpoints."""
 from __future__ import annotations
 
-import json
 import logging
-import os
 import time
-from typing import Any, Optional
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 
 from routers.rag import get_rag_state
 from routers.rag.retrieve import multi_query_retrieve
@@ -20,6 +16,16 @@ from routers.rag.citations import build_system_prompt, build_source_doc, likely_
 from routers.rag.generation import build_provider_candidates, stream_with_fallback
 from routers.rag.cache import ctx_hash as _ctx_hash, cache_lookup as _cache_lookup, cache_store as _cache_store
 from routers.rag.groundedness import score_groundedness
+from routers.rag.query_helpers import (
+    QueryRequest,
+    _resolve_key,
+    _detect_type_boost,
+    _sse,
+    _determine_answer_source,
+    _determine_confidence,
+    _client_ip,
+    _SMALL_CORPUS_MAX_CANDIDATES,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,113 +43,6 @@ _DEFAULT_MODEL = "llama-3.3-70b-versatile"
 # question (expansion + generation) against the same limit, both 429ing.
 _EXPANSION_PROVIDER = "groq"
 _EXPANSION_MODEL = "llama-3.1-8b-instant"
-
-# A flat boost on every restrict_to_uploads query would over-promote a figure
-# caption even on a purely textual question. Instead, only boost the specific
-# chunk_type(s) the question itself seems to be asking about.
-_TYPE_KEYWORDS = {
-    "table": ("table", "row", "column", "spreadsheet", "cell"),
-    "figure": ("chart", "graph", "diagram", "figure", "plot", "trend", "visual"),
-    "image": ("image", "photo", "picture", "photograph"),
-}
-
-
-def _detect_type_boost(query: str) -> dict[str, float] | None:
-    q = query.lower()
-    boost = {t: 1.3 for t, kws in _TYPE_KEYWORDS.items() if any(kw in q for kw in kws)}
-    return boost or None
-
-
-# Many phrasings ("what's this about", "what is he saying", "summarize",
-# "did she say anything about X"...) have no single chunk that's
-# semantically "the answer" — ordinary relevance-based rerank filtering
-# rejects everything, including genuinely relevant content (observed live,
-# twice: a real video transcript scored 0.007 for "what is the person
-# talking about?", then got dropped again for "what is he saying?" because
-# that phrasing wasn't on a keyword list). A keyword list for this is
-# inherently a losing game — there's no bounded set of ways to ask a broad
-# question. Instead: for a SMALL uploaded corpus, always send everything to
-# the LLM regardless of query wording. There's no real cost (the pool is
-# tiny) and it removes this whole class of bug rather than growing a list
-# one missed phrasing at a time.
-_SMALL_CORPUS_MAX_CANDIDATES = 15  # cap so this doesn't dump an unbounded
-                                   # amount of context for a LARGER uploaded
-                                   # corpus (multi-document Q&A)
-
-
-# ── Env var fallbacks ──────────────────────────────────────────────────────────
-_ENV_KEYS = {
-    "groq": "GROQ_API_KEY",
-    "openai": "OPENAI_API_KEY",
-    "claude": "ANTHROPIC_API_KEY",
-    "gemini": "GEMINI_API_KEY",
-    "cohere": "COHERE_API_KEY",
-    "mistral": "MISTRAL_API_KEY",
-    # perplexity intentionally has no server default — BYOK only, matching
-    # its frontend envKeyNote ("Paste your Perplexity API key").
-}
-
-
-# ── Schemas ────────────────────────────────────────────────────────────────────
-
-class QueryRequest(BaseModel):
-    query: str
-    tool_context: str = ""
-    history: list[dict] = []
-    provider: str = _DEFAULT_PROVIDER
-    model: str = _DEFAULT_MODEL
-    user_key: Optional[str] = None
-    embedding_model: str = "minilm"  # "minilm" | "jina"
-    session_id: str = ""
-    force_web: bool = False
-    restrict_to_uploads: bool = False  # answer ONLY from this session's uploads — no KB, no web
-    answer_length: str = "normal"  # "concise" | "normal" | "detailed"
-    chunk_type_filter: Optional[list[str]] = None  # e.g. ["table"] — restrict retrieval to these chunk_type(s)
-    entity_type_filter: Optional[list[str]] = None  # e.g. ["money", "date"] — restrict to chunks containing these
-    share_token: Optional[str] = None  # resolves to the owning session_id if valid, not revoked, not expired
-
-
-# ── Helpers ────────────────────────────────────────────────────────────────────
-
-def _resolve_key(provider: str, user_key: Optional[str]) -> str:
-    if user_key:
-        return user_key
-    env = _ENV_KEYS.get(provider, "")
-    return os.environ.get(env, "")
-
-
-def _sse(obj: Any) -> str:
-    return f"data: {json.dumps(obj)}\n\n"
-
-
-def _determine_answer_source(chunks: list[dict], web_fallback_used: bool, has_dataset: bool) -> str:
-    if web_fallback_used:
-        return "web"
-    if not chunks:
-        return "dataset" if has_dataset else "none"
-    if chunks[0].get("uploaded"):
-        return "uploaded_doc"
-    if has_dataset:
-        return "dataset"
-    return "knowledge_base"
-
-
-def _determine_confidence(chunks: list[dict], answer_source: str, has_dataset: bool = False) -> str:
-    if answer_source in ("dataset", "none"):
-        return "high"
-    top_score = chunks[0].get("score", 0.0) if chunks else 0.0
-    # When dataset is also loaded, LLM has extra grounding — bump one tier
-    if has_dataset:
-        if top_score >= 0.3:
-            return "high"
-        if top_score >= 0.05:
-            return "medium"
-        return "medium"
-    if top_score >= 0.5:
-        return "high"
-    if top_score >= 0.15:
-        return "medium"
-    return "low"
 
 
 # ── SSE generator ──────────────────────────────────────────────────────────────
@@ -320,6 +219,57 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
         except Exception as exc:
             logger.warning("Groundedness scoring failed: %s", exc)
 
+    # 4c. Self-correction retry — groundedness (4b) is computed on every
+    # answer but historically only ever displayed as a badge. When it comes
+    # back "low", broaden retrieval (drop the relevance floor, pull more
+    # candidates already fetched in step 1 — no extra retrieval call) and
+    # regenerate once. A single retry only, and only on the rare low-
+    # confidence case, so the common already-grounded answer streams exactly
+    # as before with no added latency. The retry's own tokens stream as a
+    # fresh "retry" + "source"/"token" sequence so the client can swap out
+    # the first attempt rather than appending onto it.
+    self_corrected = False
+    if full_text and not generation_failed and candidates and groundedness and groundedness.get("level") == "low" and not web_fallback_used:
+        broadened = rerank(req.query, candidates, state,
+                           top_k=min(len(candidates), 10), abs_floor=0.0, keep_all=False)
+        if broadened and broadened != chunks:
+            yield _sse({"type": "retry", "reason": "low_groundedness"})
+            for chunk in broadened:
+                yield _sse({"type": "source", "doc": build_source_doc(chunk, redact=redact)})
+
+            retry_system_prompt = build_system_prompt(req.tool_context, broadened, restrict_to_uploads=req.restrict_to_uploads,
+                                                       answer_length=req.answer_length, redact=redact)
+            retry_parts: list[str] = []
+            retry_meta: dict = {}
+            retry_failed = False
+            for token in stream_with_fallback(provider_candidates, messages, retry_system_prompt, retry_meta):
+                if token.startswith("[") and "error" in token.lower():
+                    retry_failed = True
+                retry_parts.append(token)
+                yield _sse({"type": "token", "text": token})
+
+            if not retry_meta.get("mid_stream_error") and not retry_failed and retry_parts:
+                retry_text = "".join(retry_parts)
+                try:
+                    retry_groundedness = score_groundedness(retry_text, broadened, state.embedding_fn)
+                except Exception as exc:
+                    logger.warning("Retry groundedness scoring failed: %s", exc)
+                    retry_groundedness = None
+                # Only keep the retry if it's actually no worse — never trade
+                # a complete (if imperfectly grounded) answer for a worse one.
+                if not retry_groundedness or retry_groundedness.get("score", 0) >= groundedness.get("score", 0):
+                    chunks = broadened
+                    full_text = retry_text
+                    groundedness = retry_groundedness or groundedness
+                    served_provider = retry_meta.get("served_provider", provider)
+                    served_model = retry_meta.get("served_model", model)
+                    seen_sources = []
+                    for chunk in broadened:
+                        src = chunk.get("source", "")
+                        if src and src not in seen_sources:
+                            seen_sources.append(src)
+                    self_corrected = True
+
     # 5. Store in semantic cache — skip on provider errors, and skip entirely
     # for restrict_to_uploads (correctness over latency for single-doc Q&A).
     if query_emb is not None and full_text and not generation_failed and not req.restrict_to_uploads:
@@ -356,17 +306,11 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
         "primary_provider": meta.get("primary_provider"),
         "primary_failure": meta.get("primary_failure"),
         "groundedness": groundedness,
+        "self_corrected": self_corrected,
     })
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
-
-def _client_ip(request: Request) -> str:
-    xff = request.headers.get("x-forwarded-for", "")
-    if xff:
-        return xff.split(",")[0].strip()
-    return request.client.host if request.client else ""
-
 
 @router.post("/query")
 def rag_query(req: QueryRequest, request: Request):
