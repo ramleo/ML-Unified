@@ -78,18 +78,22 @@ def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploa
             "quote, or append any [source...] label in your answer text. Write a "
             "plain, direct answer with no bracketed references at all."
         )
-        # MMRAG-12: the retrieved knowledge is virtually always in English
-        # (captions/transcripts are generated/transcribed in English by
-        # default) regardless of what language the user asks in — without
-        # this, a non-English question risks getting an English answer just
-        # because the context happened to be in English. Most models already
-        # mirror the question's language on their own (observed live via
-        # Groq's llama-3.3-70b), but this makes it an explicit instruction
-        # rather than relying on that being consistent across providers.
+        # MMRAG-12: without this, a non-English question risks getting an
+        # English answer just because the context happened to be in English
+        # (captions/transcripts are usually English by default). Most models
+        # already mirror the question's language on their own (observed live
+        # via Groq's llama-3.3-70b), but this makes it explicit rather than
+        # relying on that being consistent across providers. Deliberately NOT
+        # hardcoded to assume the retrieved knowledge is in English — a
+        # broadened/low-floor retrieval pass (query.py's self-correction
+        # retry) can pull in a non-English chunk, and a false "it's all
+        # English" premise in the prompt was observed to drag the answer
+        # itself into that chunk's language instead of the question's.
         parts.append(
             "Answer in the same language the user's question is written in, "
-            "even though the retrieved knowledge below is in English — "
-            "translate the relevant facts, don't just answer in English."
+            "regardless of what language the retrieved knowledge below happens "
+            "to be in — translate the relevant facts into the question's "
+            "language, don't just copy the source language."
         )
         if _has_multiple_visual_chunks_per_source(chunks):
             # Observed live: a video's two independently-captioned frames
