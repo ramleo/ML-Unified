@@ -270,14 +270,23 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
 
     revision_candidate = find_revision_candidate(source, session_id, chunks, state) if uploaded else None
 
+    figure_pages = [(c["page"], page_images[c["page"] - 1]) for c in chunks
+                    if c["chunk_type"] in ("figure", "image")]
+
     if "clip" in embedding_mode:
         try:
             from routers.rag.mm_similar import index_figures_clip
-            figure_pages = [(c["page"], page_images[c["page"] - 1]) for c in chunks
-                            if c["chunk_type"] in ("figure", "image")]
             await loop.run_in_executor(_executor, lambda: index_figures_clip(source, figure_pages))
         except Exception as exc:
             logger.warning("CLIP figure indexing skipped: %s", exc)
+
+    try:
+        from routers.rag.cohere_vision import index_figures_vision
+        await loop.run_in_executor(
+            _executor, lambda: index_figures_vision(source, session_id, figure_pages),
+        )
+    except Exception as exc:
+        logger.warning("Cohere vision indexing skipped: %s", exc)
 
     yield _sse(build_done_event(
         source=source, session_id=session_id, save_scope=save_scope, chunks=chunks,

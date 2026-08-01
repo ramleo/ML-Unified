@@ -251,10 +251,13 @@ def hybrid_retrieve(query: str, state, top_k: int = 8, use_jina: bool = False, s
     bm25_hits = bm25_retrieve(query, state, k=50, session_id=session_id, chunk_type_filter=chunk_type_filter,
                               entity_type_filter=entity_type_filter)
 
-    if not dense_hits and not bm25_hits:
+    from routers.rag.cohere_vision import vision_retrieve
+    vision_hits = vision_retrieve(query, state, session_id=session_id, top_k=20)
+
+    if not dense_hits and not bm25_hits and not vision_hits:
         return []
 
-    ranked_lists, labels = _labeled(("dense", dense_hits), ("bm25", bm25_hits))
+    ranked_lists, labels = _labeled(("dense", dense_hits), ("bm25", bm25_hits), ("vision", vision_hits))
     fused = reciprocal_rank_fusion(ranked_lists, type_boost=type_boost, labels=labels)
     return fused[:top_k]
 
