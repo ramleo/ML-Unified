@@ -299,8 +299,11 @@ def tiered_hybrid_retrieve(
                               entity_type_filter=entity_type_filter) if count > 0 else []
     bm25_up = bm25_retrieve(query, state, k=20, session_id=session_id, uploaded_only=True,
                             chunk_type_filter=chunk_type_filter, entity_type_filter=entity_type_filter)
-    tier1_lists, tier1_labels = _labeled(("dense", dense_up), ("bm25", bm25_up))
-    tier1 = reciprocal_rank_fusion(tier1_lists, type_boost=type_boost, labels=tier1_labels) if (dense_up or bm25_up) else []
+    from routers.rag.cohere_vision import vision_retrieve
+    vision_up = vision_retrieve(query, state, session_id=session_id, top_k=20)
+    tier1_lists, tier1_labels = _labeled(("dense", dense_up), ("bm25", bm25_up), ("vision", vision_up))
+    tier1 = (reciprocal_rank_fusion(tier1_lists, type_boost=type_boost, labels=tier1_labels)
+             if (dense_up or bm25_up or vision_up) else [])
     for c in tier1:
         c["uploaded"] = True
 

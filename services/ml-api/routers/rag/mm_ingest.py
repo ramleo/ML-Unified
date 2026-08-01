@@ -282,8 +282,9 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
 
     try:
         from routers.rag.cohere_vision import index_figures_vision
+        vision_session_id = session_id if uploaded else ""
         await loop.run_in_executor(
-            _executor, lambda: index_figures_vision(source, session_id, figure_pages),
+            _executor, lambda: index_figures_vision(source, vision_session_id, figure_pages),
         )
     except Exception as exc:
         logger.warning("Cohere vision indexing skipped: %s", exc)
