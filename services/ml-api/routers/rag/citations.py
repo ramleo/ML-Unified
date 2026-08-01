@@ -95,6 +95,21 @@ def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploa
             "to be in — translate the relevant facts into the question's "
             "language, don't just copy the source language."
         )
+        # Observed live: "what is career timeline?" was read as "define the
+        # general concept of a career timeline" and correctly declined since
+        # the document doesn't define that term — but the document DOES have
+        # a section literally titled "Career Timeline", and a rephrased "what
+        # is shown under career timeline?" got the real answer. A "what
+        # is <X>" question whose <X> matches a heading/label in the chunks
+        # below is asking what that section contains, not for a dictionary
+        # definition of <X> as a standalone concept.
+        parts.append(
+            "If the question asks \"what is <X>\" (or similar) and <X> matches a "
+            "section heading, label, or title appearing in the retrieved content "
+            "below, treat it as asking what that section contains — answer with "
+            "its contents, don't decline on the grounds that <X> isn't defined as "
+            "a general concept."
+        )
         if _has_multiple_visual_chunks_per_source(chunks):
             # Observed live: a video's two independently-captioned frames
             # described the same speaker with different wording/focus (one
