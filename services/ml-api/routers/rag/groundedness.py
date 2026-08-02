@@ -35,8 +35,18 @@ _MEDIUM_THRESHOLD = 0.35
 # answer (MMRAG-12) that only ever gets split on ".!?" collapses into ONE
 # giant "sentence" for scoring, the same dilution bug already fixed for the
 # source-chunk side (see score_groundedness's docstring below). \s* (not
-# \s+) because CJK text often has no space after its terminator at all.
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?।؟。！？])\s*")
+# \s+) for THOSE terminators because CJK text often has no space after its
+# terminator at all.
+#
+# ASCII ".!?" are handled separately with a (?=\s|$) lookahead instead of
+# consuming \s* — an inline-code filename like `entity_test_memo.pdf` has a
+# period with NO following space, and the old \s*-based split fired on it
+# anyway (zero-width match), chopping the answer into garbled fragments like
+# "pdf` and `entity_test_contract." that then scored as "unsupported" purely
+# from being nonsense, not from being actually ungrounded. Requiring the
+# period be followed by whitespace or end-of-string keeps mid-token periods
+# (filenames, "e.g.", domains) from being treated as sentence boundaries.
+_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])(?=\s|$)|(?<=[।؟。！？])\s*")
 
 
 def _split_sentences(text: str) -> list[str]:
