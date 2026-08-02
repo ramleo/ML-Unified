@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from collections import defaultdict
 
+from routers.rag.query_router import classify_query
 from routers.rag.text import tokenize
 
 logger = logging.getLogger(__name__)
@@ -170,10 +171,11 @@ def reciprocal_rank_fusion(
     k: int = 60,
     type_boost: dict[str, float] | None = None,
     labels: list[str] | None = None,
+    list_weights: dict[str, float] | None = None,
 ) -> list[dict]:
     """Merge multiple ranked lists using Reciprocal Rank Fusion.
 
-    Formula: score(d) = sum over lists of boost(chunk_type) / (rank + k)
+    Formula: score(d) = sum over lists of boost(chunk_type) * weight(list) / (rank + k)
     type_boost multiplies each contribution by the doc's chunk_type (default
     1.0 for unlisted types) — corrects for table/figure/image chunks being
     short (a caption or a table's own text) and so structurally weaker
@@ -191,6 +193,14 @@ def reciprocal_rank_fusion(
     inner pass's trace survives untouched — only "score" gets replaced by
     the outer RRF value, since `dict(doc_store[key])` copies existing keys
     through unless labels asks this pass to add its own.
+
+    list_weights (MMRAG-27, adaptive query routing) — keyed by the same
+    labels used for tracing, multiplies that entire list's contribution
+    (e.g. {"vision": 1.5} trusts the vision signal's votes 50% more for a
+    visual question). Requires labels to be set; None (default) preserves
+    today's equal-standing behavior. A tilt, not a filter — an unlisted
+    label defaults to 1.0, never zero, so a wrong classification degrades
+    gracefully instead of blinding the pipeline to a signal.
     """
     rrf_scores: dict[tuple, float] = defaultdict(float)
     doc_store: dict[tuple, dict] = {}
@@ -198,10 +208,11 @@ def reciprocal_rank_fusion(
 
     for list_idx, ranked in enumerate(ranked_lists):
         label = labels[list_idx] if labels else None
+        weight = (list_weights or {}).get(label, 1.0) if label else 1.0
         for rank, doc in enumerate(ranked, start=1):
             key = (doc["text"], doc["source"])
             boost = (type_boost or {}).get(doc.get("chunk_type"), 1.0)
-            rrf_scores[key] += boost / (rank + k)
+            rrf_scores[key] += boost * weight / (rank + k)
             if key not in doc_store:
                 doc_store[key] = doc
             if label:
@@ -225,7 +236,8 @@ def reciprocal_rank_fusion(
 def hybrid_retrieve(query: str, state, top_k: int = 8, use_jina: bool = False, session_id: str = "",
                     type_boost: dict[str, float] | None = None,
                     chunk_type_filter: list[str] | None = None,
-                    entity_type_filter: list[str] | None = None) -> list[dict]:
+                    entity_type_filter: list[str] | None = None,
+                    expansion_intent: str | None = None) -> list[dict]:
     """Run dense + BM25 retrieval, fuse with RRF, return top_k results.
 
     Returns list of {text, source, score, id}.
@@ -258,7 +270,8 @@ def hybrid_retrieve(query: str, state, top_k: int = 8, use_jina: bool = False, s
         return []
 
     ranked_lists, labels = _labeled(("dense", dense_hits), ("bm25", bm25_hits), ("vision", vision_hits))
-    fused = reciprocal_rank_fusion(ranked_lists, type_boost=type_boost, labels=labels)
+    list_weights = classify_query(query, expansion_intent)
+    fused = reciprocal_rank_fusion(ranked_lists, type_boost=type_boost, labels=labels, list_weights=list_weights)
     return fused[:top_k]
 
 
@@ -267,6 +280,7 @@ def tiered_hybrid_retrieve(
     kb_fallback: bool = True, type_boost: dict[str, float] | None = None,
     chunk_type_filter: list[str] | None = None,
     entity_type_filter: list[str] | None = None,
+    expansion_intent: str | None = None,
 ) -> list[dict]:
     """Two-tier retrieval: session-uploaded docs first, KB fallback if weak match.
 
@@ -286,7 +300,8 @@ def tiered_hybrid_retrieve(
     if not has_uploads:
         return hybrid_retrieve(query, state, top_k=top_k, use_jina=use_jina, session_id=session_id,
                                type_boost=type_boost, chunk_type_filter=chunk_type_filter,
-                               entity_type_filter=entity_type_filter) if kb_fallback else []
+                               entity_type_filter=entity_type_filter,
+                               expansion_intent=expansion_intent) if kb_fallback else []
 
     query_emb = embed_query(query, state, use_jina=use_jina)
     collection = state.jina_collection if (use_jina and state.jina_ready) else state.collection
@@ -304,7 +319,8 @@ def tiered_hybrid_retrieve(
     from routers.rag.graph_retrieve import graph_retrieve
     graph_up = graph_retrieve(query, state, session_id=session_id, top_k=20)
     tier1_lists, tier1_labels = _labeled(("dense", dense_up), ("bm25", bm25_up), ("vision", vision_up), ("graph", graph_up))
-    tier1 = (reciprocal_rank_fusion(tier1_lists, type_boost=type_boost, labels=tier1_labels)
+    list_weights = classify_query(query, expansion_intent)
+    tier1 = (reciprocal_rank_fusion(tier1_lists, type_boost=type_boost, labels=tier1_labels, list_weights=list_weights)
              if (dense_up or bm25_up or vision_up or graph_up) else [])
     for c in tier1:
         c["uploaded"] = True
@@ -323,7 +339,8 @@ def tiered_hybrid_retrieve(
     bm25_kb = bm25_retrieve(query, state, k=50, kb_only=True, chunk_type_filter=chunk_type_filter,
                             entity_type_filter=entity_type_filter)
     tier2_lists, tier2_labels = _labeled(("dense", dense_kb), ("bm25", bm25_kb))
-    tier2 = reciprocal_rank_fusion(tier2_lists, labels=tier2_labels) if (dense_kb or bm25_kb) else []
+    tier2 = (reciprocal_rank_fusion(tier2_lists, labels=tier2_labels, list_weights=list_weights)
+             if (dense_kb or bm25_kb) else [])
 
     if not tier1:
         return tier2[:top_k]
@@ -334,10 +351,15 @@ def multi_query_retrieve(queries: list[str], state, top_k: int = 50, use_jina: b
                          session_id: str = "", kb_fallback: bool = True,
                          type_boost: dict[str, float] | None = None,
                          chunk_type_filter: list[str] | None = None,
-                         entity_type_filter: list[str] | None = None) -> list[dict]:
+                         entity_type_filter: list[str] | None = None,
+                         expansion_intent: str | None = None) -> list[dict]:
     """Run hybrid_retrieve for each query variant, then RRF-merge across all
     variants' result lists. A chunk surfaced by multiple phrasings of the
     same question ranks higher than one found by only the original wording.
+
+    expansion_intent describes the ORIGINAL question's intent (from the same
+    LLM call that produced these variants), not re-derived per rewritten
+    variant — passed through unchanged to every per-variant retrieve call.
     """
     if not state.initialized or not queries:
         return []
@@ -345,10 +367,11 @@ def multi_query_retrieve(queries: list[str], state, top_k: int = 50, use_jina: b
     retrieve_fn = tiered_hybrid_retrieve if session_id else hybrid_retrieve
     per_query_lists = [
         retrieve_fn(q, state, top_k=top_k, use_jina=use_jina, session_id=session_id, kb_fallback=kb_fallback,
-                    type_boost=type_boost, chunk_type_filter=chunk_type_filter, entity_type_filter=entity_type_filter)
+                    type_boost=type_boost, chunk_type_filter=chunk_type_filter, entity_type_filter=entity_type_filter,
+                    expansion_intent=expansion_intent)
         if session_id else retrieve_fn(q, state, top_k=top_k, use_jina=use_jina, session_id=session_id,
                                        type_boost=type_boost, chunk_type_filter=chunk_type_filter,
-                                       entity_type_filter=entity_type_filter)
+                                       entity_type_filter=entity_type_filter, expansion_intent=expansion_intent)
         for q in queries
     ]
     per_query_lists = [lst for lst in per_query_lists if lst]

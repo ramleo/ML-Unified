@@ -128,7 +128,7 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
     # 1. Expand query, retrieve top-50 candidates per variant (RRF-merged), rerank to top-8
     use_jina = req.embedding_model == "jina" and state.jina_ready
     expansion_key = _resolve_key(_EXPANSION_PROVIDER, None)
-    queries = expand_query(req.query, _EXPANSION_PROVIDER, _EXPANSION_MODEL, expansion_key)
+    queries, expansion_intent = expand_query(req.query, _EXPANSION_PROVIDER, _EXPANSION_MODEL, expansion_key)
     # Table/figure/image chunks are short (a caption, a table's own text) and so
     # structurally weaker dense/BM25 matches than verbose prose — without a
     # boost they can lose the RRF fusion race even when they hold the answer
@@ -139,7 +139,8 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
     candidates = multi_query_retrieve(queries, state, top_k=20, use_jina=use_jina,
                                       session_id=req.session_id, kb_fallback=not req.restrict_to_uploads,
                                       type_boost=type_boost, chunk_type_filter=req.chunk_type_filter,
-                                      entity_type_filter=req.entity_type_filter)
+                                      entity_type_filter=req.entity_type_filter,
+                                      expansion_intent=expansion_intent)
     # The default absolute floor is tuned to filter noise out of a large,
     # mixed general corpus. In restrict_to_uploads mode, tier-1 retrieval has
     # already scoped candidates to just the user's own small uploaded
