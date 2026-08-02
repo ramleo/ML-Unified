@@ -1,20 +1,51 @@
-"""Domain-specific structured entity extraction (MMRAG-03) — pulls out
-money amounts, dates, and percentages from a chunk's own text at ingest
-time, the same way pii.py flags PII categories: cheap regex, computed once
+"""Domain-specific structured entity extraction (MMRAG-03/MMRAG-26) — pulls
+out money amounts, dates, percentages, and named entities from a chunk's own
+text at ingest time, the same way pii.py flags PII categories: computed once
 per chunk, never a per-query LLM call.
 
-Deliberately scoped to entities regex can extract reliably — money/date/
-percent show up prominently in exactly the document types this tool
-targets (invoices, resumes, contracts, reports). Person/organization names
-are NOT attempted here: a regex heuristic for those (e.g. capitalized word
-sequences) produces too many false positives on section headers and titles
-to be worth shipping — a real accuracy/cost tradeoff, not an oversight.
+Money/date/percent stay regex-based (cheap, reliable, no reason to replace).
+Person/organization/location were originally left out because a regex
+heuristic (capitalized word sequences) produced too many false positives on
+section headers and titles — that reasoning doesn't apply to a real NER
+model, so MMRAG-26 adds a small local spaCy pass (en_core_web_sm) for those
+three types: no API calls, no per-use cost, one-time model download baked
+into the Docker image at build time (see Dockerfile).
 """
 from __future__ import annotations
 
 import json
+import logging
 import re
+import threading
 from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+_nlp = None
+_load_error: Optional[str] = None
+_lock = threading.Lock()
+
+_SPACY_LABEL_MAP = {"PERSON": "person", "ORG": "org", "GPE": "location", "LOC": "location"}
+
+
+def _ensure_loaded() -> bool:
+    """Lazy-load spaCy on first use — only the NER component is needed, so
+    the parser/lemmatizer pipes are disabled for speed."""
+    global _nlp, _load_error
+    if _nlp is not None:
+        return True
+    with _lock:
+        if _nlp is not None:
+            return True
+        try:
+            import spacy
+
+            _nlp = spacy.load("en_core_web_sm", disable=["parser", "lemmatizer"])
+            return True
+        except Exception as exc:
+            logger.warning("spaCy load failed — named-entity extraction disabled: %s", exc)
+            _load_error = str(exc)
+            return False
 
 _MONEY_RE = re.compile(
     r"[$€£¥]\s?\d[\d,]*(?:\.\d+)?(?:\s?(?:million|billion|k|M|B))?"
@@ -43,7 +74,11 @@ _MAX_PER_TYPE = 4
 
 def extract_entities(text: str) -> list[dict]:
     """Returns a deduped, order-preserving list of {"type", "value"} — at
-    most _MAX_PER_TYPE per type."""
+    most _MAX_PER_TYPE per type. Regex types (money/date/percent) always
+    run; person/org/location additionally run through spaCy NER when the
+    model is available — best-effort, silently skipped if spaCy failed to
+    load (same "never blocks the main path" contract as this module's other
+    optional-resource siblings, e.g. mm_similar.py's CLIP loader)."""
     found: list[dict] = []
     for etype, pattern in (("money", _MONEY_RE), ("date", _DATE_RE), ("percent", _PERCENT_RE)):
         seen: set[str] = set()
@@ -55,6 +90,25 @@ def extract_entities(text: str) -> list[dict]:
                 continue
             seen.add(value.lower())
             found.append({"type": etype, "value": value})
+
+    if _ensure_loaded():
+        seen_by_type: dict[str, set[str]] = {}
+        try:
+            for ent in _nlp(text[:5000]).ents:  # cap input length — chunk text is already short
+                etype = _SPACY_LABEL_MAP.get(ent.label_)
+                if not etype:
+                    continue
+                seen = seen_by_type.setdefault(etype, set())
+                if len(seen) >= _MAX_PER_TYPE:
+                    continue
+                value = ent.text.strip()
+                if not value or value.lower() in seen:
+                    continue
+                seen.add(value.lower())
+                found.append({"type": etype, "value": value})
+        except Exception as exc:
+            logger.warning("spaCy NER pass failed on a chunk — skipping: %s", exc)
+
     return found
 
 
@@ -75,7 +129,7 @@ def decode_entities(raw: Optional[str]) -> list[dict]:
         return []
 
 
-ENTITY_TYPES = ("money", "date", "percent")
+ENTITY_TYPES = ("money", "date", "percent", "person", "org", "location")
 
 
 def entity_type_flags(entities: list[dict]) -> dict[str, bool]:
