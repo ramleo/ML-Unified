@@ -52,7 +52,8 @@ _ANSWER_LENGTH_INSTRUCTIONS = {
 
 
 def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploads: bool = False,
-                        answer_length: str = "normal", redact: bool = False) -> str:
+                        answer_length: str = "normal", redact: bool = False,
+                        verification_note: str = "") -> str:
     parts: list[str] = []
     if tool_context:
         parts.append(tool_context.strip())
@@ -69,6 +70,9 @@ def build_system_prompt(tool_context: str, chunks: list[dict], restrict_to_uploa
             "the uploaded document doesn't cover it — do not guess or answer from "
             "what you generally know about the topic."
         )
+
+    if verification_note:
+        parts.append(verification_note)
 
     if chunks:
         parts.append(

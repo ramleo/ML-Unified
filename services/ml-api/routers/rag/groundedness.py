@@ -126,3 +126,21 @@ def score_groundedness(answer: str, chunks: list[dict], embed_fn: Callable[[list
         "level": level,
         "ungrounded_sentences": ungrounded,
     }
+
+
+def build_verification_note(ungrounded_sentences: list[str]) -> str:
+    """Formats flagged sentences into an explicit correction directive for
+    the self-correction retry's system prompt (query.py) — the actual
+    "evidence-gated" part of MMRAG-28: the LLM is told exactly which claims
+    were flagged and why, instead of just being handed more context and
+    asked to regenerate blind."""
+    if not ungrounded_sentences:
+        return ""
+    flagged = "; ".join(f'"{s}"' for s in ungrounded_sentences)
+    return (
+        f"Your previous answer included statements that don't appear to be "
+        f"supported by the retrieved evidence: {flagged}. Using ONLY the "
+        f"retrieved content below, revise your answer — fix or remove any "
+        f"claim not directly supported by it. If you're unsure a specific "
+        f"detail is correct, omit it rather than guess."
+    )

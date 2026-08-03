@@ -15,7 +15,7 @@ from routers.rag.crag import web_search_fallback
 from routers.rag.citations import build_system_prompt, build_source_doc, likely_used_indices
 from routers.rag.generation import build_provider_candidates, stream_with_fallback
 from routers.rag.cache import ctx_hash as _ctx_hash, cache_lookup as _cache_lookup, cache_store as _cache_store
-from routers.rag.groundedness import score_groundedness
+from routers.rag.groundedness import score_groundedness, build_verification_note
 from routers.rag.query_helpers import (
     QueryRequest,
     _resolve_key,
@@ -220,26 +220,37 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
         except Exception as exc:
             logger.warning("Groundedness scoring failed: %s", exc)
 
-    # 4c. Self-correction retry — groundedness (4b) is computed on every
-    # answer but historically only ever displayed as a badge. When it comes
-    # back "low", broaden retrieval (drop the relevance floor, pull more
-    # candidates already fetched in step 1 — no extra retrieval call) and
-    # regenerate once. A single retry only, and only on the rare low-
-    # confidence case, so the common already-grounded answer streams exactly
-    # as before with no added latency. The retry's own tokens stream as a
-    # fresh "retry" + "source"/"token" sequence so the client can swap out
-    # the first attempt rather than appending onto it.
+    # 4c. Evidence-gated self-correction retry (MMRAG-28) — groundedness (4b)
+    # is computed on every answer. Two tiers trigger a retry: "low" overall
+    # score, or "medium" with at least one specific sentence flagged
+    # ungrounded (a partially-wrong answer that would otherwise just ship
+    # with a badge and nothing acting on it). Retrieval is broadened (drop
+    # the relevance floor, pull more candidates already fetched in step 1 —
+    # no extra retrieval call) AND the retry is actually evidence-gated: the
+    # flagged sentences are named explicitly in the retry's system prompt
+    # (build_verification_note) so the LLM is told exactly what to fix
+    # rather than just handed more context and asked to regenerate blind.
+    # A single retry only, so the common already-grounded answer streams
+    # exactly as before with no added latency. The retry's own tokens stream
+    # as a fresh "retry" + "source"/"token" sequence so the client can swap
+    # out the first attempt rather than appending onto it.
     self_corrected = False
-    if full_text and not generation_failed and candidates and groundedness and groundedness.get("level") == "low" and not web_fallback_used:
+    groundedness_level = groundedness.get("level") if groundedness else None
+    should_retry = groundedness_level == "low" or (
+        groundedness_level == "medium" and groundedness.get("ungrounded_sentences")
+    )
+    if full_text and not generation_failed and candidates and should_retry and not web_fallback_used:
         broadened = rerank(req.query, candidates, state,
                            top_k=min(len(candidates), 10), abs_floor=0.0, keep_all=False)
         if broadened and broadened != chunks:
-            yield _sse({"type": "retry", "reason": "low_groundedness"})
+            yield _sse({"type": "retry", "reason": f"{groundedness_level}_groundedness"})
             for chunk in broadened:
                 yield _sse({"type": "source", "doc": build_source_doc(chunk, redact=redact)})
 
+            verification_note = build_verification_note(groundedness.get("ungrounded_sentences", []))
             retry_system_prompt = build_system_prompt(req.tool_context, broadened, restrict_to_uploads=req.restrict_to_uploads,
-                                                       answer_length=req.answer_length, redact=redact)
+                                                       answer_length=req.answer_length, redact=redact,
+                                                       verification_note=verification_note)
             retry_parts: list[str] = []
             retry_meta: dict = {}
             retry_failed = False
