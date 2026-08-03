@@ -17,6 +17,14 @@ def build_done_event(*, source: str, session_id: str, save_scope: str, chunks: l
         "save_scope": save_scope,
         "chunks_added": len(chunks),
         "chunk_summary": summary,
+        # "pdf"|"csv"|"video"|"audio"|"image" — already computed by the
+        # caller (mm_ingest.py) for analytics/text_segments-exclusion above,
+        # but never actually surfaced to the frontend until now. Lets the UI
+        # tell "standalone image/video upload" apart from "PDF" reliably,
+        # instead of guessing from chunk-type counts (a real image upload
+        # CAN produce a "table" chunk when it contains a readable chart/grid
+        # — chunk counts alone aren't a safe proxy for the source file type).
+        "file_type": file_type,
         # Which entity types (MMRAG-03: money/date/percent) appear ANYWHERE
         # in this document, computed once here rather than folded into
         # `summary` above — that dict already powers the "N chunks" count
