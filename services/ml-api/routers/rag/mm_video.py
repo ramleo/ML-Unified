@@ -23,6 +23,7 @@ import tempfile
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.mm_caption import clean_ocr_text, extract_caption
 from routers.rag.mm_objects import describe_objects, detect_objects
+from routers.rag.mm_signatures import describe_signatures, detect_signatures
 
 logger = logging.getLogger(__name__)
 
@@ -139,8 +140,15 @@ def process_frame(cap, timestamp_s: float, frame_idx: int, source: str) -> tuple
         # chunk["text"] — stays in sync with what the answer can say.
         caption = f"{caption}\n\n{obj_desc}"
 
+    # Signature detection (backlog item 1) — same treatment as mm_image.py:
+    # own model/vocabulary, kept as a separate field from `objects`.
+    signatures = detect_signatures(b64)
+    sig_desc = describe_signatures(signatures)
+    if sig_desc:
+        caption = f"{caption}\n\n{sig_desc}"
+
     chunk = {"text": caption, "source": source, "chunk_index": frame_idx - 1,
-             "chunk_type": "video", "page": frame_idx, "objects": objects,
+             "chunk_type": "video", "page": frame_idx, "objects": objects, "signatures": signatures,
              # Real seconds into the video (not the 1-indexed sample number
              # above) — MMRAG-09: lets a citation for a visual-only frame
              # (nothing spoken at that moment) jump the player to the exact

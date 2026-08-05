@@ -10,6 +10,7 @@ from routers.rag.blur import blur_score
 from routers.rag.mm_caption import (build_table_markdown, clean_ocr_text, extract_caption,
                                     extract_chart_data, split_pipe_tables)
 from routers.rag.mm_objects import describe_objects, detect_objects
+from routers.rag.mm_signatures import describe_signatures, detect_signatures
 
 _OCR_TEXT_CAP = 2000
 
@@ -108,10 +109,21 @@ def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[
         # mm_objects.describe_objects for why.
         caption = f"{caption}\n\n{obj_desc}" if caption else obj_desc
 
+    # Signature detection (backlog item 1) — same "compute once at ingest,
+    # free metadata lookup later" rationale as object detection above, own
+    # model/vocabulary so kept as a separate field rather than merged into
+    # `objects` (mixing would corrupt the OIV7 label-based "Detect faces"
+    # filter and the "Detect objects (N)" count elsewhere).
+    signatures = detect_signatures(b64)
+    sig_desc = describe_signatures(signatures)
+    if sig_desc:
+        caption = f"{caption}\n\n{sig_desc}" if caption else sig_desc
+
     chunks: list[dict] = []
     if caption:
         chunks.append({"text": caption, "source": source, "chunk_index": 0,
-                       "chunk_type": "image", "page": 1, "quality": quality, "objects": objects})
+                       "chunk_type": "image", "page": 1, "quality": quality, "objects": objects,
+                       "signatures": signatures})
     for tbl in table_blocks:
         chunks.append({"text": tbl, "source": source, "chunk_index": len(chunks),
                        "chunk_type": "table", "page": 1})

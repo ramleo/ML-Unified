@@ -137,6 +137,10 @@ def index_chunks(chunks: list[dict], state, uploaded: bool = False, session_id: 
             # JSON-encode/decode pattern, own codec since the shape differs
             # from bbox (a list of {label,confidence,bbox} dicts, not one box).
             "objects": encode_objects(c.get("objects")),
+            # Same generic {label,confidence,bbox}-list codec as `objects`
+            # above (encode_objects is shape-agnostic JSON, not OIV7-
+            # specific) — reused rather than duplicated for signatures.
+            "signatures": encode_objects(c.get("signatures")),
             "number_mismatch": c.get("number_mismatch"),
             "pii_types": ",".join(detect_pii_types(c["text"])) or None,
             "blurry": (c.get("quality") or {}).get("blurry"),
