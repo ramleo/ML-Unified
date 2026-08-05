@@ -61,7 +61,15 @@ def build_done_event(*, source: str, session_id: str, save_scope: str, chunks: l
              "objects": c.get("objects") or None,
              "number_mismatch": c.get("number_mismatch") or None,
              "pii_types": ",".join(detect_pii_types(c.get("text", ""))) or None,
-             "blurry": (c.get("quality") or {}).get("blurry") or None}
+             "blurry": (c.get("quality") or {}).get("blurry") or None,
+             # Same extract_entities() call ingest.py's index_chunks() uses
+             # to build Chroma metadata (entities are derived purely from
+             # `text`, so this is deterministic, not a second real
+             # computation) — just never surfaced in the SSE response
+             # before, so the frontend could only ever see a chunk's
+             # entities via a later query-time citation, not right after
+             # upload like objects/pii_types already could.
+             "entities": extract_entities(c.get("text", "")) or None}
             for c in chunks if c.get("chunk_type") != "text"
         ],
         # Full, unchunked video transcript (empty/absent for non-video
