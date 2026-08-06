@@ -13,8 +13,9 @@ import tempfile
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.mm_caption import clean_ocr_text, extract_caption
 from routers.rag.mm_objects import describe_objects, detect_objects
+from routers.rag.mm_noise_forensics import detect_noise_regions
 from routers.rag.mm_signatures import describe_signatures, detect_signatures
-from routers.rag.mm_tampering import describe_tampering, detect_tampering
+from routers.rag.mm_tampering import combine_tampering_detections, describe_tampering, detect_tampering
 from routers.rag.mm_video_audio import generate_chapters, transcribe_video
 
 logger = logging.getLogger(__name__)
@@ -138,8 +139,11 @@ def process_frame(cap, timestamp_s: float, frame_idx: int, source: str) -> tuple
     if sig_desc:
         caption = f"{caption}\n\n{sig_desc}"
 
-    # ELA tampering detection (backlog item 2) — same treatment as mm_image.py.
-    tampering = detect_tampering(b64)
+    # Tampering detection (backlog item 2) — a decoded video frame is always
+    # cv2-encoded as a fresh PNG (never JPEG-sourced), so source_is_jpeg is
+    # unconditionally False here — ELA-only hits get discounted, noise-
+    # residual and agreed-upon hits don't. See mm_tampering.py.
+    tampering = combine_tampering_detections(detect_tampering(b64), detect_noise_regions(b64), False)
     tamper_desc = describe_tampering(tampering)
     if tamper_desc:
         caption = f"{caption}\n\n{tamper_desc}"

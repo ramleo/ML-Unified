@@ -10,6 +10,13 @@ diff. Only a reliable signal on JPEG-sourced content — a PNG/lossless
 original, a screenshot, or an image already resaved many times can give
 noisy or muted results, so this is surfaced to the user as "possible"
 regions worth a look, not a verdict.
+
+combine_tampering_detections() below merges this module's ELA output with
+mm_noise_forensics.detect_noise_regions() — a format-agnostic second
+signal — into one final list, discounting ELA-only detections when the
+upload wasn't actually JPEG-sourced (its core assumption doesn't hold
+there) while leaving noise-residual and agreed-upon detections at full
+strength.
 """
 from __future__ import annotations
 
@@ -104,9 +111,76 @@ def describe_tampering(regions: list[dict] | None) -> str:
     """Same rationale as mm_objects.describe_objects / mm_signatures
     .describe_signatures: baked into the stored chunk text (not just the
     LLM prompt) so groundedness/citation scoring, which only ever reads
-    chunk["text"], can back a "does this look edited" answer."""
+    chunk["text"], can back a "does this look edited" answer. Wording is
+    detector-agnostic since `regions` may have come from ELA, noise-residual,
+    or both merged together — the caller doesn't need to know which."""
     if not regions:
         return ""
     n = len(regions)
-    return (f"Possible tampering detected: {n} region{'s' if n != 1 else ''} with elevated "
-            "JPEG compression error (may indicate editing) — not a certainty, verify visually.")
+    return (f"Possible tampering detected: {n} region{'s' if n != 1 else ''} with signs of "
+            "possible editing (may indicate tampering) — not a certainty, verify visually.")
+
+
+_MERGE_IOU_THRESH = 0.3
+_ELA_NONJPEG_DISCOUNT = 0.6  # ELA's core assumption (a prior JPEG save) doesn't hold on a
+                             # non-JPEG-sourced upload — still a weak hint, not dropped entirely
+
+
+def _iou_xywh(a: list[float], b: list[float]) -> float:
+    ax0, ay0, aw, ah = a
+    bx0, by0, bw, bh = b
+    ix0, iy0 = max(ax0, bx0), max(ay0, by0)
+    ix1, iy1 = min(ax0 + aw, bx0 + bw), min(ay0 + ah, by0 + bh)
+    iw, ih = max(0.0, ix1 - ix0), max(0.0, iy1 - iy0)
+    inter = iw * ih
+    union = aw * ah + bw * bh - inter
+    return inter / union if union > 0 else 0.0
+
+
+def _union_bbox(a: list[float], b: list[float]) -> list[float]:
+    x0, y0 = min(a[0], b[0]), min(a[1], b[1])
+    x1, y1 = max(a[0] + a[2], b[0] + b[2]), max(a[1] + a[3], b[1] + b[3])
+    return [round(x0, 4), round(y0, 4), round(x1 - x0, 4), round(y1 - y0, 4)]
+
+
+def combine_tampering_detections(ela_regions: list[dict], noise_regions: list[dict],
+                                  source_is_jpeg: bool) -> list[dict]:
+    """Merges the two detectors' independent region lists into one, so the
+    frontend only ever sees a single "tampering" field/dropdown option
+    regardless of which technique(s) actually fired.
+
+    - Overlapping ELA + noise-residual regions (IoU >= _MERGE_IOU_THRESH):
+      two independent signals agreeing is strong evidence either way, so
+      confidence is boosted (not just averaged) and never discounted, even
+      on a non-JPEG upload.
+    - ELA-only regions on a non-JPEG-sourced upload: discounted, since
+      ELA's "this was previously JPEG-compressed" assumption doesn't hold —
+      still surfaced as a weaker hint rather than dropped.
+    - Noise-residual-only regions: never discounted, since it's
+      format-agnostic by construction.
+    """
+    merged: list[dict] = []
+    used_noise: set[int] = set()
+    for ela_r in ela_regions:
+        best_j, best_iou = None, 0.0
+        for j, noise_r in enumerate(noise_regions):
+            if j in used_noise:
+                continue
+            iou = _iou_xywh(ela_r["bbox"], noise_r["bbox"])
+            if iou > best_iou:
+                best_iou, best_j = iou, j
+        if best_j is not None and best_iou >= _MERGE_IOU_THRESH:
+            noise_r = noise_regions[best_j]
+            used_noise.add(best_j)
+            c1, c2 = ela_r["confidence"], noise_r["confidence"]
+            merged.append({"label": "Tampering", "confidence": round(1 - (1 - c1) * (1 - c2), 3),
+                           "bbox": _union_bbox(ela_r["bbox"], noise_r["bbox"])})
+        else:
+            conf = ela_r["confidence"] if source_is_jpeg else round(ela_r["confidence"] * _ELA_NONJPEG_DISCOUNT, 3)
+            merged.append({"label": "Tampering", "confidence": conf, "bbox": ela_r["bbox"]})
+    for j, noise_r in enumerate(noise_regions):
+        if j not in used_noise:
+            merged.append(noise_r)
+
+    merged.sort(key=lambda r: -r["confidence"])
+    return merged[:_MAX_DETECTIONS]
