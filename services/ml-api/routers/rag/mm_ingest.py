@@ -37,7 +37,7 @@ _executor = ThreadPoolExecutor(max_workers=2)
 
 MAX_FILE_BYTES = 20 * 1024 * 1024  # 20 MB — video audio now chunks past
                                     # Groq Whisper's own 25MB-per-call cap
-                                    # (see mm_video.py's _transcribe_long_audio),
+                                    # (see mm_video_audio.py's _transcribe_long_audio),
                                     # so this ceiling is about upload/ingestion
                                     # cost, not a transcription hard limit
 

@@ -141,6 +141,9 @@ def index_chunks(chunks: list[dict], state, uploaded: bool = False, session_id: 
             # above (encode_objects is shape-agnostic JSON, not OIV7-
             # specific) — reused rather than duplicated for signatures.
             "signatures": encode_objects(c.get("signatures")),
+            # Same reuse for ELA tampering regions (backlog item 2) — also a
+            # list of {label,confidence,bbox} dicts.
+            "tampering": encode_objects(c.get("tampering")),
             "number_mismatch": c.get("number_mismatch"),
             "pii_types": ",".join(detect_pii_types(c["text"])) or None,
             "blurry": (c.get("quality") or {}).get("blurry"),

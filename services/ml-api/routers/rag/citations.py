@@ -192,6 +192,7 @@ def build_source_doc(chunk: dict, redact: bool = False) -> dict:
         "bbox": _decode_bbox(chunk.get("bbox")),
         "objects": decode_objects(chunk.get("objects")) or None,
         "signatures": decode_objects(chunk.get("signatures")) or None,
+        "tampering": decode_objects(chunk.get("tampering")) or None,
         "number_mismatch": chunk.get("number_mismatch") or None,
         "pii_types": chunk.get("pii_types") or None,
         "blurry": chunk.get("blurry") or None,

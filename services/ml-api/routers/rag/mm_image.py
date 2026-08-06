@@ -11,6 +11,7 @@ from routers.rag.mm_caption import (build_table_markdown, clean_ocr_text, extrac
                                     extract_chart_data, split_pipe_tables)
 from routers.rag.mm_objects import describe_objects, detect_objects
 from routers.rag.mm_signatures import describe_signatures, detect_signatures
+from routers.rag.mm_tampering import describe_tampering, detect_tampering
 
 _OCR_TEXT_CAP = 2000
 
@@ -119,11 +120,20 @@ def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[
     if sig_desc:
         caption = f"{caption}\n\n{sig_desc}" if caption else sig_desc
 
+    # ELA tampering detection (backlog item 2) — same "compute once at
+    # ingest" rationale, own field since it's a totally different signal
+    # (compression-error regions, not a labeled detector) from objects/
+    # signatures.
+    tampering = detect_tampering(b64)
+    tamper_desc = describe_tampering(tampering)
+    if tamper_desc:
+        caption = f"{caption}\n\n{tamper_desc}" if caption else tamper_desc
+
     chunks: list[dict] = []
     if caption:
         chunks.append({"text": caption, "source": source, "chunk_index": 0,
                        "chunk_type": "image", "page": 1, "quality": quality, "objects": objects,
-                       "signatures": signatures})
+                       "signatures": signatures, "tampering": tampering})
     for tbl in table_blocks:
         chunks.append({"text": tbl, "source": source, "chunk_index": len(chunks),
                        "chunk_type": "table", "page": 1})
