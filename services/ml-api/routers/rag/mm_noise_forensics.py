@@ -26,7 +26,9 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 _BLOCK = 16  # coarser than ELA's 8px grid — noise variance needs more samples per block to be stable
-_OUTLIER_STD = 2.0
+_OUTLIER_STD = 3.5
+_LOCAL_SMOOTH = 5  # box-blur kernel (in blocks) used to build the "expected" local noise level
+_MIN_CONFIDENCE = 0.45  # below this, too likely to be ordinary depth-of-field falloff
 _MAX_DETECTIONS = 5
 _MIN_REGION_FRAC = 0.001
 
@@ -52,14 +54,24 @@ def detect_noise_regions(b64: str) -> list[dict]:
         cropped = residual[:h_blocks * _BLOCK, :w_blocks * _BLOCK]
         block_energy = cropped.reshape(h_blocks, _BLOCK, w_blocks, _BLOCK).mean(axis=(1, 3))
 
-        mean, std = float(block_energy.mean()), float(block_energy.std())
+        # Compare each block against its LOCAL neighborhood's expected noise
+        # level, not the whole image's. A real photo's noise texture varies
+        # gradually across the frame on its own — depth-of-field blur, a
+        # smooth sky next to a textured foreground — none of that is
+        # tampering. A high-pass (block minus its local smoothed average)
+        # cancels that gradual variation out and leaves only the SHARP local
+        # jumps a genuine spliced-in patch actually creates.
+        local_avg = cv2.blur(block_energy, (_LOCAL_SMOOTH, _LOCAL_SMOOTH))
+        local_dev = block_energy - local_avg
+
+        mean, std = float(local_dev.mean()), float(local_dev.std())
         if std < 1e-6:
             return []
         # Outliers in EITHER direction: suspiciously smooth (denoised/
         # regenerated patch) OR suspiciously grainy (mismatched source) —
-        # both are "this block's noise texture doesn't match the rest of
-        # the photo," just opposite symptoms of the same underlying tell.
-        mask = (np.abs(block_energy - mean) > _OUTLIER_STD * std).astype(np.uint8)
+        # both are "this block's noise texture doesn't match its
+        # surroundings," just opposite symptoms of the same underlying tell.
+        mask = (np.abs(local_dev - mean) > _OUTLIER_STD * std).astype(np.uint8)
 
         num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
         min_blocks = max(2, int(_MIN_REGION_FRAC * h_blocks * w_blocks))
@@ -71,8 +83,10 @@ def detect_noise_regions(b64: str) -> list[dict]:
                 continue
             bx, by = stats[i, cv2.CC_STAT_LEFT], stats[i, cv2.CC_STAT_TOP]
             bw, bh = stats[i, cv2.CC_STAT_WIDTH], stats[i, cv2.CC_STAT_HEIGHT]
-            region_energy = float(block_energy[labels == i].mean())
-            confidence = float(np.clip(abs(region_energy - mean) / (4.0 * std), 0, 1))
+            region_dev = float(local_dev[labels == i].mean())
+            confidence = float(np.clip(abs(region_dev - mean) / (4.0 * std), 0, 1))
+            if confidence < _MIN_CONFIDENCE:
+                continue
             x0, y0 = int(bx * _BLOCK), int(by * _BLOCK)
             x1, y1 = min(orig_w, int((bx + bw) * _BLOCK)), min(orig_h, int((by + bh) * _BLOCK))
             candidates.append((confidence, x0, y0, x1, y1))
