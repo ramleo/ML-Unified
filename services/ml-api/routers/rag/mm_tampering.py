@@ -13,10 +13,12 @@ regions worth a look, not a verdict.
 
 combine_tampering_detections() below merges this module's ELA output with
 mm_noise_forensics.detect_noise_regions() — a format-agnostic second
-signal — into one final list, discounting ELA-only detections when the
-upload wasn't actually JPEG-sourced (its core assumption doesn't hold
-there) while leaving noise-residual and agreed-upon detections at full
-strength.
+signal — into one final list. An ELA hit only surfaces when noise-residual
+agrees on roughly the same region; a solo ELA hit is dropped rather than
+shown at any confidence, since it's been tested to be confusable with
+ordinary fine real detail (see combine_tampering_detections' docstring).
+Noise-residual-only hits are kept at full strength — the only signal
+available at all on a non-JPEG-sourced upload.
 """
 from __future__ import annotations
 
@@ -33,8 +35,19 @@ logger = logging.getLogger(__name__)
 _ELA_QUALITY = 90
 _ELA_SCALE = 12       # amplifies the raw per-pixel diff enough to threshold
 _BLOCK = 8              # JPEG's native compression block size
+_LOCAL_SMOOTH = 9  # box-blur kernel (in blocks) for the "expected" local compression error
 _MAX_DETECTIONS = 5
 _MIN_REGION_FRAC = 0.001  # ignore blobs under ~0.1% of image area as noise
+# NOTE: an edge-density guard (skip blocks with high real Sobel-gradient
+# content, reasoning that fine real detail like spokes/wires would have
+# high edge density but genuine tampering wouldn't) was tried and reverted
+# — tested against a real spliced/noisy patch, it suppressed genuine
+# detections just as often as it suppressed false ones, because spliced
+# content is very often itself high-frequency (the whole point of a
+# splice is it doesn't match its surroundings). ELA-alone is confusable
+# with real fine detail and there's no cheap per-block heuristic that
+# reliably tells the two apart — see combine_tampering_detections below,
+# which handles this by requiring noise-residual agreement instead.
 
 
 def detect_tampering(b64: str) -> list[dict]:
@@ -67,11 +80,19 @@ def detect_tampering(b64: str) -> list[dict]:
         cropped = diff_gray[:h_blocks * _BLOCK, :w_blocks * _BLOCK]
         block_err = cropped.reshape(h_blocks, _BLOCK, w_blocks, _BLOCK).mean(axis=(1, 3))
 
-        mean, std = float(block_err.mean()), float(block_err.std())
+        # Compare each block against its LOCAL neighborhood's expected
+        # compression error, not the whole image's — a region that's simply
+        # busier/more detailed everywhere (a textured foreground against a
+        # flat background) shouldn't itself read as tampering, only a SHARP
+        # local jump against its own surroundings should.
+        local_avg = cv2.blur(block_err, (_LOCAL_SMOOTH, _LOCAL_SMOOTH))
+        local_dev = block_err - local_avg
+
+        mean, std = float(local_dev.mean()), float(local_dev.std())
         if std < 1e-6:
             return []
         threshold = mean + 2.0 * std
-        mask = (block_err > threshold).astype(np.uint8)
+        mask = (local_dev > threshold).astype(np.uint8)
 
         num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
         min_blocks = max(2, int(_MIN_REGION_FRAC * h_blocks * w_blocks))
@@ -83,8 +104,8 @@ def detect_tampering(b64: str) -> list[dict]:
                 continue
             bx, by = stats[i, cv2.CC_STAT_LEFT], stats[i, cv2.CC_STAT_TOP]
             bw, bh = stats[i, cv2.CC_STAT_WIDTH], stats[i, cv2.CC_STAT_HEIGHT]
-            region_err = float(block_err[labels == i].mean())
-            confidence = float(np.clip((region_err - mean) / (4.0 * std), 0, 1))
+            region_dev = float(local_dev[labels == i].mean())
+            confidence = float(np.clip((region_dev - mean) / (4.0 * std), 0, 1))
             # int(...) here — stats[] entries are numpy int32, which
             # json.dumps (encode_objects, ingest.py) can't serialize; every
             # other numeric field in this module is already cast to a
@@ -122,8 +143,6 @@ def describe_tampering(regions: list[dict] | None) -> str:
 
 
 _MERGE_IOU_THRESH = 0.3
-_ELA_NONJPEG_DISCOUNT = 0.6  # ELA's core assumption (a prior JPEG save) doesn't hold on a
-                             # non-JPEG-sourced upload — still a weak hint, not dropped entirely
 
 
 def _iou_xywh(a: list[float], b: list[float]) -> float:
@@ -143,21 +162,30 @@ def _union_bbox(a: list[float], b: list[float]) -> list[float]:
     return [round(x0, 4), round(y0, 4), round(x1 - x0, 4), round(y1 - y0, 4)]
 
 
-def combine_tampering_detections(ela_regions: list[dict], noise_regions: list[dict],
-                                  source_is_jpeg: bool) -> list[dict]:
+def combine_tampering_detections(ela_regions: list[dict], noise_regions: list[dict]) -> list[dict]:
     """Merges the two detectors' independent region lists into one, so the
     frontend only ever sees a single "tampering" field/dropdown option
     regardless of which technique(s) actually fired.
 
     - Overlapping ELA + noise-residual regions (IoU >= _MERGE_IOU_THRESH):
       two independent signals agreeing is strong evidence either way, so
-      confidence is boosted (not just averaged) and never discounted, even
-      on a non-JPEG upload.
-    - ELA-only regions on a non-JPEG-sourced upload: discounted, since
-      ELA's "this was previously JPEG-compressed" assumption doesn't hold —
-      still surfaced as a weaker hint rather than dropped.
-    - Noise-residual-only regions: never discounted, since it's
-      format-agnostic by construction.
+      confidence is boosted (not just averaged).
+    - ELA-only regions (no noise-residual agreement): DROPPED, not
+      discounted. Live-tested against a real photo (bicycle spokes/frame
+      edges) and confirmed via synthetic tests: ELA's block-error signal is
+      confusable with ordinary fine real detail (JPEG quantization error
+      concentrates at high-frequency content the same way tampering-induced
+      error does), and no cheap per-block heuristic (local-neighborhood
+      normalization, Sobel edge-density guard, connected-component
+      solidity) reliably told the two apart — every guard tried either let
+      the false positives through or suppressed genuine detections just as
+      often. An uncorroborated ELA hit isn't trustworthy enough to show a
+      user, at any confidence.
+    - Noise-residual-only regions: kept at full confidence — it has its own
+      (tested, working) local-neighborhood + edge-density guard against
+      this same fine-detail confound, and this is the ONLY signal available
+      at all on a non-JPEG-sourced upload, so dropping solo hits here would
+      gut the entire reason this detector exists.
     """
     merged: list[dict] = []
     used_noise: set[int] = set()
@@ -175,9 +203,6 @@ def combine_tampering_detections(ela_regions: list[dict], noise_regions: list[di
             c1, c2 = ela_r["confidence"], noise_r["confidence"]
             merged.append({"label": "Tampering", "confidence": round(1 - (1 - c1) * (1 - c2), 3),
                            "bbox": _union_bbox(ela_r["bbox"], noise_r["bbox"])})
-        else:
-            conf = ela_r["confidence"] if source_is_jpeg else round(ela_r["confidence"] * _ELA_NONJPEG_DISCOUNT, 3)
-            merged.append({"label": "Tampering", "confidence": conf, "bbox": ela_r["bbox"]})
     for j, noise_r in enumerate(noise_regions):
         if j not in used_noise:
             merged.append(noise_r)

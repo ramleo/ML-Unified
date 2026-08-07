@@ -65,11 +65,6 @@ def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[
     from PIL import Image
     import io, base64
 
-    # Sniffed from the RAW upload bytes, before the PNG re-encode below
-    # discards this information — needed by combine_tampering_detections()
-    # to know whether ELA's "was previously JPEG-compressed" assumption
-    # actually holds for this upload.
-    source_is_jpeg = file_bytes.startswith(b"\xff\xd8\xff")
     img = Image.open(io.BytesIO(file_bytes)).convert("RGB")
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
@@ -130,7 +125,7 @@ def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[
     # JPEG-only; noise-residual: format-agnostic) merged into one field, so
     # a PNG/WebP/BMP upload still gets real coverage instead of only ever
     # working on JPEGs. See mm_tampering.py's module docstring.
-    tampering = combine_tampering_detections(detect_tampering(b64), detect_noise_regions(b64), source_is_jpeg)
+    tampering = combine_tampering_detections(detect_tampering(b64), detect_noise_regions(b64))
     tamper_desc = describe_tampering(tampering)
     if tamper_desc:
         caption = f"{caption}\n\n{tamper_desc}" if caption else tamper_desc

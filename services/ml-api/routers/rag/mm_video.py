@@ -139,11 +139,9 @@ def process_frame(cap, timestamp_s: float, frame_idx: int, source: str) -> tuple
     if sig_desc:
         caption = f"{caption}\n\n{sig_desc}"
 
-    # Tampering detection (backlog item 2) — a decoded video frame is always
-    # cv2-encoded as a fresh PNG (never JPEG-sourced), so source_is_jpeg is
-    # unconditionally False here — ELA-only hits get discounted, noise-
-    # residual and agreed-upon hits don't. See mm_tampering.py.
-    tampering = combine_tampering_detections(detect_tampering(b64), detect_noise_regions(b64), False)
+    # Tampering detection (backlog item 2) — see mm_tampering.py's
+    # combine_tampering_detections for why a solo ELA hit never surfaces.
+    tampering = combine_tampering_detections(detect_tampering(b64), detect_noise_regions(b64))
     tamper_desc = describe_tampering(tampering)
     if tamper_desc:
         caption = f"{caption}\n\n{tamper_desc}"
