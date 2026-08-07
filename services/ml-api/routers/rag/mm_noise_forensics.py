@@ -29,6 +29,8 @@ _BLOCK = 16  # coarser than ELA's 8px grid — noise variance needs more samples
 _OUTLIER_STD = 3.5
 _LOCAL_SMOOTH = 5  # box-blur kernel (in blocks) used to build the "expected" local noise level
 _MIN_CONFIDENCE = 0.45  # below this, too likely to be ordinary depth-of-field falloff
+_EDGE_GUARD_STD = 1.25  # a block this far above the image's own mean edge density is
+                        # "genuinely fine real detail" (spokes, wires, hair), not tampering
 _MAX_DETECTIONS = 5
 _MIN_REGION_FRAC = 0.001
 
@@ -48,11 +50,25 @@ def detect_noise_regions(b64: str) -> list[dict]:
         denoised = cv2.fastNlMeansDenoising(gray, h=10, templateWindowSize=7, searchWindowSize=21)
         residual = np.abs(gray.astype(np.float32) - denoised.astype(np.float32))
 
+        # Real fine detail — bicycle spokes, wire fences, hair, foliage — gets
+        # smoothed away by the denoiser almost as aggressively as actual
+        # sensor noise, producing the same "this block got flattened" residual
+        # a genuine tampered/regenerated patch would. Sobel edge magnitude on
+        # the ORIGINAL (pre-denoise) image tells the two apart: fine real
+        # detail has a lot of real gradient there to begin with; a smoothed-in
+        # fake patch generally doesn't.
+        gx = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+        gy = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
+        edge_mag = cv2.magnitude(gx, gy)
+
         h_blocks, w_blocks = orig_h // _BLOCK, orig_w // _BLOCK
         if h_blocks < 2 or w_blocks < 2:
             return []
         cropped = residual[:h_blocks * _BLOCK, :w_blocks * _BLOCK]
         block_energy = cropped.reshape(h_blocks, _BLOCK, w_blocks, _BLOCK).mean(axis=(1, 3))
+        cropped_edge = edge_mag[:h_blocks * _BLOCK, :w_blocks * _BLOCK]
+        block_edge = cropped_edge.reshape(h_blocks, _BLOCK, w_blocks, _BLOCK).mean(axis=(1, 3))
+        edge_mean, edge_std = float(block_edge.mean()), float(block_edge.std())
 
         # Compare each block against its LOCAL neighborhood's expected noise
         # level, not the whole image's. A real photo's noise texture varies
@@ -87,6 +103,15 @@ def detect_noise_regions(b64: str) -> list[dict]:
             confidence = float(np.clip(abs(region_dev - mean) / (4.0 * std), 0, 1))
             if confidence < _MIN_CONFIDENCE:
                 continue
+            # Only the "suspiciously grainier than neighbors" direction is
+            # confusable with fine real detail — a "suspiciously smoother"
+            # region (the other outlier direction, a plausible denoised/
+            # regenerated patch) doesn't have this failure mode, so the
+            # guard only applies here.
+            if region_dev > 0 and edge_std > 1e-6:
+                region_edge = float(block_edge[labels == i].mean())
+                if region_edge > edge_mean + _EDGE_GUARD_STD * edge_std:
+                    continue
             x0, y0 = int(bx * _BLOCK), int(by * _BLOCK)
             x1, y1 = min(orig_w, int((bx + bw) * _BLOCK)), min(orig_h, int((by + bh) * _BLOCK))
             candidates.append((confidence, x0, y0, x1, y1))
