@@ -352,4 +352,7 @@ def delete_upload(source: str) -> JSONResponse:
     from routers.rag.mm_video_store import evict_video
     evict_video(source)
 
+    from routers.rag.mm_duplicates import evict_duplicates
+    evict_duplicates(source)
+
     return JSONResponse({"status": "ok", "removed": removed, "source": source})

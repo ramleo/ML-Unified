@@ -12,6 +12,7 @@ import tempfile
 
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.mm_caption import clean_ocr_text, extract_caption
+from routers.rag.mm_duplicates import describe_duplicates, detect_duplicates
 from routers.rag.mm_objects import describe_objects, detect_objects
 from routers.rag.mm_noise_forensics import detect_noise_regions
 from routers.rag.mm_signatures import describe_signatures, detect_signatures
@@ -91,7 +92,7 @@ def prepare_video(file_bytes: bytes):
     return cap, tmp.name, n_frames, duration_s
 
 
-def process_frame(cap, timestamp_s: float, frame_idx: int, source: str) -> tuple[list[dict], str, dict]:
+def process_frame(cap, timestamp_s: float, frame_idx: int, source: str, session_id: str = "") -> tuple[list[dict], str, dict]:
     """Seek to and caption ONE sampled frame at the given timestamp
     (frame_idx is just its 1-indexed display/citation order, no longer used
     to derive the timestamp itself — the caller decides WHERE to sample,
@@ -146,9 +147,17 @@ def process_frame(cap, timestamp_s: float, frame_idx: int, source: str) -> tuple
     if tamper_desc:
         caption = f"{caption}\n\n{tamper_desc}"
 
+    # Near-duplicate detection (backlog item 3) — catches e.g. a static/
+    # near-static shot re-sampled as several visually-identical frames, or
+    # the same clip re-uploaded earlier in this session.
+    duplicates = detect_duplicates(b64, source, frame_idx, session_id)
+    dup_desc = describe_duplicates(duplicates)
+    if dup_desc:
+        caption = f"{caption}\n\n{dup_desc}"
+
     chunk = {"text": caption, "source": source, "chunk_index": frame_idx - 1,
              "chunk_type": "video", "page": frame_idx, "objects": objects, "signatures": signatures,
-             "tampering": tampering,
+             "tampering": tampering, "duplicates": duplicates,
              # Real seconds into the video (not the 1-indexed sample number
              # above) — MMRAG-09: lets a citation for a visual-only frame
              # (nothing spoken at that moment) jump the player to the exact

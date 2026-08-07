@@ -9,6 +9,7 @@ from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.blur import blur_score
 from routers.rag.mm_caption import (build_table_markdown, clean_ocr_text, extract_caption,
                                     extract_chart_data, split_pipe_tables)
+from routers.rag.mm_duplicates import describe_duplicates, detect_duplicates
 from routers.rag.mm_objects import describe_objects, detect_objects
 from routers.rag.mm_noise_forensics import detect_noise_regions
 from routers.rag.mm_signatures import describe_signatures, detect_signatures
@@ -59,7 +60,7 @@ def looks_like_image(file_bytes: bytes, content_type: str = "") -> bool:
         return False
 
 
-def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[str], dict]:
+def build_image_chunk(file_bytes: bytes, source: str, session_id: str = "") -> tuple[list[dict], list[str], dict]:
     """A standalone image upload — one 'image' chunk_type, described thoroughly
     (not the terser 'figure on a document page' framing used for PDF pages)."""
     from PIL import Image
@@ -130,11 +131,19 @@ def build_image_chunk(file_bytes: bytes, source: str) -> tuple[list[dict], list[
     if tamper_desc:
         caption = f"{caption}\n\n{tamper_desc}" if caption else tamper_desc
 
+    # Near-duplicate detection (backlog item 3) — same "compute once at
+    # ingest" rationale as everything above; needs session_id since a match
+    # is only meaningful against this caller's own earlier uploads.
+    duplicates = detect_duplicates(b64, source, 1, session_id)
+    dup_desc = describe_duplicates(duplicates)
+    if dup_desc:
+        caption = f"{caption}\n\n{dup_desc}" if caption else dup_desc
+
     chunks: list[dict] = []
     if caption:
         chunks.append({"text": caption, "source": source, "chunk_index": 0,
                        "chunk_type": "image", "page": 1, "quality": quality, "objects": objects,
-                       "signatures": signatures, "tampering": tampering})
+                       "signatures": signatures, "tampering": tampering, "duplicates": duplicates})
     for tbl in table_blocks:
         chunks.append({"text": tbl, "source": source, "chunk_index": len(chunks),
                        "chunk_type": "table", "page": 1})

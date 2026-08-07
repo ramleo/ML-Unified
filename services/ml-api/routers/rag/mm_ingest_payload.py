@@ -61,6 +61,7 @@ def build_done_event(*, source: str, session_id: str, save_scope: str, chunks: l
              "objects": c.get("objects") or None,
              "signatures": c.get("signatures") or None,
              "tampering": c.get("tampering") or None,
+             "duplicates": c.get("duplicates") or None,
              "number_mismatch": c.get("number_mismatch") or None,
              "pii_types": ",".join(detect_pii_types(c.get("text", ""))) or None,
              "blurry": (c.get("quality") or {}).get("blurry") or None,

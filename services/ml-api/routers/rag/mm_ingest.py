@@ -107,6 +107,11 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         transcript_text = cached.get("transcript_text", "")
         transcript_segments = cached.get("transcript_segments", [])
         chapters = cached.get("chapters", [])
+        # The cache is keyed on file bytes, not session_id — a hit would
+        # otherwise never re-check duplicates for THIS caller's session at
+        # all (see mm_duplicates.refresh_duplicates_for_chunks docstring).
+        from routers.rag.mm_duplicates import refresh_duplicates_for_chunks
+        refresh_duplicates_for_chunks(chunks, page_images, session_id)
         yield _sse({"step": "extract", "status": "done", "chunk_summary": summary, "cached": True})
     else:
         loop = asyncio.get_event_loop()
@@ -132,7 +137,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
             yield _sse({"step": "extract", "status": "running", "indeterminate": True})
             try:
                 chunks, page_images, summary = await loop.run_in_executor(
-                    _executor, lambda: build_image_chunk(file_bytes, source)
+                    _executor, lambda: build_image_chunk(file_bytes, source, session_id)
                 )
             except Exception as exc:
                 logger.error("Multimodal ingestion failed: %s", exc)
@@ -197,7 +202,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
                 yield _sse({"step": "extract", "status": "running", "page": 0, "pages": len(sample_times)})
                 for frame_idx, ts in enumerate(sample_times, start=1):
                     frame_chunks, b64, page_summary = await loop.run_in_executor(
-                        _executor, lambda fi=frame_idx, t=ts: process_frame(cap, t, fi, source)
+                        _executor, lambda fi=frame_idx, t=ts: process_frame(cap, t, fi, source, session_id)
                     )
                     chunks.extend(frame_chunks)
                     if b64:
