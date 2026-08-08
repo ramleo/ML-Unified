@@ -13,6 +13,7 @@ from routers.rag.mm_duplicates import describe_duplicates, detect_duplicates
 from routers.rag.mm_objects import describe_objects, detect_objects
 from routers.rag.mm_noise_forensics import detect_noise_regions
 from routers.rag.mm_signatures import describe_signatures, detect_signatures
+from routers.rag.mm_tables import detect_table_regions
 from routers.rag.mm_tampering import combine_tampering_detections, describe_tampering, detect_tampering
 
 _OCR_TEXT_CAP = 2000
@@ -144,9 +145,17 @@ def build_image_chunk(file_bytes: bytes, source: str, session_id: str = "") -> t
         chunks.append({"text": caption, "source": source, "chunk_index": 0,
                        "chunk_type": "image", "page": 1, "quality": quality, "objects": objects,
                        "signatures": signatures, "tampering": tampering, "duplicates": duplicates})
-    for tbl in table_blocks:
-        chunks.append({"text": tbl, "source": source, "chunk_index": len(chunks),
-                       "chunk_type": "table", "page": 1})
+    # Table-region detection (backlog item 4) — only worth the model-load
+    # cost when OCR actually found at least one pipe-table to attach a bbox
+    # to; positional pairing (both lists already top-to-bottom) since
+    # neither an OCR-reconstructed markdown block nor Table Transformer's
+    # own output carries an ID linking them together. See mm_tables.py.
+    table_regions = detect_table_regions(b64) if table_blocks else []
+    for i, tbl in enumerate(table_blocks):
+        chunk = {"text": tbl, "source": source, "chunk_index": len(chunks), "chunk_type": "table", "page": 1}
+        if i < len(table_regions):
+            chunk["bbox"] = table_regions[i]["bbox"]
+        chunks.append(chunk)
     chart_table_count = 0
     if chart:
         # MMRAG-14: same shape a real extracted table gets — RagTableView.tsx
