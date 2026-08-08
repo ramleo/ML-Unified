@@ -18,6 +18,7 @@ from __future__ import annotations
 import base64
 import io
 import logging
+import os
 import tempfile
 import threading
 from typing import Optional
@@ -39,7 +40,14 @@ _SPACE = "black-forest-labs/FLUX.1-Kontext-Dev"
 def _ensure_client():
     """Lazily construct the gradio_client.Client — its constructor does its
     own schema fetch (~1-2s), so it's cached like every other mm_*.py
-    lazy-loaded resource rather than rebuilt per request."""
+    lazy-loaded resource rather than rebuilt per request.
+
+    Passing an HF token authenticates the call — anonymous callers get a
+    much smaller ZeroGPU quota (observed live: exhausted after a handful of
+    calls, failing with "You have exceeded your ZeroGPU runs limit").
+    Falls back to anonymous if no token is configured (Space secret
+    HF_TOKEN, same account this Space itself deploys under) — degrades to
+    the old low-quota behavior rather than failing outright."""
     global _client, _load_error
     if _client is not None:
         return _client
@@ -49,7 +57,7 @@ def _ensure_client():
         try:
             from gradio_client import Client
 
-            _client = Client(_SPACE)
+            _client = Client(_SPACE, token=os.environ.get("HF_TOKEN"))
             return _client
         except Exception as exc:
             logger.warning("Could not connect to %s: %s", _SPACE, exc)
