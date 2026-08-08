@@ -23,6 +23,7 @@ from routers.rag.ingest import router as rag_ingest_router
 from routers.rag.mm_ingest import router as rag_mm_ingest_router
 from routers.rag.mm_video_store import router as rag_mm_video_store_router
 from routers.rag.mm_similar import router as rag_mm_similar_router
+from routers.rag.mm_inpaint import router as rag_mm_inpaint_router
 from routers.rag.contradictions import router as rag_contradictions_router
 from routers.rag.evaluate_mm import router as rag_mm_eval_router
 from routers.rag.evaluate import router as rag_eval_router
@@ -159,6 +160,7 @@ app.include_router(rag_ingest_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_ingest_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_video_store_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_similar_router, prefix="/rag", tags=["rag"])
+app.include_router(rag_mm_inpaint_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_contradictions_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_eval_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_eval_router, prefix="/rag", tags=["rag"])
