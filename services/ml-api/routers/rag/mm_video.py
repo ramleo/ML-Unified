@@ -15,6 +15,7 @@ from routers.rag.mm_caption import clean_ocr_text, extract_caption
 from routers.rag.mm_duplicates import describe_duplicates, detect_duplicates
 from routers.rag.mm_objects import describe_objects, detect_objects
 from routers.rag.mm_noise_forensics import detect_noise_regions
+from routers.rag.mm_segment import refine_masks
 from routers.rag.mm_signatures import describe_signatures, detect_signatures
 from routers.rag.mm_tampering import combine_tampering_detections, describe_tampering, detect_tampering
 from routers.rag.mm_video_audio import generate_chapters, transcribe_video
@@ -154,6 +155,11 @@ def process_frame(cap, timestamp_s: float, frame_idx: int, source: str, session_
     dup_desc = describe_duplicates(duplicates)
     if dup_desc:
         caption = f"{caption}\n\n{dup_desc}"
+
+    # Pixel-accurate mask refinement (backlog item 5) — see mm_segment.py
+    # and mm_image.py's identical treatment.
+    signatures = refine_masks(b64, signatures)
+    tampering = refine_masks(b64, tampering)
 
     chunk = {"text": caption, "source": source, "chunk_index": frame_idx - 1,
              "chunk_type": "video", "page": frame_idx, "objects": objects, "signatures": signatures,

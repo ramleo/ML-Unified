@@ -12,6 +12,7 @@ from routers.rag.mm_caption import (build_table_markdown, clean_ocr_text, extrac
 from routers.rag.mm_duplicates import describe_duplicates, detect_duplicates
 from routers.rag.mm_objects import describe_objects, detect_objects
 from routers.rag.mm_noise_forensics import detect_noise_regions
+from routers.rag.mm_segment import refine_masks
 from routers.rag.mm_signatures import describe_signatures, detect_signatures
 from routers.rag.mm_tables import detect_table_regions
 from routers.rag.mm_tampering import combine_tampering_detections, describe_tampering, detect_tampering
@@ -131,6 +132,15 @@ def build_image_chunk(file_bytes: bytes, source: str, session_id: str = "") -> t
     tamper_desc = describe_tampering(tampering)
     if tamper_desc:
         caption = f"{caption}\n\n{tamper_desc}" if caption else tamper_desc
+
+    # Pixel-accurate mask refinement (backlog item 5, final CV backlog item)
+    # — signatures/tampering are the two detector types whose rectangular
+    # bbox most understates the real shape (ink strokes, irregular edited
+    # regions); a face or a generic object's bbox is already close to its
+    # own shape, so left at plain rectangles. Purely additive — see
+    # mm_segment.py's module docstring.
+    signatures = refine_masks(b64, signatures)
+    tampering = refine_masks(b64, tampering)
 
     # Near-duplicate detection (backlog item 3) — same "compute once at
     # ingest" rationale as everything above; needs session_id since a match
