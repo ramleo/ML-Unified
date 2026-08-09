@@ -19,6 +19,7 @@ import base64
 import io
 import logging
 import os
+import re
 import tempfile
 import threading
 from typing import Optional
@@ -35,6 +36,18 @@ _lock = threading.Lock()
 _load_error: Optional[str] = None
 
 _SPACE = "black-forest-labs/FLUX.1-Kontext-Dev"
+
+# ZeroGPU's own quota-exceeded message looks like: "You have exceeded your
+# free ZeroGPU quota (90s requested vs. 80s left). Try again in 15:31:36." —
+# this is a genuine daily cap (observed live, see mm_ai_fill session notes),
+# not a random blip, so it's worth relaying the actual countdown instead of
+# the generic "try again in a moment" that implies otherwise.
+_QUOTA_RESET_RE = re.compile(r"exceeded your (?:free )?ZeroGPU quota.*?Try again in ([\d:]+)", re.DOTALL)
+
+
+def _quota_reset_eta(exc: Exception) -> Optional[str]:
+    match = _QUOTA_RESET_RE.search(str(exc))
+    return match.group(1) if match else None
 
 
 def _ensure_client():
@@ -115,4 +128,10 @@ def ai_fill_region(body: AiFillRequest):
         raise
     except Exception as exc:
         logger.warning("AI fill failed: %s", exc)
+        reset_eta = _quota_reset_eta(exc)
+        if reset_eta:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Daily AI-fill limit reached on the free shared model — resets in about {reset_eta} (hh:mm:ss).",
+            )
         raise HTTPException(status_code=502, detail="AI fill is temporarily unavailable — try again in a moment.")
