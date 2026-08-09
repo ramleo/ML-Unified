@@ -35,7 +35,7 @@ def _llm_explanation_raw(api_key: str, prompt: str, provider: str = "gemini-2.5"
     """Call LLM with a raw prompt string. Returns (text, error) tuple."""
     try:
         if provider in ("gemini-2.5", "gemini-3.5-flash"):
-            _model = "gemini-2.5-flash" if provider == "gemini-2.5" else "gemini-3.5-flash"
+            _model = "gemini-3.6-flash"
             _url = (
                 f"https://generativelanguage.googleapis.com/v1beta/models/"
                 f"{_model}:generateContent?key={api_key}"

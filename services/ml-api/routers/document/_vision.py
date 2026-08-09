@@ -163,7 +163,7 @@ def _gemini_vision_raw(b64: str, prompt: str) -> str:
     key = os.environ.get("GEMINI_API_KEY", "")
     if not key:
         return ""
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
     parts = [
         {"inline_data": {"mime_type": "image/png", "data": b64}},
         {"text": prompt},

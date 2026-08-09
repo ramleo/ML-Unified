@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 FALLBACK_CANDIDATES = [
     ("groq", "llama-3.3-70b-versatile"),
     ("mistral", "mistral-small-latest"),  # proven reliable fallback elsewhere in this codebase (vision captioning)
-    ("gemini", "gemini-2.0-flash"),
+    ("gemini", "gemini-3.6-flash"),
     ("cohere", "command-a-03-2025"),
 ]
 

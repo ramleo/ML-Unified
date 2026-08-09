@@ -10,7 +10,7 @@ class RateLimitError(Exception):
 _PROVIDERS: dict[str, dict] = {
     "groq":    {"env": "GROQ_API_KEY",    "model": "llama-3.3-70b-versatile"},
     "mistral": {"env": "MISTRAL_API_KEY", "model": "codestral-latest"},
-    "gemini":  {"env": "GEMINI_API_KEY",  "model": "gemini-2.0-flash"},
+    "gemini":  {"env": "GEMINI_API_KEY",  "model": "gemini-3.6-flash"},
     "cohere":  {"env": "COHERE_API_KEY",  "model": "command-r-plus-08-2024"},
 }
 

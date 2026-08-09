@@ -150,7 +150,7 @@ def _llm_explanation(api_key: str, winner: str, cv_results: list, task: str,
         elif provider in ("gemini-3.5", "gemini-2.5"):
             import urllib.request as _urllib
             import json as _json2
-            default_model = "gemini-2.0-flash" if provider == "gemini-3.5" else "gemini-2.5-flash"
+            default_model = "gemini-3.6-flash"
             _model = custom_model or default_model
             _url = f"https://generativelanguage.googleapis.com/v1beta/models/{_model}:generateContent?key={api_key}"
             _body = _json2.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode()

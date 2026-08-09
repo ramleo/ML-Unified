@@ -94,7 +94,7 @@ def _gemini_text(messages: list[dict], system: str) -> str:
         if system:
             body["system_instruction"] = {"parts": [{"text": system}]}
         url = ("https://generativelanguage.googleapis.com/v1beta/models"
-               "/gemini-2.0-flash:generateContent")
+               "/gemini-3.6-flash:generateContent")
         with httpx.Client(timeout=60) as client:
             r = client.post(url, params={"key": key}, json=body)
             r.raise_for_status()

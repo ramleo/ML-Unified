@@ -302,7 +302,7 @@ class AgentRequest(BaseModel):
     tool_context: str = ""
     history:      List[dict] = []
     provider:     str = "gemini"
-    model:        str = "gemini-2.5-flash"
+    model:        str = "gemini-3.6-flash"
     user_key:     Optional[str] = None
     session_id:   str = ""
     force_web:    bool = False

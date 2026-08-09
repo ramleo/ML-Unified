@@ -34,7 +34,7 @@ def _resolve_key() -> tuple[str, str, str]:
     for provider, env in _ENV_KEYS.items():
         key = os.environ.get(env, "")
         if key:
-            return provider, "llama-3.3-70b-versatile" if provider == "groq" else "gemini-2.0-flash", key
+            return provider, "llama-3.3-70b-versatile" if provider == "groq" else "gemini-3.6-flash", key
     return "", "", ""
 
 

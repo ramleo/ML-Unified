@@ -19,7 +19,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
-_DIARIZE_MODEL = "gemini-2.5-flash"
+_DIARIZE_MODEL = "gemini-3.6-flash"
 _MAX_DIARIZE_BYTES = 20 * 1024 * 1024  # keep this one-shot call bounded —
                                        # unlike Whisper, this isn't chunked
                                        # for larger files; skip rather than

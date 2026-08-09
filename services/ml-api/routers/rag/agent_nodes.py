@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 # ── Cheapest model per provider ────────────────────────────────────────────────
 
 _CHEAP: dict[str, tuple[str, str | None]] = {
-    "gemini":     ("gemini-2.0-flash",         None),
+    "gemini":     ("gemini-3.6-flash",         None),
     "claude":     ("claude-haiku-4-5-20251001", None),
     "openai":     ("gpt-4o-mini",               None),
     "groq":       ("llama-3.1-8b-instant",      "https://api.groq.com/openai/v1"),
@@ -47,14 +47,14 @@ def _meta_call(prompt: str, user_key: str, provider: str,
     """One-shot LLM call for routing/grading/rewriting. Raises on failure."""
     server_key = os.environ.get("GEMINI_API_KEY", "")
     if server_key:
-        text = _gemini_one_shot(server_key, "gemini-2.0-flash", prompt)
+        text = _gemini_one_shot(server_key, "gemini-3.6-flash", prompt)
         return text if preserve_case else text.lower()
 
     api_key = user_key or _resolve_key(provider, None)
     if not api_key:
         raise RuntimeError(f"No API key available for meta call (provider={provider})")
 
-    model, base_url = _CHEAP.get(provider, ("gemini-2.0-flash", None))
+    model, base_url = _CHEAP.get(provider, ("gemini-3.6-flash", None))
 
     if provider == "gemini":
         text = _gemini_one_shot(api_key, model, prompt)

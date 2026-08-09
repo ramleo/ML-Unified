@@ -14,7 +14,7 @@ router = APIRouter()
 
 _PROVIDERS = {
     "groq":   {"env": "GROQ_API_KEY",    "model": "llama-3.3-70b-versatile"},
-    "gemini": {"env": "GEMINI_API_KEY",  "model": "gemini-2.0-flash"},
+    "gemini": {"env": "GEMINI_API_KEY",  "model": "gemini-3.6-flash"},
     "cohere": {"env": "COHERE_API_KEY",  "model": "command-r-plus-08-2024"},
 }
 

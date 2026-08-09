@@ -7,9 +7,9 @@ from typing import Any
 
 _PROVIDER_MODELS = {
     "groq":             "llama-3.3-70b-versatile",
-    "gemini":           "gemini-2.5-flash",
-    "gemini-2.5-flash": "gemini-2.5-flash",
-    "gemini-3.5-flash": "gemini-3.5-flash",
+    "gemini":           "gemini-3.6-flash",
+    "gemini-2.5-flash": "gemini-3.6-flash",
+    "gemini-3.5-flash": "gemini-3.6-flash",
     "cohere":           "command-a-03-2025",
 }
 
