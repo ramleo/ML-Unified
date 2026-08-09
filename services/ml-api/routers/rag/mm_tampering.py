@@ -12,13 +12,15 @@ noisy or muted results, so this is surfaced to the user as "possible"
 regions worth a look, not a verdict.
 
 combine_tampering_detections() below merges this module's ELA output with
-mm_noise_forensics.detect_noise_regions() — a format-agnostic second
-signal — into one final list. An ELA hit only surfaces when noise-residual
-agrees on roughly the same region; a solo ELA hit is dropped rather than
-shown at any confidence, since it's been tested to be confusable with
-ordinary fine real detail (see combine_tampering_detections' docstring).
-Noise-residual-only hits are kept at full strength — the only signal
-available at all on a non-JPEG-sourced upload.
+mm_noise_forensics.detect_noise_regions() (format-agnostic) and
+mm_jpeg_ghost.detect_jpeg_ghosts() (JPEG-only, catches double-compression
+splices the other two can miss) into one final list. An ELA hit only
+surfaces when one of the other two agrees on roughly the same region; a
+solo ELA hit is dropped rather than shown at any confidence, since it's
+been tested to be confusable with ordinary fine real detail (see
+combine_tampering_detections' docstring). Noise-residual-only and
+jpeg-ghost-only hits are both kept at full strength — see
+combine_tampering_detections' docstring for why each is trusted solo.
 """
 from __future__ import annotations
 
@@ -162,50 +164,77 @@ def _union_bbox(a: list[float], b: list[float]) -> list[float]:
     return [round(x0, 4), round(y0, 4), round(x1 - x0, 4), round(y1 - y0, 4)]
 
 
-def combine_tampering_detections(ela_regions: list[dict], noise_regions: list[dict]) -> list[dict]:
-    """Merges the two detectors' independent region lists into one, so the
-    frontend only ever sees a single "tampering" field/dropdown option
+def _merge_one(a: dict, pool: list[dict], used: set[int]) -> dict | None:
+    """Finds the best unused IoU match for `a` in `pool`, marks it used, and
+    returns a confidence-boosted, bbox-unioned merge — or None if nothing
+    in `pool` overlaps closely enough."""
+    best_j, best_iou = None, 0.0
+    for j, b in enumerate(pool):
+        if j in used:
+            continue
+        iou = _iou_xywh(a["bbox"], b["bbox"])
+        if iou > best_iou:
+            best_iou, best_j = iou, j
+    if best_j is None or best_iou < _MERGE_IOU_THRESH:
+        return None
+    used.add(best_j)
+    b = pool[best_j]
+    c1, c2 = a["confidence"], b["confidence"]
+    return {"label": "Tampering", "confidence": round(1 - (1 - c1) * (1 - c2), 3),
+            "bbox": _union_bbox(a["bbox"], b["bbox"])}
+
+
+def combine_tampering_detections(
+    ela_regions: list[dict], noise_regions: list[dict], ghost_regions: list[dict] | None = None,
+) -> list[dict]:
+    """Merges up to three independent detectors' region lists into one, so
+    the frontend only ever sees a single "tampering" field/dropdown option
     regardless of which technique(s) actually fired.
 
-    - Overlapping ELA + noise-residual regions (IoU >= _MERGE_IOU_THRESH):
-      two independent signals agreeing is strong evidence either way, so
-      confidence is boosted (not just averaged).
-    - ELA-only regions (no noise-residual agreement): DROPPED, not
-      discounted. Live-tested against a real photo (bicycle spokes/frame
-      edges) and confirmed via synthetic tests: ELA's block-error signal is
-      confusable with ordinary fine real detail (JPEG quantization error
-      concentrates at high-frequency content the same way tampering-induced
-      error does), and no cheap per-block heuristic (local-neighborhood
-      normalization, Sobel edge-density guard, connected-component
-      solidity) reliably told the two apart — every guard tried either let
-      the false positives through or suppressed genuine detections just as
-      often. An uncorroborated ELA hit isn't trustworthy enough to show a
-      user, at any confidence.
-    - Noise-residual-only regions: kept at full confidence — it has its own
-      (tested, working) local-neighborhood + edge-density guard against
-      this same fine-detail confound, and this is the ONLY signal available
-      at all on a non-JPEG-sourced upload, so dropping solo hits here would
-      gut the entire reason this detector exists.
+    - Overlapping regions from two or more detectors (IoU >= _MERGE_IOU_
+      THRESH): independent signals agreeing is strong evidence either way,
+      so confidence is boosted (not just averaged).
+    - ELA-only regions (no agreement from noise-residual OR jpeg-ghost):
+      DROPPED, not discounted. Live-tested against a real photo (bicycle
+      spokes/frame edges) and confirmed via synthetic tests: ELA's block-
+      error signal is confusable with ordinary fine real detail (JPEG
+      quantization error concentrates at high-frequency content the same
+      way tampering-induced error does), and no cheap per-block heuristic
+      reliably told the two apart. An uncorroborated ELA hit isn't
+      trustworthy enough to show a user, at any confidence.
+    - Noise-residual-only and jpeg-ghost-only regions: BOTH kept at their
+      own confidence. Noise-residual has its own tested local-neighborhood
+      + edge-density guard against the fine-detail confound and is the only
+      signal at all on non-JPEG uploads. jpeg-ghost was specifically added
+      (see mm_jpeg_ghost.py) to recover recall noise-residual loses on
+      already-recompressed JPEGs (compression damps the fine noise texture
+      noise-residual looks for) — it never reads raw pixel busy-ness, so it
+      doesn't share ELA's confound, and was verified via three separate
+      synthetic false-positive tests (uniform noise, sharp/smooth
+      quadrants, mixed content) plus a true-positive splice test before
+      being allowed to surface solo like this.
     """
+    ghost_regions = ghost_regions or []
     merged: list[dict] = []
     used_noise: set[int] = set()
+    used_ghost: set[int] = set()
+
     for ela_r in ela_regions:
-        best_j, best_iou = None, 0.0
-        for j, noise_r in enumerate(noise_regions):
-            if j in used_noise:
-                continue
-            iou = _iou_xywh(ela_r["bbox"], noise_r["bbox"])
-            if iou > best_iou:
-                best_iou, best_j = iou, j
-        if best_j is not None and best_iou >= _MERGE_IOU_THRESH:
-            noise_r = noise_regions[best_j]
-            used_noise.add(best_j)
-            c1, c2 = ela_r["confidence"], noise_r["confidence"]
-            merged.append({"label": "Tampering", "confidence": round(1 - (1 - c1) * (1 - c2), 3),
-                           "bbox": _union_bbox(ela_r["bbox"], noise_r["bbox"])})
-    for j, noise_r in enumerate(noise_regions):
-        if j not in used_noise:
-            merged.append(noise_r)
+        m = _merge_one(ela_r, noise_regions, used_noise)
+        if m is None:
+            m = _merge_one(ela_r, ghost_regions, used_ghost)
+        if m is not None:
+            merged.append(m)
+
+    for i, noise_r in enumerate(noise_regions):
+        if i in used_noise:
+            continue
+        m = _merge_one(noise_r, ghost_regions, used_ghost)
+        merged.append(m if m is not None else noise_r)
+
+    for j, ghost_r in enumerate(ghost_regions):
+        if j not in used_ghost:
+            merged.append(ghost_r)
 
     merged.sort(key=lambda r: -r["confidence"])
     return merged[:_MAX_DETECTIONS]

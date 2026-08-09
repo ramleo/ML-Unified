@@ -14,6 +14,7 @@ from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.mm_caption import clean_ocr_text, extract_caption
 from routers.rag.mm_duplicates import describe_duplicates, detect_duplicates
 from routers.rag.mm_objects import describe_objects, detect_objects
+from routers.rag.mm_jpeg_ghost import detect_jpeg_ghosts
 from routers.rag.mm_noise_forensics import detect_noise_regions
 from routers.rag.mm_segment import refine_masks
 from routers.rag.mm_signatures import describe_signatures, detect_signatures
@@ -143,7 +144,8 @@ def process_frame(cap, timestamp_s: float, frame_idx: int, source: str, session_
 
     # Tampering detection (backlog item 2) — see mm_tampering.py's
     # combine_tampering_detections for why a solo ELA hit never surfaces.
-    tampering = combine_tampering_detections(detect_tampering(b64), detect_noise_regions(b64))
+    tampering = combine_tampering_detections(
+        detect_tampering(b64), detect_noise_regions(b64), detect_jpeg_ghosts(b64))
     tamper_desc = describe_tampering(tampering)
     if tamper_desc:
         caption = f"{caption}\n\n{tamper_desc}"

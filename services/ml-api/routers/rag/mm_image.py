@@ -11,6 +11,7 @@ from routers.rag.mm_caption import (build_table_markdown, clean_ocr_text, extrac
                                     extract_chart_data, split_pipe_tables)
 from routers.rag.mm_duplicates import describe_duplicates, detect_duplicates
 from routers.rag.mm_objects import describe_objects, detect_objects
+from routers.rag.mm_jpeg_ghost import detect_jpeg_ghosts
 from routers.rag.mm_noise_forensics import detect_noise_regions
 from routers.rag.mm_segment import refine_masks
 from routers.rag.mm_signatures import describe_signatures, detect_signatures
@@ -124,11 +125,12 @@ def build_image_chunk(file_bytes: bytes, source: str, session_id: str = "") -> t
     if sig_desc:
         caption = f"{caption}\n\n{sig_desc}" if caption else sig_desc
 
-    # Tampering detection (backlog item 2) — two independent signals (ELA:
-    # JPEG-only; noise-residual: format-agnostic) merged into one field, so
-    # a PNG/WebP/BMP upload still gets real coverage instead of only ever
-    # working on JPEGs. See mm_tampering.py's module docstring.
-    tampering = combine_tampering_detections(detect_tampering(b64), detect_noise_regions(b64))
+    # Tampering detection (backlog item 2) — three independent signals (ELA
+    # + jpeg-ghost: JPEG-only; noise-residual: format-agnostic) merged into
+    # one field, so a PNG/WebP/BMP upload still gets real coverage instead
+    # of only ever working on JPEGs. See mm_tampering.py's module docstring.
+    tampering = combine_tampering_detections(
+        detect_tampering(b64), detect_noise_regions(b64), detect_jpeg_ghosts(b64))
     tamper_desc = describe_tampering(tampering)
     if tamper_desc:
         caption = f"{caption}\n\n{tamper_desc}" if caption else tamper_desc
