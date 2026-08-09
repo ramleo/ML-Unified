@@ -19,4 +19,3 @@ timm>=1.0.0  # ResNet backbone for microsoft/table-transformer-detection (mm_tab
 langgraph>=0.2.0
 langchain-core>=0.3.0
 spacy>=3.7.0,<3.8.0
-gradio_client>=1.0.0  # calls the public FLUX.1 Kontext Space for AI-fill (mm_ai_fill.py) — no local model
