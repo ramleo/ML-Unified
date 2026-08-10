@@ -191,14 +191,25 @@ def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> dict:
     region_b, text_b = _attempt()
 
     similarity = difflib.SequenceMatcher(None, text_a.lower(), text_b.lower()).ratio()
-    agrees = bool(text_a) and similarity >= _AGREEMENT_THRESHOLD
-    confidence = "high" if agrees else "low"
+    if not text_a and not text_b:
+        # Neither attempt read ANY text — this isn't two readings disagreeing,
+        # it's simply not a text region (a logo/emblem/icon, say). Caught
+        # live: a selected Nissan grille badge got labeled "two independent
+        # AI attempts disagreed — unreliable," which is wrong on its face —
+        # OCR was never going to find text on a graphic, agreement or not.
+        # None (not "low") tells the frontend this check doesn't apply here,
+        # falling back to the plain generic disclaimer instead of a false
+        # disagreement warning.
+        confidence = None
+    else:
+        agrees = bool(text_a) and similarity >= _AGREEMENT_THRESHOLD
+        confidence = "high" if agrees else "low"
 
     base.paste(region_a, (paste_left, paste_top))
     return {
         "image": _pil_to_b64(base),
         "confidence": confidence,
-        "text": text_a if agrees else None,
+        "text": text_a if confidence == "high" else None,
     }
 
 
