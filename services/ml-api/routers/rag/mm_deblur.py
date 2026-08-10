@@ -20,9 +20,13 @@ image runs invented two DIFFERENT plate readings (once in Devanagari
 script, once Latin-alphanumeric), proving neither was a real recovery.
 
 `bbox`-scoped sharpening narrows the blast radius: cropping to just the
-region of interest and pasting the result back pixel-exact everywhere
-outside that box means a hallucination in one region can never silently
-alter unrelated parts of the image.
+region of interest and pasting the result back (bbox + a small paste margin,
+see `_PASTE_MARGIN`) means a hallucination in one region can never silently
+alter unrelated parts of the image. The margin exists because a box drawn
+pixel-tight around text can otherwise clip a character at its own edge even
+when the model reconstructed it correctly — caught live testing a properly
+recovered "INVOICE #4471": the model's own output had the full text, but a
+too-tight test bbox meant the paste-back cut it off before the final "1".
 
 Region-scoped requests also get a corroboration check (`_sharpen_region`),
 modeled on how real forensic recovery actually works — investigators trust
@@ -74,6 +78,17 @@ _INSTRUCTION = (
 # pasted back. Only the caller's exact bbox is written into the result.
 _CONTEXT_PAD = 0.25
 
+# Small implicit margin (as a fraction of the drawn box's own size) added to
+# what actually gets pasted back, beyond the caller's literal bbox — NOT the
+# same as _CONTEXT_PAD (model-context-only, never pasted). Found necessary
+# live: a box drawn pixel-tight around text can clip a character at its own
+# edge even though the model reconstructed it correctly just outside that
+# edge, because the paste-back honored the literal box exactly. A person
+# drawing a box around text almost always draws it a little tight, not
+# generous, so a small margin removes that papercut for most real boxes
+# while staying far short of whole-image risk.
+_PASTE_MARGIN = 0.08
+
 # How similar the two independent OCR readings need to be (difflib ratio,
 # 0-1) to count as agreement. Calibrated loose on purpose — real OCR of the
 # same true text across two slightly-different renders still varies in
@@ -87,9 +102,9 @@ class DeblurRequest(BaseModel):
     image: str  # b64 PNG, the current citation page/frame image (post-edit if any)
     # [x, y, w, h], normalized 0-1, page-relative — same convention as every
     # other bbox in this app (see Bbox in the frontend's _types.ts). When
-    # given, only this region is sent to the model and pasted back; every
-    # other pixel in the returned image is byte-identical to the input.
-    # None means whole-image sharpen, the original behavior.
+    # given, only this region (plus a small paste margin, see _PASTE_MARGIN)
+    # is sent to the model and pasted back; every pixel further out stays
+    # byte-identical to the input. None means whole-image sharpen.
     bbox: list[float] | None = None
 
 
@@ -129,12 +144,12 @@ def _ocr_text(img: Image.Image) -> str:
 def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> dict:
     """Crops bbox (+ context padding) out of `image_b64`, sharpens it via TWO
     independent Gemini calls, and pastes ONE of the results back into the
-    full original image at the exact same pixel rect — every pixel outside
-    bbox stays byte-identical to the input, by construction. OCR-reads each
-    independent result and compares them: agreement -> confidence "high"
-    plus the corroborated text; disagreement -> confidence "low", no text
-    asserted (see module docstring for why this is the actual mechanism,
-    not just a disclaimer)."""
+    full original image at (bbox + a small paste margin, see _PASTE_MARGIN)
+    — every pixel further out than that stays byte-identical to the input,
+    by construction. OCR-reads each independent result and compares them:
+    agreement -> confidence "high" plus the corroborated text; disagreement
+    -> confidence "low", no text asserted (see module docstring for why this
+    is the actual mechanism, not just a disclaimer)."""
     base = Image.open(io.BytesIO(base64.b64decode(image_b64))).convert("RGB")
     w, h = base.size
     x, y, bw, bh = bbox
@@ -148,8 +163,16 @@ def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> dict:
     crop = base.crop((left, top, right, bottom))
     crop_b64 = _pil_to_b64(crop)
 
-    rel_left, rel_top = int(px) - left, int(py) - top
-    rel_right, rel_bottom = rel_left + int(pw), rel_top + int(ph)
+    # The actual paste-back rect: bbox expanded by _PASTE_MARGIN, clamped to
+    # the padded crop above (can never exceed what was actually sent to the
+    # model) and to the image bounds.
+    margin_x, margin_y = pw * _PASTE_MARGIN, ph * _PASTE_MARGIN
+    paste_left = max(left, int(px - margin_x))
+    paste_top = max(top, int(py - margin_y))
+    paste_right = min(right, int(px + pw + margin_x))
+    paste_bottom = min(bottom, int(py + ph + margin_y))
+    rel_left, rel_top = paste_left - left, paste_top - top
+    rel_right, rel_bottom = paste_right - left, paste_bottom - top
 
     def _attempt() -> tuple[Image.Image, str]:
         result_b64 = _call_gemini(key, crop_b64)
@@ -168,7 +191,7 @@ def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> dict:
     agrees = bool(text_a) and similarity >= _AGREEMENT_THRESHOLD
     confidence = "high" if agrees else "low"
 
-    base.paste(region_a, (int(px), int(py)))
+    base.paste(region_a, (paste_left, paste_top))
     return {
         "image": _pil_to_b64(base),
         "confidence": confidence,
