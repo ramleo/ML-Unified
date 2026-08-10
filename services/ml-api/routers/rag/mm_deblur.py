@@ -14,20 +14,31 @@ The hallucination risk isn't hypothetical — caught live on a real photo of
 a car with a deliberately blurred logo/plate: whole-image sharpen correctly
 restored the "NISSAN" logo (present elsewhere in sharp detail across the
 same photo, e.g. the grille badge, so the model had real evidence to work
-from) but invented Devanagari text reading "Nissan Magnite" on the plate,
-which was blurred with genuinely no legible content underneath for the
-model to recover — it filled the gap with something plausible instead of
-admitting it couldn't tell. `bbox`-scoped sharpening (below) directly
-narrows this: cropping to just the region of interest and pasting the
-result back pixel-exact everywhere outside that box means a hallucination
-in one region can never silently alter unrelated parts of the image (the
-plate hallucination above didn't spread to the rest of the car, but a
-whole-image call has no structural guarantee against that — a bbox call
-does, by construction).
+from) but invented text on the plate, which was blurred with genuinely no
+legible content underneath for the model to recover — two separate whole-
+image runs invented two DIFFERENT plate readings (once in Devanagari
+script, once Latin-alphanumeric), proving neither was a real recovery.
+
+`bbox`-scoped sharpening narrows the blast radius: cropping to just the
+region of interest and pasting the result back pixel-exact everywhere
+outside that box means a hallucination in one region can never silently
+alter unrelated parts of the image.
+
+Region-scoped requests also get a corroboration check (`_sharpen_region`),
+modeled on how real forensic recovery actually works — investigators trust
+agreement between independent sources (multiple frames, cross-referenced
+records), never a single generative guess. Gemini is called TWICE
+independently on the same crop; OCR (Mistral, already used elsewhere in
+this app's ingest path) reads the region out of each result; if the two
+readings agree, that's real corroboration (confidence "high", the read text
+is returned); if they disagree, that's the signal neither can be trusted
+(confidence "low", no text asserted). The two whole-image plate runs above
+are exactly the disagreement case this is designed to catch.
 """
 from __future__ import annotations
 
 import base64
+import difflib
 import io
 import logging
 import os
@@ -35,6 +46,8 @@ import os
 from fastapi import APIRouter, HTTPException
 from PIL import Image
 from pydantic import BaseModel
+
+from routers.document._vision import mistral_ocr_pages
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +73,14 @@ _INSTRUCTION = (
 # it can match surrounding lighting/style/texture, never part of what gets
 # pasted back. Only the caller's exact bbox is written into the result.
 _CONTEXT_PAD = 0.25
+
+# How similar the two independent OCR readings need to be (difflib ratio,
+# 0-1) to count as agreement. Calibrated loose on purpose — real OCR of the
+# same true text across two slightly-different renders still varies in
+# spacing/case/minor misreads; this only needs to catch the case where the
+# two readings are substantively DIFFERENT content (a real disagreement),
+# not cosmetic OCR noise.
+_AGREEMENT_THRESHOLD = 0.7
 
 
 class DeblurRequest(BaseModel):
@@ -94,11 +115,26 @@ def _call_gemini(key: str, image_b64: str) -> str:
     raise ValueError("Gemini response had no image part")
 
 
-def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> str:
-    """Crops bbox (+ context padding) out of `image_b64`, sharpens just that
-    crop, then pastes the result back into the FULL original image at the
-    exact same pixel rect — every pixel outside bbox stays byte-identical to
-    the input, by construction, regardless of what the model does."""
+def _pil_to_b64(img: Image.Image) -> str:
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def _ocr_text(img: Image.Image) -> str:
+    md, _ = mistral_ocr_pages([_pil_to_b64(img)])
+    return md.strip()
+
+
+def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> dict:
+    """Crops bbox (+ context padding) out of `image_b64`, sharpens it via TWO
+    independent Gemini calls, and pastes ONE of the results back into the
+    full original image at the exact same pixel rect — every pixel outside
+    bbox stays byte-identical to the input, by construction. OCR-reads each
+    independent result and compares them: agreement -> confidence "high"
+    plus the corroborated text; disagreement -> confidence "low", no text
+    asserted (see module docstring for why this is the actual mechanism,
+    not just a disclaimer)."""
     base = Image.open(io.BytesIO(base64.b64decode(image_b64))).convert("RGB")
     w, h = base.size
     x, y, bw, bh = bbox
@@ -110,40 +146,49 @@ def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> str:
         raise ValueError("Selected region is empty")
 
     crop = base.crop((left, top, right, bottom))
-    buf = io.BytesIO()
-    crop.save(buf, format="PNG")
-    crop_b64 = base64.b64encode(buf.getvalue()).decode()
+    crop_b64 = _pil_to_b64(crop)
 
-    result_b64 = _call_gemini(key, crop_b64)
-    result_crop = Image.open(io.BytesIO(base64.b64decode(result_b64))).convert("RGB")
-    # The model doesn't necessarily return the crop at its exact input
-    # resolution — force it back so the paste-back coordinates below still
-    # line up with the ORIGINAL crop's pixel grid.
-    result_crop = result_crop.resize((right - left, bottom - top))
-
-    # bbox's own rect, expressed relative to the padded crop we just sent —
-    # this is the only part of the model's output that actually gets used.
     rel_left, rel_top = int(px) - left, int(py) - top
     rel_right, rel_bottom = rel_left + int(pw), rel_top + int(ph)
-    sharpened_region = result_crop.crop((rel_left, rel_top, rel_right, rel_bottom))
 
-    base.paste(sharpened_region, (int(px), int(py)))
-    out = io.BytesIO()
-    base.save(out, format="PNG")
-    return base64.b64encode(out.getvalue()).decode()
+    def _attempt() -> tuple[Image.Image, str]:
+        result_b64 = _call_gemini(key, crop_b64)
+        result_crop = Image.open(io.BytesIO(base64.b64decode(result_b64))).convert("RGB")
+        # The model doesn't necessarily return the crop at its exact input
+        # resolution — force it back so the paste-back coordinates line up
+        # with the ORIGINAL crop's pixel grid.
+        result_crop = result_crop.resize((right - left, bottom - top))
+        region = result_crop.crop((rel_left, rel_top, rel_right, rel_bottom))
+        return region, _ocr_text(region)
+
+    region_a, text_a = _attempt()
+    region_b, text_b = _attempt()
+
+    similarity = difflib.SequenceMatcher(None, text_a.lower(), text_b.lower()).ratio()
+    agrees = bool(text_a) and similarity >= _AGREEMENT_THRESHOLD
+    confidence = "high" if agrees else "low"
+
+    base.paste(region_a, (int(px), int(py)))
+    return {
+        "image": _pil_to_b64(base),
+        "confidence": confidence,
+        "text": text_a if agrees else None,
+    }
 
 
 @router.post("/mm-deblur")
 def deblur_image(body: DeblurRequest):
-    """Returns {"image": <b64>} — best-effort, never persisted server-side,
-    same disposable-edit contract as /mm-inpaint and /mm-ai-fill."""
+    """Returns {"image": <b64>} for a whole-image sharpen, or
+    {"image", "confidence", "text"} for a region-scoped one — best-effort,
+    never persisted server-side, same disposable-edit contract as
+    /mm-inpaint and /mm-ai-fill."""
     key = os.environ.get("GEMINI_API_KEY", "")
     if not key:
         raise HTTPException(status_code=502, detail="Sharpen is not configured (missing GEMINI_API_KEY).")
 
     try:
         if body.bbox:
-            return {"image": _sharpen_region(key, body.image, body.bbox)}
+            return _sharpen_region(key, body.image, body.bbox)
         return {"image": _call_gemini(key, body.image)}
     except Exception as exc:
         logger.warning("Deblur failed: %s", exc)
