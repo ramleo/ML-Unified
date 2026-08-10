@@ -100,6 +100,14 @@ _PASTE_MARGIN = 0.20
 # not cosmetic OCR noise.
 _AGREEMENT_THRESHOLD = 0.7
 
+# Minimum stripped-character length an OCR reading needs before it counts as
+# a real reading at all, for the purposes of the agreement check above. OCR
+# can spuriously "read" a couple of characters out of pure visual noise (a
+# grille's mesh pattern, a reflection) even on a region with no real text —
+# a too-short reading isn't meaningful signal either way, so both sides must
+# clear this before disagreement is treated as a real finding.
+_MIN_TEXT_LEN = 4
+
 
 class DeblurRequest(BaseModel):
     image: str  # b64 PNG, the current citation page/frame image (post-edit if any)
@@ -191,18 +199,20 @@ def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> dict:
     region_b, text_b = _attempt()
 
     similarity = difflib.SequenceMatcher(None, text_a.lower(), text_b.lower()).ratio()
-    if not text_a and not text_b:
-        # Neither attempt read ANY text — this isn't two readings disagreeing,
-        # it's simply not a text region (a logo/emblem/icon, say). Caught
-        # live: a selected Nissan grille badge got labeled "two independent
-        # AI attempts disagreed — unreliable," which is wrong on its face —
-        # OCR was never going to find text on a graphic, agreement or not.
-        # None (not "low") tells the frontend this check doesn't apply here,
-        # falling back to the plain generic disclaimer instead of a false
-        # disagreement warning.
+    if len(text_a.strip()) < _MIN_TEXT_LEN or len(text_b.strip()) < _MIN_TEXT_LEN:
+        # An earlier version only skipped this check when BOTH readings were
+        # completely empty — too narrow. Caught live via Space log debugging
+        # on a selected Nissan grille badge: text_a='- 2017年' (OCR
+        # hallucinating a couple of characters out of the grille's mesh
+        # pattern), text_b='' (correctly found nothing) — one non-empty
+        # reading was enough to reach the "disagreement" branch and label a
+        # pure graphic "unreliable," which is wrong on its face. Requiring
+        # BOTH readings to clear a minimum length before treating them as a
+        # real text disagreement catches this: a couple of spurious
+        # characters from visual noise isn't a meaningful reading either.
         confidence = None
     else:
-        agrees = bool(text_a) and similarity >= _AGREEMENT_THRESHOLD
+        agrees = similarity >= _AGREEMENT_THRESHOLD
         confidence = "high" if agrees else "low"
 
     base.paste(region_a, (paste_left, paste_top))
