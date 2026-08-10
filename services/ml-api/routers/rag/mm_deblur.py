@@ -78,16 +78,19 @@ _INSTRUCTION = (
 # pasted back. Only the caller's exact bbox is written into the result.
 _CONTEXT_PAD = 0.25
 
-# Small implicit margin (as a fraction of the drawn box's own size) added to
-# what actually gets pasted back, beyond the caller's literal bbox — NOT the
-# same as _CONTEXT_PAD (model-context-only, never pasted). Found necessary
-# live: a box drawn pixel-tight around text can clip a character at its own
-# edge even though the model reconstructed it correctly just outside that
-# edge, because the paste-back honored the literal box exactly. A person
-# drawing a box around text almost always draws it a little tight, not
-# generous, so a small margin removes that papercut for most real boxes
-# while staying far short of whole-image risk.
-_PASTE_MARGIN = 0.08
+# Implicit margin (as a fraction of the drawn box's own size) added to what
+# actually gets pasted back, beyond the caller's literal bbox — NOT the same
+# as _CONTEXT_PAD (model-context-only, never pasted). Found necessary live:
+# a box drawn pixel-tight around text can clip a character at its own edge
+# even though the model reconstructed it correctly just outside that edge,
+# because the paste-back honored the literal box exactly. A person drawing a
+# box around text almost always draws it a little tight, not generous, so a
+# margin removes that papercut for most real boxes while staying well short
+# of whole-image risk. Raised from an initial 0.08 to 0.20 after 0.08 still
+# clipped a real, only-moderately-tight drawn box live (right edge landed at
+# 0.646 of image width when the text needed ~0.67) — 0.08 rescued a slightly
+# looser box but wasn't enough margin for a realistic freehand drag.
+_PASTE_MARGIN = 0.20
 
 # How similar the two independent OCR readings need to be (difflib ratio,
 # 0-1) to count as agreement. Calibrated loose on purpose — real OCR of the
