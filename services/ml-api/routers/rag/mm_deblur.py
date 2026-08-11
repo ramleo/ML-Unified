@@ -183,6 +183,11 @@ def _classify_and_describe(region_b64: str) -> tuple[bool, str | None]:
         desc_val = m.group(1).strip() if m else None
 
     is_text = not (type_val and "GRAPHIC" in type_val.upper())
+    # Guard against a malformed/truncated answer (caught live: "**" with no
+    # actual words, likely stray markdown emphasis markers around content
+    # the model cut short) — no letters at all means nothing worth showing.
+    if desc_val is not None and not re.search(r"[A-Za-z]", desc_val):
+        desc_val = None
     return is_text, (desc_val or None)
 
 
