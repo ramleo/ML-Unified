@@ -125,6 +125,15 @@ _TEXT_CLASSIFY_PROMPT = (
     "readable text? Answer with exactly one word: TEXT or GRAPHIC."
 )
 
+# Asked only on the graphic branch (see _sharpen_region) — this is a single,
+# uncorroborated AI opinion (there's no second-reading agreement check for
+# free-text description the way there is for OCR'd text), so it's returned
+# labeled as an identification to verify, never as an asserted fact.
+_DESCRIBE_PROMPT = (
+    "What is shown in this image? Answer in a short phrase (a few words), "
+    "naming the specific object, brand, or logo if you can recognize it."
+)
+
 
 def _looks_like_text_region(crop_b64: str) -> bool:
     """Defaults to True (assume real text) on any failed/ambiguous answer —
@@ -136,6 +145,14 @@ def _looks_like_text_region(crop_b64: str) -> bool:
         return "GRAPHIC" not in answer
     except Exception:
         return True
+
+
+def _describe_region(region_b64: str) -> str | None:
+    try:
+        answer = _vision_cascade_raw(region_b64, _DESCRIBE_PROMPT).strip()
+        return answer or None
+    except Exception:
+        return None
 
 
 class DeblurRequest(BaseModel):
@@ -228,10 +245,11 @@ def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> dict:
     region_b, text_b = _attempt()
 
     similarity = difflib.SequenceMatcher(None, text_a.lower(), text_b.lower()).ratio()
+    is_graphic = not _looks_like_text_region(crop_b64)
     if len(text_a.strip()) < _MIN_TEXT_LEN or len(text_b.strip()) < _MIN_TEXT_LEN:
         # Neither/one reading cleared the length floor — see _MIN_TEXT_LEN.
         confidence = None
-    elif not _looks_like_text_region(crop_b64):
+    elif is_graphic:
         # Checked BEFORE looking at agreement, on purpose — an earlier
         # version only ran this tie-breaker on disagreement, which missed a
         # worse case caught live: on a pure graphic, OCR can hallucinate the
@@ -246,11 +264,17 @@ def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> dict:
     else:
         confidence = "low"
 
+    # Only spent on the graphic branch — text regions already have a real
+    # corroborated reading (or a real disagreement) from OCR, which is a
+    # stronger signal than one uncorroborated description would be.
+    description = _describe_region(_pil_to_b64(region_a)) if is_graphic else None
+
     base.paste(region_a, (paste_left, paste_top))
     return {
         "image": _pil_to_b64(base),
         "confidence": confidence,
         "text": text_a if confidence == "high" else None,
+        "description": description,
     }
 
 
