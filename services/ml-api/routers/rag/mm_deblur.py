@@ -51,7 +51,7 @@ from fastapi import APIRouter, HTTPException
 from PIL import Image
 from pydantic import BaseModel
 
-from routers.document._vision import mistral_ocr_pages
+from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +107,35 @@ _AGREEMENT_THRESHOLD = 0.7
 # a too-short reading isn't meaningful signal either way, so both sides must
 # clear this before disagreement is treated as a real finding.
 _MIN_TEXT_LEN = 4
+
+# Tie-breaker for a genuine disagreement (both readings pass _MIN_TEXT_LEN
+# but still don't match) — found live that a length threshold alone isn't
+# enough: OCR can hallucinate a full FAKE sentence (not just a few noise
+# characters) out of a pure graphic. One real case: the same car-grille crop
+# read as "- 2017年" on one attempt and "- *The New York Times* (1995)" on
+# the other — both well past _MIN_TEXT_LEN, both completely fabricated. This
+# asks directly, on the ORIGINAL (pre-sharpen) crop, whether it's actually
+# text at all, rather than continuing to infer that indirectly from OCR's
+# own output. Only spent on the disagreement path — the common "high"
+# (agreement) and already-empty "None" cases never pay for this extra call.
+_TEXT_CLASSIFY_PROMPT = (
+    "Look at this image. Does it contain real, readable printed or "
+    "handwritten text (a label, sign, plate, or document text)? Or is it "
+    "primarily a graphic, logo, emblem, icon, or pattern with no real "
+    "readable text? Answer with exactly one word: TEXT or GRAPHIC."
+)
+
+
+def _looks_like_text_region(crop_b64: str) -> bool:
+    """Defaults to True (assume real text) on any failed/ambiguous answer —
+    the safer default, since it keeps the existing "low confidence,
+    disagreed" warning rather than silently downgrading a genuine
+    disagreement to the softer generic caption."""
+    try:
+        answer = _vision_cascade_raw(crop_b64, _TEXT_CLASSIFY_PROMPT).strip().upper()
+        return "GRAPHIC" not in answer
+    except Exception:
+        return True
 
 
 class DeblurRequest(BaseModel):
@@ -200,20 +229,20 @@ def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> dict:
 
     similarity = difflib.SequenceMatcher(None, text_a.lower(), text_b.lower()).ratio()
     if len(text_a.strip()) < _MIN_TEXT_LEN or len(text_b.strip()) < _MIN_TEXT_LEN:
-        # An earlier version only skipped this check when BOTH readings were
-        # completely empty — too narrow. Caught live via Space log debugging
-        # on a selected Nissan grille badge: text_a='- 2017年' (OCR
-        # hallucinating a couple of characters out of the grille's mesh
-        # pattern), text_b='' (correctly found nothing) — one non-empty
-        # reading was enough to reach the "disagreement" branch and label a
-        # pure graphic "unreliable," which is wrong on its face. Requiring
-        # BOTH readings to clear a minimum length before treating them as a
-        # real text disagreement catches this: a couple of spurious
-        # characters from visual noise isn't a meaningful reading either.
+        # Neither/one reading cleared the length floor — see _MIN_TEXT_LEN.
         confidence = None
+    elif similarity >= _AGREEMENT_THRESHOLD:
+        confidence = "high"
+    elif _looks_like_text_region(crop_b64):
+        # A genuine disagreement on what really does look like text.
+        confidence = "low"
     else:
-        agrees = similarity >= _AGREEMENT_THRESHOLD
-        confidence = "high" if agrees else "low"
+        # Both readings passed the length floor but the tie-breaker confirms
+        # this crop isn't text at all — OCR fabricated two different fake
+        # sentences on a graphic (see _TEXT_CLASSIFY_PROMPT's docstring for
+        # the real example). Same conclusion as the length-floor branch
+        # above, just reached via a direct check instead of a length proxy.
+        confidence = None
 
     base.paste(region_a, (paste_left, paste_top))
     return {
