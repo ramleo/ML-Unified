@@ -47,6 +47,7 @@ import io
 import json
 import logging
 import os
+import re
 
 from fastapi import APIRouter, HTTPException
 from PIL import Image
@@ -115,60 +116,74 @@ _MIN_TEXT_LEN = 4
 # characters) out of a pure graphic. One real case: the same car-grille crop
 # read as "- 2017年" on one attempt and "- *The New York Times* (1995)" on
 # the other — both well past _MIN_TEXT_LEN, both completely fabricated. This
-# asks directly, on the ORIGINAL (pre-sharpen) crop, whether it's actually
-# text at all, rather than continuing to infer that indirectly from OCR's
-# own output. Only spent on the disagreement path — the common "high"
-# (agreement) and already-empty "None" cases never pay for this extra call.
-_TEXT_CLASSIFY_PROMPT = (
-    "Look at this image. Does it contain real, readable printed or "
-    "handwritten text (a label, sign, plate, or document text)? Or is it "
-    "primarily a graphic, logo, emblem, icon, or pattern with no real "
-    "readable text? Answer with exactly one word: TEXT or GRAPHIC."
+# asks directly whether it's actually text at all, rather than continuing to
+# infer that indirectly from OCR's own output.
+#
+# Also asks for a description in the SAME call, used only on the graphic
+# branch — an earlier version made this a separate second vision-cascade
+# call, which caused a real regression caught live: Groq (this cascade's
+# first leg) is rate-limited/over-capacity on most calls in production, and
+# each failed Groq attempt costs ~30s before falling back to Mistral; two
+# such calls back to back pushed total region-sharpen latency to ~70s, past
+# the frontend's 60s abort timeout, surfacing as a false "temporarily
+# unavailable" even though the backend was still working and did eventually
+# succeed. One combined call restores the original latency budget. The
+# description itself is a single, uncorroborated AI opinion (there's no
+# independent-agreement check for free-text description the way there is for
+# OCR'd text), so it's surfaced labeled as an identification to verify, never
+# as an asserted fact.
+_CLASSIFY_DESCRIBE_PROMPT = (
+    "Look at this image and answer in exactly this two-line format:\n"
+    "TYPE: TEXT or GRAPHIC\n"
+    "DESCRIPTION: <a short phrase describing what the image shows; name the "
+    "specific object, brand, or logo if you recognize it>\n"
+    "TYPE is TEXT if the image contains real, readable printed or "
+    "handwritten text (a label, sign, plate, or document text). Otherwise "
+    "it is GRAPHIC (a logo, emblem, icon, or pattern with no real readable "
+    "text)."
 )
 
-# Asked only on the graphic branch (see _sharpen_region) — this is a single,
-# uncorroborated AI opinion (there's no second-reading agreement check for
-# free-text description the way there is for OCR'd text), so it's returned
-# labeled as an identification to verify, never as an asserted fact.
-_DESCRIBE_PROMPT = (
-    "What is shown in this image? Answer in a short phrase (a few words), "
-    "naming the specific object, brand, or logo if you can recognize it."
-)
 
-
-def _looks_like_text_region(crop_b64: str) -> bool:
-    """Defaults to True (assume real text) on any failed/ambiguous answer —
-    the safer default, since it keeps the existing "low confidence,
-    disagreed" warning rather than silently downgrading a genuine
-    disagreement to the softer generic caption."""
+def _classify_and_describe(region_b64: str) -> tuple[bool, str | None]:
+    """Returns (is_text, description). Defaults to (True, None) — assume
+    real text, no description — on any failed/ambiguous answer: the safer
+    default, since it keeps the existing "low confidence, disagreed"
+    warning rather than silently downgrading a genuine disagreement to the
+    softer generic caption. `_vision_cascade_raw` can be answered by
+    Mistral, which forces `response_format: json_object` regardless of what
+    the prompt asks for (see _vision.py) — caught live, so this parses
+    either the requested plain TYPE/DESCRIPTION lines or a JSON object."""
     try:
-        answer = _vision_cascade_raw(crop_b64, _TEXT_CLASSIFY_PROMPT).strip().upper()
-        return "GRAPHIC" not in answer
+        answer = _vision_cascade_raw(region_b64, _CLASSIFY_DESCRIBE_PROMPT).strip()
     except Exception:
-        return True
+        return True, None
+    if not answer:
+        return True, None
 
+    type_val: str | None = None
+    desc_val: str | None = None
+    if answer.startswith("{"):
+        try:
+            parsed = json.loads(answer)
+            if isinstance(parsed, dict):
+                for k, v in parsed.items():
+                    if not isinstance(v, str) or not v.strip():
+                        continue
+                    if type_val is None and "type" in k.lower():
+                        type_val = v
+                    elif desc_val is None and "desc" in k.lower():
+                        desc_val = v
+        except ValueError:
+            pass
+    if type_val is None:
+        m = re.search(r"TYPE:\s*(\w+)", answer, re.IGNORECASE)
+        type_val = m.group(1) if m else None
+    if desc_val is None:
+        m = re.search(r"DESCRIPTION:\s*(.+)", answer, re.IGNORECASE)
+        desc_val = m.group(1).strip() if m else None
 
-def _describe_region(region_b64: str) -> str | None:
-    """`_vision_cascade_raw` can be answered by Mistral, which forces
-    `response_format: json_object` regardless of what the prompt asks for
-    (see _vision.py) — caught live: this came back as the literal string
-    '{"description": "Adidas logo"}' instead of a plain phrase. Unwrap that
-    rather than showing raw JSON syntax in the UI caption."""
-    try:
-        answer = _vision_cascade_raw(region_b64, _DESCRIBE_PROMPT).strip()
-        if not answer:
-            return None
-        if answer.startswith("{"):
-            try:
-                parsed = json.loads(answer)
-                if isinstance(parsed, dict):
-                    values = [v for v in parsed.values() if isinstance(v, str) and v.strip()]
-                    return values[0].strip() if values else None
-            except ValueError:
-                pass
-        return answer
-    except Exception:
-        return None
+    is_text = not (type_val and "GRAPHIC" in type_val.upper())
+    return is_text, (desc_val or None)
 
 
 class DeblurRequest(BaseModel):
@@ -261,7 +276,8 @@ def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> dict:
     region_b, text_b = _attempt()
 
     similarity = difflib.SequenceMatcher(None, text_a.lower(), text_b.lower()).ratio()
-    is_graphic = not _looks_like_text_region(crop_b64)
+    is_text_region, description = _classify_and_describe(_pil_to_b64(region_a))
+    is_graphic = not is_text_region
     if len(text_a.strip()) < _MIN_TEXT_LEN or len(text_b.strip()) < _MIN_TEXT_LEN:
         # Neither/one reading cleared the length floor — see _MIN_TEXT_LEN.
         confidence = None
@@ -280,10 +296,11 @@ def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> dict:
     else:
         confidence = "low"
 
-    # Only spent on the graphic branch — text regions already have a real
-    # corroborated reading (or a real disagreement) from OCR, which is a
-    # stronger signal than one uncorroborated description would be.
-    description = _describe_region(_pil_to_b64(region_a)) if is_graphic else None
+    # Description is only surfaced for the graphic branch — text regions
+    # already have a real corroborated reading (or a real disagreement) from
+    # OCR, which is a stronger signal than one uncorroborated description
+    # would be.
+    description = description if is_graphic else None
 
     base.paste(region_a, (paste_left, paste_top))
     return {
