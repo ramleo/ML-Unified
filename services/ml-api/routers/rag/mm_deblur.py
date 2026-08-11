@@ -231,18 +231,20 @@ def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> dict:
     if len(text_a.strip()) < _MIN_TEXT_LEN or len(text_b.strip()) < _MIN_TEXT_LEN:
         # Neither/one reading cleared the length floor — see _MIN_TEXT_LEN.
         confidence = None
+    elif not _looks_like_text_region(crop_b64):
+        # Checked BEFORE looking at agreement, on purpose — an earlier
+        # version only ran this tie-breaker on disagreement, which missed a
+        # worse case caught live: on a pure graphic, OCR can hallucinate the
+        # SAME fake reading twice (shared bias from the same input image),
+        # producing a false "high" that asserts fabricated text as
+        # CONFIRMED — strictly worse than a false "low", which at least
+        # doesn't assert anything. Confirming it's really text has to gate
+        # both branches, not just the disagreement one.
+        confidence = None
     elif similarity >= _AGREEMENT_THRESHOLD:
         confidence = "high"
-    elif _looks_like_text_region(crop_b64):
-        # A genuine disagreement on what really does look like text.
-        confidence = "low"
     else:
-        # Both readings passed the length floor but the tie-breaker confirms
-        # this crop isn't text at all — OCR fabricated two different fake
-        # sentences on a graphic (see _TEXT_CLASSIFY_PROMPT's docstring for
-        # the real example). Same conclusion as the length-floor branch
-        # above, just reached via a direct check instead of a length proxy.
-        confidence = None
+        confidence = "low"
 
     base.paste(region_a, (paste_left, paste_top))
     return {
