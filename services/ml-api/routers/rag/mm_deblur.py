@@ -44,6 +44,7 @@ from __future__ import annotations
 import base64
 import difflib
 import io
+import json
 import logging
 import os
 
@@ -148,9 +149,24 @@ def _looks_like_text_region(crop_b64: str) -> bool:
 
 
 def _describe_region(region_b64: str) -> str | None:
+    """`_vision_cascade_raw` can be answered by Mistral, which forces
+    `response_format: json_object` regardless of what the prompt asks for
+    (see _vision.py) — caught live: this came back as the literal string
+    '{"description": "Adidas logo"}' instead of a plain phrase. Unwrap that
+    rather than showing raw JSON syntax in the UI caption."""
     try:
         answer = _vision_cascade_raw(region_b64, _DESCRIBE_PROMPT).strip()
-        return answer or None
+        if not answer:
+            return None
+        if answer.startswith("{"):
+            try:
+                parsed = json.loads(answer)
+                if isinstance(parsed, dict):
+                    values = [v for v in parsed.values() if isinstance(v, str) and v.strip()]
+                    return values[0].strip() if values else None
+            except ValueError:
+                pass
+        return answer
     except Exception:
         return None
 
