@@ -55,6 +55,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
+from routers.rag._image_gen_budget import check_and_record_call
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +205,7 @@ class DeblurRequest(BaseModel):
 def _call_gemini(key: str, image_b64: str) -> str:
     import httpx
 
+    check_and_record_call("deblur")
     with httpx.Client(timeout=60) as client:
         res = client.post(
             _URL,
@@ -362,6 +364,11 @@ def deblur_image(body: DeblurRequest):
         if body.bbox:
             return _sharpen_region(key, body.image, body.bbox)
         return {"image": _call_gemini(key, body.image)}
+    except HTTPException:
+        # Preserve a deliberate error (e.g. the daily budget cap in
+        # _image_gen_budget.py) as-is — only genuinely unexpected failures
+        # below get flattened into the generic message.
+        raise
     except Exception as exc:
         logger.warning("Deblur failed: %s", exc)
         raise HTTPException(status_code=502, detail="Sharpen is temporarily unavailable — try again in a moment.")

@@ -22,6 +22,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from routers.rag._image_gen_budget import check_and_record_call
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -56,6 +58,7 @@ def ai_fill_region(body: AiFillRequest):
     try:
         import httpx
 
+        check_and_record_call("ai-fill")
         with httpx.Client(timeout=60) as client:
             res = client.post(
                 _URL,
@@ -73,6 +76,8 @@ def ai_fill_region(body: AiFillRequest):
             if inline and inline.get("data"):
                 return {"image": inline["data"]}
         raise ValueError("Gemini response had no image part")
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.warning("AI fill failed: %s", exc)
         raise HTTPException(status_code=502, detail="AI fill is temporarily unavailable — try again in a moment.")
