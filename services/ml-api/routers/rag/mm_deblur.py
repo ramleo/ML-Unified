@@ -48,6 +48,7 @@ import json
 import logging
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, HTTPException
 from PIL import Image
@@ -181,7 +182,6 @@ def _classify_and_describe(region_b64: str) -> tuple[bool, str | None]:
     if desc_val is None:
         m = re.search(r"DESCRIPTION:\s*(.+)", answer, re.IGNORECASE)
         desc_val = m.group(1).strip() if m else None
-
     is_text = not (type_val and "GRAPHIC" in type_val.upper())
     # Guard against a malformed/truncated answer (caught live: "**" with no
     # actual words, likely stray markdown emphasis markers around content
@@ -272,8 +272,14 @@ def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> dict:
         result_crop = Image.open(io.BytesIO(base64.b64decode(result_b64))).convert("RGB")
         # The model doesn't necessarily return the crop at its exact input
         # resolution — force it back so the paste-back coordinates line up
-        # with the ORIGINAL crop's pixel grid.
-        result_crop = result_crop.resize((right - left, bottom - top))
+        # with the ORIGINAL crop's pixel grid. LANCZOS (high-quality, not
+        # PIL's NEAREST default) matters here specifically: this crop was
+        # JUST sharpened, so a low-quality downsample here would throw away
+        # exactly the fine detail the whole point of this call was to
+        # recover. Whole-image sharpen never hits this path (it returns
+        # Gemini's output directly, no resize), which is why it could look
+        # crisper for the same blur despite going through the same model.
+        result_crop = result_crop.resize((right - left, bottom - top), Image.LANCZOS)
         region = result_crop.crop((rel_left, rel_top, rel_right, rel_bottom))
         return region, _ocr_text(region)
 
@@ -281,8 +287,34 @@ def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> dict:
     region_b, text_b = _attempt()
 
     similarity = difflib.SequenceMatcher(None, text_a.lower(), text_b.lower()).ratio()
-    is_text_region, description = _classify_and_describe(_pil_to_b64(region_a))
-    is_graphic = not is_text_region
+    # Classify BOTH independent regions concurrently (ThreadPoolExecutor, not
+    # sequential) — same corroboration philosophy as the OCR check above,
+    # applied here after two real bugs on a single-call classification:
+    # (1) real text on an invoice occasionally misclassified as GRAPHIC
+    # (~1/3 runs), silently suppressing a legitimate "high" confidence
+    # result; (2) TYPE flip-flopping on a genuinely ambiguous image, at the
+    # mercy of whichever single answer happened to come back. Requiring BOTH
+    # calls to agree GRAPHIC before suppressing confidence means a flip
+    # (TEXT then GRAPHIC, or vice versa) now resolves to the safer TEXT
+    # default instead of hinging on one call. Running them concurrently
+    # (not one-after-the-other) keeps the added wall-clock cost to roughly
+    # ONE classify call, not two — sequential would risk reintroducing the
+    # exact 60s-timeout regression this file already fixed once (see
+    # _CLASSIFY_DESCRIBE_PROMPT's comment above).
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        future_a = pool.submit(_classify_and_describe, _pil_to_b64(region_a))
+        future_b = pool.submit(_classify_and_describe, _pil_to_b64(region_b))
+        is_text_a, desc_a = future_a.result()
+        is_text_b, desc_b = future_b.result()
+    # Deliberately NOT the OCR-agreement-overrides-classification approach
+    # (i.e. trusting OCR agreement over a GRAPHIC verdict) — that was tried
+    # and rejected: a pure graphic can make OCR hallucinate the SAME fake
+    # reading twice (shared bias from one input image), which would produce
+    # a false "high" asserting fabricated text as CONFIRMED, strictly worse
+    # than the current false "low". Corroborating the classification call
+    # itself, not overriding it with a different signal, avoids that trap.
+    is_graphic = not is_text_a and not is_text_b
+    description = desc_a or desc_b
     if len(text_a.strip()) < _MIN_TEXT_LEN or len(text_b.strip()) < _MIN_TEXT_LEN:
         # Neither/one reading cleared the length floor — see _MIN_TEXT_LEN.
         confidence = None
