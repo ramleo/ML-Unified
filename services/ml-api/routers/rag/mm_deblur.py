@@ -44,18 +44,17 @@ from __future__ import annotations
 import base64
 import difflib
 import io
-import json
 import logging
 import os
-import re
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, HTTPException
 from PIL import Image
 from pydantic import BaseModel
 
-from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
+from routers.document._vision import mistral_ocr_pages
 from routers.rag._image_gen_budget import check_and_record_call
+from routers.rag.mm_deblur_classify import classify_and_describe
 
 logger = logging.getLogger(__name__)
 
@@ -119,77 +118,8 @@ _MIN_TEXT_LEN = 4
 # read as "- 2017年" on one attempt and "- *The New York Times* (1995)" on
 # the other — both well past _MIN_TEXT_LEN, both completely fabricated. This
 # asks directly whether it's actually text at all, rather than continuing to
-# infer that indirectly from OCR's own output.
-#
-# Also asks for a description in the SAME call, used only on the graphic
-# branch — an earlier version made this a separate second vision-cascade
-# call, which caused a real regression caught live: Groq (this cascade's
-# first leg) is rate-limited/over-capacity on most calls in production, and
-# each failed Groq attempt costs ~30s before falling back to Mistral; two
-# such calls back to back pushed total region-sharpen latency to ~70s, past
-# the frontend's 60s abort timeout, surfacing as a false "temporarily
-# unavailable" even though the backend was still working and did eventually
-# succeed. One combined call restores the original latency budget. The
-# description itself is a single, uncorroborated AI opinion (there's no
-# independent-agreement check for free-text description the way there is for
-# OCR'd text), so it's surfaced labeled as an identification to verify, never
-# as an asserted fact.
-_CLASSIFY_DESCRIBE_PROMPT = (
-    "Look at this image and answer in exactly this two-line format:\n"
-    "TYPE: TEXT or GRAPHIC\n"
-    "DESCRIPTION: <a short phrase describing what the image shows; name the "
-    "specific object, brand, or logo if you recognize it>\n"
-    "TYPE is TEXT if the image contains real, readable printed or "
-    "handwritten text (a label, sign, plate, or document text). Otherwise "
-    "it is GRAPHIC (a logo, emblem, icon, or pattern with no real readable "
-    "text)."
-)
-
-
-def _classify_and_describe(region_b64: str) -> tuple[bool, str | None]:
-    """Returns (is_text, description). Defaults to (True, None) — assume
-    real text, no description — on any failed/ambiguous answer: the safer
-    default, since it keeps the existing "low confidence, disagreed"
-    warning rather than silently downgrading a genuine disagreement to the
-    softer generic caption. `_vision_cascade_raw` can be answered by
-    Mistral, which forces `response_format: json_object` regardless of what
-    the prompt asks for (see _vision.py) — caught live, so this parses
-    either the requested plain TYPE/DESCRIPTION lines or a JSON object."""
-    try:
-        answer = _vision_cascade_raw(region_b64, _CLASSIFY_DESCRIBE_PROMPT).strip()
-    except Exception:
-        return True, None
-    if not answer:
-        return True, None
-
-    type_val: str | None = None
-    desc_val: str | None = None
-    if answer.startswith("{"):
-        try:
-            parsed = json.loads(answer)
-            if isinstance(parsed, dict):
-                for k, v in parsed.items():
-                    if not isinstance(v, str) or not v.strip():
-                        continue
-                    if type_val is None and "type" in k.lower():
-                        type_val = v
-                    elif desc_val is None and "desc" in k.lower():
-                        desc_val = v
-        except ValueError:
-            pass
-    if type_val is None:
-        m = re.search(r"TYPE:\s*(\w+)", answer, re.IGNORECASE)
-        type_val = m.group(1) if m else None
-    if desc_val is None:
-        m = re.search(r"DESCRIPTION:\s*(.+)", answer, re.IGNORECASE)
-        desc_val = m.group(1).strip() if m else None
-    is_text = not (type_val and "GRAPHIC" in type_val.upper())
-    # Guard against a malformed/truncated answer (caught live: "**" with no
-    # actual words, likely stray markdown emphasis markers around content
-    # the model cut short) — no letters at all means nothing worth showing.
-    if desc_val is not None and not re.search(r"[A-Za-z]", desc_val):
-        desc_val = None
-    return is_text, (desc_val or None)
+# infer that indirectly from OCR's own output. See mm_deblur_classify.py for
+# the classification/description call itself.
 
 
 class DeblurRequest(BaseModel):
@@ -269,7 +199,7 @@ def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> dict:
     rel_left, rel_top = paste_left - left, paste_top - top
     rel_right, rel_bottom = paste_right - left, paste_bottom - top
 
-    def _attempt() -> tuple[Image.Image, str]:
+    def _attempt() -> tuple[Image.Image, str, Image.Image]:
         result_b64 = _call_gemini(key, crop_b64)
         result_crop = Image.open(io.BytesIO(base64.b64decode(result_b64))).convert("RGB")
         # The model doesn't necessarily return the crop at its exact input
@@ -283,10 +213,19 @@ def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> dict:
         # crisper for the same blur despite going through the same model.
         result_crop = result_crop.resize((right - left, bottom - top), Image.LANCZOS)
         region = result_crop.crop((rel_left, rel_top, rel_right, rel_bottom))
-        return region, _ocr_text(region)
+        # `region` (just the paste rect) is what OCR reads and what gets
+        # pasted back — kept tight on purpose (see _PASTE_MARGIN). But it's
+        # a poor input for brand/logo recognition: a badge cropped down to
+        # almost nothing loses exactly the surrounding context (grille
+        # shape, position on the car) a vision model needs to recognize it,
+        # the same reason whole-image sharpen could correctly read "NISSAN"
+        # elsewhere in a full photo. `result_crop` (the full _CONTEXT_PAD'd
+        # crop actually sent to Gemini) keeps that context — used ONLY for
+        # classification below, never for OCR or the paste-back itself.
+        return region, _ocr_text(region), result_crop
 
-    region_a, text_a = _attempt()
-    region_b, text_b = _attempt()
+    region_a, text_a, context_a = _attempt()
+    region_b, text_b, context_b = _attempt()
 
     similarity = difflib.SequenceMatcher(None, text_a.lower(), text_b.lower()).ratio()
     # Classify BOTH independent regions concurrently (ThreadPoolExecutor, not
@@ -304,8 +243,8 @@ def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> dict:
     # exact 60s-timeout regression this file already fixed once (see
     # _CLASSIFY_DESCRIBE_PROMPT's comment above).
     with ThreadPoolExecutor(max_workers=2) as pool:
-        future_a = pool.submit(_classify_and_describe, _pil_to_b64(region_a))
-        future_b = pool.submit(_classify_and_describe, _pil_to_b64(region_b))
+        future_a = pool.submit(classify_and_describe, key, _pil_to_b64(context_a))
+        future_b = pool.submit(classify_and_describe, key, _pil_to_b64(context_b))
         is_text_a, desc_a = future_a.result()
         is_text_b, desc_b = future_b.result()
     # Deliberately NOT the OCR-agreement-overrides-classification approach
