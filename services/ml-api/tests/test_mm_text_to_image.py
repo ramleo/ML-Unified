@@ -32,9 +32,10 @@ def _fake_gemini_response(has_image: bool = True):
 
 
 class _FakeClient:
-    def __init__(self, has_image=True, raise_exc=None):
+    def __init__(self, has_image=True, raise_exc=None, captured=None):
         self._has_image = has_image
         self._raise_exc = raise_exc
+        self._captured = captured
 
     def __enter__(self):
         return self
@@ -43,6 +44,8 @@ class _FakeClient:
         return False
 
     def post(self, *args, **kwargs):
+        if self._captured is not None:
+            self._captured.append(kwargs)
         if self._raise_exc:
             raise self._raise_exc
         return _fake_gemini_response(self._has_image)
@@ -120,3 +123,47 @@ def test_text2img_pool_cap_default_15():
         _image_gen_budget.check_and_record_call("text-to-image", pool="text2img")
     with pytest.raises(Exception):
         _image_gen_budget.check_and_record_call("text-to-image", pool="text2img")
+
+
+def test_unknown_style_rejected(monkeypatch):
+    monkeypatch.setattr("httpx.Client", lambda timeout: _FakeClient(has_image=True))
+    res = client.post("/rag/mm-text-to-image", json={"prompt": "a cat", "style": "not-a-real-style"})
+    assert res.status_code == 400
+
+
+def test_unknown_aspect_ratio_rejected(monkeypatch):
+    monkeypatch.setattr("httpx.Client", lambda timeout: _FakeClient(has_image=True))
+    res = client.post("/rag/mm-text-to-image", json={"prompt": "a cat", "aspect_ratio": "ultrawide"})
+    assert res.status_code == 400
+
+
+def test_overlength_negative_prompt_rejected(monkeypatch):
+    monkeypatch.setattr("httpx.Client", lambda timeout: _FakeClient(has_image=True))
+    res = client.post("/rag/mm-text-to-image", json={"prompt": "a cat", "negative_prompt": "x" * 501})
+    assert res.status_code == 400
+
+
+def test_style_aspect_ratio_negative_prompt_appended_to_sent_prompt(monkeypatch):
+    captured = []
+    monkeypatch.setattr("httpx.Client", lambda timeout: _FakeClient(has_image=True, captured=captured))
+    res = client.post("/rag/mm-text-to-image", json={
+        "prompt": "a cat on a tree",
+        "style": "anime",
+        "aspect_ratio": "landscape",
+        "negative_prompt": "blurry, text, watermark",
+    })
+    assert res.status_code == 200
+    sent_prompt = captured[0]["json"]["contents"][0]["parts"][0]["text"]
+    assert "a cat on a tree" in sent_prompt
+    assert "anime" in sent_prompt
+    assert "16:9" in sent_prompt
+    assert "blurry, text, watermark" in sent_prompt
+
+
+def test_no_style_or_aspect_ratio_leaves_prompt_unmodified(monkeypatch):
+    captured = []
+    monkeypatch.setattr("httpx.Client", lambda timeout: _FakeClient(has_image=True, captured=captured))
+    res = client.post("/rag/mm-text-to-image", json={"prompt": "a cat on a tree"})
+    assert res.status_code == 200
+    sent_prompt = captured[0]["json"]["contents"][0]["parts"][0]["text"]
+    assert sent_prompt == "a cat on a tree"

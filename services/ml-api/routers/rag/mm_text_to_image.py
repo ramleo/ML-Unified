@@ -23,6 +23,12 @@ Uses its own daily budget pool ("text2img", see _image_gen_budget.py) —
 deliberately NOT the shared pool mm_deblur.py/mm_ai_fill.py use, since free
 prompt experimentation would otherwise be able to exhaust that shared
 budget and block sharpen/AI-fill for the rest of the day.
+
+Style/aspect-ratio/negative-prompt are pure prompt-text engineering, not a
+new request shape — still one text-only Gemini call, just a longer prompt
+string built server-side (never trust the client to have assembled it
+correctly/safely). No live-call verification needed for this addition, the
+model call itself is byte-for-byte the same shape Phase B already verified.
 """
 from __future__ import annotations
 
@@ -42,10 +48,32 @@ _MODEL = "gemini-3.1-flash-lite-image"
 _URL = f"https://generativelanguage.googleapis.com/v1beta/models/{_MODEL}:generateContent"
 
 _MAX_PROMPT_LEN = 2000
+_MAX_NEGATIVE_PROMPT_LEN = 500
+
+# Fixed, server-validated set (not free text) so the appended instruction is
+# always a known-good phrase — a client can only pick a key, never inject
+# arbitrary text into this part of the prompt.
+_STYLES = {
+    "photorealistic": "in a photorealistic photographic style",
+    "watercolor": "in a soft watercolor painting style",
+    "anime": "in a vibrant anime/manga art style",
+    "cyberpunk": "in a neon-lit cyberpunk art style",
+    "oil-painting": "in a classical oil painting style, visible brushstrokes",
+    "3d-render": "as a polished 3D render, studio lighting",
+    "sketch": "as a detailed pencil sketch, black and white",
+}
+_ASPECT_RATIOS = {
+    "square": "composed for a 1:1 square aspect ratio",
+    "landscape": "composed for a 16:9 widescreen landscape aspect ratio",
+    "portrait": "composed for a 9:16 tall portrait aspect ratio",
+}
 
 
 class TextToImageRequest(BaseModel):
     prompt: str
+    style: str | None = None
+    aspect_ratio: str | None = None
+    negative_prompt: str | None = None
 
 
 @router.post("/mm-text-to-image")
@@ -66,6 +94,22 @@ def generate_image(body: TextToImageRequest):
     if len(prompt) > _MAX_PROMPT_LEN:
         raise HTTPException(status_code=400, detail=f"Prompt is too long (max {_MAX_PROMPT_LEN} characters).")
 
+    if body.style is not None and body.style not in _STYLES:
+        raise HTTPException(status_code=400, detail=f"Unknown style. Choose one of: {', '.join(_STYLES)}.")
+    if body.aspect_ratio is not None and body.aspect_ratio not in _ASPECT_RATIOS:
+        raise HTTPException(status_code=400, detail=f"Unknown aspect_ratio. Choose one of: {', '.join(_ASPECT_RATIOS)}.")
+    negative_prompt = (body.negative_prompt or "").strip()
+    if len(negative_prompt) > _MAX_NEGATIVE_PROMPT_LEN:
+        raise HTTPException(status_code=400, detail=f"Negative prompt is too long (max {_MAX_NEGATIVE_PROMPT_LEN} characters).")
+
+    full_prompt = prompt
+    if body.style:
+        full_prompt += f", {_STYLES[body.style]}"
+    if body.aspect_ratio:
+        full_prompt += f", {_ASPECT_RATIOS[body.aspect_ratio]}"
+    if negative_prompt:
+        full_prompt += f". Do not include: {negative_prompt}."
+
     try:
         import httpx
 
@@ -74,7 +118,7 @@ def generate_image(body: TextToImageRequest):
             res = client.post(
                 _URL,
                 params={"key": key},
-                json={"contents": [{"role": "user", "parts": [{"text": prompt}]}]},
+                json={"contents": [{"role": "user", "parts": [{"text": full_prompt}]}]},
             )
             res.raise_for_status()
             parts = res.json()["candidates"][0]["content"]["parts"]
