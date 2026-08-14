@@ -26,6 +26,7 @@ from routers.rag.mm_similar import router as rag_mm_similar_router
 from routers.rag.mm_inpaint import router as rag_mm_inpaint_router
 from routers.rag.mm_ai_fill import router as rag_mm_ai_fill_router
 from routers.rag.mm_deblur import router as rag_mm_deblur_router
+from routers.rag.mm_text_to_image import router as rag_mm_text_to_image_router
 from routers.rag.contradictions import router as rag_contradictions_router
 from routers.rag.evaluate_mm import router as rag_mm_eval_router
 from routers.rag.evaluate import router as rag_eval_router
@@ -165,6 +166,7 @@ app.include_router(rag_mm_similar_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_inpaint_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_ai_fill_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_deblur_router, prefix="/rag", tags=["rag"])
+app.include_router(rag_mm_text_to_image_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_contradictions_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_eval_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_eval_router, prefix="/rag", tags=["rag"])
