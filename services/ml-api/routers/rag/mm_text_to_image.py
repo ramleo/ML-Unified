@@ -74,6 +74,68 @@ class TextToImageRequest(BaseModel):
     style: str | None = None
     aspect_ratio: str | None = None
     negative_prompt: str | None = None
+    # EXPERIMENTAL, unverified as of this commit: the Generative Language API
+    # supports `generationConfig.seed` on some Gemini models for deterministic
+    # output, but nobody has confirmed gemini-3.1-flash-lite-image (an image-
+    # gen model, not a text model) actually honors it rather than silently
+    # ignoring it. Sent through as-is when provided; None omits the field
+    # entirely so every existing caller is unaffected. Do NOT build frontend
+    # seed UI on top of this until a live same-seed/same-prompt pair has been
+    # compared and found to actually reproduce.
+    seed: int | None = None
+
+
+class EnhancePromptRequest(BaseModel):
+    prompt: str
+
+
+# Same fallback order as generation.py's FALLBACK_CANDIDATES (Groq -> Mistral
+# -> Gemini -> Cohere), each using its own server-side key — this is a plain
+# text completion, not the billed image model, so it deliberately does NOT
+# go through check_and_record_call/the text2img budget pool.
+_ENHANCE_CASCADE = [
+    ("groq", "llama-3.3-70b-versatile", "GROQ_API_KEY"),
+    ("mistral", "mistral-small-latest", "MISTRAL_API_KEY"),
+    ("gemini", "gemini-3.6-flash", "GEMINI_API_KEY"),
+    ("cohere", "command-a-03-2025", "COHERE_API_KEY"),
+]
+
+_ENHANCE_SYSTEM_PROMPT = (
+    "You are a prompt engineer for a text-to-image AI model. Rewrite the "
+    "user's short prompt into a single vivid, detailed paragraph (2-4 "
+    "sentences) describing the subject, setting, lighting, and mood, while "
+    "preserving their original intent exactly. Do not invent a different "
+    "subject. Do not add style names or commentary. Return ONLY the "
+    "rewritten prompt text, nothing else."
+)
+
+
+@router.post("/mm-text-to-image/enhance-prompt")
+def enhance_prompt(body: EnhancePromptRequest):
+    """Best-effort prompt expansion via the same free-tier LLM cascade used
+    elsewhere in this codebase (see generation.py) — not the paid image
+    model, so no budget check. Returns the original prompt unexpanded (with
+    ok=False) rather than a hard error if every provider is unavailable, so
+    a flaky free-tier provider never blocks the user from generating with
+    what they already typed."""
+    from routers.rag.llm import complete
+
+    prompt = body.prompt.strip()
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Prompt is required.")
+    if len(prompt) > _MAX_PROMPT_LEN:
+        raise HTTPException(status_code=400, detail=f"Prompt is too long (max {_MAX_PROMPT_LEN} characters).")
+
+    for provider, model, env_key in _ENHANCE_CASCADE:
+        key = os.environ.get(env_key, "")
+        if not key:
+            continue
+        result = complete(provider, model, key, [{"role": "user", "content": prompt}], system=_ENHANCE_SYSTEM_PROMPT)
+        result = result.strip()
+        if result:
+            return {"enhanced_prompt": result[:_MAX_PROMPT_LEN], "ok": True}
+
+    return {"enhanced_prompt": prompt, "ok": False}
 
 
 @router.post("/mm-text-to-image")
@@ -114,12 +176,11 @@ def generate_image(body: TextToImageRequest):
         import httpx
 
         check_and_record_call("text-to-image", pool="text2img")
+        payload: dict = {"contents": [{"role": "user", "parts": [{"text": full_prompt}]}]}
+        if body.seed is not None:
+            payload["generationConfig"] = {"seed": body.seed}
         with httpx.Client(timeout=60) as client:
-            res = client.post(
-                _URL,
-                params={"key": key},
-                json={"contents": [{"role": "user", "parts": [{"text": full_prompt}]}]},
-            )
+            res = client.post(_URL, params={"key": key}, json=payload)
             res.raise_for_status()
             parts = res.json()["candidates"][0]["content"]["parts"]
 
