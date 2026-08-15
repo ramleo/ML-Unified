@@ -175,7 +175,23 @@ def describe_image(body: DescribeImageRequest):
         raise HTTPException(status_code=400, detail="Image is required.")
 
     raw = _vision_cascade_raw(image, _DESCRIBE_IMAGE_PROMPT)
-    description = str(_parse_json(raw).get("description", "")).strip()
+    parsed = _parse_json(raw)
+    description = str(parsed.get("description", "")).strip()
+    if not description and not parsed:
+        # _vision_cascade_raw stops at the FIRST non-empty response, so if
+        # that provider ignored the "return ONLY JSON" instruction (observed
+        # live: happens intermittently on real photos, not deterministically
+        # — likely provider-dependent compliance, since this cascade was
+        # originally built for more document-like inputs), _parse_json finds
+        # no JSON at all and we'd otherwise discard a perfectly good prose
+        # description just because it wasn't wrapped in JSON. Only fall back
+        # to the raw text when NO JSON was found (`not parsed`) — if a valid
+        # JSON object WAS parsed but simply lacks a "description" key (e.g.
+        # a JSON-shaped refusal), that's a real failure and using the raw
+        # text instead would leak visible {} braces into the prompt box.
+        fallback = raw.strip()
+        if fallback:
+            description = fallback
     if not description:
         return {"description": "", "ok": False}
     return {"description": description[:_MAX_PROMPT_LEN], "ok": True}
