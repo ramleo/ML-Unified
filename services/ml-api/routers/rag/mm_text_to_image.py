@@ -88,6 +88,10 @@ class EnhancePromptRequest(BaseModel):
     prompt: str
 
 
+class DescribeImageRequest(BaseModel):
+    image: str  # b64, any common image format — vision models are tolerant of the actual bytes
+
+
 # Same fallback order as generation.py's FALLBACK_CANDIDATES (Groq -> Mistral
 # -> Gemini -> Cohere), each using its own server-side key — this is a plain
 # text completion, not the billed image model, so it deliberately does NOT
@@ -135,6 +139,46 @@ def enhance_prompt(body: EnhancePromptRequest):
             return {"enhanced_prompt": result[:_MAX_PROMPT_LEN], "ok": True}
 
     return {"enhanced_prompt": prompt, "ok": False}
+
+
+# Requests JSON explicitly rather than plain prose: _mistral_vision_raw (one
+# leg of the shared vision cascade below) forces response_format=json_object
+# on every call, so a plain-prose prompt would either fail outright on that
+# leg or come back JSON-wrapped anyway — and _vision_cascade_raw returns on
+# the FIRST non-empty response, so an unhandled JSON-wrapped answer from
+# Mistral would leak raw braces straight into the user's prompt box. Asking
+# for the same {"description": ...} shape from every leg and parsing with
+# _parse_json (tolerant of code fences/stray text) keeps the result
+# consistent regardless of which provider actually answered.
+_DESCRIBE_IMAGE_PROMPT = (
+    "Describe this image as a detailed, vivid prompt suitable for an AI "
+    "text-to-image generator to recreate it — subject, setting, composition, "
+    "lighting, colors, mood, and any notable style. Write it as a single "
+    "flowing paragraph (2-4 sentences), not a list. "
+    'Return ONLY JSON: {"description": "<the paragraph>"}'
+)
+
+
+@router.post("/mm-text-to-image/describe-image")
+def describe_image(body: DescribeImageRequest):
+    """Best-effort image -> prompt description via the same free vision
+    cascade already used for document captioning (Groq -> Mistral -> Gemini,
+    see routers/document/_vision.py's _vision_cascade_raw) — NOT the paid
+    image-gen model, so no budget check. Mirrors enhance_prompt's contract:
+    returns ok=False with an empty description (not a hard error) if every
+    provider fails, so a flaky free-tier provider never blocks the user."""
+    from routers.document._llm import _parse_json
+    from routers.document._vision import _vision_cascade_raw
+
+    image = body.image.strip()
+    if not image:
+        raise HTTPException(status_code=400, detail="Image is required.")
+
+    raw = _vision_cascade_raw(image, _DESCRIBE_IMAGE_PROMPT)
+    description = str(_parse_json(raw).get("description", "")).strip()
+    if not description:
+        return {"description": "", "ok": False}
+    return {"description": description[:_MAX_PROMPT_LEN], "ok": True}
 
 
 @router.post("/mm-text-to-image")
