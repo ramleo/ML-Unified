@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -159,6 +160,24 @@ _DESCRIBE_IMAGE_PROMPT = (
 )
 
 
+# Some reasoning models (observed: Groq's qwen leg) prepend a <think>...</think>
+# chain-of-thought block before the actual JSON answer, or emit an unterminated
+# <think> if generation was cut off. Strip it before JSON-parsing or falling
+# back to raw text, otherwise the reasoning dump — not the description — ends
+# up in the user's prompt box (matches the reasoning-model <think>-leak issue
+# already seen elsewhere in this codebase).
+_THINK_BLOCK_RE = re.compile(r"<think>.*?(?:</think>|$)", re.IGNORECASE | re.DOTALL)
+
+# A raw-text fallback (see below) is only safe to show the user if it reads
+# like the requested single-paragraph description. Multi-section analysis
+# dumps ("Analysis of the Image(s):", markdown headers, etc.) are a sign the
+# model ignored the JSON instruction entirely rather than just skipping the
+# wrapper — better to report failure than feed that into the generator.
+_ANALYSIS_MARKER_RE = re.compile(
+    r"analysis of the image|^\s*#{1,6}\s|^\s*\*\*[A-Z]", re.IGNORECASE | re.MULTILINE
+)
+
+
 @router.post("/mm-text-to-image/describe-image")
 def describe_image(body: DescribeImageRequest):
     """Best-effort image -> prompt description via the same free vision
@@ -175,7 +194,8 @@ def describe_image(body: DescribeImageRequest):
         raise HTTPException(status_code=400, detail="Image is required.")
 
     raw = _vision_cascade_raw(image, _DESCRIBE_IMAGE_PROMPT)
-    parsed = _parse_json(raw)
+    cleaned = _THINK_BLOCK_RE.sub("", raw).strip()
+    parsed = _parse_json(cleaned)
     description = str(parsed.get("description", "")).strip()
     if not description and not parsed:
         # _vision_cascade_raw stops at the FIRST non-empty response, so if
@@ -189,8 +209,8 @@ def describe_image(body: DescribeImageRequest):
         # JSON object WAS parsed but simply lacks a "description" key (e.g.
         # a JSON-shaped refusal), that's a real failure and using the raw
         # text instead would leak visible {} braces into the prompt box.
-        fallback = raw.strip()
-        if fallback:
+        fallback = cleaned.strip()
+        if fallback and not _ANALYSIS_MARKER_RE.search(fallback):
             description = fallback
     if not description:
         return {"description": "", "ok": False}
