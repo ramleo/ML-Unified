@@ -29,6 +29,14 @@ new request shape — still one text-only Gemini call, just a longer prompt
 string built server-side (never trust the client to have assembled it
 correctly/safely). No live-call verification needed for this addition, the
 model call itself is byte-for-byte the same shape Phase B already verified.
+
+Seed reproducibility was tried and REJECTED, 2026-08-15: passing
+`generationConfig.seed` was accepted without error, but two live calls with
+the identical prompt and seed (42) returned two genuinely different images
+(different SHA-256, different byte length — 546436 vs 539208). Whatever
+`seed` does for this API, it is not deterministic image output for
+gemini-3.1-flash-lite-image. Do not re-add a seed field without new
+evidence the model's behavior has changed.
 """
 from __future__ import annotations
 
@@ -74,15 +82,6 @@ class TextToImageRequest(BaseModel):
     style: str | None = None
     aspect_ratio: str | None = None
     negative_prompt: str | None = None
-    # EXPERIMENTAL, unverified as of this commit: the Generative Language API
-    # supports `generationConfig.seed` on some Gemini models for deterministic
-    # output, but nobody has confirmed gemini-3.1-flash-lite-image (an image-
-    # gen model, not a text model) actually honors it rather than silently
-    # ignoring it. Sent through as-is when provided; None omits the field
-    # entirely so every existing caller is unaffected. Do NOT build frontend
-    # seed UI on top of this until a live same-seed/same-prompt pair has been
-    # compared and found to actually reproduce.
-    seed: int | None = None
 
 
 class EnhancePromptRequest(BaseModel):
@@ -176,11 +175,12 @@ def generate_image(body: TextToImageRequest):
         import httpx
 
         check_and_record_call("text-to-image", pool="text2img")
-        payload: dict = {"contents": [{"role": "user", "parts": [{"text": full_prompt}]}]}
-        if body.seed is not None:
-            payload["generationConfig"] = {"seed": body.seed}
         with httpx.Client(timeout=60) as client:
-            res = client.post(_URL, params={"key": key}, json=payload)
+            res = client.post(
+                _URL,
+                params={"key": key},
+                json={"contents": [{"role": "user", "parts": [{"text": full_prompt}]}]},
+            )
             res.raise_for_status()
             parts = res.json()["candidates"][0]["content"]["parts"]
 
