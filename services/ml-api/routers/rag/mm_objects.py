@@ -141,6 +141,11 @@ _FACE_CLASS_IDS = {i for i, name in enumerate(OIV7_CLASSES) if name in _FACE_LAB
 _MAX_PERSON_CROPS = 4  # bounds extra inference passes on a busy photo
 _CROP_PAD_RATIO = 0.15  # a little slack so a face near the person box's edge isn't clipped
 
+_VEHICLE_LABELS = {"Car", "Truck", "Bus", "Van", "Land vehicle", "Taxi", "Limousine", "Ambulance", "Motorcycle", "Vehicle"}
+_PLATE_LABELS = {"Vehicle registration plate"}
+_PLATE_CLASS_IDS = {i for i, name in enumerate(OIV7_CLASSES) if name in _PLATE_LABELS}
+_MAX_VEHICLE_CROPS = 4  # same bound as person crops, same reasoning
+
 _session = None
 _session_lock = threading.Lock()
 
@@ -242,6 +247,34 @@ def _detect_faces_in_person_crops(img: Image.Image, person_boxes: list[tuple[int
     return found
 
 
+def _detect_plates_in_vehicle_crops(img: Image.Image, vehicle_boxes: list[tuple[int, float, np.ndarray]]) -> list[tuple[int, float, np.ndarray]]:
+    """Same gap as `_detect_faces_in_person_crops`, same fix, different
+    parent/child pair: a plate is a small fraction of a full vehicle photo
+    (more so than a face is of a person, since plates are physically small
+    relative to the whole car) and can score under `_CONF_THRESH` at
+    full-frame 640x640 even though the car around it detects easily —
+    confirmed live on a real photo where "Car" scored 91% but the plainly
+    legible plate wasn't found at all. Cropping to each detected vehicle box
+    first gives the plate far more effective pixels, at the cost of one
+    extra (bounded, capped) inference pass per vehicle box, only when the
+    full-frame pass found no plate at all."""
+    orig_w, orig_h = img.size
+    found: list[tuple[int, float, np.ndarray]] = []
+    for _, _, box in sorted(vehicle_boxes, key=lambda t: -t[1])[:_MAX_VEHICLE_CROPS]:
+        x0, y0, x1, y1 = box
+        pad_x, pad_y = (x1 - x0) * _CROP_PAD_RATIO, (y1 - y0) * _CROP_PAD_RATIO
+        cx0, cy0 = max(0, int(x0 - pad_x)), max(0, int(y0 - pad_y))
+        cx1, cy1 = min(orig_w, int(x1 + pad_x)), min(orig_h, int(y1 + pad_y))
+        if cx1 - cx0 < 4 or cy1 - cy0 < 4:
+            continue
+        crop = img.crop((cx0, cy0, cx1, cy1))
+        pred, cw, ch, scale, pad_x2, pad_y2 = _infer_raw(crop)
+        for class_id, conf, crop_box in _decode_detections(
+                pred, cw, ch, scale, pad_x2, pad_y2, _CONF_THRESH, allowed_ids=_PLATE_CLASS_IDS):
+            found.append((class_id, conf, crop_box + np.array([cx0, cy0, cx0, cy0])))
+    return found
+
+
 def _nms(boxes: np.ndarray, scores: np.ndarray, iou_thresh: float = _IOU_THRESH) -> list[int]:
     idxs = scores.argsort()[::-1]
     keep: list[int] = []
@@ -281,6 +314,11 @@ def detect_objects(b64: str) -> list[dict]:
         has_face = any(OIV7_CLASSES[r[0]] in _FACE_LABELS for r in raw)
         if person_boxes and not has_face:
             raw = raw + _detect_faces_in_person_crops(img, person_boxes)
+
+        vehicle_boxes = [r for r in raw if OIV7_CLASSES[r[0]] in _VEHICLE_LABELS]
+        has_plate = any(OIV7_CLASSES[r[0]] in _PLATE_LABELS for r in raw)
+        if vehicle_boxes and not has_plate:
+            raw = raw + _detect_plates_in_vehicle_crops(img, vehicle_boxes)
 
         results = [(OIV7_CLASSES[c], conf, box) for c, conf, box in raw]
         results.sort(key=lambda t: -t[1])
