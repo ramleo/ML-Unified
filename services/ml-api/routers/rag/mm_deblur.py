@@ -46,6 +46,7 @@ import difflib
 import io
 import logging
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, HTTPException
@@ -54,6 +55,7 @@ from pydantic import BaseModel
 
 from routers.document._vision import mistral_ocr_pages
 from routers.rag._image_gen_budget import check_and_record_call
+from routers.rag.mm_caption import clean_ocr_text
 from routers.rag.mm_deblur_classify import classify_and_describe
 
 logger = logging.getLogger(__name__)
@@ -161,9 +163,34 @@ def _pil_to_b64(img: Image.Image) -> str:
     return base64.b64encode(buf.getvalue()).decode()
 
 
+_TABLE_ROW_RE = re.compile(r"^\s*\|(.+)\|\s*$")
+_TABLE_SEP_RE = re.compile(r"^[\s|:-]+$")
+
+
+def _strip_markdown_table(text: str) -> str:
+    """Mistral OCR sometimes wraps a short bordered snippet — a license
+    plate, a small label or logo box — in pipe-table markdown syntax even
+    though it isn't really tabular data (observed live on a plate crop:
+    "| LXI7 PYD |\\n| --- |"). Left as-is, that raw markdown leaks into the
+    corroboration message shown to the user. Flattens any pipe-table rows
+    down to their plain cell text and drops separator rows entirely."""
+    out_lines = []
+    for line in text.split("\n"):
+        m = _TABLE_ROW_RE.match(line)
+        if not m:
+            out_lines.append(line)
+            continue
+        if _TABLE_SEP_RE.match(m.group(1)):
+            continue
+        cells = [c.strip() for c in m.group(1).split("|") if c.strip()]
+        if cells:
+            out_lines.append(" ".join(cells))
+    return "\n".join(l for l in out_lines if l.strip())
+
+
 def _ocr_text(img: Image.Image) -> str:
     md, _ = mistral_ocr_pages([_pil_to_b64(img)])
-    return md.strip()
+    return _strip_markdown_table(clean_ocr_text(md))
 
 
 def _sharpen_region(key: str, image_b64: str, bbox: list[float]) -> dict:
