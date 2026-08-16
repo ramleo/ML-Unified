@@ -118,19 +118,30 @@ def _preprocess(face_crop: np.ndarray) -> np.ndarray:
 
 
 def check_liveness(b64: str) -> dict:
-    """Returns {"found_face": bool, "is_real": bool|None, "confidence": float|None,
-    "error": str|None}. `is_real`/`confidence` are None when no face was
-    confidently detected — never guesses on an image with nothing to check."""
+    """Returns {"found_face": bool, "real_score": float|None, "error": str|None}.
+    `real_score` is a single 0-1 number (sigmoid of the model's real-minus-
+    spoof logit gap): 1.0 = confidently real, 0.0 = confidently spoof, 0.5 =
+    the model has no real signal either way. Deliberately NOT a pre-decided
+    bool+confidence split — real-world testing (a live webcam face scored
+    "spoofed" at only 52% under dim/low-contrast conditions, a near coin
+    flip) showed the model's confidence collapses toward 0.5 under exactly
+    the lighting a webcam produces, and a single low-confidence frame isn't
+    reliable enough to commit to a verdict on its own. Returning the raw
+    signed score lets the caller average several frames before deciding —
+    see FaceLivenessRunner.tsx's multi-frame capture, which is the actual
+    fix; a single frame's verdict is not trustworthy near 0.5. `real_score`
+    is None when no face was confidently detected — never guesses on an
+    image with nothing to check."""
     try:
         pil_img = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
     except Exception as exc:
         logger.warning("Liveness check: could not decode image: %s", exc)
-        return {"found_face": False, "is_real": None, "confidence": None, "error": "could not decode image"}
+        return {"found_face": False, "real_score": None, "error": "could not decode image"}
 
     objects, _ = detect_objects(b64)
     faces = [o for o in objects if o["label"] in _FACE_LABELS]
     if not faces:
-        return {"found_face": False, "is_real": None, "confidence": None, "error": None}
+        return {"found_face": False, "real_score": None, "error": None}
 
     best_face = max(faces, key=lambda f: f["confidence"])
     img_bgr = cv2.cvtColor(np.asarray(pil_img), cv2.COLOR_RGB2BGR)
@@ -138,20 +149,16 @@ def check_liveness(b64: str) -> dict:
     try:
         face_crop = _crop_face(img_bgr, best_face["bbox"])
         if face_crop.size == 0:
-            return {"found_face": True, "is_real": None, "confidence": None, "error": "face crop failed"}
+            return {"found_face": True, "real_score": None, "error": "face crop failed"}
         batch = _preprocess(face_crop)
         session = _get_session()
         logits = session.run(None, {session.get_inputs()[0].name: batch})[0][0]
         real_logit, spoof_logit = float(logits[0]), float(logits[1])
-        diff = real_logit - spoof_logit
-        # Logistic squash of the raw logit gap into a 0-1 "how confident"
-        # number for display — the model itself has no built-in probability
-        # output, just the two raw logits.
-        confidence = float(1 / (1 + np.exp(-abs(diff))))
-        return {"found_face": True, "is_real": diff >= 0, "confidence": round(confidence, 3), "error": None}
+        real_score = float(1 / (1 + np.exp(-(real_logit - spoof_logit))))
+        return {"found_face": True, "real_score": round(real_score, 4), "error": None}
     except Exception as exc:
         logger.warning("Liveness inference failed: %s", exc)
-        return {"found_face": True, "is_real": None, "confidence": None, "error": "inference failed"}
+        return {"found_face": True, "real_score": None, "error": "inference failed"}
 
 
 class LivenessRequest(BaseModel):
