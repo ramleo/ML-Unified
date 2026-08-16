@@ -106,7 +106,7 @@ def build_image_chunk(file_bytes: bytes, source: str, session_id: str = "") -> t
     # Closed-vocabulary object detection (MMRAG-07 follow-up) — precomputed
     # here so a later "where is the X" chat question is a free metadata
     # lookup, not a fresh vision call. See mm_objects.py for scope/rationale.
-    objects = detect_objects(b64)
+    objects, person_count = detect_objects(b64)
     obj_desc = describe_objects(objects)
     if obj_desc:
         # Baked into the stored text itself (not just the LLM prompt) so a
@@ -156,6 +156,7 @@ def build_image_chunk(file_bytes: bytes, source: str, session_id: str = "") -> t
     if caption:
         chunks.append({"text": caption, "source": source, "chunk_index": 0,
                        "chunk_type": "image", "page": 1, "quality": quality, "objects": objects,
+                       "person_count": person_count,
                        "signatures": signatures, "tampering": tampering, "duplicates": duplicates})
     # Table-region detection (backlog item 4) — only worth the model-load
     # cost when OCR actually found at least one pipe-table to attach a bbox

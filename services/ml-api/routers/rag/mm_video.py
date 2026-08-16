@@ -127,7 +127,7 @@ def process_frame(cap, timestamp_s: float, frame_idx: int, source: str, session_
     # Closed-vocabulary object detection (MMRAG-07 follow-up) — precomputed
     # here so a later "where is the X" chat question is a free metadata
     # lookup, not a fresh vision call. See mm_objects.py for scope/rationale.
-    objects = detect_objects(b64)
+    objects, person_count = detect_objects(b64)
     obj_desc = describe_objects(objects)
     if obj_desc:
         # Baked into the stored text (not just the LLM prompt) so
@@ -164,7 +164,8 @@ def process_frame(cap, timestamp_s: float, frame_idx: int, source: str, session_
     tampering = refine_masks(b64, tampering)
 
     chunk = {"text": caption, "source": source, "chunk_index": frame_idx - 1,
-             "chunk_type": "video", "page": frame_idx, "objects": objects, "signatures": signatures,
+             "chunk_type": "video", "page": frame_idx, "objects": objects, "person_count": person_count,
+             "signatures": signatures,
              "tampering": tampering, "duplicates": duplicates,
              # Real seconds into the video (not the 1-indexed sample number
              # above) — MMRAG-09: lets a citation for a visual-only frame

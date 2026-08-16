@@ -137,6 +137,12 @@ def index_chunks(chunks: list[dict], state, uploaded: bool = False, session_id: 
             # JSON-encode/decode pattern, own codec since the shape differs
             # from bbox (a list of {label,confidence,bbox} dicts, not one box).
             "objects": encode_objects(c.get("objects")),
+            # Real uncapped person count (crowd density) — a plain scalar,
+            # unlike `objects` above, since detect_objects() already caps
+            # ITS OWN returned box list at _MAX_DETECTIONS for box-drawing
+            # UI; this is the true count from before that cap, so no codec
+            # needed, just store the int directly.
+            "person_count": c.get("person_count"),
             # Same generic {label,confidence,bbox}-list codec as `objects`
             # above (encode_objects is shape-agnostic JSON, not OIV7-
             # specific) — reused rather than duplicated for signatures.

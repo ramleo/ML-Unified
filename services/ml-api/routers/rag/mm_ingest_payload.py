@@ -59,6 +59,7 @@ def build_done_event(*, source: str, session_id: str, save_scope: str, chunks: l
              # must be scalar), so no encode/decode round-trip needed here.
              "bbox": c.get("bbox"),
              "objects": c.get("objects") or None,
+             "person_count": c.get("person_count") or None,
              "signatures": c.get("signatures") or None,
              "tampering": c.get("tampering") or None,
              "duplicates": c.get("duplicates") or None,

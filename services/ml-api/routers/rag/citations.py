@@ -191,6 +191,7 @@ def build_source_doc(chunk: dict, redact: bool = False) -> dict:
         "timestamp_s": chunk.get("timestamp_s"),
         "bbox": _decode_bbox(chunk.get("bbox")),
         "objects": decode_objects(chunk.get("objects")) or None,
+        "person_count": chunk.get("person_count") or None,
         "signatures": decode_objects(chunk.get("signatures")) or None,
         "tampering": decode_objects(chunk.get("tampering")) or None,
         "number_mismatch": chunk.get("number_mismatch") or None,

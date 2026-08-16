@@ -236,21 +236,29 @@ def _nms(boxes: np.ndarray, scores: np.ndarray, iou_thresh: float = _IOU_THRESH)
     return keep
 
 
-def detect_objects(b64: str) -> list[dict]:
-    """Runs the detector over a base64 PNG/JPEG. Returns up to
+def detect_objects(b64: str) -> tuple[list[dict], int]:
+    """Runs the detector over a base64 PNG/JPEG. Returns (up to
     _MAX_DETECTIONS {label, confidence, bbox: [x,y,w,h] normalized 0-1}
-    sorted by confidence descending. [] on any failure (corrupt image, no
-    detections) — never blocks ingestion."""
+    sorted by confidence descending, real uncapped person count). ([], 0) on
+    any failure (corrupt image, no detections) — never blocks ingestion.
+
+    The person count is captured BEFORE the _MAX_DETECTIONS slice below,
+    deliberately separate from the returned (capped) box list — that cap
+    exists so a citation doesn't get 40+ overlapping boxes drawn on it for
+    a crowd photo, but a real "how many people" question needs the actual
+    count, not whatever a handful of the highest-confidence boxes happens
+    to include across every detected class."""
     try:
         img = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
         orig_w, orig_h = img.size
         if orig_w == 0 or orig_h == 0:
-            return []
+            return [], 0
 
         pred, ow, oh, scale, pad_x, pad_y = _infer_raw(img)
         raw = _decode_detections(pred, ow, oh, scale, pad_x, pad_y, _CONF_THRESH)
 
         person_boxes = [r for r in raw if OIV7_CLASSES[r[0]] in _PERSON_LABELS]
+        person_count = len(person_boxes)
         has_face = any(OIV7_CLASSES[r[0]] in _FACE_LABELS for r in raw)
         if person_boxes and not has_face:
             raw = raw + _detect_faces_in_person_crops(img, person_boxes)
@@ -264,15 +272,16 @@ def detect_objects(b64: str) -> list[dict]:
         results.sort(key=lambda t: -t[1])
         results = results[:_MAX_DETECTIONS]
 
-        return [
+        objects = [
             {"label": label, "confidence": round(conf, 3),
              "bbox": [round(float(box[0] / orig_w), 4), round(float(box[1] / orig_h), 4),
                       round(float((box[2] - box[0]) / orig_w), 4), round(float((box[3] - box[1]) / orig_h), 4)]}
             for label, conf, box in results
         ]
+        return objects, person_count
     except Exception as exc:
         logger.warning("Object detection failed: %s", exc)
-        return []
+        return [], 0
 
 
 def _spatial_phrase(bbox: list[float]) -> str:
