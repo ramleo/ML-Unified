@@ -38,7 +38,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-_MIN_FRAMES = 2
 _MAX_FRAMES = 30
 _LOW_CONFIDENCE_THRESHOLD = 0.01  # area_fraction below this = likely no plant found
 
@@ -68,7 +67,8 @@ def _leaf_area_and_mask(rgb: np.ndarray) -> dict:
     whole-frame path and the per-crop auto-detect path so a crop never has
     to round-trip through base64 just to reuse this logic."""
     mask = _leaf_mask(rgb)
-    area_fraction = float(mask.sum()) / mask.size
+    leaf_pixel_count = int(mask.sum())
+    area_fraction = float(leaf_pixel_count) / mask.size
 
     overlay = rgb.copy()
     overlay[mask] = (
@@ -80,6 +80,7 @@ def _leaf_area_and_mask(rgb: np.ndarray) -> dict:
     return {
         "ok": True,
         "area_fraction": area_fraction,
+        "leaf_pixel_count": leaf_pixel_count,
         "mask_preview": base64.b64encode(buf.getvalue()).decode(),
     }
 
@@ -163,16 +164,74 @@ def _finalize_track(entries: list[dict]) -> dict | None:
     return {"frames": frames_out}
 
 
-@router.post("/mm-plant-growth")
-def plant_growth_endpoint(body: PlantGrowthRequest):
-    if not (_MIN_FRAMES <= len(body.frames) <= _MAX_FRAMES):
+def _compare_single_photo(frame: PlantGrowthFrame, auto_detect: bool) -> dict:
+    """One photo, multiple plants — compares their CURRENT leaf area to each
+    other (relative_pct: largest plant = 100%), not a time-series growth %.
+    There's no baseline to grow from with only one photo, so this is a
+    genuinely different aggregation, not a degenerate case of the
+    multi-frame path below.
+
+    Uses each plant's ABSOLUTE leaf_pixel_count for the comparison, not its
+    area_fraction (leaf pixels / that plant's OWN crop size) — a small
+    plant's tight crop and a large plant's tight crop can land on nearly
+    identical fractions (both crops are mostly foliage), which would hide
+    the real size difference the crop size itself already encodes. Absolute
+    pixel counts are only comparable because all plants share one photo, one
+    camera distance — unlike growth% across frames, where only the SAME
+    plant's fraction over time is used (crop size for one plant is fairly
+    stable frame to frame, unlike comparing crops of different plants)."""
+    if not auto_detect:
         raise HTTPException(
             status_code=400,
-            detail=f"provide between {_MIN_FRAMES} and {_MAX_FRAMES} frames",
+            detail="Auto-detect must be on to compare plants within a single photo.",
+        )
+    try:
+        img = Image.open(io.BytesIO(base64.b64decode(frame.image))).convert("RGB")
+    except Exception as exc:
+        logger.warning("Plant growth could not decode the photo: %s", exc)
+        raise HTTPException(status_code=400, detail="could not decode this photo")
+
+    boxes = _detect_plant_boxes(frame.image)
+    if len(boxes) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Found fewer than 2 plants in this photo to compare — try a photo with "
+                "multiple distinct plants, or add a second photo to measure growth over time instead."
+            ),
+        )
+
+    measured = [_measure_frame(img, _crop(img, box)) for box in boxes]
+    pixel_counts = [m["leaf_pixel_count"] if m.get("ok") else 0 for m in measured]
+    max_count = max(pixel_counts, default=0)
+
+    plants = []
+    for idx, (m, count) in enumerate(zip(measured, pixel_counts)):
+        area_fraction = m["area_fraction"] if m.get("ok") else 0.0
+        plants.append({
+            "index": idx,
+            "area_fraction": area_fraction,
+            "relative_pct": round(count / max_count * 100.0, 1) if max_count > 0 else 0.0,
+            "mask_preview": m.get("mask_preview") if m.get("ok") else None,
+            "low_confidence": (not m.get("ok")) or area_fraction < _LOW_CONFIDENCE_THRESHOLD,
+        })
+
+    return {"mode": "compare", "plants": plants}
+
+
+@router.post("/mm-plant-growth")
+def plant_growth_endpoint(body: PlantGrowthRequest):
+    if not (1 <= len(body.frames) <= _MAX_FRAMES):
+        raise HTTPException(
+            status_code=400,
+            detail=f"provide between 1 and {_MAX_FRAMES} frames",
         )
     for i, frame in enumerate(body.frames):
         if not frame.image.strip():
             raise HTTPException(status_code=400, detail=f"frame {i} is missing an image")
+
+    if len(body.frames) == 1:
+        return _compare_single_photo(body.frames[0], body.auto_detect)
 
     labels = [frame.label.strip() or f"Day {i}" for i, frame in enumerate(body.frames)]
     imgs: list[Image.Image | None] = []
@@ -221,4 +280,4 @@ def plant_growth_endpoint(body: PlantGrowthRequest):
         if finalized:
             plants.append({"index": idx, **finalized})
 
-    return {"plants": plants}
+    return {"mode": "growth", "plants": plants}
