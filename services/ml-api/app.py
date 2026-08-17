@@ -28,6 +28,7 @@ from routers.rag.mm_ai_fill import router as rag_mm_ai_fill_router
 from routers.rag.mm_deblur import router as rag_mm_deblur_router
 from routers.rag.mm_text_to_image import router as rag_mm_text_to_image_router
 from routers.rag.mm_watermark import router as rag_mm_watermark_router
+from routers.rag.mm_plant_growth import router as rag_mm_plant_growth_router
 from routers.rag.mm_liveness import router as rag_mm_liveness_router
 from routers.rag.mm_depth import router as rag_mm_depth_router
 from routers.rag.contradictions import router as rag_contradictions_router
@@ -171,6 +172,7 @@ app.include_router(rag_mm_ai_fill_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_deblur_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_text_to_image_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_watermark_router, prefix="/rag", tags=["rag"])
+app.include_router(rag_mm_plant_growth_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_liveness_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_depth_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_contradictions_router, prefix="/rag", tags=["rag"])
