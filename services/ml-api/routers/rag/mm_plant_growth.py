@@ -20,6 +20,14 @@ measuring, the same crop-then-remeasure pattern mm_objects.py already uses
 for person->face and vehicle->plate. Without this, two plants in one photo
 would silently blend into one meaningless combined area_fraction.
 
+The object detector can under-detect plants it wasn't trained to recognize
+well — small/young seedlings, stylized illustrations — sometimes finding
+only 1 box (or merging several into one) where a human clearly sees more.
+_detect_plant_boxes() falls back to mm_plant_growth_blobs.detect_plant_
+blobs() in that case: connected-component analysis directly on this tool's
+own HSV leaf mask, which only needs foliage to be green and spatially
+separate, not recognizable to a general-purpose detector.
+
 A single photo with 2+ detected plants is ambiguous: it could be several
 distinct plants coexisting right now (compare mode: rank current sizes
 against each other), or it could be a before/after COLLAGE of one plant —
@@ -50,6 +58,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 from routers.rag.mm_objects import detect_objects
+from routers.rag.mm_plant_growth_blobs import detect_plant_blobs
 from routers.rag.mm_plant_growth_collage import detect_collage_seam, split_at_seam
 
 logger = logging.getLogger(__name__)
@@ -115,15 +124,33 @@ def measure_leaf_area(b64: str) -> dict:
 
 
 def _detect_plant_boxes(b64: str) -> list[list[float]]:
-    """Normalized [x,y,w,h] boxes for Plant/Houseplant/Flowerpot detections,
-    sorted left-to-right (x-center ascending) — the ordering later frames
-    are matched against, relying on the same "consistent framing across the
-    series" assumption this tool already requires for growth% to be
-    meaningful at all. Empty list on no detections or any failure;
-    detect_objects() itself never raises (returns ([], 0) on failure)."""
+    """Normalized [x,y,w,h] boxes for detected plants, sorted left-to-right
+    (x-center ascending) — the ordering later frames are matched against,
+    relying on the same "consistent framing across the series" assumption
+    this tool already requires for growth% to be meaningful at all.
+
+    Tries the general object detector (Plant/Houseplant/Flowerpot classes)
+    first. If it finds fewer than 2 plants, falls back to
+    mm_plant_growth_blobs.detect_plant_blobs() on this tool's own leaf
+    mask — the detector can miss small seedlings or stylized/illustrated
+    plants it wasn't trained on, but the leaf-mask blob approach doesn't
+    care what the plant looks like, only that it's green and spatially
+    separate from other green regions. Only used as a fallback (not
+    always) because it's noisier on real photos with background greenery
+    the detector correctly ignores."""
     objects, _ = detect_objects(b64)
     boxes = [o["bbox"] for o in objects if o["label"] in _PLANT_LABELS]
     boxes.sort(key=lambda b: b[0] + b[2] / 2)
+    if len(boxes) >= 2:
+        return boxes
+
+    try:
+        img = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
+        mask_boxes = detect_plant_blobs(_leaf_mask(np.asarray(img)))
+        if len(mask_boxes) > len(boxes):
+            return mask_boxes
+    except Exception as exc:
+        logger.warning("Plant growth mask-based fallback detection failed: %s", exc)
     return boxes
 
 

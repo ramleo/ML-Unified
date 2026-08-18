@@ -28,6 +28,7 @@ _SEAM_SEARCH_MARGIN = 0.05  # search window: midline ± this fraction of the dim
 _SEAM_EDGE_RATIO = 3.0      # seam gradient must exceed this multiple of the image's median gradient
 _SEAM_BASELINE_FLOOR = 1.0  # floor for the median-gradient baseline so a near-flat image doesn't
                              # divide-by-near-zero and trivially "pass" on any nonzero edge
+_SEAM_MIN_LINE_COVERAGE = 0.6  # fraction of the line's length that must show a strong LOCAL edge
 _SEAM_COLOR_DIFF_MIN = 18.0  # minimum summed mean-RGB difference (0-255 scale) between the two halves
 
 
@@ -35,22 +36,38 @@ def _seam_candidate(gray: np.ndarray, axis: int, size: int) -> int | None:
     """Finds the strongest straight edge near the midline along `axis`
     (1=vertical seam via columns, 0=horizontal seam via rows). Returns the
     seam's pixel position, or None if nothing there is meaningfully sharper
-    than the rest of the image (i.e. no seam, just ordinary photo detail)."""
-    if axis == 1:
-        grad = np.abs(cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)).mean(axis=0)
-    else:
-        grad = np.abs(cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)).mean(axis=1)
+    than the rest of the image (i.e. no seam, just ordinary photo detail).
+
+    A genuine stitched-photo seam is a straight line running nearly the
+    FULL length of the image. A single object's edge (a leaf boundary, a
+    pot rim) can average up to a high per-column/row mean too, since a very
+    sharp LOCAL edge diluted over a mostly-flat background still pulls the
+    average up — column-average alone isn't enough to tell them apart
+    (confirmed against a real false positive: a stock illustration of 3
+    seedlings averaged a seemingly sharp "seam" column that was actually
+    only edge-sharp over ~19% of the image's height, versus ~91% for an
+    actual two-panel collage). So this also checks that the edge is
+    continuously strong along most of the candidate line, not just high on
+    average."""
+    sobel = np.abs(cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)) if axis == 1 \
+        else np.abs(cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3))
+    profile = sobel.mean(axis=0) if axis == 1 else sobel.mean(axis=1)
 
     lo = int(size * (0.5 - _SEAM_SEARCH_MARGIN))
     hi = int(size * (0.5 + _SEAM_SEARCH_MARGIN))
     if hi <= lo:
         return None
-    window = grad[lo:hi]
+    window = profile[lo:hi]
     peak_idx = lo + int(np.argmax(window))
-    peak_val = grad[peak_idx]
+    peak_val = profile[peak_idx]
 
-    baseline = max(float(np.median(grad)), _SEAM_BASELINE_FLOOR)
-    if peak_val < baseline * _SEAM_EDGE_RATIO:
+    baseline = max(float(np.median(profile)), _SEAM_BASELINE_FLOOR)
+    strong_local = baseline * _SEAM_EDGE_RATIO
+    if peak_val < strong_local:
+        return None
+
+    line = sobel[:, peak_idx] if axis == 1 else sobel[peak_idx, :]
+    if float((line > strong_local).mean()) < _SEAM_MIN_LINE_COVERAGE:
         return None
     return peak_idx
 
