@@ -209,7 +209,7 @@ def _to_frame_entry(result: dict, label: str) -> dict:
     if not result.get("ok"):
         return {
             "label": label, "area_fraction": 0.0, "mask_preview": None, "low_confidence": True,
-            "greenness_index": 0.0, "leaf_count": 0,
+            "greenness_index": 0.0, "leaf_count": 0, "leaf_pixel_count": 0,
         }
     return {
         "label": label,
@@ -218,6 +218,14 @@ def _to_frame_entry(result: dict, label: str) -> dict:
         "low_confidence": result["area_fraction"] < _LOW_CONFIDENCE_THRESHOLD,
         "greenness_index": result["greenness_index"],
         "leaf_count": result["leaf_count"],
+        # Raw pixel count (not just the area_fraction ratio) — needed by the
+        # frontend's optional real-world-size calibration feature, which
+        # multiplies this by a user-supplied cm-per-pixel scale factor. Valid
+        # against that scale factor as long as it was measured on the SAME
+        # uploaded photo's native pixel grid: _crop() never resizes, so a
+        # multi-plant track's cropped leaf_pixel_count is still in the same
+        # pixel units as the original whole photo the user calibrates on.
+        "leaf_pixel_count": result["leaf_pixel_count"],
     }
 
 

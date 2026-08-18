@@ -67,6 +67,7 @@ def compare_single_photo(frame, auto_detect: bool, low_confidence_threshold: flo
             "low_confidence": (not m.get("ok")) or area_fraction < low_confidence_threshold,
             "greenness_index": m.get("greenness_index", 0.0) if m.get("ok") else 0.0,
             "leaf_count": m.get("leaf_count", 0) if m.get("ok") else 0,
+            "leaf_pixel_count": count,
         })
 
     return {"mode": "compare", "plants": plants}
