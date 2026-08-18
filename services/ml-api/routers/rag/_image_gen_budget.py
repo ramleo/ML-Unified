@@ -30,8 +30,9 @@ from fastapi import HTTPException
 
 _DAILY_CALL_CAP = int(os.environ.get("GEMINI_IMAGE_DAILY_CAP", "40"))
 _TEXT2IMG_DAILY_CAP = int(os.environ.get("GEMINI_TEXT2IMG_DAILY_CAP", "15"))
+_SPECIES_ID_DAILY_CAP = int(os.environ.get("GEMINI_SPECIES_ID_DAILY_CAP", "30"))
 
-_CAPS = {"shared": _DAILY_CALL_CAP, "text2img": _TEXT2IMG_DAILY_CAP}
+_CAPS = {"shared": _DAILY_CALL_CAP, "text2img": _TEXT2IMG_DAILY_CAP, "species_id": _SPECIES_ID_DAILY_CAP}
 _MESSAGES = {
     "shared": (
         "Daily AI image-edit budget reached ({cap} calls across sharpen + "
@@ -42,6 +43,11 @@ _MESSAGES = {
         "Daily text-to-image budget reached ({cap} calls) — resets at UTC "
         "midnight. This protects against runaway Gemini API cost, not a "
         "per-user limit."
+    ),
+    "species_id": (
+        "Daily plant species/health ID budget reached ({cap} calls) — "
+        "resets at UTC midnight. This protects against runaway Gemini API "
+        "cost, not a per-user limit."
     ),
 }
 
