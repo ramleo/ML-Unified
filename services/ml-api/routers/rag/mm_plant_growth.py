@@ -44,6 +44,14 @@ and run through the ordinary 2-frame growth path instead of compare mode —
 panel order is assumed left-to-right / top-to-bottom (natural reading
 order), which is a real assumption, not a guarantee, since there is no
 caption OCR to confirm which panel came first.
+
+Every measurement also carries two secondary metrics from
+mm_plant_growth_metrics.py, computed on the same leaf mask: greenness_index
+(an RGB-only vegetation index, a stress/chlorosis proxy independent of
+area — a plant can stay the same size while yellowing) and leaf_count
+(individual leaves via connected components, a distinct signal from total
+green area — a plant can grow more leaves without much area change, or
+vice versa).
 """
 from __future__ import annotations
 
@@ -60,6 +68,7 @@ from pydantic import BaseModel
 from routers.rag.mm_objects import detect_objects
 from routers.rag.mm_plant_growth_blobs import detect_plant_blobs
 from routers.rag.mm_plant_growth_collage import detect_collage_seam, split_at_seam
+from routers.rag.mm_plant_growth_metrics import count_leaves, greenness_index
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +117,8 @@ def _leaf_area_and_mask(rgb: np.ndarray) -> dict:
         "ok": True,
         "area_fraction": area_fraction,
         "leaf_pixel_count": leaf_pixel_count,
+        "greenness_index": round(greenness_index(rgb, mask), 3),
+        "leaf_count": count_leaves(mask),
         "mask_preview": base64.b64encode(buf.getvalue()).decode(),
     }
 
@@ -189,12 +200,17 @@ def _measure_frame(img: Image.Image, region: np.ndarray | None) -> dict:
 
 def _to_frame_entry(result: dict, label: str) -> dict:
     if not result.get("ok"):
-        return {"label": label, "area_fraction": 0.0, "mask_preview": None, "low_confidence": True}
+        return {
+            "label": label, "area_fraction": 0.0, "mask_preview": None, "low_confidence": True,
+            "greenness_index": 0.0, "leaf_count": 0,
+        }
     return {
         "label": label,
         "area_fraction": result["area_fraction"],
         "mask_preview": result["mask_preview"],
         "low_confidence": result["area_fraction"] < _LOW_CONFIDENCE_THRESHOLD,
+        "greenness_index": result["greenness_index"],
+        "leaf_count": result["leaf_count"],
     }
 
 
@@ -288,6 +304,8 @@ def _compare_single_photo(frame: PlantGrowthFrame, auto_detect: bool) -> dict:
             "relative_pct": round(count / max_count * 100.0, 1) if max_count > 0 else 0.0,
             "mask_preview": m.get("mask_preview") if m.get("ok") else None,
             "low_confidence": (not m.get("ok")) or area_fraction < _LOW_CONFIDENCE_THRESHOLD,
+            "greenness_index": m.get("greenness_index", 0.0) if m.get("ok") else 0.0,
+            "leaf_count": m.get("leaf_count", 0) if m.get("ok") else 0,
         })
 
     return {"mode": "compare", "plants": plants}
@@ -350,7 +368,10 @@ def plant_growth_endpoint(body: PlantGrowthRequest):
                 # This plant wasn't found in this frame (occluded, moved
                 # out of shot) — an honest "missing" signal, not a
                 # fabricated 0%-growth data point.
-                tracks[t].append({"label": label, "area_fraction": 0.0, "mask_preview": None, "low_confidence": True})
+                tracks[t].append({
+                    "label": label, "area_fraction": 0.0, "mask_preview": None, "low_confidence": True,
+                    "greenness_index": 0.0, "leaf_count": 0,
+                })
 
     plants = []
     for idx, entries in enumerate(tracks):
