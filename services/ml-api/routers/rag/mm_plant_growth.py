@@ -19,6 +19,23 @@ nothing new trained) to find and crop individual plants in a photo BEFORE
 measuring, the same crop-then-remeasure pattern mm_objects.py already uses
 for person->face and vehicle->plate. Without this, two plants in one photo
 would silently blend into one meaningless combined area_fraction.
+
+A single photo with 2+ detected plants is ambiguous: it could be several
+distinct plants coexisting right now (compare mode: rank current sizes
+against each other), or it could be a before/after COLLAGE of one plant —
+two separate photos stitched into one file, a common "plant progress" post
+format. Object detection alone can't tell these apart (a bounding box says
+WHAT is in it, never whether two boxes are the same subject at a different
+time). mm_plant_growth_collage.py's detect_collage_seam() adds a second,
+independent CV-only check: a collage almost always has a visible SEAM — a
+straight line where a sharp edge coincides with a color/exposure jump,
+because the two halves came from different shots (different lighting/
+white-balance/scene), which a single continuous photo does not have. When a
+confident seam is found (_auto_split_collage()), the photo is split there
+and run through the ordinary 2-frame growth path instead of compare mode —
+panel order is assumed left-to-right / top-to-bottom (natural reading
+order), which is a real assumption, not a guarantee, since there is no
+caption OCR to confirm which panel came first.
 """
 from __future__ import annotations
 
@@ -33,6 +50,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 from routers.rag.mm_objects import detect_objects
+from routers.rag.mm_plant_growth_collage import detect_collage_seam, split_at_seam
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +182,35 @@ def _finalize_track(entries: list[dict]) -> dict | None:
     return {"frames": frames_out}
 
 
+def _auto_split_collage(frame: PlantGrowthFrame) -> dict | None:
+    """If this single photo looks like a two-panel before/after collage
+    (see _detect_collage_seam), splits it at the seam and runs the two
+    halves through the exact same measurement used for a genuine 2-photo
+    growth-mode upload (_measure_frame / _finalize_track, no new
+    measurement code) — this is what a user would get by manually
+    pre-splitting the file and uploading both halves. Returns None when no
+    confident seam is found, so the caller falls through to compare mode."""
+    try:
+        img = Image.open(io.BytesIO(base64.b64decode(frame.image))).convert("RGB")
+    except Exception:
+        return None
+
+    boxes = _detect_plant_boxes(frame.image)
+    seam = detect_collage_seam(np.asarray(img), boxes)
+    if seam is None:
+        return None
+
+    region_a, region_b = split_at_seam(img, seam)
+    entries = [
+        _to_frame_entry(_measure_frame(img, region_a), "Panel 1"),
+        _to_frame_entry(_measure_frame(img, region_b), "Panel 2"),
+    ]
+    finalized = _finalize_track(entries)
+    if not finalized:
+        return None
+    return {"mode": "growth", "plants": [{"index": 0, **finalized}], "auto_split_collage": True}
+
+
 def _compare_single_photo(frame: PlantGrowthFrame, auto_detect: bool) -> dict:
     """One photo, multiple plants — compares their CURRENT leaf area to each
     other (relative_pct: largest plant = 100%), not a time-series growth %.
@@ -231,6 +278,10 @@ def plant_growth_endpoint(body: PlantGrowthRequest):
             raise HTTPException(status_code=400, detail=f"frame {i} is missing an image")
 
     if len(body.frames) == 1:
+        if body.auto_detect:
+            split_result = _auto_split_collage(body.frames[0])
+            if split_result is not None:
+                return split_result
         return _compare_single_photo(body.frames[0], body.auto_detect)
 
     labels = [frame.label.strip() or f"Day {i}" for i, frame in enumerate(body.frames)]
