@@ -1,16 +1,26 @@
 """
-QR code phishing/malicious-link risk scanner. Pure local heuristics — no ML
-model, no external API call, and the decoded URL is never actually fetched
-(only its text is analyzed), so scanning a link here can't itself visit the
+QR code phishing/malicious-link risk scanner. The decoded URL is never
+actually fetched by this tool — only its text is analyzed, and the optional
+reputation check below is a hash-prefix lookup against Google's database,
+not a page load — so scanning a link here can't itself visit the
 destination or trigger a live payload.
 
 Decodes QR code(s) in an uploaded image via OpenCV's built-in QRCodeDetector
 (already a dependency — no pyzbar/libzbar needed), then scores each decoded
-URL against structural phishing/malicious-link signals: IP-literal host,
-punycode/homograph domain, "@" auth-trick URLs, known URL-shortener domains
-(they hide the real destination), suspicious TLDs, plain HTTP, and
-typosquatting against a small curated list of frequently-impersonated brand
-domains.
+URL two ways:
+
+1. Structural heuristics (pure local, always run, no API key needed):
+   IP-literal host, punycode/homograph domain, "@" auth-trick URLs, known
+   URL-shortener domains (they hide the real destination), suspicious TLDs,
+   plain HTTP, and typosquatting against a small curated list of
+   frequently-impersonated brand domains.
+2. Google Safe Browsing reputation lookup (optional — only runs if
+   SAFE_BROWSING_API_KEY is set): checks whether the URL is already known
+   malicious/phishing in Google's own threat database. This catches sites
+   the structural heuristics fundamentally can't — a freshly-registered
+   domain with a perfectly clean-looking name — but degrades gracefully to
+   heuristics-only if the key isn't configured or the lookup fails, rather
+   than failing the whole scan.
 
 This intentionally reports SIGNALS, not a verdict — same honesty pattern as
 this codebase's tampering detector and signature-verification tools: when
@@ -20,6 +30,7 @@ let a human weigh it, rather than claim "safe" or "malicious" outright.
 
 import base64
 import logging
+import os
 from ipaddress import ip_address
 from urllib.parse import urlparse
 
@@ -32,6 +43,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024
+
+_SAFE_BROWSING_URL = "https://safebrowsing.googleapis.com/v4/threatMatches:find"
+_SAFE_BROWSING_TIMEOUT = 8.0
+_THREAT_TYPE_LABELS = {
+    "MALWARE": "malware distribution",
+    "SOCIAL_ENGINEERING": "phishing/social engineering",
+    "UNWANTED_SOFTWARE": "unwanted software",
+    "POTENTIALLY_HARMFUL_APPLICATION": "a potentially harmful application",
+}
 
 _SHORTENER_DOMAINS = {
     "bit.ly", "tinyurl.com", "t.co", "goo.gl", "is.gd", "ow.ly", "buff.ly",
@@ -133,19 +153,60 @@ def _analyze_url(raw: str) -> dict:
     }
 
 
+def _check_safe_browsing(urls: list[str]) -> dict[str, list[str]] | None:
+    """Looks up each URL against Google Safe Browsing's known-threat lists —
+    a hash-prefix lookup, not a fetch of the page itself, preserving the
+    "never actually visits the link" property. Returns None (not {}) if the
+    check couldn't run at all (no key configured, network/API error) so the
+    caller can distinguish "checked, nothing found" from "didn't check"."""
+    key = os.environ.get("SAFE_BROWSING_API_KEY", "")
+    if not key or not urls:
+        return None
+    import httpx
+
+    try:
+        with httpx.Client(timeout=_SAFE_BROWSING_TIMEOUT) as client:
+            res = client.post(
+                _SAFE_BROWSING_URL,
+                params={"key": key},
+                json={
+                    "client": {"clientId": "ml-unified-qr-phishing", "clientVersion": "1.0.0"},
+                    "threatInfo": {
+                        "threatTypes": list(_THREAT_TYPE_LABELS.keys()),
+                        "platformTypes": ["ANY_PLATFORM"],
+                        "threatEntryTypes": ["URL"],
+                        "threatEntries": [{"url": u} for u in urls],
+                    },
+                },
+            )
+            res.raise_for_status()
+            matches = res.json().get("matches", [])
+    except Exception as exc:
+        logger.warning("Safe Browsing lookup failed: %s", exc)
+        return None
+
+    flagged: dict[str, list[str]] = {}
+    for m in matches:
+        url = m.get("threat", {}).get("url")
+        threat_type = m.get("threatType")
+        if url and threat_type:
+            flagged.setdefault(url, []).append(threat_type)
+    return flagged
+
+
 def scan_qr_codes(image_b64: str) -> dict:
     try:
         raw = base64.b64decode(image_b64, validate=True)
     except Exception:
-        return {"found": False, "qr_codes": [], "error": "Could not decode image data."}
+        return {"found": False, "qr_codes": [], "reputation_checked": False, "error": "Could not decode image data."}
 
     if len(raw) > _MAX_IMAGE_BYTES:
-        return {"found": False, "qr_codes": [], "error": "Image too large (max 10MB)."}
+        return {"found": False, "qr_codes": [], "reputation_checked": False, "error": "Image too large (max 10MB)."}
 
     arr = np.frombuffer(raw, dtype=np.uint8)
     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     if img is None:
-        return {"found": False, "qr_codes": [], "error": "Could not read this as an image."}
+        return {"found": False, "qr_codes": [], "reputation_checked": False, "error": "Could not read this as an image."}
 
     decoded_texts: tuple = ()
     try:
@@ -157,7 +218,24 @@ def scan_qr_codes(image_b64: str) -> dict:
         decoded_texts = ()
 
     results = [_analyze_url(text) for text in decoded_texts if text]
-    return {"found": len(results) > 0, "qr_codes": results}
+
+    def _lookup_form(data: str) -> str:
+        return data if "://" in data else f"http://{data}"
+
+    lookup_urls = [_lookup_form(r["data"]) for r in results if r["is_url"]]
+    flagged = _check_safe_browsing(lookup_urls)
+    reputation_checked = flagged is not None
+    if flagged:
+        for r in results:
+            if not r["is_url"]:
+                continue
+            threats = flagged.get(_lookup_form(r["data"]))
+            if threats:
+                labels = ", ".join(_THREAT_TYPE_LABELS.get(t, t) for t in threats)
+                r["reasons"].insert(0, f"Flagged by Google Safe Browsing as {labels} — a known-bad site in Google's own database, not just a structural guess.")
+                r["risk_level"] = "high"
+
+    return {"found": len(results) > 0, "qr_codes": results, "reputation_checked": reputation_checked}
 
 
 class QrScanRequest(BaseModel):
