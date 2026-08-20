@@ -14,21 +14,14 @@ URL two ways:
    URL-shortener domains (they hide the real destination), suspicious TLDs,
    plain HTTP, and typosquatting against a small curated list of
    frequently-impersonated brand domains.
-2. Google Safe Browsing reputation lookup (optional — only runs if
-   SAFE_BROWSING_API_KEY is set): checks whether the URL is already known
-   malicious/phishing in Google's own threat database. This catches sites
-   the structural heuristics fundamentally can't — a freshly-registered
-   domain with a perfectly clean-looking name — but degrades gracefully to
-   heuristics-only if the key isn't configured or the lookup fails, rather
-   than failing the whole scan.
-3. Domain-age lookup via RDAP (free, no API key — WHOIS's structured,
-   ICANN-mandated successor as of Jan 2025), plugging the exact gap Safe
-   Browsing has: a brand-new phishing domain that hasn't been indexed yet.
-   A domain registered days ago is a real, well-established phishing signal
-   even with an otherwise clean-looking URL and no reputation hit. Best-
-   effort only — many TLDs/registries don't expose RDAP, so a failed or
-   unsupported lookup is silently skipped, never treated as a red flag
-   itself.
+2. Google Safe Browsing reputation lookup and 3. RDAP domain-age lookup —
+   both in mm_qr_phishing_reputation.py, see that module's docstring.
+
+A QR payload that isn't a URL at all (Wi-Fi credentials, a contact card, a
+phone/SMS/email/geo link, or plain text) skips the URL analysis entirely and
+is instead labeled by type (_detect_payload_type) so the UI can say what it
+actually is rather than a flat "nothing to check" — a Wi-Fi QR code in
+particular gets a caution note, since scanning one auto-joins a network.
 
 This intentionally reports SIGNALS, not a verdict — same honesty pattern as
 this codebase's tampering detector and signature-verification tools: when
@@ -38,10 +31,7 @@ let a human weigh it, rather than claim "safe" or "malicious" outright.
 
 import base64
 import logging
-import os
 import re
-import time
-from datetime import datetime, timezone
 from ipaddress import ip_address
 from urllib.parse import urlparse
 
@@ -50,19 +40,16 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from routers.rag.mm_qr_phishing_reputation import (
+    _KNOWN_BRAND_DOMAINS,
+    _enrich_with_reputation_and_age,
+    _registrable_domain,
+)
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024
-
-_SAFE_BROWSING_URL = "https://safebrowsing.googleapis.com/v4/threatMatches:find"
-_SAFE_BROWSING_TIMEOUT = 8.0
-_THREAT_TYPE_LABELS = {
-    "MALWARE": "malware distribution",
-    "SOCIAL_ENGINEERING": "phishing/social engineering",
-    "UNWANTED_SOFTWARE": "unwanted software",
-    "POTENTIALLY_HARMFUL_APPLICATION": "a potentially harmful application",
-}
 
 _SHORTENER_DOMAINS = {
     "bit.ly", "tinyurl.com", "t.co", "goo.gl", "is.gd", "ow.ly", "buff.ly",
@@ -75,29 +62,7 @@ _SUSPICIOUS_TLDS = {
     "work", "support", "loan", "win", "review", "download", "stream",
 }
 
-# A handful of frequently-impersonated brand domains, for the typosquat
-# check only — NOT a claim of exhaustive brand coverage. Compared against
-# the registrable root domain so real subdomains of these brands never
-# false-flag (e.g. "accounts.google.com" -> root "google.com" -> exact match).
-_KNOWN_BRAND_DOMAINS = {
-    "paypal.com", "amazon.com", "apple.com", "microsoft.com", "google.com",
-    "chase.com", "bankofamerica.com", "wellsfargo.com", "netflix.com",
-    "facebook.com", "instagram.com", "whatsapp.com", "dhl.com", "fedex.com",
-    "ups.com", "usps.com", "irs.gov", "linkedin.com", "dropbox.com",
-    "docusign.com", "coinbase.com", "binance.com",
-}
-
 _MAX_TYPOSQUAT_DISTANCE = 2
-
-_RDAP_URL = "https://rdap.org/domain/{domain}"
-_RDAP_TIMEOUT = 12.0  # rdap.org bootstraps via a redirect to the actual
-# registry's RDAP server — a two-hop round trip that can run past 6s under
-# real deployed-network latency even though it's fast on a local machine
-# (found via a real timeout on the deployed HF Space, not assumed upfront).
-_DOMAIN_AGE_HIGH_RISK_DAYS = 30
-_DOMAIN_AGE_MEDIUM_RISK_DAYS = 180
-_DOMAIN_AGE_CACHE_TTL_SECONDS = 3600
-_domain_age_cache: dict[str, tuple[float, int | None]] = {}
 
 
 def _levenshtein(a: str, b: str) -> int:
@@ -110,14 +75,6 @@ def _levenshtein(a: str, b: str) -> int:
             cur[j] = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb))
         prev = cur
     return prev[-1]
-
-
-def _registrable_domain(host: str) -> str:
-    """Best-effort eTLD+1 without a public-suffix-list dependency — sufficient
-    for the small curated brand list above (all plain .com/.gov), not a
-    general-purpose PSL implementation."""
-    parts = host.lower().split(".")
-    return ".".join(parts[-2:]) if len(parts) >= 2 else host.lower()
 
 
 _HOSTNAME_RE = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$")
@@ -138,15 +95,69 @@ def _looks_like_hostname(host: str) -> bool:
     return bool(_HOSTNAME_RE.match(host))
 
 
+_PAYLOAD_TYPE_PATTERNS: list[tuple[str, str, re.Pattern]] = [
+    ("wifi", "Wi-Fi network credentials", re.compile(r"^WIFI:", re.IGNORECASE)),
+    ("contact", "Contact card", re.compile(r"^(BEGIN:VCARD|MECARD:)", re.IGNORECASE)),
+    ("email", "Email address", re.compile(r"^mailto:", re.IGNORECASE)),
+    ("phone", "Phone number", re.compile(r"^tel:", re.IGNORECASE)),
+    ("sms", "SMS/text message", re.compile(r"^(sms|smsto):", re.IGNORECASE)),
+    ("location", "Geographic coordinates", re.compile(r"^geo:", re.IGNORECASE)),
+    ("calendar", "Calendar event", re.compile(r"^BEGIN:VEVENT", re.IGNORECASE)),
+]
+
+
+def _detect_payload_type(raw: str) -> tuple[str, str]:
+    """Best-effort label for a QR payload that isn't a URL, so the result
+    card can say what it actually is instead of a flat "nothing to check".
+    Falls back to "text" for anything unrecognized — still useful, since it
+    tells the user their photo decoded fine and simply isn't a link."""
+    stripped = raw.strip()
+    for payload_type, label, pattern in _PAYLOAD_TYPE_PATTERNS:
+        if pattern.match(stripped):
+            return payload_type, label
+    return "text", "Plain text"
+
+
+def _non_url_result(raw: str, payload_type: str, payload_label: str) -> dict:
+    reasons: list[str] = []
+    risk_level = "unknown"
+    if payload_type == "wifi":
+        risk_level = "medium"
+        reasons.append(
+            "This QR code configures your device to join a Wi-Fi network automatically — "
+            "only scan Wi-Fi QR codes from a source you trust, since a malicious one could "
+            "connect you to an attacker-controlled network that can intercept your traffic."
+        )
+    return {
+        "data": raw,
+        "is_url": False,
+        "host": None,
+        "risk_level": risk_level,
+        "reasons": reasons,
+        "payload_type": payload_type,
+        "payload_label": payload_label,
+    }
+
+
 def _analyze_url(raw: str) -> dict:
+    stripped = raw.strip()
+    # Check known non-web schemes (mailto:/tel:/sms:/geo:/WIFI:/vCard/vEvent) BEFORE attempting
+    # URL parsing. mailto: in particular breaks the "no scheme -> assume http://" fallback below:
+    # urlparse("http://mailto:x@example.com") misreads "mailto:x" as URL userinfo and "example.com"
+    # as a real host, wrongly triggering the "@" auth-trick heuristic on an ordinary email QR code.
+    for payload_type, label, pattern in _PAYLOAD_TYPE_PATTERNS:
+        if pattern.match(stripped):
+            return _non_url_result(raw, payload_type, label)
+
     try:
         parsed = urlparse(raw if "://" in raw else f"http://{raw}")
     except ValueError:
-        return {"data": raw, "is_url": False, "risk_level": "unknown", "reasons": []}
+        parsed = None
 
-    host = parsed.hostname or ""
-    if not host or not _looks_like_hostname(host):
-        return {"data": raw, "is_url": False, "risk_level": "unknown", "reasons": []}
+    host = parsed.hostname if parsed else ""
+    if not parsed or not host or not _looks_like_hostname(host):
+        payload_type, payload_label = _detect_payload_type(raw)
+        return _non_url_result(raw, payload_type, payload_label)
 
     high: list[str] = []
     medium: list[str] = []
@@ -189,133 +200,9 @@ def _analyze_url(raw: str) -> dict:
         "host": host,
         "risk_level": risk_level,
         "reasons": high + medium,
+        "payload_type": "url",
+        "payload_label": "Web link",
     }
-
-
-def _check_safe_browsing(urls: list[str]) -> dict[str, list[str]] | None:
-    """Looks up each URL against Google Safe Browsing's known-threat lists —
-    a hash-prefix lookup, not a fetch of the page itself, preserving the
-    "never actually visits the link" property. Returns None (not {}) if the
-    check couldn't run at all (no key configured, network/API error) so the
-    caller can distinguish "checked, nothing found" from "didn't check"."""
-    key = os.environ.get("SAFE_BROWSING_API_KEY", "")
-    if not key or not urls:
-        return None
-    import httpx
-
-    try:
-        with httpx.Client(timeout=_SAFE_BROWSING_TIMEOUT) as client:
-            res = client.post(
-                _SAFE_BROWSING_URL,
-                params={"key": key},
-                json={
-                    "client": {"clientId": "ml-unified-qr-phishing", "clientVersion": "1.0.0"},
-                    "threatInfo": {
-                        "threatTypes": list(_THREAT_TYPE_LABELS.keys()),
-                        "platformTypes": ["ANY_PLATFORM"],
-                        "threatEntryTypes": ["URL"],
-                        "threatEntries": [{"url": u} for u in urls],
-                    },
-                },
-            )
-            res.raise_for_status()
-            matches = res.json().get("matches", [])
-    except Exception as exc:
-        logger.warning("Safe Browsing lookup failed: %s", exc)
-        return None
-
-    flagged: dict[str, list[str]] = {}
-    for m in matches:
-        url = m.get("threat", {}).get("url")
-        threat_type = m.get("threatType")
-        if url and threat_type:
-            flagged.setdefault(url, []).append(threat_type)
-    return flagged
-
-
-def _check_domain_age(root_domain: str) -> int | None:
-    """Looks up a domain's registration date via RDAP — free, no API key,
-    no signup (WHOIS's structured successor, ICANN-mandated for gTLD
-    registries since Jan 2025; rdap.org bootstraps to the right registry).
-    Takes the REGISTRABLE root domain (e.g. "wikipedia.org"), not a full
-    hostname with subdomains ("en.wikipedia.org") — registries reject
-    subdomain queries with a 400, confirmed via real Space logs, not
-    assumed. Returns age in days, or None if the lookup didn't produce a
-    usable answer — many TLDs/registries don't support RDAP, or the domain
-    wasn't found, and that's just "no signal," never treated as suspicious
-    itself. Small in-memory TTL cache since the same domain can recur
-    across scans within one process's lifetime and this is a courtesy to a
-    free service."""
-    now = time.time()
-    cached = _domain_age_cache.get(root_domain)
-    if cached and now - cached[0] < _DOMAIN_AGE_CACHE_TTL_SECONDS:
-        return cached[1]
-
-    import httpx
-
-    age_days: int | None = None
-    try:
-        with httpx.Client(timeout=_RDAP_TIMEOUT, follow_redirects=True) as client:
-            res = client.get(_RDAP_URL.format(domain=root_domain))
-            if res.status_code == 200:
-                for event in res.json().get("events", []):
-                    if event.get("eventAction") == "registration" and event.get("eventDate"):
-                        reg_date = datetime.fromisoformat(event["eventDate"].replace("Z", "+00:00"))
-                        age_days = (datetime.now(timezone.utc) - reg_date).days
-                        break
-    except Exception as exc:
-        logger.info("RDAP lookup failed for %s: %s", root_domain, exc)
-
-    _domain_age_cache[root_domain] = (now, age_days)
-    return age_days
-
-
-def _lookup_form(data: str) -> str:
-    return data if "://" in data else f"http://{data}"
-
-
-def _enrich_with_reputation_and_age(results: list[dict]) -> bool:
-    """Runs the Safe Browsing + domain-age checks over already
-    structurally-analyzed results, mutating each result's risk_level/reasons
-    in place. Shared by both the QR-image path and the direct-URL path so
-    the two entry points can never drift out of sync with each other.
-    Returns whether the Safe Browsing check actually ran (reputation_checked)."""
-    lookup_urls = [_lookup_form(r["data"]) for r in results if r["is_url"]]
-    flagged = _check_safe_browsing(lookup_urls)
-    reputation_checked = flagged is not None
-    if flagged:
-        for r in results:
-            if not r["is_url"]:
-                continue
-            threats = flagged.get(_lookup_form(r["data"]))
-            if threats:
-                labels = ", ".join(_THREAT_TYPE_LABELS.get(t, t) for t in threats)
-                r["reasons"].insert(0, f"Flagged by Google Safe Browsing as {labels} — a known-bad site in Google's own database, not just a structural guess.")
-                r["risk_level"] = "high"
-
-    for r in results:
-        if not r["is_url"] or not r["host"]:
-            continue
-        try:
-            ip_address(r["host"])
-            continue  # already flagged as an IP-literal host; no domain to look up
-        except ValueError:
-            pass
-        root = _registrable_domain(r["host"])
-        if root in _KNOWN_BRAND_DOMAINS:
-            continue  # obviously long-established, not worth a lookup
-        age_days = _check_domain_age(root)
-        if age_days is None:
-            continue
-        if age_days < _DOMAIN_AGE_HIGH_RISK_DAYS:
-            r["reasons"].insert(0, f"Domain was registered only {age_days} day{'s' if age_days != 1 else ''} ago — freshly-registered domains are commonly used for short-lived phishing/scam campaigns.")
-            r["risk_level"] = "high"
-        elif age_days < _DOMAIN_AGE_MEDIUM_RISK_DAYS:
-            r["reasons"].append(f"Domain is relatively new (registered about {age_days} days ago).")
-            if r["risk_level"] == "low":
-                r["risk_level"] = "medium"
-
-    return reputation_checked
 
 
 def scan_qr_codes(image_b64: str) -> dict:
