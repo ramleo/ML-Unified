@@ -3,14 +3,22 @@ Photo library visual search — "find the photo with the red backpack" over an
 uploaded batch of photos, no captions or tags needed.
 
 Stateless, one-shot: a single request carries the whole photo batch AND the
-text query together, gets embedded with CLIP (sentence-transformers'
+query together, gets embedded with CLIP (sentence-transformers'
 clip-ViT-B-32 — already a dependency for mm_similar.py's figure-similarity
 feature, same model, but this module owns its own lazy singleton rather than
 sharing mm_similar.py's, to keep the two features decoupled), ranked by
-cosine similarity between the query text embedding and each photo's image
-embedding, and returned sorted best-match-first. No database, no
-persistence — this isn't a searchable corpus that outlives one request, just
-a batch job over whatever photos were uploaded this time.
+cosine similarity against each photo's image embedding, and returned sorted
+best-match-first. No database, no persistence — this isn't a searchable
+corpus that outlives one request, just a batch job over whatever photos were
+uploaded this time.
+
+The query is either TEXT ("a red backpack") or IMAGE (a reference photo from
+the same uploaded batch, base64 — "find more like this one"). Both land in
+the same CLIP embedding space, so ranking logic is identical either way;
+only which encoder call produces the query vector differs. When the
+reference photo is itself one of the uploaded batch, the caller passes its
+filename as `exclude_filename` so the trivial, uninteresting 100%
+self-match doesn't show up in its own results.
 """
 
 import base64
@@ -58,12 +66,20 @@ class PhotoItem(BaseModel):
 
 class SearchRequest(BaseModel):
     photos: list[PhotoItem]
-    query: str
+    query: str | None = None
+    query_image: str | None = None  # base64 of a reference photo — mutually exclusive with query
+    exclude_filename: str | None = None  # the reference photo's own filename, if query_image is one of `photos`
 
 
-def search_photos(photos: list[PhotoItem], query: str) -> dict:
-    if not query.strip():
-        raise HTTPException(status_code=400, detail="query is required")
+def search_photos(
+    photos: list[PhotoItem],
+    query: str | None = None,
+    query_image: str | None = None,
+    exclude_filename: str | None = None,
+) -> dict:
+    query = (query or "").strip()
+    if not query and not query_image:
+        raise HTTPException(status_code=400, detail="query or query_image is required")
     if not photos:
         raise HTTPException(status_code=400, detail="at least one photo is required")
     if len(photos) > _MAX_PHOTOS:
@@ -92,14 +108,23 @@ def search_photos(photos: list[PhotoItem], query: str) -> dict:
         raise HTTPException(status_code=400, detail="No valid images could be decoded from the upload.")
 
     image_embeds = _model.encode(images, batch_size=8, convert_to_numpy=True, show_progress_bar=False)
-    text_embed = _model.encode([query], convert_to_numpy=True, show_progress_bar=False)[0]
+
+    if query_image:
+        try:
+            raw = base64.b64decode(query_image, validate=True)
+            ref_img = Image.open(io.BytesIO(raw)).convert("RGB")
+        except Exception:
+            raise HTTPException(status_code=400, detail="Could not decode the reference image.")
+        query_embed = _model.encode([ref_img], convert_to_numpy=True, show_progress_bar=False)[0]
+    else:
+        query_embed = _model.encode([query], convert_to_numpy=True, show_progress_bar=False)[0]
 
     img_norms = image_embeds / np.linalg.norm(image_embeds, axis=1, keepdims=True)
-    text_norm = text_embed / np.linalg.norm(text_embed)
-    scores = img_norms @ text_norm
+    query_norm = query_embed / np.linalg.norm(query_embed)
+    scores = img_norms @ query_norm
 
     results = sorted(
-        [{"filename": f, "score": round(float(s), 4)} for f, s in zip(filenames, scores)],
+        [{"filename": f, "score": round(float(s), 4)} for f, s in zip(filenames, scores) if f != exclude_filename],
         key=lambda r: r["score"], reverse=True,
     )
     return {"results": results, "skipped": skipped}
@@ -107,4 +132,4 @@ def search_photos(photos: list[PhotoItem], query: str) -> dict:
 
 @router.post("/mm-photo-search/search")
 def photo_search(body: SearchRequest):
-    return search_photos(body.photos, body.query)
+    return search_photos(body.photos, body.query, body.query_image, body.exclude_filename)
