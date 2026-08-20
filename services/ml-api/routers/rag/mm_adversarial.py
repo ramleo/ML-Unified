@@ -22,6 +22,13 @@ for this (unlike this codebase's other CV tools, which only need forward-
 pass ONNX inference), which is why this needs the real torch model instead
 of an ONNX-exported one.
 
+Also computes Grad-CAM for both the original and adversarial prediction —
+a heatmap of which image regions actually drove that specific prediction,
+via the last conv block's activations weighted by their gradient toward the
+predicted class's logit. This is the more concrete, visual half of the
+demo: the label change alone doesn't show WHY the model was fooled, but
+comparing where it was "looking" before vs. after does.
+
 Defense: JPEG recompression at a configurable quality. This is presented
 honestly as a PARTIAL, unreliable mitigation, not a fix — real testing
 during development (a real photo, multiple epsilon/quality combinations)
@@ -184,6 +191,54 @@ def _perturbation_preview_b64(x_orig, x_adv, amplify: float = 8.0) -> str:
     return base64.b64encode(buf.getvalue()).decode()
 
 
+def _grad_cam(x_pixel, target_index: int):
+    """Grad-CAM: shows WHERE in the image the model is 'looking' to justify
+    a given prediction — the standard way to make an otherwise-abstract
+    "why did it predict that" question visible. Hooks the last conv block's
+    activations (model.features' output), weights each activation channel
+    by its global-average-pooled gradient w.r.t. the target class's logit,
+    and upsamples the resulting map back to image size. Comparing this for
+    the original vs. adversarial prediction is the actual point: an
+    imperceptible pixel change can shift not just the label but WHERE the
+    model claims to be looking."""
+    import torch
+    import torch.nn.functional as F
+
+    activations = {}
+
+    def hook(_module, _input, output):
+        activations["value"] = output
+
+    handle = _model.features.register_forward_hook(hook)
+    x = x_pixel.clone().requires_grad_(True)
+    logits = _model(_normalize(x))
+    handle.remove()
+
+    act = activations["value"]
+    act.retain_grad()
+    logits[0, target_index].backward()
+
+    grad = act.grad
+    weights = grad.mean(dim=(2, 3), keepdim=True)
+    cam = F.relu((weights * act).sum(dim=1, keepdim=True))
+    cam = F.interpolate(cam, size=(_IMG_SIZE, _IMG_SIZE), mode="bilinear", align_corners=False)[0, 0]
+    cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
+    return cam.detach()
+
+
+def _heatmap_overlay_b64(x_pixel, cam) -> str:
+    import cv2
+    from PIL import Image
+
+    orig = (x_pixel.clamp(0, 1)[0].permute(1, 2, 0).detach().numpy() * 255).astype(np.uint8)
+    heat = (cam.numpy() * 255).astype(np.uint8)
+    heat_color = cv2.cvtColor(cv2.applyColorMap(heat, cv2.COLORMAP_JET), cv2.COLOR_BGR2RGB)
+    overlay = np.clip(orig.astype(np.float32) * 0.55 + heat_color.astype(np.float32) * 0.45, 0, 255).astype(np.uint8)
+    buf = io.BytesIO()
+    Image.fromarray(overlay).save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()
+
+
 class RunRequest(BaseModel):
     image: str  # base64, no data URL prefix
     epsilon: float = 0.03
@@ -216,11 +271,13 @@ def run_adversarial_demo(image_b64: str, epsilon: float, method: str, jpeg_quali
     x = _to_tensor(img)
     original = _predict(x)
     original_top1_index = original.pop("top1_index")
+    original_cam = _grad_cam(x, original_top1_index)
 
     x_adv = _fgsm(x, original_top1_index, epsilon) if method == "fgsm" else _pgd(x, original_top1_index, epsilon)
     adversarial = _predict(x_adv)
-    adversarial.pop("top1_index")
+    adversarial_top1_index = adversarial.pop("top1_index")
     adversarial["fooled"] = adversarial["label"] != original["label"]
+    adversarial_cam = _grad_cam(x_adv, adversarial_top1_index)
 
     x_defended = _jpeg_recompress(x_adv, jpeg_quality)
     defended = _predict(x_defended)
@@ -229,8 +286,8 @@ def run_adversarial_demo(image_b64: str, epsilon: float, method: str, jpeg_quali
     defended["disrupted"] = defended["label"] != adversarial["label"]
 
     return {
-        "original": original,
-        "adversarial": {**adversarial, "image": _tensor_to_b64(x_adv)},
+        "original": {**original, "heatmap": _heatmap_overlay_b64(x, original_cam)},
+        "adversarial": {**adversarial, "image": _tensor_to_b64(x_adv), "heatmap": _heatmap_overlay_b64(x_adv, adversarial_cam)},
         "defended": {**defended, "image": _tensor_to_b64(x_defended)},
         "perturbation_preview": _perturbation_preview_b64(x, x_adv),
     }
