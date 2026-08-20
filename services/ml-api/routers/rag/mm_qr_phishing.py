@@ -89,7 +89,10 @@ _KNOWN_BRAND_DOMAINS = {
 _MAX_TYPOSQUAT_DISTANCE = 2
 
 _RDAP_URL = "https://rdap.org/domain/{domain}"
-_RDAP_TIMEOUT = 6.0
+_RDAP_TIMEOUT = 12.0  # rdap.org bootstraps via a redirect to the actual
+# registry's RDAP server — a two-hop round trip that can run past 6s under
+# real deployed-network latency even though it's fast on a local machine
+# (found via a real timeout on the deployed HF Space, not assumed upfront).
 _DOMAIN_AGE_HIGH_RISK_DAYS = 30
 _DOMAIN_AGE_MEDIUM_RISK_DAYS = 180
 _DOMAIN_AGE_CACHE_TTL_SECONDS = 3600
@@ -211,17 +214,21 @@ def _check_safe_browsing(urls: list[str]) -> dict[str, list[str]] | None:
     return flagged
 
 
-def _check_domain_age(host: str) -> int | None:
+def _check_domain_age(root_domain: str) -> int | None:
     """Looks up a domain's registration date via RDAP — free, no API key,
     no signup (WHOIS's structured successor, ICANN-mandated for gTLD
     registries since Jan 2025; rdap.org bootstraps to the right registry).
-    Returns age in days, or None if the lookup didn't produce a usable
-    answer — many TLDs/registries don't support RDAP, or the domain wasn't
-    found, and that's just "no signal," never treated as suspicious itself.
-    Small in-memory TTL cache since the same domain can recur across scans
-    within one process's lifetime and this is a courtesy to a free service."""
+    Takes the REGISTRABLE root domain (e.g. "wikipedia.org"), not a full
+    hostname with subdomains ("en.wikipedia.org") — registries reject
+    subdomain queries with a 400, confirmed via real Space logs, not
+    assumed. Returns age in days, or None if the lookup didn't produce a
+    usable answer — many TLDs/registries don't support RDAP, or the domain
+    wasn't found, and that's just "no signal," never treated as suspicious
+    itself. Small in-memory TTL cache since the same domain can recur
+    across scans within one process's lifetime and this is a courtesy to a
+    free service."""
     now = time.time()
-    cached = _domain_age_cache.get(host)
+    cached = _domain_age_cache.get(root_domain)
     if cached and now - cached[0] < _DOMAIN_AGE_CACHE_TTL_SECONDS:
         return cached[1]
 
@@ -230,7 +237,7 @@ def _check_domain_age(host: str) -> int | None:
     age_days: int | None = None
     try:
         with httpx.Client(timeout=_RDAP_TIMEOUT, follow_redirects=True) as client:
-            res = client.get(_RDAP_URL.format(domain=host))
+            res = client.get(_RDAP_URL.format(domain=root_domain))
             if res.status_code == 200:
                 for event in res.json().get("events", []):
                     if event.get("eventAction") == "registration" and event.get("eventDate"):
@@ -238,9 +245,9 @@ def _check_domain_age(host: str) -> int | None:
                         age_days = (datetime.now(timezone.utc) - reg_date).days
                         break
     except Exception as exc:
-        logger.info("RDAP lookup failed for %s: %s", host, exc)
+        logger.info("RDAP lookup failed for %s: %s", root_domain, exc)
 
-    _domain_age_cache[host] = (now, age_days)
+    _domain_age_cache[root_domain] = (now, age_days)
     return age_days
 
 
@@ -293,9 +300,10 @@ def scan_qr_codes(image_b64: str) -> dict:
             continue  # already flagged as an IP-literal host; no domain to look up
         except ValueError:
             pass
-        if _registrable_domain(r["host"]) in _KNOWN_BRAND_DOMAINS:
+        root = _registrable_domain(r["host"])
+        if root in _KNOWN_BRAND_DOMAINS:
             continue  # obviously long-established, not worth a lookup
-        age_days = _check_domain_age(r["host"])
+        age_days = _check_domain_age(root)
         if age_days is None:
             continue
         if age_days < _DOMAIN_AGE_HIGH_RISK_DAYS:
