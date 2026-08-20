@@ -19,6 +19,11 @@ only which encoder call produces the query vector differs. When the
 reference photo is itself one of the uploaded batch, the caller passes its
 filename as `exclude_filename` so the trivial, uninteresting 100%
 self-match doesn't show up in its own results.
+
+Also exposes duplicate detection over the same embeddings — no separate
+model or query needed, since "does this batch contain near-identical
+photos" is just "are any two embeddings almost the same vector," a byproduct
+of embedding the batch that search already does anyway.
 """
 
 import base64
@@ -71,19 +76,19 @@ class SearchRequest(BaseModel):
     exclude_filename: str | None = None  # the reference photo's own filename, if query_image is one of `photos`
 
 
-def search_photos(
-    photos: list[PhotoItem],
-    query: str | None = None,
-    query_image: str | None = None,
-    exclude_filename: str | None = None,
-) -> dict:
-    query = (query or "").strip()
-    if not query and not query_image:
-        raise HTTPException(status_code=400, detail="query or query_image is required")
+class DuplicatesRequest(BaseModel):
+    photos: list[PhotoItem]
+    threshold: float = 0.97
+
+
+def _decode_and_embed(photos: list[PhotoItem]) -> tuple[list, list[str], int]:
+    """Shared by search and duplicate-detection: decode each photo, drop
+    anything invalid/oversized, and CLIP-embed the rest in one batched call.
+    Returns (embeddings, filenames-in-the-same-order, skipped-count)."""
     if not photos:
         raise HTTPException(status_code=400, detail="at least one photo is required")
     if len(photos) > _MAX_PHOTOS:
-        raise HTTPException(status_code=400, detail=f"max {_MAX_PHOTOS} photos per search")
+        raise HTTPException(status_code=400, detail=f"max {_MAX_PHOTOS} photos per request")
     if not _ensure_loaded():
         raise HTTPException(status_code=503, detail="Photo search model is unavailable right now.")
 
@@ -108,6 +113,22 @@ def search_photos(
         raise HTTPException(status_code=400, detail="No valid images could be decoded from the upload.")
 
     image_embeds = _model.encode(images, batch_size=8, convert_to_numpy=True, show_progress_bar=False)
+    return image_embeds, filenames, skipped
+
+
+def search_photos(
+    photos: list[PhotoItem],
+    query: str | None = None,
+    query_image: str | None = None,
+    exclude_filename: str | None = None,
+) -> dict:
+    query = (query or "").strip()
+    if not query and not query_image:
+        raise HTTPException(status_code=400, detail="query or query_image is required")
+
+    image_embeds, filenames, skipped = _decode_and_embed(photos)
+
+    from PIL import Image
 
     if query_image:
         try:
@@ -130,6 +151,60 @@ def search_photos(
     return {"results": results, "skipped": skipped}
 
 
+def find_duplicates(photos: list[PhotoItem], threshold: float = 0.97) -> dict:
+    """Groups near-identical photos in the batch by CLIP embedding cosine
+    similarity — no query needed. threshold=0.97 sits inside the commonly
+    cited range for CLIP-based image dedup (~0.95 for "same shot, different
+    moment", ~0.99 for stricter exact-duplicate filtering) — not a value
+    tuned against this specific tool's traffic, since no labeled
+    duplicate-photo dataset exists here. Confirmed during development that
+    synthetic test images (flat solid colors, random noise) are a poor
+    proxy for calibrating this — CLIP embeds those out-of-distribution
+    inputs unnaturally close together regardless of real content, so a
+    batch of near-blank or textureless real photos (a plain white wall,
+    a screenshot of solid UI) could still over-group here; real photos with
+    normal visual complexity are the case this threshold is meant for.
+    Greedy union-find, deliberately simple for a batch capped at
+    _MAX_PHOTOS. Singleton "groups" (nothing similar enough to any other
+    photo) are dropped — they're not duplicates of anything, not worth
+    reporting."""
+    image_embeds, filenames, skipped = _decode_and_embed(photos)
+
+    n = len(filenames)
+    norms = image_embeds / np.linalg.norm(image_embeds, axis=1, keepdims=True)
+    sim_matrix = norms @ norms.T
+
+    parent = list(range(n))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def union(i: int, j: int) -> None:
+        ri, rj = find(i), find(j)
+        if ri != rj:
+            parent[rj] = ri
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            if sim_matrix[i][j] >= threshold:
+                union(i, j)
+
+    clusters: dict[int, list[str]] = {}
+    for i in range(n):
+        clusters.setdefault(find(i), []).append(filenames[i])
+
+    groups = [members for members in clusters.values() if len(members) > 1]
+    return {"groups": groups, "skipped": skipped}
+
+
 @router.post("/mm-photo-search/search")
 def photo_search(body: SearchRequest):
     return search_photos(body.photos, body.query, body.query_image, body.exclude_filename)
+
+
+@router.post("/mm-photo-search/duplicates")
+def photo_duplicates(body: DuplicatesRequest):
+    return find_duplicates(body.photos, body.threshold)
