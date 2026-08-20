@@ -24,6 +24,12 @@ Also exposes duplicate detection over the same embeddings — no separate
 model or query needed, since "does this batch contain near-identical
 photos" is just "are any two embeddings almost the same vector," a byproduct
 of embedding the batch that search already does anyway.
+
+An optional `exclude_query` steers ranking away from a second concept
+("beach photos" excluding "people") via standard CLIP embedding-space
+vector arithmetic (query direction minus exclude direction) — see
+search_photos()'s inline comment for why this is steering, not a hard
+filter.
 """
 
 import base64
@@ -74,6 +80,7 @@ class SearchRequest(BaseModel):
     query: str | None = None
     query_image: str | None = None  # base64 of a reference photo — mutually exclusive with query
     exclude_filename: str | None = None  # the reference photo's own filename, if query_image is one of `photos`
+    exclude_query: str | None = None  # text to steer AWAY from, e.g. "people" for "beach, but not people"
 
 
 class DuplicatesRequest(BaseModel):
@@ -121,6 +128,7 @@ def search_photos(
     query: str | None = None,
     query_image: str | None = None,
     exclude_filename: str | None = None,
+    exclude_query: str | None = None,
 ) -> dict:
     query = (query or "").strip()
     if not query and not query_image:
@@ -139,6 +147,22 @@ def search_photos(
         query_embed = _model.encode([ref_img], convert_to_numpy=True, show_progress_bar=False)[0]
     else:
         query_embed = _model.encode([query], convert_to_numpy=True, show_progress_bar=False)[0]
+
+    exclude_query = (exclude_query or "").strip()
+    if exclude_query:
+        # Standard CLIP "vector arithmetic" exclusion technique: normalize
+        # both the query and exclude-term embeddings, then subtract the
+        # exclude direction out of the query direction before re-normalizing
+        # below. This steers ranking AWAY from the excluded concept rather
+        # than literally filtering it out — a photo strongly matching both
+        # ("a red car" excluding "vehicles") can still rank low, since the
+        # subtraction weakens the whole query direction, not just the
+        # excluded part. Applies after either a text or image query, since
+        # by this point it's just a vector regardless of source.
+        exclude_embed = _model.encode([exclude_query], convert_to_numpy=True, show_progress_bar=False)[0]
+        q_unit = query_embed / np.linalg.norm(query_embed)
+        e_unit = exclude_embed / np.linalg.norm(exclude_embed)
+        query_embed = q_unit - e_unit
 
     img_norms = image_embeds / np.linalg.norm(image_embeds, axis=1, keepdims=True)
     query_norm = query_embed / np.linalg.norm(query_embed)
@@ -202,7 +226,7 @@ def find_duplicates(photos: list[PhotoItem], threshold: float = 0.97) -> dict:
 
 @router.post("/mm-photo-search/search")
 def photo_search(body: SearchRequest):
-    return search_photos(body.photos, body.query, body.query_image, body.exclude_filename)
+    return search_photos(body.photos, body.query, body.query_image, body.exclude_filename, body.exclude_query)
 
 
 @router.post("/mm-photo-search/duplicates")
