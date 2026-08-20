@@ -31,6 +31,7 @@ from routers.rag.mm_watermark import router as rag_mm_watermark_router
 from routers.rag.mm_plant_growth import router as rag_mm_plant_growth_router
 from routers.rag.mm_qr_phishing import router as rag_mm_qr_phishing_router
 from routers.rag.mm_photo_search import router as rag_mm_photo_search_router
+from routers.rag.mm_adversarial import router as rag_mm_adversarial_router
 from routers.rag.mm_plant_growth_species import router as rag_mm_plant_growth_species_router
 from routers.rag.mm_liveness import router as rag_mm_liveness_router
 from routers.rag.mm_depth import router as rag_mm_depth_router
@@ -179,6 +180,7 @@ app.include_router(rag_mm_plant_growth_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_plant_growth_species_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_qr_phishing_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_photo_search_router, prefix="/rag", tags=["rag"])
+app.include_router(rag_mm_adversarial_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_liveness_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_depth_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_contradictions_router, prefix="/rag", tags=["rag"])
