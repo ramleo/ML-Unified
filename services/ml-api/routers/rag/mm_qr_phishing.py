@@ -39,6 +39,7 @@ let a human weigh it, rather than claim "safe" or "malicious" outright.
 import base64
 import logging
 import os
+import re
 import time
 from datetime import datetime, timezone
 from ipaddress import ip_address
@@ -119,6 +120,24 @@ def _registrable_domain(host: str) -> str:
     return ".".join(parts[-2:]) if len(parts) >= 2 else host.lower()
 
 
+_HOSTNAME_RE = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$")
+
+
+def _looks_like_hostname(host: str) -> bool:
+    """`urlparse` will happily treat arbitrary text ("just some random
+    text") as a hostname if it's handed a scheme-less string with a
+    fabricated http:// prefix — it doesn't validate the result actually
+    looks like a domain. Real QR payloads and free-text URL input both need
+    this: a QR code can encode arbitrary text, not just links, and a user
+    typing into "check a URL directly" can type anything."""
+    try:
+        ip_address(host)
+        return True
+    except ValueError:
+        pass
+    return bool(_HOSTNAME_RE.match(host))
+
+
 def _analyze_url(raw: str) -> dict:
     try:
         parsed = urlparse(raw if "://" in raw else f"http://{raw}")
@@ -126,7 +145,7 @@ def _analyze_url(raw: str) -> dict:
         return {"data": raw, "is_url": False, "risk_level": "unknown", "reasons": []}
 
     host = parsed.hostname or ""
-    if not host:
+    if not host or not _looks_like_hostname(host):
         return {"data": raw, "is_url": False, "risk_level": "unknown", "reasons": []}
 
     high: list[str] = []
@@ -251,34 +270,16 @@ def _check_domain_age(root_domain: str) -> int | None:
     return age_days
 
 
-def scan_qr_codes(image_b64: str) -> dict:
-    try:
-        raw = base64.b64decode(image_b64, validate=True)
-    except Exception:
-        return {"found": False, "qr_codes": [], "reputation_checked": False, "error": "Could not decode image data."}
+def _lookup_form(data: str) -> str:
+    return data if "://" in data else f"http://{data}"
 
-    if len(raw) > _MAX_IMAGE_BYTES:
-        return {"found": False, "qr_codes": [], "reputation_checked": False, "error": "Image too large (max 10MB)."}
 
-    arr = np.frombuffer(raw, dtype=np.uint8)
-    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-    if img is None:
-        return {"found": False, "qr_codes": [], "reputation_checked": False, "error": "Could not read this as an image."}
-
-    decoded_texts: tuple = ()
-    try:
-        ok, decoded_texts, _points, _straight = cv2.QRCodeDetector().detectAndDecodeMulti(img)
-        if not ok:
-            decoded_texts = ()
-    except Exception as exc:
-        logger.warning("QR detectAndDecodeMulti failed: %s", exc)
-        decoded_texts = ()
-
-    results = [_analyze_url(text) for text in decoded_texts if text]
-
-    def _lookup_form(data: str) -> str:
-        return data if "://" in data else f"http://{data}"
-
+def _enrich_with_reputation_and_age(results: list[dict]) -> bool:
+    """Runs the Safe Browsing + domain-age checks over already
+    structurally-analyzed results, mutating each result's risk_level/reasons
+    in place. Shared by both the QR-image path and the direct-URL path so
+    the two entry points can never drift out of sync with each other.
+    Returns whether the Safe Browsing check actually ran (reputation_checked)."""
     lookup_urls = [_lookup_form(r["data"]) for r in results if r["is_url"]]
     flagged = _check_safe_browsing(lookup_urls)
     reputation_checked = flagged is not None
@@ -314,11 +315,52 @@ def scan_qr_codes(image_b64: str) -> dict:
             if r["risk_level"] == "low":
                 r["risk_level"] = "medium"
 
+    return reputation_checked
+
+
+def scan_qr_codes(image_b64: str) -> dict:
+    try:
+        raw = base64.b64decode(image_b64, validate=True)
+    except Exception:
+        return {"found": False, "qr_codes": [], "reputation_checked": False, "error": "Could not decode image data."}
+
+    if len(raw) > _MAX_IMAGE_BYTES:
+        return {"found": False, "qr_codes": [], "reputation_checked": False, "error": "Image too large (max 10MB)."}
+
+    arr = np.frombuffer(raw, dtype=np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    if img is None:
+        return {"found": False, "qr_codes": [], "reputation_checked": False, "error": "Could not read this as an image."}
+
+    decoded_texts: tuple = ()
+    try:
+        ok, decoded_texts, _points, _straight = cv2.QRCodeDetector().detectAndDecodeMulti(img)
+        if not ok:
+            decoded_texts = ()
+    except Exception as exc:
+        logger.warning("QR detectAndDecodeMulti failed: %s", exc)
+        decoded_texts = ()
+
+    results = [_analyze_url(text) for text in decoded_texts if text]
+    reputation_checked = _enrich_with_reputation_and_age(results)
     return {"found": len(results) > 0, "qr_codes": results, "reputation_checked": reputation_checked}
+
+
+def scan_url(raw_url: str) -> dict:
+    """Same three-signal analysis as scan_qr_codes, entered directly with a
+    URL instead of a QR photo — for a link received some other way (email,
+    text) that you want checked without a QR code involved."""
+    result = _analyze_url(raw_url)
+    reputation_checked = _enrich_with_reputation_and_age([result]) if result["is_url"] else False
+    return {"result": result, "reputation_checked": reputation_checked}
 
 
 class QrScanRequest(BaseModel):
     image: str
+
+
+class UrlScanRequest(BaseModel):
+    url: str
 
 
 @router.post("/mm-qr-phishing/scan")
@@ -326,3 +368,13 @@ def qr_phishing_scan(body: QrScanRequest):
     if not body.image.strip():
         raise HTTPException(status_code=400, detail="image is required")
     return scan_qr_codes(body.image)
+
+
+@router.post("/mm-qr-phishing/scan-url")
+def qr_phishing_scan_url(body: UrlScanRequest):
+    url = body.url.strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="url is required")
+    if len(url) > 2048:
+        raise HTTPException(status_code=400, detail="url is too long (max 2048 characters)")
+    return scan_url(url)
