@@ -21,6 +21,14 @@ URL two ways:
    domain with a perfectly clean-looking name — but degrades gracefully to
    heuristics-only if the key isn't configured or the lookup fails, rather
    than failing the whole scan.
+3. Domain-age lookup via RDAP (free, no API key — WHOIS's structured,
+   ICANN-mandated successor as of Jan 2025), plugging the exact gap Safe
+   Browsing has: a brand-new phishing domain that hasn't been indexed yet.
+   A domain registered days ago is a real, well-established phishing signal
+   even with an otherwise clean-looking URL and no reputation hit. Best-
+   effort only — many TLDs/registries don't expose RDAP, so a failed or
+   unsupported lookup is silently skipped, never treated as a red flag
+   itself.
 
 This intentionally reports SIGNALS, not a verdict — same honesty pattern as
 this codebase's tampering detector and signature-verification tools: when
@@ -31,6 +39,8 @@ let a human weigh it, rather than claim "safe" or "malicious" outright.
 import base64
 import logging
 import os
+import time
+from datetime import datetime, timezone
 from ipaddress import ip_address
 from urllib.parse import urlparse
 
@@ -77,6 +87,13 @@ _KNOWN_BRAND_DOMAINS = {
 }
 
 _MAX_TYPOSQUAT_DISTANCE = 2
+
+_RDAP_URL = "https://rdap.org/domain/{domain}"
+_RDAP_TIMEOUT = 6.0
+_DOMAIN_AGE_HIGH_RISK_DAYS = 30
+_DOMAIN_AGE_MEDIUM_RISK_DAYS = 180
+_DOMAIN_AGE_CACHE_TTL_SECONDS = 3600
+_domain_age_cache: dict[str, tuple[float, int | None]] = {}
 
 
 def _levenshtein(a: str, b: str) -> int:
@@ -194,6 +211,39 @@ def _check_safe_browsing(urls: list[str]) -> dict[str, list[str]] | None:
     return flagged
 
 
+def _check_domain_age(host: str) -> int | None:
+    """Looks up a domain's registration date via RDAP — free, no API key,
+    no signup (WHOIS's structured successor, ICANN-mandated for gTLD
+    registries since Jan 2025; rdap.org bootstraps to the right registry).
+    Returns age in days, or None if the lookup didn't produce a usable
+    answer — many TLDs/registries don't support RDAP, or the domain wasn't
+    found, and that's just "no signal," never treated as suspicious itself.
+    Small in-memory TTL cache since the same domain can recur across scans
+    within one process's lifetime and this is a courtesy to a free service."""
+    now = time.time()
+    cached = _domain_age_cache.get(host)
+    if cached and now - cached[0] < _DOMAIN_AGE_CACHE_TTL_SECONDS:
+        return cached[1]
+
+    import httpx
+
+    age_days: int | None = None
+    try:
+        with httpx.Client(timeout=_RDAP_TIMEOUT, follow_redirects=True) as client:
+            res = client.get(_RDAP_URL.format(domain=host))
+            if res.status_code == 200:
+                for event in res.json().get("events", []):
+                    if event.get("eventAction") == "registration" and event.get("eventDate"):
+                        reg_date = datetime.fromisoformat(event["eventDate"].replace("Z", "+00:00"))
+                        age_days = (datetime.now(timezone.utc) - reg_date).days
+                        break
+    except Exception as exc:
+        logger.info("RDAP lookup failed for %s: %s", host, exc)
+
+    _domain_age_cache[host] = (now, age_days)
+    return age_days
+
+
 def scan_qr_codes(image_b64: str) -> dict:
     try:
         raw = base64.b64decode(image_b64, validate=True)
@@ -234,6 +284,27 @@ def scan_qr_codes(image_b64: str) -> dict:
                 labels = ", ".join(_THREAT_TYPE_LABELS.get(t, t) for t in threats)
                 r["reasons"].insert(0, f"Flagged by Google Safe Browsing as {labels} — a known-bad site in Google's own database, not just a structural guess.")
                 r["risk_level"] = "high"
+
+    for r in results:
+        if not r["is_url"] or not r["host"]:
+            continue
+        try:
+            ip_address(r["host"])
+            continue  # already flagged as an IP-literal host; no domain to look up
+        except ValueError:
+            pass
+        if _registrable_domain(r["host"]) in _KNOWN_BRAND_DOMAINS:
+            continue  # obviously long-established, not worth a lookup
+        age_days = _check_domain_age(r["host"])
+        if age_days is None:
+            continue
+        if age_days < _DOMAIN_AGE_HIGH_RISK_DAYS:
+            r["reasons"].insert(0, f"Domain was registered only {age_days} day{'s' if age_days != 1 else ''} ago — freshly-registered domains are commonly used for short-lived phishing/scam campaigns.")
+            r["risk_level"] = "high"
+        elif age_days < _DOMAIN_AGE_MEDIUM_RISK_DAYS:
+            r["reasons"].append(f"Domain is relatively new (registered about {age_days} days ago).")
+            if r["risk_level"] == "low":
+                r["risk_level"] = "medium"
 
     return {"found": len(results) > 0, "qr_codes": results, "reputation_checked": reputation_checked}
 
