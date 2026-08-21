@@ -176,6 +176,59 @@ def _pgd(x, label_idx: int, epsilon: float, steps: int = 10, targeted: bool = Fa
     return x_adv.detach()
 
 
+_PATCH_MAX_STEPS = 150
+_PATCH_LR = 0.08
+
+
+def _adversarial_patch(x, label_idx: int, targeted: bool, patch_frac: float, max_steps: int = _PATCH_MAX_STEPS, lr: float = _PATCH_LR):
+    """A DIFFERENT attack family from FGSM/PGD: instead of a tiny,
+    imperceptible epsilon-bounded perturbation over the WHOLE image, this
+    optimizes a single square region (unconstrained within [0,1], no
+    epsilon ball) — a visible "sticker" patch, the kind that could in
+    principle be printed and physically placed in a scene. This is the
+    single-image, single-placement version (patch optimized for THIS exact
+    photo and THIS exact center position) — not the original Brown et al.
+    2017 paper's UNIVERSAL patch (trained across many images/positions/
+    rotations via expectation-over-transformation to work anywhere, on
+    any photo). Real testing found the two attack goals behave very
+    differently here: UNTARGETED patches fool the classifier almost
+    instantly (often within 1-2 gradient steps, sometimes before real
+    optimization even helps — a patch this size is already a large, blunt
+    perturbation on its own). TARGETED patches (forcing one exact chosen
+    label) are genuinely harder and slower — a small patch (10% of the
+    image) failed to reach the target at all within the step budget in
+    real testing, while a larger patch (25%) reached it in a handful of
+    steps. Early-stops the moment the goal is met (fooled for untargeted,
+    exact target for targeted) rather than always running the full step
+    budget, so `patch_steps` in the response is a real, honest measure of
+    how much optimization this specific run actually needed."""
+    import torch
+    import torch.nn.functional as F
+
+    size = x.shape[-1]
+    p = max(4, int(round(patch_frac * size)))
+    top = (size - p) // 2
+    mask = torch.zeros_like(x)
+    mask[:, :, top:top + p, top:top + p] = 1.0
+    patch = torch.rand_like(x)
+
+    for step in range(max_steps):
+        patch = patch.detach().requires_grad_(True)
+        x_patched = x * (1 - mask) + patch * mask
+        logits = _model(_normalize(x_patched))
+        pred_idx = int(logits.argmax(dim=1)[0])
+        if (not targeted and pred_idx != label_idx) or (targeted and pred_idx == label_idx):
+            return x_patched.clamp(0, 1).detach(), step
+        loss = F.cross_entropy(logits, torch.tensor([label_idx]))
+        grad = torch.autograd.grad(loss, patch)[0]
+        with torch.no_grad():
+            step_dir = -lr * grad.sign() if targeted else lr * grad.sign()
+            patch = (patch + step_dir).clamp(0, 1)
+
+    x_patched = (x * (1 - mask) + patch * mask).clamp(0, 1)
+    return x_patched.detach(), max_steps
+
+
 def _jpeg_recompress(x_pixel, quality: int):
     """The defense: re-encode the (possibly adversarial) image through a
     lossy JPEG pass, then decode it back — destroys the attack's

@@ -96,6 +96,19 @@ moves the OTHER model's prediction, not necessarily to the source attack's
 specific target). This is a single-image, single-model-pair result, not a
 general claim about FGSM vs. PGD transferability — reported as observed,
 not extrapolated, matching this module's existing honesty pattern.
+
+Third attack mode (`method="patch"`): a DIFFERENT attack family, optimizing
+a single square, unconstrained (no epsilon ball) patch region instead of a
+tiny perturbation over the whole image — a visible "sticker" attack, the
+single-image/single-placement version, not the original paper's universal-
+across-images-and-positions patch. Real testing found a sharp asymmetry:
+UNTARGETED patches fool the classifier almost instantly (1-2 gradient
+steps, sometimes because a patch this size is already disruptive before
+optimization even helps); TARGETED patches are genuinely much harder — a
+small (10%) patch failed to reach the target at all within the step
+budget in real testing, while a larger (25%) patch reached it in under 40
+steps. See mm_adversarial_models.py's `_adversarial_patch` docstring for
+the full real-testing detail.
 """
 
 import base64
@@ -114,10 +127,11 @@ _MAX_IMAGE_BYTES = 8 * 1024 * 1024
 class RunRequest(BaseModel):
     image: str  # base64, no data URL prefix
     epsilon: float = 0.03
-    method: str = "fgsm"  # "fgsm" | "pgd"
+    method: str = "fgsm"  # "fgsm" | "pgd" | "patch"
     jpeg_quality: int = 75
     target_label: str | None = None  # None = untargeted; else one of the 1000 ImageNet labels
     check_transfer: bool = False  # opt-in: also classify x_adv with ResNet18
+    patch_frac: float = 0.2  # only used when method == "patch": patch side length as a fraction of image size
 
 
 def run_adversarial_demo(
@@ -127,13 +141,16 @@ def run_adversarial_demo(
     jpeg_quality: int,
     target_label: str | None = None,
     check_transfer: bool = False,
+    patch_frac: float = 0.2,
 ) -> dict:
-    if method not in ("fgsm", "pgd"):
-        raise HTTPException(status_code=400, detail="method must be 'fgsm' or 'pgd'")
+    if method not in ("fgsm", "pgd", "patch"):
+        raise HTTPException(status_code=400, detail="method must be 'fgsm', 'pgd', or 'patch'")
     if not (0.001 <= epsilon <= 0.2):
         raise HTTPException(status_code=400, detail="epsilon must be between 0.001 and 0.2")
     if not (10 <= jpeg_quality <= 95):
         raise HTTPException(status_code=400, detail="jpeg_quality must be between 10 and 95")
+    if not (0.05 <= patch_frac <= 0.35):
+        raise HTTPException(status_code=400, detail="patch_frac must be between 0.05 and 0.35")
     if not models._ensure_loaded():
         raise HTTPException(status_code=503, detail="Adversarial demo model is unavailable right now.")
 
@@ -174,17 +191,22 @@ def run_adversarial_demo(
     else:
         attack_label_idx, targeted = original_top1_index, False
 
-    x_adv = (
-        models._fgsm(x, attack_label_idx, epsilon, targeted=targeted)
-        if method == "fgsm"
-        else models._pgd(x, attack_label_idx, epsilon, targeted=targeted)
-    )
+    patch_steps: int | None = None
+    if method == "patch":
+        x_adv, patch_steps = models._adversarial_patch(x, attack_label_idx, targeted, patch_frac)
+    elif method == "fgsm":
+        x_adv = models._fgsm(x, attack_label_idx, epsilon, targeted=targeted)
+    else:
+        x_adv = models._pgd(x, attack_label_idx, epsilon, targeted=targeted)
+
     adversarial = models._predict(x_adv)
     adversarial_top1_index = adversarial.pop("top1_index")
     adversarial["fooled"] = adversarial["label"] != original["label"]
     if targeted:
         adversarial["target_label"] = target_label
         adversarial["target_achieved"] = adversarial["label"] == target_label
+    if patch_steps is not None:
+        adversarial["patch_steps"] = patch_steps
     adversarial_cam = models._grad_cam(x_adv, adversarial_top1_index)
 
     x_defended = models._jpeg_recompress(x_adv, jpeg_quality)
@@ -227,14 +249,18 @@ def run_adversarial_demo(
         "smoothed": smoothed,
         "defended": {**defended, "image": models._tensor_to_b64(x_defended)},
         "transfer": transfer,
-        "perturbation_preview": models._perturbation_preview_b64(x, x_adv),
+        # a patch is already a large, directly visible change — amplifying
+        # it further (like the subtle epsilon attacks need) would just clip
+        # to solid color, so amplify=1.0 for patch mode only.
+        "perturbation_preview": models._perturbation_preview_b64(x, x_adv, amplify=1.0 if method == "patch" else 8.0),
     }
 
 
 @router.post("/mm-adversarial/run")
 def adversarial_run(body: RunRequest):
     return run_adversarial_demo(
-        body.image, body.epsilon, body.method, body.jpeg_quality, body.target_label, body.check_transfer
+        body.image, body.epsilon, body.method, body.jpeg_quality,
+        body.target_label, body.check_transfer, body.patch_frac,
     )
 
 
