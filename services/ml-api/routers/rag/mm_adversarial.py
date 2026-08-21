@@ -9,10 +9,10 @@ detector): if a classifier can be fooled by an engineered perturbation, its
 output shouldn't be trusted blindly.
 
 This file owns the router, request schema, and orchestration only — model
-loading, the attacks, the defenses, Grad-CAM, and image encode/decode
-helpers live in mm_adversarial_models.py (split out purely to keep both
-files under this codebase's ~400-line convention; no behavior changed by
-the split).
+loading/Grad-CAM/image helpers live in mm_adversarial_models.py, the four
+attacks live in mm_adversarial_attacks.py, and the two defenses live in
+mm_adversarial_defenses.py (split purely to keep every file under this
+codebase's ~400-line convention; no behavior changed by any split).
 
 Target model: torchvision's pretrained MobileNetV2 (ImageNet-1000), a
 generic off-the-shelf classifier, NOT any model used elsewhere in this
@@ -107,8 +107,19 @@ steps, sometimes because a patch this size is already disruptive before
 optimization even helps); TARGETED patches are genuinely much harder — a
 small (10%) patch failed to reach the target at all within the step
 budget in real testing, while a larger (25%) patch reached it in under 40
-steps. See mm_adversarial_models.py's `_adversarial_patch` docstring for
+steps. See mm_adversarial_attacks.py's `_adversarial_patch` docstring for
 the full real-testing detail.
+
+Fourth attack mode (`method="blackbox"`): a fundamentally different threat
+model — no gradient access at all, only forward-pass queries that return a
+softmax score (a simplified SimBA, Guo et al. 2019). Real testing found
+the query cost this predicts is real: UNTARGETED converged in 348 queries
+(~5.5s); TARGETED did not converge at all even at 3000 queries (~46s) or
+6000 queries with a larger step (~94s) — a genuine, expected limitation of
+query-only black-box attacks within a request-sized query budget, not a
+bug. See mm_adversarial_attacks.py's `_black_box_attack` docstring for the
+full detail. `max_queries` is user-adjustable (capped) so the tradeoff is
+visible and explorable, not hidden behind one fixed default.
 """
 
 import base64
@@ -117,6 +128,8 @@ import io
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from . import mm_adversarial_attacks as attacks
+from . import mm_adversarial_defenses as defenses
 from . import mm_adversarial_models as models
 
 router = APIRouter()
@@ -127,11 +140,12 @@ _MAX_IMAGE_BYTES = 8 * 1024 * 1024
 class RunRequest(BaseModel):
     image: str  # base64, no data URL prefix
     epsilon: float = 0.03
-    method: str = "fgsm"  # "fgsm" | "pgd" | "patch"
+    method: str = "fgsm"  # "fgsm" | "pgd" | "patch" | "blackbox"
     jpeg_quality: int = 75
     target_label: str | None = None  # None = untargeted; else one of the 1000 ImageNet labels
     check_transfer: bool = False  # opt-in: also classify x_adv with ResNet18
     patch_frac: float = 0.2  # only used when method == "patch": patch side length as a fraction of image size
+    max_queries: int = attacks._BLACKBOX_DEFAULT_QUERIES  # only used when method == "blackbox"
 
 
 def run_adversarial_demo(
@@ -142,15 +156,18 @@ def run_adversarial_demo(
     target_label: str | None = None,
     check_transfer: bool = False,
     patch_frac: float = 0.2,
+    max_queries: int = attacks._BLACKBOX_DEFAULT_QUERIES,
 ) -> dict:
-    if method not in ("fgsm", "pgd", "patch"):
-        raise HTTPException(status_code=400, detail="method must be 'fgsm', 'pgd', or 'patch'")
+    if method not in ("fgsm", "pgd", "patch", "blackbox"):
+        raise HTTPException(status_code=400, detail="method must be 'fgsm', 'pgd', 'patch', or 'blackbox'")
     if not (0.001 <= epsilon <= 0.2):
         raise HTTPException(status_code=400, detail="epsilon must be between 0.001 and 0.2")
     if not (10 <= jpeg_quality <= 95):
         raise HTTPException(status_code=400, detail="jpeg_quality must be between 10 and 95")
     if not (0.05 <= patch_frac <= 0.35):
         raise HTTPException(status_code=400, detail="patch_frac must be between 0.05 and 0.35")
+    if not (100 <= max_queries <= attacks._BLACKBOX_MAX_QUERIES):
+        raise HTTPException(status_code=400, detail=f"max_queries must be between 100 and {attacks._BLACKBOX_MAX_QUERIES}")
     if not models._ensure_loaded():
         raise HTTPException(status_code=503, detail="Adversarial demo model is unavailable right now.")
 
@@ -192,12 +209,16 @@ def run_adversarial_demo(
         attack_label_idx, targeted = original_top1_index, False
 
     patch_steps: int | None = None
+    query_info: tuple[int, bool] | None = None
     if method == "patch":
-        x_adv, patch_steps = models._adversarial_patch(x, attack_label_idx, targeted, patch_frac)
+        x_adv, patch_steps = attacks._adversarial_patch(x, attack_label_idx, targeted, patch_frac)
+    elif method == "blackbox":
+        x_adv, queries_used, bb_success = attacks._black_box_attack(x, attack_label_idx, targeted, epsilon, max_queries)
+        query_info = (queries_used, bb_success)
     elif method == "fgsm":
-        x_adv = models._fgsm(x, attack_label_idx, epsilon, targeted=targeted)
+        x_adv = attacks._fgsm(x, attack_label_idx, epsilon, targeted=targeted)
     else:
-        x_adv = models._pgd(x, attack_label_idx, epsilon, targeted=targeted)
+        x_adv = attacks._pgd(x, attack_label_idx, epsilon, targeted=targeted)
 
     adversarial = models._predict(x_adv)
     adversarial_top1_index = adversarial.pop("top1_index")
@@ -207,15 +228,17 @@ def run_adversarial_demo(
         adversarial["target_achieved"] = adversarial["label"] == target_label
     if patch_steps is not None:
         adversarial["patch_steps"] = patch_steps
+    if query_info is not None:
+        adversarial["queries_used"], adversarial["query_budget_exhausted"] = query_info[0], not query_info[1]
     adversarial_cam = models._grad_cam(x_adv, adversarial_top1_index)
 
-    x_defended = models._jpeg_recompress(x_adv, jpeg_quality)
+    x_defended = defenses._jpeg_recompress(x_adv, jpeg_quality)
     defended = models._predict(x_defended)
     defended.pop("top1_index")
     defended["recovered"] = defended["label"] == original["label"]
     defended["disrupted"] = defended["label"] != adversarial["label"]
 
-    smoothed = models._randomized_smooth(x_adv)
+    smoothed = defenses._randomized_smooth(x_adv)
     smoothed["recovered"] = smoothed["label"] == original["label"]
     smoothed["disrupted"] = smoothed["label"] != adversarial["label"]
 
@@ -260,7 +283,7 @@ def run_adversarial_demo(
 def adversarial_run(body: RunRequest):
     return run_adversarial_demo(
         body.image, body.epsilon, body.method, body.jpeg_quality,
-        body.target_label, body.check_transfer, body.patch_frac,
+        body.target_label, body.check_transfer, body.patch_frac, body.max_queries,
     )
 
 
