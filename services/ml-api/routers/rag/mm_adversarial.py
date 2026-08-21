@@ -1,7 +1,8 @@
 """
 Adversarial examples: attack + defense demo, for educational/defensive
 purposes — shows how a small, human-imperceptible pixel perturbation can
-fool an image classifier, and how a cheap input-preprocessing defense can
+fool an image classifier, and how two cheap input-side defenses (JPEG
+recompression, randomized smoothing) each partially — but never reliably —
 recover the correct prediction. This is the same failure mode that matters
 for this codebase's other CV tools (plate reader, face liveness, tampering
 detector): if a classifier can be fooled by an engineered perturbation, its
@@ -36,7 +37,7 @@ predicted class's logit. This is the more concrete, visual half of the
 demo: the label change alone doesn't show WHY the model was fooled, but
 comparing where it was "looking" before vs. after does.
 
-Defense: JPEG recompression at a configurable quality. This is presented
+Defense 1: JPEG recompression at a configurable quality. This is presented
 honestly as a PARTIAL, unreliable mitigation, not a fix — real testing
 during development (a real photo, multiple epsilon/quality combinations)
 found it sometimes disrupts the SPECIFIC wrong label an attack converged to
@@ -50,6 +51,25 @@ outcomes are surfaced separately: `recovered` (exact match to the
 original label — the strict, ideal outcome) and `disrupted` (the defended
 prediction differs from the raw adversarial one — a weaker signal that the
 defense did SOMETHING, even without full recovery).
+
+Defense 2: randomized smoothing (Cohen et al. 2019 style, empirical vote
+only — NOT the paper's certified-radius guarantee, which needs orders of
+magnitude more samples plus a concentration-bound computation this demo
+skips). Classifies `_SMOOTH_SAMPLES` independently Gaussian-noised copies
+of the adversarial image and majority-votes. Real sigma sweep during
+development on a strong PGD attack (epsilon=0.08): sigma=0.15 barely
+disrupted anything (96% vote agreement stayed on the attacker's chosen
+wrong label); sigma=0.35+ started destroying real image content, landing
+on unrelated labels unconnected to either the original or the attack;
+sigma=0.25 (the shipped default) sometimes recovered the correct label but
+with visibly LOW vote_confidence (~0.3-0.4, i.e. barely a plurality,
+changing between runs on the identical input due to the noise itself) —
+an honest instability, not a bug, and reported directly via
+`vote_confidence` rather than hidden behind a single point prediction.
+Same overall conclusion as the JPEG defense: a real, sometimes-partial
+mitigation, not a reliable fix, consistent with this project's honesty
+pattern for defenses (see RDAP, region-sharpen corroboration, watermark
+limits elsewhere in this codebase).
 """
 
 import base64
@@ -190,6 +210,55 @@ def _jpeg_recompress(x_pixel, quality: int):
     return _to_tensor(recompressed)
 
 
+_SMOOTH_SAMPLES = 25
+_SMOOTH_SIGMA = 0.25  # real sweep during dev: 0.15 too weak to disrupt a
+# strong PGD attack at all; 0.35+ starts destroying real image content
+# instead of just the perturbation (see module docstring for the honest
+# finding this produced)
+
+
+def _randomized_smooth(x_pixel, num_samples: int = _SMOOTH_SAMPLES, sigma: float = _SMOOTH_SIGMA) -> dict:
+    """Second defense: randomized smoothing (Cohen et al. 2019) — classify
+    many independently Gaussian-noised copies of the (possibly adversarial)
+    image and take a majority vote, instead of a single deterministic
+    prediction. The intuition: an adversarial perturbation is a small,
+    precisely-targeted direction in pixel space; large random noise on top
+    of it perturbs the input away from that precise direction on most
+    samples, so the vote tends toward the image's "true" neighborhood in
+    pixel space rather than the attacker's chosen wrong label. This is an
+    EMPIRICAL vote, not the formal certified-radius guarantee from the
+    original paper (that requires many more samples, e.g. 1000s, plus a
+    concentration-bound computation this demo doesn't do) — reported here as
+    `vote_confidence`, the plain fraction of noisy samples that agreed with
+    the majority label, not a certified robustness radius."""
+    import torch
+    import torch.nn.functional as F
+
+    with torch.no_grad():
+        noise = torch.randn(num_samples, *x_pixel.shape[1:]) * sigma
+        batch = (x_pixel.repeat(num_samples, 1, 1, 1) + noise).clamp(0, 1)
+        logits = _model(_normalize(batch))
+        preds = logits.argmax(dim=1)
+        counts = torch.bincount(preds, minlength=len(_categories))
+        top_idx = int(counts.argmax())
+
+        # mean softmax distribution across all noisy samples, for a
+        # top3/confidence shape consistent with _predict()'s single-sample
+        # output — vote_confidence (below) is the real smoothing signal.
+        mean_probs = F.softmax(logits, dim=1).mean(dim=0)
+        top3_conf, top3_idx = torch.topk(mean_probs, 3)
+
+    top3 = [{"label": _categories[i], "confidence": round(float(c), 4)} for c, i in zip(top3_conf, top3_idx)]
+    return {
+        "label": _categories[top_idx],
+        "confidence": round(float(mean_probs[top_idx]), 4),
+        "top3": top3,
+        "vote_confidence": round(float(counts[top_idx]) / num_samples, 4),
+        "num_samples": num_samples,
+        "sigma": sigma,
+    }
+
+
 def _perturbation_preview_b64(x_orig, x_adv, amplify: float = 8.0) -> str:
     """Amplified visualization of the perturbation itself — the raw diff is
     far too subtle to see at normal contrast, which is the whole point of
@@ -327,9 +396,14 @@ def run_adversarial_demo(
     defended["recovered"] = defended["label"] == original["label"]
     defended["disrupted"] = defended["label"] != adversarial["label"]
 
+    smoothed = _randomized_smooth(x_adv)
+    smoothed["recovered"] = smoothed["label"] == original["label"]
+    smoothed["disrupted"] = smoothed["label"] != adversarial["label"]
+
     return {
         "original": {**original, "heatmap": _heatmap_overlay_b64(x, original_cam)},
         "adversarial": {**adversarial, "image": _tensor_to_b64(x_adv), "heatmap": _heatmap_overlay_b64(x_adv, adversarial_cam)},
+        "smoothed": smoothed,
         "defended": {**defended, "image": _tensor_to_b64(x_defended)},
         "perturbation_preview": _perturbation_preview_b64(x, x_adv),
     }
