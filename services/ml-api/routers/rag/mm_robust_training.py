@@ -41,10 +41,14 @@ robustness gain does not automatically generalize to larger, more
 complex models or datasets. (2) tested only against PGD at the specific
 epsilon range offered here; adversarial training's real-world robustness
 against attacks it wasn't trained against (transferred/black-box, or a
-different epsilon entirely) can be weaker. (3) sample digits are fixed,
-bundled MNIST test images, not the user's own upload — a real user photo
-of a handwritten digit would need real preprocessing (crop/threshold/
-resize) this demo doesn't attempt.
+different epsilon entirely) can be weaker. (3) an uploaded photo of a
+handwritten digit is real out-of-distribution input for a model trained
+only on clean MNIST — the preprocessing below (grayscale, auto-invert,
+crop-to-ink, center, resize to 28x28) mirrors MNIST's own conventions as
+closely as is practical, but a photographed digit (different pen
+thickness, lighting, paper texture) can still be misclassified even
+before any attack — this is disclosed to the user via the preprocessed-
+image preview and the clean-prediction result, not hidden.
 """
 
 import base64
@@ -161,8 +165,50 @@ def _run_one_model(model: nn.Module, x_clean: torch.Tensor, y: torch.Tensor, eps
     }
 
 
+def _preprocess_upload(raw: bytes) -> tuple[torch.Tensor, str]:
+    """Best-effort MNIST-style preprocessing for a real photo: grayscale,
+    auto-invert to digit-bright-on-dark (MNIST's convention — most photos
+    of pen-on-paper are the opposite), crop to the ink's bounding box with
+    padding, center on a square canvas, resize to 28x28. Not the real
+    MNIST pipeline's deskew/center-of-mass step — a simpler, honest
+    approximation, see module docstring."""
+    img = Image.open(io.BytesIO(raw)).convert("L")
+    arr = np.asarray(img).astype(np.float32)
+
+    if arr.mean() > 127:
+        arr = 255.0 - arr
+
+    thresh = arr.max() * 0.3
+    mask = arr > thresh
+    if mask.any():
+        ys, xs = np.where(mask)
+        y0, y1 = int(ys.min()), int(ys.max())
+        x0, x1 = int(xs.min()), int(xs.max())
+        pad = int(0.15 * max(y1 - y0, x1 - x0, 1))
+        y0, x0 = max(0, y0 - pad), max(0, x0 - pad)
+        y1, x1 = min(arr.shape[0], y1 + pad + 1), min(arr.shape[1], x1 + pad + 1)
+        arr = arr[y0:y1, x0:x1]
+
+    h, w = arr.shape
+    size = max(h, w, 1)
+    canvas = np.zeros((size, size), dtype=np.float32)
+    oy, ox = (size - h) // 2, (size - w) // 2
+    canvas[oy:oy + h, ox:ox + w] = arr
+
+    resized = Image.fromarray(canvas.astype(np.uint8), mode="L").resize((28, 28), Image.BILINEAR)
+    norm = np.asarray(resized).astype(np.float32) / 255.0
+    x = torch.from_numpy(norm).unsqueeze(0).unsqueeze(0)
+    return x, _tensor_to_b64(x)
+
+
 class RunRequest(BaseModel):
     sample_id: int
+    epsilon: float = 0.2
+
+
+class UploadRunRequest(BaseModel):
+    image: str  # base64, no data URL prefix
+    intended_label: int
     epsilon: float = 0.2
 
 
@@ -187,6 +233,37 @@ def run_robust_training_demo(sample_id: int, epsilon: float) -> dict:
     }
 
 
+def run_robust_training_upload(image_b64: str, intended_label: int, epsilon: float) -> dict:
+    if not (0.02 <= epsilon <= 0.4):
+        raise HTTPException(status_code=400, detail="epsilon must be between 0.02 and 0.4")
+    if not (0 <= intended_label <= 9):
+        raise HTTPException(status_code=400, detail="intended_label must be 0-9")
+    if not _ensure_loaded():
+        raise HTTPException(status_code=503, detail="Robustness-demo models are unavailable right now.")
+
+    try:
+        raw = base64.b64decode(image_b64, validate=True)
+        if len(raw) > 8 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="Image too large (max 8MB).")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not decode this as an image.")
+
+    try:
+        x, preview_b64 = _preprocess_upload(raw)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not process this as an image.")
+
+    y = torch.tensor([intended_label])
+    return {
+        "label": intended_label,
+        "preprocessed_image": preview_b64,
+        "standard": _run_one_model(_standard_model, x, y, epsilon),
+        "adversarial_trained": _run_one_model(_adversarial_model, x, y, epsilon),
+    }
+
+
 @router.get("/mm-robust-training/samples")
 def robust_training_samples():
     return {"samples": [{"id": i, "label": s["label"], "image_b64": s["image_b64"]} for i, s in enumerate(SAMPLE_DIGITS)]}
@@ -195,3 +272,8 @@ def robust_training_samples():
 @router.post("/mm-robust-training/run")
 def robust_training_run(body: RunRequest):
     return run_robust_training_demo(body.sample_id, body.epsilon)
+
+
+@router.post("/mm-robust-training/run-upload")
+def robust_training_run_upload(body: UploadRunRequest):
+    return run_robust_training_upload(body.image, body.intended_label, body.epsilon)
