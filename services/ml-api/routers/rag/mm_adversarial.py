@@ -15,12 +15,19 @@ transitive dependencies here (timm, pinned for mm_tables.py, requires
 torchvision), so nothing new is added to requirements.
 
 Attack: FGSM (single gradient step) or PGD (a few iterative steps, project
-onto the epsilon L-infinity ball each step) — both untargeted: the attack
-just pushes the prediction away from whatever the model currently predicts,
-not toward a specific chosen wrong label. Real gradient access is required
-for this (unlike this codebase's other CV tools, which only need forward-
-pass ONNX inference), which is why this needs the real torch model instead
-of an ONNX-exported one.
+onto the epsilon L-infinity ball each step). Untargeted by default — the
+attack pushes the prediction away from whatever the model currently
+predicts, not toward a specific chosen wrong label. Optionally targeted:
+the caller picks one of the 1000 ImageNet labels and the attack instead
+descends the loss w.r.t. THAT label (same gradient machinery, opposite
+sign/direction), trying to force that exact misclassification rather than
+just any wrong one — a strictly harder attack than untargeted, since it
+constrains not just "be wrong" but "be wrong in this specific way", so it
+is not guaranteed to succeed within the same epsilon budget that reliably
+fools the model untargeted. Real gradient access is required for this
+(unlike this codebase's other CV tools, which only need forward-pass ONNX
+inference), which is why this needs the real torch model instead of an
+ONNX-exported one.
 
 Also computes Grad-CAM for both the original and adversarial prediction —
 a heatmap of which image regions actually drove that specific prediction,
@@ -135,19 +142,23 @@ def _tensor_to_b64(x_pixel) -> str:
     return base64.b64encode(buf.getvalue()).decode()
 
 
-def _fgsm(x, true_idx: int, epsilon: float):
+def _fgsm(x, label_idx: int, epsilon: float, targeted: bool = False):
+    """Untargeted: ascend the loss w.r.t. the TRUE label (push away from it).
+    Targeted: descend the loss w.r.t. the TARGET label (push toward it) —
+    same gradient, opposite sign."""
     import torch
     import torch.nn.functional as F
 
     x_adv = x.clone().requires_grad_(True)
     logits = _model(_normalize(x_adv))
-    loss = F.cross_entropy(logits, torch.tensor([true_idx]))
+    loss = F.cross_entropy(logits, torch.tensor([label_idx]))
     grad = torch.autograd.grad(loss, x_adv)[0]
-    x_adv = (x_adv + epsilon * grad.sign()).clamp(0, 1)
+    step = -epsilon * grad.sign() if targeted else epsilon * grad.sign()
+    x_adv = (x_adv + step).clamp(0, 1)
     return x_adv.detach()
 
 
-def _pgd(x, true_idx: int, epsilon: float, steps: int = 10):
+def _pgd(x, label_idx: int, epsilon: float, steps: int = 10, targeted: bool = False):
     import torch
     import torch.nn.functional as F
 
@@ -156,9 +167,10 @@ def _pgd(x, true_idx: int, epsilon: float, steps: int = 10):
     for _ in range(steps):
         x_adv = x_adv.detach().requires_grad_(True)
         logits = _model(_normalize(x_adv))
-        loss = F.cross_entropy(logits, torch.tensor([true_idx]))
+        loss = F.cross_entropy(logits, torch.tensor([label_idx]))
         grad = torch.autograd.grad(loss, x_adv)[0]
-        x_adv = x_adv.detach() + alpha * grad.sign()
+        step = -alpha * grad.sign() if targeted else alpha * grad.sign()
+        x_adv = x_adv.detach() + step
         x_adv = torch.min(torch.max(x_adv, x - epsilon), x + epsilon)  # project to epsilon ball
         x_adv = x_adv.clamp(0, 1)
     return x_adv.detach()
@@ -244,9 +256,12 @@ class RunRequest(BaseModel):
     epsilon: float = 0.03
     method: str = "fgsm"  # "fgsm" | "pgd"
     jpeg_quality: int = 75
+    target_label: str | None = None  # None = untargeted; else one of the 1000 ImageNet labels
 
 
-def run_adversarial_demo(image_b64: str, epsilon: float, method: str, jpeg_quality: int) -> dict:
+def run_adversarial_demo(
+    image_b64: str, epsilon: float, method: str, jpeg_quality: int, target_label: str | None = None
+) -> dict:
     if method not in ("fgsm", "pgd"):
         raise HTTPException(status_code=400, detail="method must be 'fgsm' or 'pgd'")
     if not (0.001 <= epsilon <= 0.2):
@@ -255,6 +270,13 @@ def run_adversarial_demo(image_b64: str, epsilon: float, method: str, jpeg_quali
         raise HTTPException(status_code=400, detail="jpeg_quality must be between 10 and 95")
     if not _ensure_loaded():
         raise HTTPException(status_code=503, detail="Adversarial demo model is unavailable right now.")
+
+    target_idx: int | None = None
+    if target_label is not None:
+        try:
+            target_idx = _categories.index(target_label)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Unknown target_label: {target_label!r}")
 
     from PIL import Image
 
@@ -273,10 +295,30 @@ def run_adversarial_demo(image_b64: str, epsilon: float, method: str, jpeg_quali
     original_top1_index = original.pop("top1_index")
     original_cam = _grad_cam(x, original_top1_index)
 
-    x_adv = _fgsm(x, original_top1_index, epsilon) if method == "fgsm" else _pgd(x, original_top1_index, epsilon)
+    if target_idx is not None:
+        # Targeted: if the model already predicts the target label, there's
+        # nothing to attack toward — surface that plainly instead of running
+        # a pointless attack that trivially "succeeds".
+        if target_idx == original_top1_index:
+            raise HTTPException(
+                status_code=400,
+                detail=f"The model already predicts {target_label!r} for this image — pick a different target.",
+            )
+        attack_label_idx, targeted = target_idx, True
+    else:
+        attack_label_idx, targeted = original_top1_index, False
+
+    x_adv = (
+        _fgsm(x, attack_label_idx, epsilon, targeted=targeted)
+        if method == "fgsm"
+        else _pgd(x, attack_label_idx, epsilon, targeted=targeted)
+    )
     adversarial = _predict(x_adv)
     adversarial_top1_index = adversarial.pop("top1_index")
     adversarial["fooled"] = adversarial["label"] != original["label"]
+    if targeted:
+        adversarial["target_label"] = target_label
+        adversarial["target_achieved"] = adversarial["label"] == target_label
     adversarial_cam = _grad_cam(x_adv, adversarial_top1_index)
 
     x_defended = _jpeg_recompress(x_adv, jpeg_quality)
@@ -295,4 +337,14 @@ def run_adversarial_demo(image_b64: str, epsilon: float, method: str, jpeg_quali
 
 @router.post("/mm-adversarial/run")
 def adversarial_run(body: RunRequest):
-    return run_adversarial_demo(body.image, body.epsilon, body.method, body.jpeg_quality)
+    return run_adversarial_demo(body.image, body.epsilon, body.method, body.jpeg_quality, body.target_label)
+
+
+@router.get("/mm-adversarial/categories")
+def adversarial_categories():
+    """The 1000 ImageNet label strings, for the frontend's targeted-attack
+    label picker. Triggers the lazy model load if it hasn't happened yet
+    (categories come from the loaded weights' metadata)."""
+    if not _ensure_loaded():
+        raise HTTPException(status_code=503, detail="Adversarial demo model is unavailable right now.")
+    return {"categories": _categories}
