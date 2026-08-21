@@ -16,6 +16,7 @@ chromadb>=0.5.0
 rank-bm25>=0.2.2
 onnxruntime>=1.18.0
 timm>=1.0.0  # ResNet backbone for microsoft/table-transformer-detection (mm_tables.py)
+facenet-pytorch>=2.6.0  # InceptionResnetV1 face-embedding model, MIT license (mm_face_cloak.py)
 langgraph>=0.2.0
 langchain-core>=0.3.0
 spacy>=3.7.0,<3.8.0
