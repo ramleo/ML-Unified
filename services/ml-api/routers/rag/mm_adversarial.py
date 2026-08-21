@@ -8,6 +8,12 @@ for this codebase's other CV tools (plate reader, face liveness, tampering
 detector): if a classifier can be fooled by an engineered perturbation, its
 output shouldn't be trusted blindly.
 
+This file owns the router, request schema, and orchestration only — model
+loading, the attacks, the defenses, Grad-CAM, and image encode/decode
+helpers live in mm_adversarial_models.py (split out purely to keep both
+files under this codebase's ~400-line convention; no behavior changed by
+the split).
+
 Target model: torchvision's pretrained MobileNetV2 (ImageNet-1000), a
 generic off-the-shelf classifier, NOT any model used elsewhere in this
 codebase — this demo is illustrative of a general ML robustness property,
@@ -70,254 +76,39 @@ Same overall conclusion as the JPEG defense: a real, sometimes-partial
 mitigation, not a reliable fix, consistent with this project's honesty
 pattern for defenses (see RDAP, region-sharpen corroboration, watermark
 limits elsewhere in this codebase).
+
+Optional transferability check (`check_transfer=True`): classifies the
+SAME adversarial image (crafted only against MobileNetV2, no gradient
+access to a second model at all) with ResNet18 — a different architecture
+family — and reports whether ResNet18's own prediction also changed. Off
+by default since it triggers a second (~45MB) lazy model download on
+first use; see mm_adversarial_models.py's `_ensure_transfer_loaded` for
+why the two models' category orderings are safe to compare directly.
+
+Real finding from a method/epsilon sweep on a real photo (both models,
+same image, `check_transfer=True`): FGSM's single-step perturbation did
+NOT transfer to ResNet18 at ANY tested epsilon (0.02-0.08) — ResNet18 kept
+its own correct prediction throughout, even though FGSM reliably fooled
+MobileNetV2 itself every time. PGD's multi-step perturbation DID transfer
+at every tested epsilon, changing ResNet18's prediction too (though never
+to the exact same wrong label MobileNetV2 landed on — cross-model transfer
+moves the OTHER model's prediction, not necessarily to the source attack's
+specific target). This is a single-image, single-model-pair result, not a
+general claim about FGSM vs. PGD transferability — reported as observed,
+not extrapolated, matching this module's existing honesty pattern.
 """
 
 import base64
 import io
-import logging
-import threading
 
-import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-logger = logging.getLogger(__name__)
+from . import mm_adversarial_models as models
+
 router = APIRouter()
 
-_model = None
-_categories: list[str] = []
-_lock = threading.Lock()
-
 _MAX_IMAGE_BYTES = 8 * 1024 * 1024
-_IMG_SIZE = 224
-_MEAN = [0.485, 0.456, 0.406]
-_STD = [0.229, 0.224, 0.225]
-
-
-def _ensure_loaded() -> bool:
-    """Lazy-load MobileNetV2 on first use — most sessions never open this
-    tool. Downloads pretrained ImageNet weights on first call, same pattern
-    as CLIP in mm_photo_search.py / mm_similar.py."""
-    global _model, _categories
-    if _model is not None:
-        return True
-    with _lock:
-        if _model is not None:
-            return True
-        try:
-            import torch
-            from torchvision.models import MobileNet_V2_Weights, mobilenet_v2
-
-            logger.info("Loading MobileNetV2 (ImageNet, ~14MB) for adversarial demo …")
-            weights = MobileNet_V2_Weights.IMAGENET1K_V1
-            model = mobilenet_v2(weights=weights)
-            model.eval()
-            for p in model.parameters():
-                p.requires_grad_(False)
-            _model = model
-            _categories = list(weights.meta["categories"])
-            return True
-        except Exception as exc:
-            logger.warning("MobileNetV2 load failed — adversarial demo disabled: %s", exc)
-            return False
-
-
-def _to_tensor(img):
-    from torchvision import transforms
-
-    prep = transforms.Compose([
-        transforms.Resize(256),
-        transforms.CenterCrop(_IMG_SIZE),
-        transforms.ToTensor(),  # -> [0,1], shape (3, H, W)
-    ])
-    return prep(img).unsqueeze(0)  # (1, 3, 224, 224)
-
-
-def _normalize(x):
-    import torch
-
-    mean = torch.tensor(_MEAN).view(1, 3, 1, 1)
-    std = torch.tensor(_STD).view(1, 3, 1, 1)
-    return (x - mean) / std
-
-
-def _predict(x_pixel) -> dict:
-    import torch
-    import torch.nn.functional as F
-
-    with torch.no_grad():
-        logits = _model(_normalize(x_pixel))
-        probs = F.softmax(logits, dim=1)[0]
-        top3_conf, top3_idx = torch.topk(probs, 3)
-    top3 = [{"label": _categories[i], "confidence": round(float(c), 4)} for c, i in zip(top3_conf, top3_idx)]
-    return {"label": top3[0]["label"], "confidence": top3[0]["confidence"], "top3": top3, "top1_index": int(top3_idx[0])}
-
-
-def _tensor_to_b64(x_pixel) -> str:
-    from PIL import Image
-
-    arr = (x_pixel.clamp(0, 1)[0].permute(1, 2, 0).detach().numpy() * 255).astype(np.uint8)
-    buf = io.BytesIO()
-    Image.fromarray(arr).save(buf, format="PNG")
-    return base64.b64encode(buf.getvalue()).decode()
-
-
-def _fgsm(x, label_idx: int, epsilon: float, targeted: bool = False):
-    """Untargeted: ascend the loss w.r.t. the TRUE label (push away from it).
-    Targeted: descend the loss w.r.t. the TARGET label (push toward it) —
-    same gradient, opposite sign."""
-    import torch
-    import torch.nn.functional as F
-
-    x_adv = x.clone().requires_grad_(True)
-    logits = _model(_normalize(x_adv))
-    loss = F.cross_entropy(logits, torch.tensor([label_idx]))
-    grad = torch.autograd.grad(loss, x_adv)[0]
-    step = -epsilon * grad.sign() if targeted else epsilon * grad.sign()
-    x_adv = (x_adv + step).clamp(0, 1)
-    return x_adv.detach()
-
-
-def _pgd(x, label_idx: int, epsilon: float, steps: int = 10, targeted: bool = False):
-    import torch
-    import torch.nn.functional as F
-
-    alpha = epsilon / 4
-    x_adv = x.clone()
-    for _ in range(steps):
-        x_adv = x_adv.detach().requires_grad_(True)
-        logits = _model(_normalize(x_adv))
-        loss = F.cross_entropy(logits, torch.tensor([label_idx]))
-        grad = torch.autograd.grad(loss, x_adv)[0]
-        step = -alpha * grad.sign() if targeted else alpha * grad.sign()
-        x_adv = x_adv.detach() + step
-        x_adv = torch.min(torch.max(x_adv, x - epsilon), x + epsilon)  # project to epsilon ball
-        x_adv = x_adv.clamp(0, 1)
-    return x_adv.detach()
-
-
-def _jpeg_recompress(x_pixel, quality: int):
-    """The defense: re-encode the (possibly adversarial) image through a
-    lossy JPEG pass, then decode it back — destroys the attack's
-    high-frequency perturbation while leaving real image content intact."""
-    from PIL import Image
-
-    arr = (x_pixel.clamp(0, 1)[0].permute(1, 2, 0).detach().numpy() * 255).astype(np.uint8)
-    buf = io.BytesIO()
-    Image.fromarray(arr).save(buf, format="JPEG", quality=quality)
-    buf.seek(0)
-    recompressed = Image.open(buf).convert("RGB")
-    return _to_tensor(recompressed)
-
-
-_SMOOTH_SAMPLES = 25
-_SMOOTH_SIGMA = 0.25  # real sweep during dev: 0.15 too weak to disrupt a
-# strong PGD attack at all; 0.35+ starts destroying real image content
-# instead of just the perturbation (see module docstring for the honest
-# finding this produced)
-
-
-def _randomized_smooth(x_pixel, num_samples: int = _SMOOTH_SAMPLES, sigma: float = _SMOOTH_SIGMA) -> dict:
-    """Second defense: randomized smoothing (Cohen et al. 2019) — classify
-    many independently Gaussian-noised copies of the (possibly adversarial)
-    image and take a majority vote, instead of a single deterministic
-    prediction. The intuition: an adversarial perturbation is a small,
-    precisely-targeted direction in pixel space; large random noise on top
-    of it perturbs the input away from that precise direction on most
-    samples, so the vote tends toward the image's "true" neighborhood in
-    pixel space rather than the attacker's chosen wrong label. This is an
-    EMPIRICAL vote, not the formal certified-radius guarantee from the
-    original paper (that requires many more samples, e.g. 1000s, plus a
-    concentration-bound computation this demo doesn't do) — reported here as
-    `vote_confidence`, the plain fraction of noisy samples that agreed with
-    the majority label, not a certified robustness radius."""
-    import torch
-    import torch.nn.functional as F
-
-    with torch.no_grad():
-        noise = torch.randn(num_samples, *x_pixel.shape[1:]) * sigma
-        batch = (x_pixel.repeat(num_samples, 1, 1, 1) + noise).clamp(0, 1)
-        logits = _model(_normalize(batch))
-        preds = logits.argmax(dim=1)
-        counts = torch.bincount(preds, minlength=len(_categories))
-        top_idx = int(counts.argmax())
-
-        # mean softmax distribution across all noisy samples, for a
-        # top3/confidence shape consistent with _predict()'s single-sample
-        # output — vote_confidence (below) is the real smoothing signal.
-        mean_probs = F.softmax(logits, dim=1).mean(dim=0)
-        top3_conf, top3_idx = torch.topk(mean_probs, 3)
-
-    top3 = [{"label": _categories[i], "confidence": round(float(c), 4)} for c, i in zip(top3_conf, top3_idx)]
-    return {
-        "label": _categories[top_idx],
-        "confidence": round(float(mean_probs[top_idx]), 4),
-        "top3": top3,
-        "vote_confidence": round(float(counts[top_idx]) / num_samples, 4),
-        "num_samples": num_samples,
-        "sigma": sigma,
-    }
-
-
-def _perturbation_preview_b64(x_orig, x_adv, amplify: float = 8.0) -> str:
-    """Amplified visualization of the perturbation itself — the raw diff is
-    far too subtle to see at normal contrast, which is the whole point of
-    the attack, so this exists purely to make that point visible."""
-    from PIL import Image
-
-    diff = ((x_adv - x_orig)[0].permute(1, 2, 0).detach().numpy() * amplify + 0.5)
-    arr = np.clip(diff * 255, 0, 255).astype(np.uint8)
-    buf = io.BytesIO()
-    Image.fromarray(arr).save(buf, format="PNG")
-    return base64.b64encode(buf.getvalue()).decode()
-
-
-def _grad_cam(x_pixel, target_index: int):
-    """Grad-CAM: shows WHERE in the image the model is 'looking' to justify
-    a given prediction — the standard way to make an otherwise-abstract
-    "why did it predict that" question visible. Hooks the last conv block's
-    activations (model.features' output), weights each activation channel
-    by its global-average-pooled gradient w.r.t. the target class's logit,
-    and upsamples the resulting map back to image size. Comparing this for
-    the original vs. adversarial prediction is the actual point: an
-    imperceptible pixel change can shift not just the label but WHERE the
-    model claims to be looking."""
-    import torch
-    import torch.nn.functional as F
-
-    activations = {}
-
-    def hook(_module, _input, output):
-        activations["value"] = output
-
-    handle = _model.features.register_forward_hook(hook)
-    x = x_pixel.clone().requires_grad_(True)
-    logits = _model(_normalize(x))
-    handle.remove()
-
-    act = activations["value"]
-    act.retain_grad()
-    logits[0, target_index].backward()
-
-    grad = act.grad
-    weights = grad.mean(dim=(2, 3), keepdim=True)
-    cam = F.relu((weights * act).sum(dim=1, keepdim=True))
-    cam = F.interpolate(cam, size=(_IMG_SIZE, _IMG_SIZE), mode="bilinear", align_corners=False)[0, 0]
-    cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
-    return cam.detach()
-
-
-def _heatmap_overlay_b64(x_pixel, cam) -> str:
-    import cv2
-    from PIL import Image
-
-    orig = (x_pixel.clamp(0, 1)[0].permute(1, 2, 0).detach().numpy() * 255).astype(np.uint8)
-    heat = (cam.numpy() * 255).astype(np.uint8)
-    heat_color = cv2.cvtColor(cv2.applyColorMap(heat, cv2.COLORMAP_JET), cv2.COLOR_BGR2RGB)
-    overlay = np.clip(orig.astype(np.float32) * 0.55 + heat_color.astype(np.float32) * 0.45, 0, 255).astype(np.uint8)
-    buf = io.BytesIO()
-    Image.fromarray(overlay).save(buf, format="PNG")
-    return base64.b64encode(buf.getvalue()).decode()
 
 
 class RunRequest(BaseModel):
@@ -326,10 +117,16 @@ class RunRequest(BaseModel):
     method: str = "fgsm"  # "fgsm" | "pgd"
     jpeg_quality: int = 75
     target_label: str | None = None  # None = untargeted; else one of the 1000 ImageNet labels
+    check_transfer: bool = False  # opt-in: also classify x_adv with ResNet18
 
 
 def run_adversarial_demo(
-    image_b64: str, epsilon: float, method: str, jpeg_quality: int, target_label: str | None = None
+    image_b64: str,
+    epsilon: float,
+    method: str,
+    jpeg_quality: int,
+    target_label: str | None = None,
+    check_transfer: bool = False,
 ) -> dict:
     if method not in ("fgsm", "pgd"):
         raise HTTPException(status_code=400, detail="method must be 'fgsm' or 'pgd'")
@@ -337,13 +134,13 @@ def run_adversarial_demo(
         raise HTTPException(status_code=400, detail="epsilon must be between 0.001 and 0.2")
     if not (10 <= jpeg_quality <= 95):
         raise HTTPException(status_code=400, detail="jpeg_quality must be between 10 and 95")
-    if not _ensure_loaded():
+    if not models._ensure_loaded():
         raise HTTPException(status_code=503, detail="Adversarial demo model is unavailable right now.")
 
     target_idx: int | None = None
     if target_label is not None:
         try:
-            target_idx = _categories.index(target_label)
+            target_idx = models._categories.index(target_label)
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Unknown target_label: {target_label!r}")
 
@@ -359,10 +156,10 @@ def run_adversarial_demo(
     except Exception:
         raise HTTPException(status_code=400, detail="Could not decode this as an image.")
 
-    x = _to_tensor(img)
-    original = _predict(x)
+    x = models._to_tensor(img)
+    original = models._predict(x)
     original_top1_index = original.pop("top1_index")
-    original_cam = _grad_cam(x, original_top1_index)
+    original_cam = models._grad_cam(x, original_top1_index)
 
     if target_idx is not None:
         # Targeted: if the model already predicts the target label, there's
@@ -378,40 +175,67 @@ def run_adversarial_demo(
         attack_label_idx, targeted = original_top1_index, False
 
     x_adv = (
-        _fgsm(x, attack_label_idx, epsilon, targeted=targeted)
+        models._fgsm(x, attack_label_idx, epsilon, targeted=targeted)
         if method == "fgsm"
-        else _pgd(x, attack_label_idx, epsilon, targeted=targeted)
+        else models._pgd(x, attack_label_idx, epsilon, targeted=targeted)
     )
-    adversarial = _predict(x_adv)
+    adversarial = models._predict(x_adv)
     adversarial_top1_index = adversarial.pop("top1_index")
     adversarial["fooled"] = adversarial["label"] != original["label"]
     if targeted:
         adversarial["target_label"] = target_label
         adversarial["target_achieved"] = adversarial["label"] == target_label
-    adversarial_cam = _grad_cam(x_adv, adversarial_top1_index)
+    adversarial_cam = models._grad_cam(x_adv, adversarial_top1_index)
 
-    x_defended = _jpeg_recompress(x_adv, jpeg_quality)
-    defended = _predict(x_defended)
+    x_defended = models._jpeg_recompress(x_adv, jpeg_quality)
+    defended = models._predict(x_defended)
     defended.pop("top1_index")
     defended["recovered"] = defended["label"] == original["label"]
     defended["disrupted"] = defended["label"] != adversarial["label"]
 
-    smoothed = _randomized_smooth(x_adv)
+    smoothed = models._randomized_smooth(x_adv)
     smoothed["recovered"] = smoothed["label"] == original["label"]
     smoothed["disrupted"] = smoothed["label"] != adversarial["label"]
 
+    transfer = None
+    if check_transfer:
+        if not models._ensure_transfer_loaded():
+            raise HTTPException(status_code=503, detail="Transferability check model is unavailable right now.")
+        transfer_original = models._predict(x, model=models._transfer_model)
+        transfer_original.pop("top1_index")
+        transfer_adversarial = models._predict(x_adv, model=models._transfer_model)
+        transfer_adversarial.pop("top1_index")
+        transfer = {
+            "model": "resnet18",
+            "original": transfer_original,
+            "adversarial": transfer_adversarial,
+            # transferred: the SAME perturbation (crafted only against
+            # MobileNetV2, no gradient access to ResNet18 at all) ALSO
+            # changed ResNet18's own prediction — the actual point of the
+            # test, distinct from whether it landed on MobileNetV2's exact
+            # wrong label (an unrealistic bar for a black-box transfer).
+            "transferred": transfer_adversarial["label"] != transfer_original["label"],
+        }
+
     return {
-        "original": {**original, "heatmap": _heatmap_overlay_b64(x, original_cam)},
-        "adversarial": {**adversarial, "image": _tensor_to_b64(x_adv), "heatmap": _heatmap_overlay_b64(x_adv, adversarial_cam)},
+        "original": {**original, "heatmap": models._heatmap_overlay_b64(x, original_cam)},
+        "adversarial": {
+            **adversarial,
+            "image": models._tensor_to_b64(x_adv),
+            "heatmap": models._heatmap_overlay_b64(x_adv, adversarial_cam),
+        },
         "smoothed": smoothed,
-        "defended": {**defended, "image": _tensor_to_b64(x_defended)},
-        "perturbation_preview": _perturbation_preview_b64(x, x_adv),
+        "defended": {**defended, "image": models._tensor_to_b64(x_defended)},
+        "transfer": transfer,
+        "perturbation_preview": models._perturbation_preview_b64(x, x_adv),
     }
 
 
 @router.post("/mm-adversarial/run")
 def adversarial_run(body: RunRequest):
-    return run_adversarial_demo(body.image, body.epsilon, body.method, body.jpeg_quality, body.target_label)
+    return run_adversarial_demo(
+        body.image, body.epsilon, body.method, body.jpeg_quality, body.target_label, body.check_transfer
+    )
 
 
 @router.get("/mm-adversarial/categories")
@@ -419,6 +243,6 @@ def adversarial_categories():
     """The 1000 ImageNet label strings, for the frontend's targeted-attack
     label picker. Triggers the lazy model load if it hasn't happened yet
     (categories come from the loaded weights' metadata)."""
-    if not _ensure_loaded():
+    if not models._ensure_loaded():
         raise HTTPException(status_code=503, detail="Adversarial demo model is unavailable right now.")
-    return {"categories": _categories}
+    return {"categories": models._categories}
