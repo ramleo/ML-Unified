@@ -1,11 +1,15 @@
 """ML readiness, insights, narrative, MI, PCA, and SPLOM computation."""
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 import pandas as pd
 from sklearn.decomposition import PCA
 from sklearn.metrics import mutual_info_score
 from sklearn.preprocessing import KBinsDiscretizer, StandardScaler
+
+logger = logging.getLogger(__name__)
 
 
 def compute_insights(columns: list, stats: dict, overview: dict, correlations: dict | None) -> list:
@@ -200,7 +204,8 @@ def compute_pca(df: pd.DataFrame, num_cols: list[str], cat_cols: list[str]) -> d
             "coords": coords, "explained_variance": ev, "labels": pca_num_cols,
             "color_col": color_col, "cat_cols": color_opts, "cat_color_map": cat_color_map,
         }
-    except Exception:
+    except Exception as exc:
+        logger.warning("PCA computation failed, chart will be omitted: %s", exc)
         return None
 
 
@@ -228,7 +233,8 @@ def compute_splom(df: pd.DataFrame, num_cols: list[str], cat_cols: list[str]) ->
                     pass
         return {"cols": splom_cols, "data": data, "n": n_sample,
                 "color_col": color_col, "color_vals": color_vals, "color_map": color_map}
-    except Exception:
+    except Exception as exc:
+        logger.warning("SPLOM computation failed, chart will be omitted: %s", exc)
         return None
 
 

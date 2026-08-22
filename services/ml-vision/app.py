@@ -6,9 +6,12 @@ from shared.progress import StreamingTask
 from typing import Any, Dict
 import collections
 import io
+import logging
 import os
 import threading
 import time
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="ML Vision")
 app.add_middleware(
@@ -808,7 +811,8 @@ async def segment_image(
         p.update(65, "Running inference")
         try:
             logits = session.run(["logits"], {"pixel_values": arr})[0]
-        except Exception:
+        except Exception as exc:
+            logger.error("Segmentation inference failed: %s", exc)
             p.finish(error="Segmentation failed — please try again")
             return
 

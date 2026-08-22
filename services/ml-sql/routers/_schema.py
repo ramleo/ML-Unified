@@ -1,11 +1,14 @@
 """DB schema introspection — SQLite and PostgreSQL."""
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any
 
 import aiosqlite
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -162,12 +165,14 @@ async def load_duckdb_schema(db_path: str) -> DBSchema:
             ]
             try:
                 row_count = con.execute(f'SELECT COUNT(*) FROM "{tname}"').fetchone()[0]
-            except Exception:
+            except Exception as exc:
+                logger.warning("Row count failed for table %r, showing 0 (may be inaccurate): %s", tname, exc)
                 row_count = 0
             try:
                 sample_df = con.execute(f'SELECT * FROM "{tname}" LIMIT 3').fetchdf()
                 sample = sample_df.to_dict(orient="records")
-            except Exception:
+            except Exception as exc:
+                logger.warning("Sample rows fetch failed for table %r, showing none: %s", tname, exc)
                 sample = []
             tables[tname] = TableSchema(
                 name=tname, columns=columns,

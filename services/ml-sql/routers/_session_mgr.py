@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from pathlib import Path
 
@@ -9,6 +10,8 @@ from ._execute import (
     execute_duckdb, execute_mssql, execute_mysql, execute_pg, execute_sqlite,
 )
 from ._schema import load_duckdb_schema, load_sqlite_schema
+
+logger = logging.getLogger(__name__)
 
 CHINOOK_PATH  = Path(__file__).parent.parent / "data" / "chinook.db"
 _UPLOAD_DIR   = Path("/tmp/ml_sql_sessions")
@@ -45,8 +48,8 @@ def save_session_index() -> None:
     }
     try:
         _SESSION_FILE.write_text(json.dumps(index))
-    except OSError:
-        pass
+    except OSError as exc:
+        logger.warning("Failed to persist session index — sessions will not survive a restart: %s", exc)
 
 
 async def restore_sessions() -> None:
@@ -54,7 +57,8 @@ async def restore_sessions() -> None:
         return
     try:
         index = json.loads(_SESSION_FILE.read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("Failed to read session index, no sessions restored this startup: %s", exc)
         return
     cutoff = time.time() - _SESSION_TTL
     for ref, meta in index.items():
@@ -66,8 +70,8 @@ async def restore_sessions() -> None:
                 stype = meta.get("type", "sqlite")
                 schema = await load_duckdb_schema(path) if stype == "duckdb" else await load_sqlite_schema(path)
                 _sessions[ref] = {"type": stype, "path": path, "schema": schema, "created_at": meta["created_at"]}
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Failed to restore session %r, will show as expired: %s", ref, exc)
 
 
 async def exec_session(session: dict, sql: str):
