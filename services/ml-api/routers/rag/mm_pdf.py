@@ -6,11 +6,15 @@ mm_ingest.py to stay under the project's file-length limit.
 """
 from __future__ import annotations
 
+import logging
+
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.blur import blur_score
 from routers.rag.ingest import chunk_document
 from routers.rag.mm_caption import (build_table_markdown, clean_ocr_text, extract_caption,
                                     extract_chart_data, numbers_disagree)
+
+logger = logging.getLogger(__name__)
 
 _OCR_TEXT_CAP = 2000  # chars; dedicated OCR reads exact text (e.g. every date
                       # in a dense timeline graphic) that a short prose caption
@@ -186,7 +190,8 @@ def _visual_regions(page, max_regions: int = _MAX_REGIONS_PER_PAGE) -> list:
             if len(regions) >= max_regions:
                 break
         return regions
-    except Exception:
+    except Exception as exc:
+        logger.warning("Visual-region detection failed for page, treating as no regions: %s", exc)
         return []
 
 

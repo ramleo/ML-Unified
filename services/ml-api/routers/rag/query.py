@@ -91,7 +91,8 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
     try:
         query_emb = state.embedding_fn([req.query])[0]
         cached = None if req.restrict_to_uploads else _cache_lookup(query_emb, state, provider, ctx_hash)
-    except Exception:
+    except Exception as exc:
+        logger.warning("Query embedding/cache lookup failed, proceeding without cache: %s", exc)
         query_emb = None
         cached = None
 

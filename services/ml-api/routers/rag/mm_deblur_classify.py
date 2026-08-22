@@ -29,7 +29,10 @@ as an asserted fact.
 from __future__ import annotations
 
 import json
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 _VISION_MODEL = "gemini-3.6-flash"
 _VISION_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{_VISION_MODEL}:generateContent"
@@ -75,7 +78,8 @@ def classify_and_describe(key: str, region_b64: str) -> tuple[bool, str | None]:
     softer generic caption."""
     try:
         answer = _call_gemini_vision(key, region_b64, _CLASSIFY_DESCRIBE_PROMPT).strip()
-    except Exception:
+    except Exception as exc:
+        logger.warning("Deblur classify/describe call failed, defaulting to text/no-description: %s", exc)
         return True, None
     if not answer:
         return True, None

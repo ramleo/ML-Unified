@@ -215,8 +215,12 @@ def delete_source(source: str, state) -> int:
     if state.jina_ready and state.jina_collection is not None:
         try:
             state.jina_collection.delete(where={"source": source})
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(
+                "Failed to delete source %r from Jina collection — chunks may now be "
+                "stale/orphaned there even though the primary collection was cleaned: %s",
+                source, exc,
+            )
 
     keep_idx = [i for i, s in enumerate(state.chunk_sources) if s != source]
     removed = len(state.chunk_sources) - len(keep_idx)
