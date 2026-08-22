@@ -1,7 +1,11 @@
 """Extract training baseline stats from fitted sklearn pipeline, and batch stats for versioning."""
 from __future__ import annotations
 
+import logging
+
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 _baseline_cache: dict[str, dict] = {}
 
@@ -59,8 +63,12 @@ def _extract_pipeline_stats(pipeline, schema: dict) -> dict:
                         "std":    schema_std,
                         "source": "training",
                     }
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.error(
+            "Training baseline extraction failed — drift comparisons for this "
+            "model will use an empty/partial baseline with no warning otherwise: %s",
+            exc,
+        )
 
     return stats
 

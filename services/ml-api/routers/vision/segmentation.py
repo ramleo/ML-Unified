@@ -1,9 +1,12 @@
 """Vision segmentation routes: /seg-models, /segment-image."""
 import io
+import logging
 import os
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
+
+logger = logging.getLogger(__name__)
 
 from .shared import (
     VISION_CACHE_DIR,
@@ -240,7 +243,8 @@ async def segment_image(
         p.update(65, "Running inference")
         try:
             logits = session.run(["logits"], {"pixel_values": arr})[0]
-        except Exception:
+        except Exception as exc:
+            logger.error("Segmentation inference failed: %s", exc)
             p.finish(error="Segmentation failed — please try again")
             return
 

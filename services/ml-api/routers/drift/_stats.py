@@ -1,8 +1,11 @@
 """Statistical functions for drift detection: PSI, KS test, histogram, helpers."""
 from __future__ import annotations
 
+import logging
 import math
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 def norm_cdf(x: float, mean: float, std: float) -> float:
@@ -64,7 +67,8 @@ def ks_test(vals: list, ref_mean: float, ref_std: float):
         pvalue = float(2.0 * math.exp(-2.0 * t * t))
         pvalue = max(0.0, min(1.0, pvalue))
         return ks, pvalue
-    except Exception:
+    except Exception as exc:
+        logger.warning("KS test failed, column will show no p-value: %s", exc)
         return None, None
 
 
@@ -98,7 +102,8 @@ def histogram(vals: list, ref_mean: float, ref_std: float, n_bins: int = 12) -> 
             }
             for i in range(n_bins)
         ]
-    except Exception:
+    except Exception as exc:
+        logger.warning("Histogram computation failed, column will show no chart: %s", exc)
         return None
 
 

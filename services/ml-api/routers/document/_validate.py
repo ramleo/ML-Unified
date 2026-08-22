@@ -142,7 +142,8 @@ def _check_line_items_sum(fields: list[dict]) -> dict[str, dict]:
         return issues
     try:
         items = json.loads(str(items_f["value"]))
-    except Exception:
+    except Exception as exc:
+        logger.warning("Line-items sum check skipped — could not parse line_items as JSON: %s", exc)
         return issues
     if not isinstance(items, list) or not items:
         return issues
@@ -187,7 +188,8 @@ def _recompute_experience(fields: list[dict]) -> dict[str, dict]:
         return {}
     try:
         roles = json.loads(str(timeline_f["value"]))
-    except Exception:
+    except Exception as exc:
+        logger.warning("Experience recomputation skipped — could not parse career_timeline as JSON: %s", exc)
         return {}
     if not isinstance(roles, list):
         return {}
