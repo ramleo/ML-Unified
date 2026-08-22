@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import base64
 import io
+import logging
 import time
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 import numpy as np
 import pandas as pd
@@ -180,11 +183,14 @@ def _run_automl(df: pd.DataFrame, target: str, task_type: str, cfg: Optional[Dic
             if task_type == "regression":
                 sc = -sc
             leaderboard.append({"algo": algo, "score": sc})
-        except Exception:
+        except Exception as exc:
+            logger.warning("Comparison: %s failed cross-validation, excluded from leaderboard: %s", algo, exc)
             leaderboard.append({"algo": algo, "score": -999.0})
 
     leaderboard.sort(key=lambda x: x["score"], reverse=True)
     winner = leaderboard[0]
+    if winner["score"] == -999.0:
+        logger.error("Comparison: every model failed — returned 'winner' is not a real comparison outcome")
     return {"score": winner["score"], "winner": winner["algo"]}
 
 

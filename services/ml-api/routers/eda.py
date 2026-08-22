@@ -1,10 +1,13 @@
 import io
+import logging
 import numpy as np
 import pandas as pd
 from sklearn.decomposition import PCA
 from sklearn.metrics import mutual_info_score
 from sklearn.preprocessing import KBinsDiscretizer, StandardScaler
 from fastapi import APIRouter, HTTPException, UploadFile, File
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -337,7 +340,8 @@ async def exploratory_analysis(file: UploadFile = File(...)):
                 "cat_cols": color_option_cols,
                 "cat_color_map": cat_color_map,
             }
-        except Exception:
+        except Exception as exc:
+            logger.warning("PCA computation failed, chart will be omitted: %s", exc)
             pca_result = None
 
     # ── SPLOM (Scatter Plot Matrix) ──────────────────────────────
@@ -372,7 +376,8 @@ async def exploratory_analysis(file: UploadFile = File(...)):
                     "color_vals": splom_color_vals,
                     "color_map": splom_color_map,
                 }
-        except Exception:
+        except Exception as exc:
+            logger.warning("SPLOM computation failed, chart will be omitted: %s", exc)
             splom_result = None
 
     # ── Low-variance flags ───────────────────────────────────────

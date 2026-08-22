@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import io
+import logging
 import uuid
 from typing import List
 
@@ -15,6 +16,8 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelEncoder
 
 from routers.core.shared import MODELS
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -98,7 +101,8 @@ def _maybe_sample(X: pd.DataFrame, y: np.ndarray, cap: int, task: str):
     stratify = y if task == "classification" else None
     try:
         Xs, ys = resample(X, y, n_samples=cap, stratify=stratify, random_state=42, replace=False)
-    except Exception:
+    except Exception as exc:
+        logger.warning("Stratified sampling failed, falling back to unstratified (class balance may shift): %s", exc)
         Xs, ys = resample(X, y, n_samples=cap, random_state=42, replace=False)
     return Xs, ys, len(X)
 
@@ -230,11 +234,14 @@ def run_optuna(req: OptunaRequest):
                                  ("est", _get_estimator(algo, req.task_type, params))])
                 val = float(cross_val_score(pipe, X, y_enc, cv=cv_opt, scoring=scoring).mean())
                 return -val if req.task_type == "regression" else val
-            except Exception:
+            except Exception as exc:
+                logger.warning("Optuna trial failed, scoring it -999.0: %s", exc)
                 return -999.0
 
         study = optuna.create_study(direction="maximize")
         study.optimize(objective, n_trials=min(30, req.config.n_trials))
+        if study.best_value == -999.0:
+            logger.error("Optuna: every trial failed — returned 'best' result is not a real optimization outcome")
         best_params = study.best_params
         # objective returns -val for regression (where val = neg_mae, so -val = +MAE).
         # study.best_value is therefore already a positive MAE for regression.
@@ -302,7 +309,8 @@ def run_shap(req: SHAPRequest):
 
         try:
             feat_names = list(preprocessor.get_feature_names_out())
-        except Exception:
+        except Exception as exc:
+            logger.warning("Could not recover real feature names for SHAP output, using f0/f1/...: %s", exc)
             feat_names = [f"f{i}" for i in range(len(mean_abs))]
 
         pairs = sorted(zip(feat_names, mean_abs.tolist()), key=lambda x: x[1], reverse=True)[:15]
@@ -344,7 +352,8 @@ def run_ensemble(req: EnsembleRequest):
                       else float(mean_absolute_error(y_enc, oof)))
                 individual_scores[algo] = sc
                 good_estimators.append((algo, _get_estimator(algo, req.task_type)))
-            except Exception:
+            except Exception as exc:
+                logger.warning("Ensemble: %s failed individual evaluation, excluded: %s", algo, exc)
                 individual_scores[algo] = -999.0
 
         if not good_estimators:
@@ -378,7 +387,8 @@ def run_ensemble(req: EnsembleRequest):
                     probas = [cross_val_predict(est, X_pre, y_enc, cv=cv, method="predict_proba")
                               for _, est in good_estimators]
                     ens_preds = np.argmax(np.mean(probas, axis=0), axis=1)
-                except Exception:
+                except Exception as exc:
+                    logger.warning("Soft voting failed, falling back to hard voting: %s", exc)
                     hard = np.array([cross_val_predict(est, X_pre, y_enc, cv=cv)
                                      for _, est in good_estimators])
                     ens_preds = np.array([np.bincount(hard[:, i].astype(int)).argmax()
