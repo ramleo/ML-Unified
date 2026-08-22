@@ -1,10 +1,13 @@
 """Non-streaming SQL generation via Groq / Gemini / Cohere."""
 from __future__ import annotations
 
+import logging
 import os
 import re
 
 from ._providers import _PROVIDERS, get_provider_cfg, call_provider, RateLimitError
+
+logger = logging.getLogger(__name__)
 
 _TOP_N_PER_GROUP_RE = re.compile(
     r"\btop\s+\d+\s+.{0,40}\b(per|each|in\s+each|by\s+each|within|for\s+each)\b",
@@ -316,19 +319,25 @@ async def generate_sql(
 
     last_exc: Exception | None = None
     rate_limited: list[str] = []
-    for p, k in providers_to_try:
+    for i, (p, k) in enumerate(providers_to_try):
         cfg = get_provider_cfg(p)
         try:
             raw = await call_provider(p, prompt, cfg["model"], k)
+            if i > 0:
+                logger.warning("SQL generation fell back to %s after %d failed attempt(s)", p, i)
             return _extract_sql(raw)
         except RateLimitError as exc:
+            logger.warning("SQL generation: %s rate-limited", p)
             rate_limited.append(p)
             last_exc = exc
             continue
         except Exception as exc:
+            logger.warning("SQL generation: %s failed: %s", p, exc)
             last_exc = exc
             continue
 
     if rate_limited and len(rate_limited) == len(providers_to_try):
+        logger.error("SQL generation: all providers rate-limited (%s)", ", ".join(rate_limited))
         raise RateLimitError(f"All providers rate-limited ({', '.join(rate_limited)}). Wait ~60s and try again.")
+    logger.error("SQL generation: all providers failed. Last error: %s", last_exc)
     raise Exception(f"All providers failed. Last error: {last_exc}")

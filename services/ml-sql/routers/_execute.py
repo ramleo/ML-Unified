@@ -11,6 +11,7 @@ Guardrails:
 """
 from __future__ import annotations
 
+import logging
 import re
 import time
 import urllib.parse
@@ -19,6 +20,8 @@ from dataclasses import dataclass
 import aiosqlite
 import sqlparse
 from sqlparse.sql import Statement
+
+logger = logging.getLogger(__name__)
 
 
 class UnsafeQueryError(Exception):
@@ -50,50 +53,57 @@ def _strip_comments(sql: str) -> str:
     return _COMMENT_STRIP.sub(" ", sql)
 
 
+def _reject(reason: str) -> UnsafeQueryError:
+    """Log a security-relevant SQL rejection before raising — every blocked
+    query is an audit-trail event, not just a client-facing error message."""
+    logger.warning("SQL rejected: %s", reason)
+    return UnsafeQueryError(reason)
+
+
 def validate_sql(sql: str) -> None:
     """Raise UnsafeQueryError if the statement is not a safe SELECT."""
     stripped = sql.strip()
     if not stripped:
-        raise UnsafeQueryError("Empty SQL query")
+        raise _reject("Empty SQL query")
 
     # Block multi-statement queries (stacked injections: SELECT 1; DROP TABLE foo)
     # A lone semicolon at the very end is fine — strip it first.
     no_trailing = stripped.rstrip(";").strip()
     if ";" in no_trailing:
-        raise UnsafeQueryError("Multiple statements are not allowed")
+        raise _reject("Multiple statements are not allowed")
 
     parsed = sqlparse.parse(stripped)
     if not parsed:
-        raise UnsafeQueryError("Could not parse SQL")
+        raise _reject("Could not parse SQL")
 
     stmt: Statement = parsed[0]
     stmt_type = stmt.get_type()
     if stmt_type not in ("SELECT", "UNKNOWN", None):
-        raise UnsafeQueryError(f"Only SELECT queries are allowed (got: {stmt_type})")
+        raise _reject(f"Only SELECT queries are allowed (got: {stmt_type})")
 
     clean = _strip_comments(stripped).upper()
     for kw in _BLOCKED_KEYWORDS:
         if re.search(rf"\b{kw}\b", clean):
-            raise UnsafeQueryError(f"Blocked keyword: {kw}")
+            raise _reject(f"Blocked keyword: {kw}")
 
     if not re.search(r"\bSELECT\b", clean):
-        raise UnsafeQueryError("Query must contain SELECT")
+        raise _reject("Query must contain SELECT")
 
     # Structural pre-validation — catch malformed LLM output before hitting the DB
 
     # 1. FROM clause required (subqueries with no outer FROM are rare and suspicious)
     if not re.search(r"\bFROM\b", clean):
-        raise UnsafeQueryError("Query must contain a FROM clause")
+        raise _reject("Query must contain a FROM clause")
 
     # 2. Balanced parentheses
     if stripped.count("(") != stripped.count(")"):
-        raise UnsafeQueryError("Unbalanced parentheses in query")
+        raise _reject("Unbalanced parentheses in query")
 
     # 3. Unmatched single quotes (odd count means an open string literal)
     # Strip escaped quotes ('') before counting
     no_escaped = stripped.replace("''", "")
     if no_escaped.count("'") % 2 != 0:
-        raise UnsafeQueryError("Unmatched single quote in query")
+        raise _reject("Unmatched single quote in query")
 
     # 4. Truncated query — ends on a dangling keyword (LLM cut off mid-generation)
     _DANGLING = re.compile(
@@ -101,7 +111,7 @@ def validate_sql(sql: str) -> None:
         re.IGNORECASE,
     )
     if _DANGLING.search(stripped.rstrip(";")):
-        raise UnsafeQueryError("Query appears truncated (ends on a keyword)")
+        raise _reject("Query appears truncated (ends on a keyword)")
 
 
 @dataclass
@@ -175,6 +185,10 @@ def mask_sensitive_columns(result: "QueryResult") -> "QueryResult":
     ]
     if not sensitive_idx:
         return result
+    logger.info(
+        "Masking sensitive columns in result: %s",
+        [result.columns[i] for i in sensitive_idx],
+    )
     masked = [
         [("***" if j in sensitive_idx else cell) for j, cell in enumerate(row)]
         for row in result.rows

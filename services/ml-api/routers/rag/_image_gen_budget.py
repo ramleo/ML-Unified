@@ -23,10 +23,13 @@ point.
 from __future__ import annotations
 
 import datetime
+import logging
 import os
 import threading
 
 from fastapi import HTTPException
+
+logger = logging.getLogger(__name__)
 
 _DAILY_CALL_CAP = int(os.environ.get("GEMINI_IMAGE_DAILY_CAP", "40"))
 _TEXT2IMG_DAILY_CAP = int(os.environ.get("GEMINI_TEXT2IMG_DAILY_CAP", "15"))
@@ -68,5 +71,14 @@ def check_and_record_call(feature: str, pool: str = "shared") -> None:
         key = (pool, today)
         count = _counts.get(key, 0)
         if count >= cap:
+            logger.warning(
+                "Gemini daily budget exceeded: pool=%s feature=%s cap=%d",
+                pool, feature, cap,
+            )
             raise HTTPException(status_code=429, detail=_MESSAGES[pool].format(cap=cap))
         _counts[key] = count + 1
+        if _counts[key] == cap:
+            logger.warning(
+                "Gemini daily budget pool=%s reached cap (%d) on this call (feature=%s)",
+                pool, cap, feature,
+            )

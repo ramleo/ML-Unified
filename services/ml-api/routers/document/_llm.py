@@ -138,12 +138,15 @@ _CASCADE_ORDER = (("groq", _groq), ("mistral", _mistral), ("gemini", _gemini_tex
 
 def _cascade(messages: list[dict], system: str) -> str:
     global last_provider
-    for name, fn in _CASCADE_ORDER:
+    for i, (name, fn) in enumerate(_CASCADE_ORDER):
         result = fn(messages, system)
         if result.strip():
+            if i > 0:
+                logger.warning("Document LLM cascade fell back to %s after %d failed attempt(s)", name, i)
             last_provider = name
             return result
     last_provider = ""
+    logger.error("Document LLM cascade exhausted — all providers failed or returned empty")
     return ""
 
 
@@ -201,6 +204,10 @@ def classify_document(text_sample: str, known_types: list[str],
     doc_type = data.get("doc_type", "")
     confidence = float(data.get("confidence", 0.7))
     if not doc_type or doc_type not in known_types:
+        logger.warning(
+            "Document classification: LLM cascade gave no usable doc_type, "
+            "falling back to keyword classifier"
+        )
         doc_type, confidence = _keyword_classify(text_sample, known_types)
     return doc_type, max(0.0, min(1.0, confidence))
 
@@ -246,6 +253,10 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
             if raw.strip() and _parse_json(raw).get("fields"):
                 last_provider = "groq · fast"
             else:
+                logger.warning(
+                    "Field extraction: fast-tier model returned empty/invalid JSON, "
+                    "falling back to full cascade"
+                )
                 raw = ""
         if not raw:
             raw = _cascade(messages, system)
