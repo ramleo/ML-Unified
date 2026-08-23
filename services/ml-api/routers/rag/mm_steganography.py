@@ -41,6 +41,17 @@ sensitivity drops off sharply below ~20-30% embedding rate — a small
 hidden message occupying only a few percent of the image's pixels will not
 reliably separate from a clean baseline. This ships as a signal for
 "substantial" LSB payloads, not a guarantee against a small one.
+
+Second real limitation, found live after shipping (not by the original
+calibration, which only tested large images): the chi-square statistic
+needs enough pixel-value diversity to be reliable, and how much is
+CONTENT-dependent, not a clean fixed cutoff — a smooth/low-detail JPEG
+photo produced false positives even close to its own native resolution,
+while a higher-detail lossless image stayed reliable much smaller (see
+_MIN_DIM below for the real numbers). Below that floor the check is
+skipped entirely rather than reported with reduced confidence, since
+there's no reliable signal to report at all — but the floor is a
+heuristic with real margin, not a guarantee against every image.
 """
 from __future__ import annotations
 
@@ -66,6 +77,27 @@ _MIN_EXPECTED = 4  # skip a value-pair with too few samples to be meaningful
 # bounds anchor the confidence scale below.
 _CHI_SQ_STEGO_CEILING = 2.0   # at/below this -> confidence 1.0
 _CHI_SQ_CLEAN_FLOOR = 13.0    # at/above this -> confidence 0.0
+
+# Real bug found live (not caught by the original calibration, which only
+# tested full-resolution images): the chi-square statistic needs enough
+# real pixel-value diversity to behave the way _CHI_SQ_CLEAN_FLOOR assumes,
+# and how much is "enough" is CONTENT-dependent, not a clean fixed cutoff —
+# confirmed directly on two different real images:
+#   - china.jpg (a soft, low-detail JPEG, one of this module's own clean
+#     calibration images) was already only marginally clean at its full
+#     native 640x427 size (14.86, barely above the 13.0 floor) and flipped
+#     to a false 27-59% "detected" once resized down to 500px or smaller —
+#     zero embedding either time.
+#   - the bike PNG (higher-detail, more real texture, lossless) stayed
+#     correctly clean down to ~500px (15.42) and only degraded below the
+#     floor at ~450px (12.82).
+# There's no single dimension that's safe for every image — a genuinely
+# smooth/low-detail photo could in principle still misfire above this
+# floor. 500 sits above china.jpg's own marginal native size (427, already
+# only barely clean) and comfortably above the bike PNG's real failure
+# point (450) with its actual clean value there (15.42) — not a guarantee
+# against all content, just real margin above what was actually observed.
+_MIN_DIM = 500
 
 
 def chi_square_lsb_stat(channel: np.ndarray) -> float | None:
@@ -103,7 +135,7 @@ def detect_steganography(b64: str) -> dict:
     try:
         img = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
         arr = np.asarray(img)
-        if arr.shape[0] < 32 or arr.shape[1] < 32:
+        if arr.shape[0] < _MIN_DIM or arr.shape[1] < _MIN_DIM:
             return {"detected": False, "confidence": 0.0}
 
         # AVERAGE chi-square across R/G/B — two other combinations were
