@@ -18,6 +18,7 @@ from routers.rag.mm_signatures import describe_signatures, detect_signatures
 from routers.rag.mm_tables import detect_table_regions
 from routers.rag.mm_tampering import combine_tampering_detections, describe_tampering, detect_tampering
 from routers.rag.mm_steganography import describe_steganography, detect_steganography
+from routers.rag.mm_moire import describe_moire, detect_moire
 
 _OCR_TEXT_CAP = 2000
 
@@ -144,6 +145,13 @@ def build_image_chunk(file_bytes: bytes, source: str, session_id: str = "") -> t
     if stego_desc:
         caption = f"{caption}\n\n{stego_desc}" if caption else stego_desc
 
+    # Moire/scan-line detection — whole-image verdict, same shape as
+    # steganography above, see mm_moire.py's module docstring.
+    moire = detect_moire(b64)
+    moire_desc = describe_moire(moire)
+    if moire_desc:
+        caption = f"{caption}\n\n{moire_desc}" if caption else moire_desc
+
     # Pixel-accurate mask refinement (backlog item 5, final CV backlog item)
     # — signatures/tampering are the two detector types whose rectangular
     # bbox most understates the real shape (ink strokes, irregular edited
@@ -167,7 +175,7 @@ def build_image_chunk(file_bytes: bytes, source: str, session_id: str = "") -> t
                        "chunk_type": "image", "page": 1, "quality": quality, "objects": objects,
                        "person_count": person_count,
                        "signatures": signatures, "tampering": tampering,
-                       "steganography": steganography, "duplicates": duplicates})
+                       "steganography": steganography, "moire": moire, "duplicates": duplicates})
     # Table-region detection (backlog item 4) — only worth the model-load
     # cost when OCR actually found at least one pipe-table to attach a bbox
     # to; positional pairing (both lists already top-to-bottom) since

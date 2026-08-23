@@ -71,6 +71,9 @@ def build_done_event(*, source: str, session_id: str, save_scope: str, chunks: l
              # found" convention as every sibling field here.
              "steganography": (c.get("steganography")
                                 if (c.get("steganography") or {}).get("detected") else None),
+             # Same non-empty-dict caveat as steganography above.
+             "moire": (c.get("moire")
+                        if (c.get("moire") or {}).get("detected") else None),
              "number_mismatch": c.get("number_mismatch") or None,
              "pii_types": ",".join(detect_pii_types(c.get("text", ""))) or None,
              "blurry": (c.get("quality") or {}).get("blurry") or None,

@@ -20,6 +20,7 @@ from routers.rag.mm_segment import refine_masks
 from routers.rag.mm_signatures import describe_signatures, detect_signatures
 from routers.rag.mm_tampering import combine_tampering_detections, describe_tampering, detect_tampering
 from routers.rag.mm_steganography import describe_steganography, detect_steganography
+from routers.rag.mm_moire import describe_moire, detect_moire
 from routers.rag.mm_video_audio import generate_chapters, transcribe_video
 
 logger = logging.getLogger(__name__)
@@ -162,6 +163,15 @@ def process_frame(cap, timestamp_s: float, frame_idx: int, source: str, session_
     if stego_desc:
         caption = f"{caption}\n\n{stego_desc}"
 
+    # Moire/scan-line detection — relevant here unlike steganography above:
+    # a video genuinely can be a recording of a screen/scanned feed, and the
+    # fine-period spike this looks for (see mm_moire.py) mostly survives
+    # typical video codec compression since it isn't JPEG block-DCT noise.
+    moire = detect_moire(b64)
+    moire_desc = describe_moire(moire)
+    if moire_desc:
+        caption = f"{caption}\n\n{moire_desc}"
+
     # Near-duplicate detection (backlog item 3) — catches e.g. a static/
     # near-static shot re-sampled as several visually-identical frames, or
     # the same clip re-uploaded earlier in this session.
@@ -178,7 +188,7 @@ def process_frame(cap, timestamp_s: float, frame_idx: int, source: str, session_
     chunk = {"text": caption, "source": source, "chunk_index": frame_idx - 1,
              "chunk_type": "video", "page": frame_idx, "objects": objects, "person_count": person_count,
              "signatures": signatures,
-             "tampering": tampering, "steganography": steganography, "duplicates": duplicates,
+             "tampering": tampering, "steganography": steganography, "moire": moire, "duplicates": duplicates,
              # Real seconds into the video (not the 1-indexed sample number
              # above) — MMRAG-09: lets a citation for a visual-only frame
              # (nothing spoken at that moment) jump the player to the exact
