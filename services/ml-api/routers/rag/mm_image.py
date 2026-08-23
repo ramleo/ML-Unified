@@ -8,7 +8,7 @@ from __future__ import annotations
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.blur import blur_score
 from routers.rag.mm_caption import (build_table_markdown, clean_ocr_text, extract_caption,
-                                    extract_chart_data, split_pipe_tables)
+                                    extract_chart_data, is_junk_table_block, split_pipe_tables)
 from routers.rag.mm_duplicates import describe_duplicates, detect_duplicates
 from routers.rag.mm_objects import describe_objects, detect_objects
 from routers.rag.mm_jpeg_ghost import detect_jpeg_ghosts
@@ -95,6 +95,11 @@ def build_image_chunk(file_bytes: bytes, source: str, session_id: str = "") -> t
     # pipe-table syntax even with no PDF structure behind it. Surface that as
     # its own "table" chunk instead of only ever a flattened caption/OCR blob.
     table_blocks, remaining_md = split_pipe_tables(ocr_md)
+    # Discard a "table" that's actually just a wrapped image-reference
+    # placeholder with no real tabular content — a genuine live false
+    # positive: an ordinary face photo produced a bogus table chunk whose
+    # only content was the placeholder text itself. See is_junk_table_block.
+    table_blocks = [b for b in table_blocks if not is_junk_table_block(b)]
     ocr_text = clean_ocr_text(remaining_md)[:_OCR_TEXT_CAP]
     if ocr_text:
         caption = f"{caption}\n\nExact text from image (OCR):\n{ocr_text}" if caption else ocr_text

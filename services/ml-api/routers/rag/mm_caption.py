@@ -155,6 +155,20 @@ def clean_ocr_text(md: str) -> str:
     return text
 
 
+def is_junk_table_block(block: str) -> bool:
+    """True when a "table" block found by split_pipe_tables isn't a real
+    table at all — Mistral OCR sometimes wraps a lone image-reference
+    placeholder (see clean_ocr_text's docstring) in pipe/separator syntax
+    on a photo with nothing tabular on it (observed live: an ordinary face
+    photo produced a bogus one-cell "table" whose only content was
+    "![img-0.jpeg](img-0.jpeg)"), which split_pipe_tables' contiguous-pipe-
+    lines heuristic can't distinguish from a genuine table. Strips each
+    line's pipe/dash table syntax and any image-ref placeholder; if nothing
+    substantive is left, this was never a real table."""
+    stripped = re.sub(r"[|\-\s]", "", _IMG_REF_RE.sub("", block))
+    return len(stripped) < 3
+
+
 def split_pipe_tables(md: str) -> tuple[list[str], str]:
     """Splits OCR markdown into (table_blocks, remaining_text). Mistral OCR
     reconstructs a real pipe-table (`| a | b |`) when the source image has a
