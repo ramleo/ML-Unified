@@ -21,6 +21,7 @@ from routers.rag.mm_signatures import describe_signatures, detect_signatures
 from routers.rag.mm_tampering import combine_tampering_detections, describe_tampering, detect_tampering
 from routers.rag.mm_steganography import describe_steganography, detect_steganography
 from routers.rag.mm_moire import describe_moire, detect_moire
+from routers.rag.mm_prnu import check_camera_match, describe_camera_match
 from routers.rag.mm_video_audio import generate_chapters, transcribe_video
 
 logger = logging.getLogger(__name__)
@@ -180,6 +181,17 @@ def process_frame(cap, timestamp_s: float, frame_idx: int, source: str, session_
     if dup_desc:
         caption = f"{caption}\n\n{dup_desc}"
 
+    # PRNU camera-fingerprint matching — see mm_image.py's identical
+    # treatment. Weaker signal here than for a photo: video codec
+    # compression re-encodes each frame far more aggressively than JPEG,
+    # which can degrade the sensor noise pattern this reads. Kept for
+    # consistency and for a frame from a lightly-compressed source, not
+    # because video is this detector's strongest use case.
+    camera_match = check_camera_match(b64, source, frame_idx, session_id)
+    camera_desc = describe_camera_match(camera_match)
+    if camera_desc:
+        caption = f"{caption}\n\n{camera_desc}"
+
     # Pixel-accurate mask refinement (backlog item 5) — see mm_segment.py
     # and mm_image.py's identical treatment.
     signatures = refine_masks(b64, signatures)
@@ -189,6 +201,7 @@ def process_frame(cap, timestamp_s: float, frame_idx: int, source: str, session_
              "chunk_type": "video", "page": frame_idx, "objects": objects, "person_count": person_count,
              "signatures": signatures,
              "tampering": tampering, "steganography": steganography, "moire": moire, "duplicates": duplicates,
+             "camera_match": camera_match,
              # Real seconds into the video (not the 1-indexed sample number
              # above) — MMRAG-09: lets a citation for a visual-only frame
              # (nothing spoken at that moment) jump the player to the exact

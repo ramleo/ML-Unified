@@ -112,6 +112,10 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         # all (see mm_duplicates.refresh_duplicates_for_chunks docstring).
         from routers.rag.mm_duplicates import refresh_duplicates_for_chunks
         refresh_duplicates_for_chunks(chunks, page_images, session_id)
+        # Same cache-bypass rationale as duplicates above, for PRNU camera
+        # matching — see mm_prnu.refresh_camera_match_for_chunks docstring.
+        from routers.rag.mm_prnu import refresh_camera_match_for_chunks
+        refresh_camera_match_for_chunks(chunks, page_images, session_id)
         yield _sse({"step": "extract", "status": "done", "chunk_summary": summary, "cached": True})
     else:
         loop = asyncio.get_event_loop()

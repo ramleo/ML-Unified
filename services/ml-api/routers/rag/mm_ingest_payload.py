@@ -63,6 +63,7 @@ def build_done_event(*, source: str, session_id: str, save_scope: str, chunks: l
              "signatures": c.get("signatures") or None,
              "tampering": c.get("tampering") or None,
              "duplicates": c.get("duplicates") or None,
+             "camera_match": c.get("camera_match") or None,
              # Unlike tampering/duplicates (lists, falsy when empty),
              # detect_steganography() always returns a non-empty dict even
              # when nothing was found ({"detected": False, ...}) — `or None`

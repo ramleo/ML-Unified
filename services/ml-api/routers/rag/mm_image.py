@@ -19,6 +19,7 @@ from routers.rag.mm_tables import detect_table_regions
 from routers.rag.mm_tampering import combine_tampering_detections, describe_tampering, detect_tampering
 from routers.rag.mm_steganography import describe_steganography, detect_steganography
 from routers.rag.mm_moire import describe_moire, detect_moire
+from routers.rag.mm_prnu import check_camera_match, describe_camera_match
 
 _OCR_TEXT_CAP = 2000
 
@@ -174,13 +175,22 @@ def build_image_chunk(file_bytes: bytes, source: str, session_id: str = "") -> t
     if dup_desc:
         caption = f"{caption}\n\n{dup_desc}" if caption else dup_desc
 
+    # PRNU camera-fingerprint matching — same per-session in-memory registry
+    # pattern as duplicates above, but comparing sensor noise residuals
+    # instead of perceptual hashes. See mm_prnu.py's module docstring.
+    camera_match = check_camera_match(b64, source, 1, session_id)
+    camera_desc = describe_camera_match(camera_match)
+    if camera_desc:
+        caption = f"{caption}\n\n{camera_desc}" if caption else camera_desc
+
     chunks: list[dict] = []
     if caption:
         chunks.append({"text": caption, "source": source, "chunk_index": 0,
                        "chunk_type": "image", "page": 1, "quality": quality, "objects": objects,
                        "person_count": person_count,
                        "signatures": signatures, "tampering": tampering,
-                       "steganography": steganography, "moire": moire, "duplicates": duplicates})
+                       "steganography": steganography, "moire": moire, "duplicates": duplicates,
+                       "camera_match": camera_match})
     # Table-region detection (backlog item 4) — only worth the model-load
     # cost when OCR actually found at least one pipe-table to attach a bbox
     # to; positional pairing (both lists already top-to-bottom) since

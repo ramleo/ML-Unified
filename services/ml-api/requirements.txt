@@ -18,6 +18,7 @@ pandas==2.2.2
 numpy==1.26.4
 scipy>=1.11.0  # explicit dep for mm_moire.py's rotate/median_filter (already transitively
 # installed via scikit-learn, but declared directly since this is the first module to import it)
+PyWavelets>=1.5.0  # mm_prnu.py's wavelet-domain noise-residual extraction
 joblib==1.5.3
 xgboost==2.1.1
 lightgbm==4.6.0
