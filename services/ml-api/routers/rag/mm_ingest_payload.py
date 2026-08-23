@@ -63,6 +63,14 @@ def build_done_event(*, source: str, session_id: str, save_scope: str, chunks: l
              "signatures": c.get("signatures") or None,
              "tampering": c.get("tampering") or None,
              "duplicates": c.get("duplicates") or None,
+             # Unlike tampering/duplicates (lists, falsy when empty),
+             # detect_steganography() always returns a non-empty dict even
+             # when nothing was found ({"detected": False, ...}) — `or None`
+             # alone would never suppress it, so check .detected explicitly
+             # to match the same "only surface when something was actually
+             # found" convention as every sibling field here.
+             "steganography": (c.get("steganography")
+                                if (c.get("steganography") or {}).get("detected") else None),
              "number_mismatch": c.get("number_mismatch") or None,
              "pii_types": ",".join(detect_pii_types(c.get("text", ""))) or None,
              "blurry": (c.get("quality") or {}).get("blurry") or None,

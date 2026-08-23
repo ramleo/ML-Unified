@@ -19,6 +19,7 @@ from routers.rag.mm_noise_forensics import detect_noise_regions
 from routers.rag.mm_segment import refine_masks
 from routers.rag.mm_signatures import describe_signatures, detect_signatures
 from routers.rag.mm_tampering import combine_tampering_detections, describe_tampering, detect_tampering
+from routers.rag.mm_steganography import describe_steganography, detect_steganography
 from routers.rag.mm_video_audio import generate_chapters, transcribe_video
 
 logger = logging.getLogger(__name__)
@@ -150,6 +151,17 @@ def process_frame(cap, timestamp_s: float, frame_idx: int, source: str, session_
     if tamper_desc:
         caption = f"{caption}\n\n{tamper_desc}"
 
+    # Steganography detection — see mm_image.py's identical treatment. A
+    # decoded video frame has already been through lossy codec compression,
+    # so this will realistically almost always read clean here (same
+    # caveat ELA/JPEG-ghost already carry for JPEG-sourced content) — kept
+    # for consistency and for the rare frame extracted from a lossless
+    # source, not because video is this detector's real use case.
+    steganography = detect_steganography(b64)
+    stego_desc = describe_steganography(steganography)
+    if stego_desc:
+        caption = f"{caption}\n\n{stego_desc}"
+
     # Near-duplicate detection (backlog item 3) — catches e.g. a static/
     # near-static shot re-sampled as several visually-identical frames, or
     # the same clip re-uploaded earlier in this session.
@@ -166,7 +178,7 @@ def process_frame(cap, timestamp_s: float, frame_idx: int, source: str, session_
     chunk = {"text": caption, "source": source, "chunk_index": frame_idx - 1,
              "chunk_type": "video", "page": frame_idx, "objects": objects, "person_count": person_count,
              "signatures": signatures,
-             "tampering": tampering, "duplicates": duplicates,
+             "tampering": tampering, "steganography": steganography, "duplicates": duplicates,
              # Real seconds into the video (not the 1-indexed sample number
              # above) — MMRAG-09: lets a citation for a visual-only frame
              # (nothing spoken at that moment) jump the player to the exact

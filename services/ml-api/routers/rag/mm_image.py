@@ -17,6 +17,7 @@ from routers.rag.mm_segment import refine_masks
 from routers.rag.mm_signatures import describe_signatures, detect_signatures
 from routers.rag.mm_tables import detect_table_regions
 from routers.rag.mm_tampering import combine_tampering_detections, describe_tampering, detect_tampering
+from routers.rag.mm_steganography import describe_steganography, detect_steganography
 
 _OCR_TEXT_CAP = 2000
 
@@ -135,6 +136,14 @@ def build_image_chunk(file_bytes: bytes, source: str, session_id: str = "") -> t
     if tamper_desc:
         caption = f"{caption}\n\n{tamper_desc}" if caption else tamper_desc
 
+    # Steganography detection — whole-image verdict (no bbox, see
+    # mm_steganography.py's module docstring for why), so a separate field
+    # from tampering rather than merged into it.
+    steganography = detect_steganography(b64)
+    stego_desc = describe_steganography(steganography)
+    if stego_desc:
+        caption = f"{caption}\n\n{stego_desc}" if caption else stego_desc
+
     # Pixel-accurate mask refinement (backlog item 5, final CV backlog item)
     # — signatures/tampering are the two detector types whose rectangular
     # bbox most understates the real shape (ink strokes, irregular edited
@@ -157,7 +166,8 @@ def build_image_chunk(file_bytes: bytes, source: str, session_id: str = "") -> t
         chunks.append({"text": caption, "source": source, "chunk_index": 0,
                        "chunk_type": "image", "page": 1, "quality": quality, "objects": objects,
                        "person_count": person_count,
-                       "signatures": signatures, "tampering": tampering, "duplicates": duplicates})
+                       "signatures": signatures, "tampering": tampering,
+                       "steganography": steganography, "duplicates": duplicates})
     # Table-region detection (backlog item 4) — only worth the model-load
     # cost when OCR actually found at least one pipe-table to attach a bbox
     # to; positional pairing (both lists already top-to-bottom) since
