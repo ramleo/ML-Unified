@@ -66,6 +66,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 from routers.rag.mm_objects import detect_objects
+from routers.rag.mm_plant_growth_align import compute_frame_alignment
 from routers.rag.mm_plant_growth_blobs import detect_plant_blobs
 from routers.rag.mm_plant_growth_collage import detect_collage_seam, split_at_seam
 from routers.rag.mm_plant_growth_compare import compare_single_photo
@@ -325,7 +326,15 @@ def _run_growth_mode(frames: list[PlantGrowthFrame], auto_detect: bool) -> dict:
         if finalized:
             plants.append({"index": idx, **finalized})
 
-    return {"mode": "growth", "plants": plants}
+    # One [dx, dy] per uploaded photo (not per track/plant — camera shake is
+    # a property of the shot, shared by every plant measured within it), so
+    # the client-side GIF exporter (PlantGrowthGif.tsx) can shift each
+    # frame's draw position and look less jittery. Purely cosmetic — never
+    # used by the measurement above, which already handles reframing via its
+    # own per-frame plant re-detection. See mm_plant_growth_align.py.
+    frame_alignment = compute_frame_alignment(imgs)
+
+    return {"mode": "growth", "plants": plants, "frame_alignment": frame_alignment}
 
 
 @router.post("/mm-plant-growth")
