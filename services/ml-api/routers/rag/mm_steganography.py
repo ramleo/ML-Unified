@@ -140,7 +140,7 @@ def describe_steganography(result: dict | None) -> str:
     if not result or not result.get("detected"):
         return ""
     conf_pct = round(result["confidence"] * 100)
-    return (f"Possible steganographic content detected ({conf_pct}% confidence) — "
-            "pixel value-pair statistics resemble LSB-embedded data (may indicate a "
-            "hidden payload) — not a certainty, and only meaningful for losslessly-saved "
-            "images (PNG/BMP/TIFF); a JPEG-sourced image cannot carry survivable LSB data.")
+    return (f"Possible hidden data detected in this image ({conf_pct}% confidence) — "
+            "its colors show a pattern that usually only shows up when something is secretly "
+            "hidden inside it. A strong hint, not proof. Only works on PNG-style images (a "
+            "JPEG photo can't hide data this way).")
