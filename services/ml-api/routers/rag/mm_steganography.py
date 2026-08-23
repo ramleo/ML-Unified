@@ -49,9 +49,12 @@ import io
 import logging
 
 import numpy as np
+from fastapi import APIRouter
 from PIL import Image
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
+router = APIRouter()
 
 _MIN_EXPECTED = 4  # skip a value-pair with too few samples to be meaningful
 # Calibrated against real test images (bike PNG + 3 native-JPEG photos,
@@ -141,6 +144,43 @@ def describe_steganography(result: dict | None) -> str:
         return ""
     conf_pct = round(result["confidence"] * 100)
     return (f"Possible hidden data detected in this image ({conf_pct}% confidence) — "
-            "its colors show a pattern that usually only shows up when something is secretly "
-            "hidden inside it. A strong hint, not proof. Only works on PNG-style images (a "
-            "JPEG photo can't hide data this way).")
+            "every pixel has a color number, and hidden data quietly nudges some of those "
+            "numbers so that certain pairs (like pixels colored 100 vs. 101) show up equally "
+            "often, something a normal photo almost never does on its own. A strong hint, not "
+            "proof, and only works on PNG-style images (a JPEG photo can't hide data this way).")
+
+
+class VisualizeRequest(BaseModel):
+    image: str  # b64 image, the same citation image already shown to the user
+
+
+def extract_lsb_visualization(b64: str, max_dim: int = 500) -> str:
+    """Renders the red channel's least-significant-bit plane as its own
+    black/white image — purely illustrative, NOT a claim about where a
+    hidden payload is located (there is no "where": see the module
+    docstring on why this is a whole-image signal). Every pixel's last bit
+    becomes black (0) or white (1); a normal, untouched photo's version of
+    this looks like plain static/noise, same as a photo carrying a hidden
+    payload — the point is to make the otherwise-invisible thing the
+    detector reads concretely visible, not to visually distinguish clean
+    from tampered. Downsized to `max_dim` on the long side since precision
+    doesn't matter for an illustration and this keeps the response small."""
+    img = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
+    w, h = img.size
+    scale = min(1.0, max_dim / max(w, h))
+    if scale < 1.0:
+        img = img.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.NEAREST)
+    r = np.asarray(img)[:, :, 0]
+    bitplane = ((r & 1) * 255).astype(np.uint8)
+    buf = io.BytesIO()
+    Image.fromarray(bitplane, mode="L").save(buf, format="PNG")
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+@router.post("/mm-steganography/visualize")
+def visualize_steganography(body: VisualizeRequest):
+    """Returns {"image": <b64>} — the illustrative bit-plane image (see
+    extract_lsb_visualization). Computed on demand, not at ingest, since
+    it's only ever needed if a user actually opens the "Possible hidden
+    data" dropdown option."""
+    return {"image": extract_lsb_visualization(body.image)}
