@@ -49,6 +49,7 @@ import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 
+import httpx
 from fastapi import APIRouter, HTTPException
 from PIL import Image
 from pydantic import BaseModel
@@ -335,6 +336,21 @@ def deblur_image(body: DeblurRequest):
         # _image_gen_budget.py) as-is — only genuinely unexpected failures
         # below get flattened into the generic message.
         raise
+    except httpx.HTTPStatusError as exc:
+        # A real 429 from Gemini (its own quota/rate-limit, not this app's
+        # daily budget cap above) was previously flattened into the same
+        # generic 502 as every other failure — indistinguishable from an
+        # actual outage. Confirmed live 2026-08-24: the Space logs showed a
+        # genuine 429 from gemini-3.1-flash-lite-image while the frontend
+        # only ever saw a bare 502, making "try again in a moment" wrong
+        # advice (the quota doesn't reset in a moment).
+        if exc.response.status_code == 429:
+            logger.warning("Deblur rate-limited by Gemini: %s", exc)
+            raise HTTPException(status_code=429,
+                                detail="Sharpen is rate-limited right now — the image model has hit its "
+                                       "usage quota. Try again in a few minutes.")
+        logger.warning("Deblur failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Sharpen is temporarily unavailable — try again in a moment.")
     except Exception as exc:
         logger.warning("Deblur failed: %s", exc)
         raise HTTPException(status_code=502, detail="Sharpen is temporarily unavailable — try again in a moment.")

@@ -153,6 +153,22 @@ def system_info():
     return {"gpu": _detect_gpu()}
 
 
+@app.get("/_diag_groq_models")
+def _diag_groq_models():
+    """TEMP DIAGNOSTIC (EC-008, remove after confirming current Groq model
+    IDs) — lists what the real deployed GROQ_API_KEY can actually see, since
+    llama-3.1-8b-instant / llama-3.3-70b-versatile started 404ing in
+    production and guessing a replacement name from web search isn't
+    reliable (this project has been burned by that before)."""
+    import httpx
+    key = os.environ.get("GROQ_API_KEY", "")
+    if not key:
+        return {"error": "no key"}
+    r = httpx.get("https://api.groq.com/openai/v1/models",
+                  headers={"Authorization": f"Bearer {key}"}, timeout=15)
+    return {"status": r.status_code, "ids": [m["id"] for m in r.json().get("data", [])]}
+
+
 @app.get("/app-config")
 def app_config():
     """Return runtime config consumed by the frontend."""
