@@ -33,7 +33,7 @@ router = APIRouter()
 
 # ── Default model ──────────────────────────────────────────────────────────────
 _DEFAULT_PROVIDER = "groq"
-_DEFAULT_MODEL = "llama-3.3-70b-versatile"
+_DEFAULT_MODEL = "groq/compound"
 
 # Query expansion always uses its own fixed, fast, server-key-only provider —
 # NEVER the user's selected/BYOK provider. It's an optional quality boost
@@ -42,7 +42,7 @@ _DEFAULT_MODEL = "llama-3.3-70b-versatile"
 # after it. Found live: selecting Cohere fired two real Cohere calls per
 # question (expansion + generation) against the same limit, both 429ing.
 _EXPANSION_PROVIDER = "groq"
-_EXPANSION_MODEL = "llama-3.1-8b-instant"
+_EXPANSION_MODEL = "groq/compound-mini"
 
 
 # ── SSE generator ──────────────────────────────────────────────────────────────

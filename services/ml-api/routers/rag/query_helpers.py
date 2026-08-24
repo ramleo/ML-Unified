@@ -63,7 +63,7 @@ class QueryRequest(BaseModel):
     tool_context: str = ""
     history: list[dict] = []
     provider: str = "groq"
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "groq/compound"
     user_key: Optional[str] = None
     embedding_model: str = "minilm"  # "minilm" | "jina"
     session_id: str = ""

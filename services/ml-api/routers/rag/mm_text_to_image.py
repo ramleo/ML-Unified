@@ -98,7 +98,7 @@ class DescribeImageRequest(BaseModel):
 # text completion, not the billed image model, so it deliberately does NOT
 # go through check_and_record_call/the text2img budget pool.
 _ENHANCE_CASCADE = [
-    ("groq", "llama-3.3-70b-versatile", "GROQ_API_KEY"),
+    ("groq", "groq/compound", "GROQ_API_KEY"),
     ("mistral", "mistral-small-latest", "MISTRAL_API_KEY"),
     ("gemini", "gemini-3.6-flash", "GEMINI_API_KEY"),
     ("cohere", "command-a-03-2025", "COHERE_API_KEY"),

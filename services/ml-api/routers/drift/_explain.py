@@ -6,7 +6,7 @@ import os
 from typing import Any
 
 _PROVIDER_MODELS = {
-    "groq":             "llama-3.3-70b-versatile",
+    "groq":             "groq/compound",
     "gemini":           "gemini-3.6-flash",
     "gemini-2.5-flash": "gemini-3.6-flash",
     "gemini-3.5-flash": "gemini-3.6-flash",
@@ -85,7 +85,7 @@ def explain_stream(result: dict, provider: str):
     from routers.rag.llm import stream_groq_openai, stream_gemini, stream_cohere
 
     provider = (provider or "groq").lower()
-    model    = _PROVIDER_MODELS.get(provider, "llama-3.3-70b-versatile")
+    model    = _PROVIDER_MODELS.get(provider, "groq/compound")
     family   = "gemini" if provider.startswith("gemini") else provider
     env_var  = _ENV_KEYS.get(family, "")
     key      = os.environ.get(env_var, "")

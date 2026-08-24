@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _DEFAULT_PROVIDER = "groq"
-_DEFAULT_MODEL = "llama-3.3-70b-versatile"
+_DEFAULT_MODEL = "groq/compound"
 _ENV_KEYS = {
     "groq": "GROQ_API_KEY",
     "openai": "OPENAI_API_KEY",
