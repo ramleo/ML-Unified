@@ -1072,6 +1072,29 @@ consistency sweep + ML-Unified CI fix + theme toggle rollout.
 **Expected Result (after fix):** Re-verified live — 5/5 fresh ingests of the same photo returned the correct plain caption, 0 hallucinations reaching the final chunk text.
 **Source:** EC-007 follow-up, this conversation (2026-08-24) — a real example of "verify live before calling it done" catching a fix that looked complete but wasn't.
 
+### TC-P10-102 (open, correction of TC-P10-097's earlier conclusion)
+**Category:** Bug-Regression (unverified — root-caused, not yet fixed)
+**Test Name:** AI Sharpen 502 is real Gemini quota exhaustion, not a transient blip
+**Steps:**
+1. Click "Sharpen image (AI)" on any citation.
+2. If it fails, check the HF Space logs (`huggingface.co/api/spaces/{id}/logs/run`) for the actual upstream error, not just the frontend's generic message.
+**Expected Result (what was first assumed):** A raw empty-body curl to `/rag/mm-deblur` returned 422 (validation working), which was read as "not a real outage" — this was an incomplete check, since it never exercised the actual Gemini call.
+**Actual Result (confirmed via real Space logs 2026-08-24):** `routers.rag.mm_deblur WARNING Deblur failed: Client error '429 Too Many Requests'` from `gemini-3.1-flash-lite-image:generateContent` — the image-gen model's quota/rate-limit is genuinely exhausted, and the backend surfaces that unhandled 429 to the frontend as a generic 502 with no informative message.
+**Fix (not yet done):** Backend should catch a 429 from the Gemini deblur call specifically and return a clear "temporarily rate-limited, try again later" message instead of a bare 502 — same UX pattern already used elsewhere in this app for provider failures.
+**Automation Hint:** Mock the Gemini deblur call to return 429, assert the frontend shows a specific rate-limit message rather than the current generic "Sharpen is temporarily unavailable" (which happens to read correctly by coincidence, not because the code distinguishes the cause).
+**Source:** EC-004b investigation, this conversation (2026-08-24) — corrects an earlier premature "confirmed not a real outage" conclusion once real evidence (Space logs) was actually checked.
+
+### TC-P10-103 (open, spotted incidentally)
+**Category:** Bug (production, unrelated to session's main work)
+**Test Name:** Groq chat models return model_not_found in the generation cascade
+**Steps:**
+1. Ask any question via `/rag/query` in production.
+2. Check HF Space logs for the provider cascade's attempts.
+**Expected Result:** Groq (the preferred/first provider) succeeds.
+**Actual Result (observed live 2026-08-24):** Two separate log lines showed Groq returning 404 `model_not_found` — `llama-3.1-8b-instant` and `llama-3.3-70b-versatile` "does not exist or you do not have access to it." The cascade recovered via Mistral both times, so the user-facing answer still succeeded, but the primary provider is silently broken — likely a Groq-side model deprecation/rename the app's hardcoded model strings haven't caught up to.
+**Automation Hint:** Hit `/rag/query` with a real question, assert the response's `provider` field is `groq`, not a fallback — would have caught this regression immediately.
+**Source:** EC-008, spotted incidentally in HF Space logs while diagnosing TC-P10-102 — not yet root-caused further (which model name is actually current on Groq wasn't checked).
+
 ---
 
 ## Pending Test Cases (from this range, unbuilt or explicitly flagged)
