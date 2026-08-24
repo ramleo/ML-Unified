@@ -1017,15 +1017,15 @@ consistency sweep + ML-Unified CI fix + theme toggle rollout.
 **Automation Hint:** Playwright — navigate to page 2, switch documents, switch back, assert which page renders.
 **Source:** EC-003, this conversation (2026-08-23 noted / 2026-08-24 confirmed as current behavior).
 
-### TC-P10-097 (open)
-**Category:** Bug-Regression (unverified)
-**Test Name:** AI Sharpen result persists across a document switch-away-and-back
+### TC-P10-097 (Closed — confirmed intentional, not a bug)
+**Category:** Bug-Regression → Design confirmation
+**Test Name:** AI Sharpen result does NOT persist across a document switch-away-and-back, by design
 **Steps:**
 1. On an image citation, click "Sharpen image (AI)" and let it complete.
 2. Switch to a different document, then switch back.
-**Expected Result:** The sharpened result (and "View original" toggle) is still available, not lost.
-**Automation Hint:** Playwright — sharpen, switch docs twice, assert sharpened-image state/toggle still present.
-**Source:** EC-004b, this conversation (2026-08-24). Attempt blocked live by a transient 502 on `/rag/mm-deblur`, confirmed NOT a real outage via direct curl immediately after (endpoint returned normal 422). Left open, to retry.
+**Expected Result:** Confirmed via direct code reading (a live Gemini call wasn't available — quota still exhausted as of 2026-08-24, see TC-P10-102) — the sharpened result is lost on switch. `useSharpen.ts`'s own module docstring states this outright: "must stay a disposable, explicitly-toggled view... and never persisted across a citation switch." Mechanically enforced by the `syncKey` effect (lines 58-67) resetting `sharpenedImg` to `null` the instant `editKey` (source:page) changes — no lifted/parent-level persistence exists for it, unlike `useInpaint`'s `edits`/`onEditChange`. This is intentional: Sharpen is generative and can hallucinate detail, so the app deliberately refuses to let a stale result silently persist and be mistaken for the real image after navigating away.
+**Automation Hint:** Unit-test `useSharpen`'s syncKey-change effect directly — assert all sharpen-result state resets to null/initial when `syncKey` changes, no live API call needed.
+**Source:** EC-004b, this conversation (2026-08-24). Original attempts were blocked by Gemini quota exhaustion (still unresolved as of this entry); resolved via code inspection instead once that path was confirmed unavailable.
 
 ### TC-P10-098 (open)
 **Category:** E2E (unverified — needs suitable test content)

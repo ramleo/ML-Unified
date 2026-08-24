@@ -11,14 +11,14 @@ pre-existing narrower gaps unrelated to Part ranges.
 
 Tracked separately at [EDGECASES.md](testcases/EDGECASES.md) — a running list of
 edge cases as they're noticed, each of which also gets a numbered TC entry in
-the relevant TC-*.md file. 2026-08-24 pass: 5 resolved (2 real bugs fixed —
-stale visualAction dropdown across document switches, commit `9dd24be`;
-vision-captioner collage hallucination, commits `9814f79`+`a14d356`; plus 3
-verified no-bug/messaging-only fixes), 4 open (2 blocked on missing test
-fixtures, 1 partially fixed — the Gemini-429 error message is now accurate,
-commit `8e985ce`, but the underlying document-switch persistence question is
-still untested — 1 reopened after an unapproved model swap was caught and
-reverted, commit `7d561b7`; see EC-008's correction note).
+the relevant TC-*.md file. 2026-08-24 pass: 6 resolved (3 real findings closed
+— stale visualAction dropdown across document switches, commit `9dd24be`;
+vision-captioner collage hallucination, commits `9814f79`+`a14d356`; AI
+Sharpen's error message fixed AND its persistence-across-switch design
+confirmed intentional via code reading, commit `8e985ce`; plus 3 verified
+no-bug fixes), 3 open (2 blocked on missing test fixtures, 1 reopened after
+an unapproved model swap was caught and reverted, commit `7d561b7`; see
+EC-008's correction note).
 
 ---
 
