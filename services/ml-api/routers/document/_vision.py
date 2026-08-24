@@ -191,12 +191,6 @@ def _vision_cascade_raw(b64: str, prompt: str) -> str:
         raw = fn(b64, prompt)
         if raw.strip():
             _llm_state.last_provider = f"{name} vision"
-            # TEMP DIAGNOSTIC (EC-007, remove after root-causing the
-            # "collage of cropped sections" caption hallucination on plain
-            # single photos) — logs which provider actually served a
-            # standalone-image caption, since no successful call was
-            # previously logged at all (only failures were).
-            logger.warning("EC007_DIAG provider=%s raw=%r", name, raw[:400])
             return raw
     return ""
 

@@ -90,6 +90,26 @@ def extract_caption(raw: str, fallback_len: int) -> str:
     return fenced[:fallback_len]
 
 
+# EC-007: a reasoning vision model (observed: Groq's Qwen) can complete its
+# <think> block coherently but reason its way to a confidently WRONG
+# conclusion — inventing a multi-panel collage/composite structure on a
+# single plain photo (e.g. "a vertical collage of four cropped sections of
+# a young man's face" for one ordinary headshot). Unlike a truncated <think>
+# leak (already caught by strip_thinking above), there's no parsing signal
+# that this text is wrong — it's a well-formed, on-topic sentence. The only
+# way to catch it is a cross-check against an INDEPENDENTLY computed signal
+# (object detection's bbox sizes), done by the caller — this just flags the
+# caption text side of that check.
+_COLLAGE_HALLUCINATION_RE = re.compile(
+    r"\b(collage|composite)\b.{0,40}\bcropped\b.{0,20}\b(sections?|views?|panels?|images?|parts?)\b",
+    re.IGNORECASE,
+)
+
+
+def looks_like_fabricated_collage(caption: str) -> bool:
+    return bool(_COLLAGE_HALLUCINATION_RE.search(caption))
+
+
 def build_table_markdown(rows: list[list]) -> str:
     """A pipe-table string from a header row + data rows — shared by real
     PDF-extracted tables (mm_pdf.py) and MMRAG-14's chart-data extraction

@@ -8,7 +8,8 @@ from __future__ import annotations
 from routers.document._vision import _vision_cascade_raw, mistral_ocr_pages
 from routers.rag.blur import blur_score
 from routers.rag.mm_caption import (build_table_markdown, clean_ocr_text, extract_caption,
-                                    extract_chart_data, is_junk_table_block, split_pipe_tables)
+                                    extract_chart_data, is_junk_table_block,
+                                    looks_like_fabricated_collage, split_pipe_tables)
 from routers.rag.mm_duplicates import describe_duplicates, detect_duplicates
 from routers.rag.mm_objects import describe_objects, detect_objects
 from routers.rag.mm_jpeg_ghost import detect_jpeg_ghosts
@@ -115,6 +116,19 @@ def build_image_chunk(file_bytes: bytes, source: str, session_id: str = "") -> t
     # here so a later "where is the X" chat question is a free metadata
     # lookup, not a fresh vision call. See mm_objects.py for scope/rationale.
     objects, person_count = detect_objects(b64)
+    # EC-007: catch a fabricated "collage/composite of cropped sections"
+    # caption against the independently-computed object-detection signal —
+    # a real N-panel collage tiles the frame, so no single detection would
+    # span most of it. Retrying once (same pattern as the empty-caption
+    # retry above) either gets a different, honest caption from the cascade,
+    # or leaves the original if the retry doesn't help — see mm_caption.py's
+    # looks_like_fabricated_collage docstring for the full reasoning.
+    if caption and looks_like_fabricated_collage(caption) and any(
+        o["bbox"][2] * o["bbox"][3] > 0.4 for o in objects
+    ):
+        retry_caption = extract_caption(_vision_cascade_raw(b64, _image_prompt(terse=True)), 400)
+        if retry_caption and not looks_like_fabricated_collage(retry_caption):
+            caption = retry_caption
     obj_desc = describe_objects(objects)
     if obj_desc:
         # Baked into the stored text itself (not just the LLM prompt) so a
