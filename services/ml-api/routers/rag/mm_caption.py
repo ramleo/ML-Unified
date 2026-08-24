@@ -100,14 +100,20 @@ def extract_caption(raw: str, fallback_len: int) -> str:
 # way to catch it is a cross-check against an INDEPENDENTLY computed signal
 # (object detection's bbox sizes), done by the caller — this just flags the
 # caption text side of that check.
-_COLLAGE_HALLUCINATION_RE = re.compile(
-    r"\b(collage|composite)\b.{0,40}\bcropped\b.{0,20}\b(sections?|views?|panels?|images?|parts?)\b",
-    re.IGNORECASE,
-)
+# Not a single bounded phrase — observed wording varies too much ("...four
+# cropped sections..." vs "...close-up crops of a young man's face... The
+# top section displays...", crop-word and structure-word can land in
+# different sentences). Two independent word-groups anywhere in the text is
+# enough: the object-detection contradiction check in mm_image.py (a single
+# detection spanning most of the frame) is what actually guards against a
+# false positive on a genuine multi-subject collage, not word proximity here.
+_COLLAGE_WORD_RE = re.compile(r"\b(collage|composite)\b", re.IGNORECASE)
+_CROP_STRUCTURE_WORD_RE = re.compile(
+    r"\b(crops?|cropped|cropping|sections?|panels?|quadrants?|tiles?|views?)\b", re.IGNORECASE)
 
 
 def looks_like_fabricated_collage(caption: str) -> bool:
-    return bool(_COLLAGE_HALLUCINATION_RE.search(caption))
+    return bool(_COLLAGE_WORD_RE.search(caption) and _CROP_STRUCTURE_WORD_RE.search(caption))
 
 
 def build_table_markdown(rows: list[list]) -> str:
