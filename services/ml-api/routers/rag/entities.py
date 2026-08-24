@@ -10,6 +10,19 @@ section headers and titles — that reasoning doesn't apply to a real NER
 model, so MMRAG-26 adds a small local spaCy pass (en_core_web_sm) for those
 three types: no API calls, no per-use cost, one-time model download baked
 into the Docker image at build time (see Dockerfile).
+
+Domain-specific NER (2026-08-24): three more regex categories — legal
+contract-clause language, financial/accounting terms of art, and common
+medical-condition NAMES. All three are curated word/phrase lists, not a
+trained domain NER model — a heavier option (e.g. scispaCy for medical) would
+be a new, large dependency this project has consistently avoided elsewhere.
+Legal and financial terms are genuine low-ambiguity terms of art, same
+technique as money/date/percent above. Medical is the one category that
+deserves an explicit caveat: this flags a curated list of CONDITION NAMES
+appearing in text (diabetes, hypertension, etc.) — it is NOT a diagnostic
+tool, is not clinically validated, and deliberately does not attempt to
+extract symptoms, dosages, or drug names, which would edge toward a clinical
+interpretation this was never built or validated for.
 """
 from __future__ import annotations
 
@@ -67,6 +80,43 @@ _DATE_RE = re.compile(
     re.IGNORECASE,
 )
 
+def _terms_re(terms: list[str]) -> re.Pattern:
+    """Word-boundary, case-insensitive alternation over a curated phrase
+    list — same technique as the regexes above, generalized for multi-word
+    terms. Longer terms sorted first so e.g. "termination for cause" wins
+    over a bare "termination" if both were ever in the same list."""
+    escaped = sorted((re.escape(t) for t in terms), key=len, reverse=True)
+    return re.compile(r"\b(?:" + "|".join(escaped) + r")\b", re.IGNORECASE)
+
+
+_LEGAL_CLAUSE_TERMS = [
+    "indemnification", "indemnify", "force majeure", "arbitration",
+    "governing law", "confidentiality", "non-disclosure", "non-compete",
+    "non-solicitation", "limitation of liability", "warranty",
+    "termination for cause", "termination for convenience", "severability",
+    "liquidated damages", "dispute resolution", "choice of venue",
+    "jurisdiction", "breach of contract",
+]
+_FINANCIAL_TERM_TERMS = [
+    "EBITDA", "gross margin", "net income", "operating expenses",
+    "accounts receivable", "accounts payable", "accrued liabilities",
+    "amortization", "depreciation", "working capital",
+    "cost of goods sold", "COGS", "goodwill impairment",
+    "capital expenditure", "capex", "free cash flow",
+    "revenue recognition", "deferred revenue", "balance sheet",
+    "income statement", "cash flow statement",
+]
+_MEDICAL_CONDITION_TERMS = [
+    "diabetes", "hypertension", "myocardial infarction", "asthma",
+    "pneumonia", "hypothyroidism", "hyperthyroidism", "arthritis",
+    "osteoporosis", "anemia", "epilepsy", "migraine", "eczema",
+    "psoriasis", "hepatitis", "cirrhosis", "chronic kidney disease",
+    "COPD", "atrial fibrillation", "coronary artery disease",
+]
+_LEGAL_CLAUSE_RE = _terms_re(_LEGAL_CLAUSE_TERMS)
+_FINANCIAL_TERM_RE = _terms_re(_FINANCIAL_TERM_TERMS)
+_MEDICAL_CONDITION_RE = _terms_re(_MEDICAL_CONDITION_TERMS)
+
 # Bounds chunk metadata size — a chunk mentioning many dates/amounts only
 # needs to signal "this chunk has these", not catalogue every occurrence.
 _MAX_PER_TYPE = 4
@@ -74,13 +124,18 @@ _MAX_PER_TYPE = 4
 
 def extract_entities(text: str) -> list[dict]:
     """Returns a deduped, order-preserving list of {"type", "value"} — at
-    most _MAX_PER_TYPE per type. Regex types (money/date/percent) always
-    run; person/org/location additionally run through spaCy NER when the
-    model is available — best-effort, silently skipped if spaCy failed to
-    load (same "never blocks the main path" contract as this module's other
-    optional-resource siblings, e.g. mm_similar.py's CLIP loader)."""
+    most _MAX_PER_TYPE per type. Regex types (money/date/percent/legal_clause/
+    financial_term/medical_condition) always run; person/org/location
+    additionally run through spaCy NER when the model is available —
+    best-effort, silently skipped if spaCy failed to load (same "never
+    blocks the main path" contract as this module's other optional-resource
+    siblings, e.g. mm_similar.py's CLIP loader)."""
     found: list[dict] = []
-    for etype, pattern in (("money", _MONEY_RE), ("date", _DATE_RE), ("percent", _PERCENT_RE)):
+    for etype, pattern in (
+        ("money", _MONEY_RE), ("date", _DATE_RE), ("percent", _PERCENT_RE),
+        ("legal_clause", _LEGAL_CLAUSE_RE), ("financial_term", _FINANCIAL_TERM_RE),
+        ("medical_condition", _MEDICAL_CONDITION_RE),
+    ):
         seen: set[str] = set()
         for m in pattern.finditer(text):
             if len(seen) >= _MAX_PER_TYPE:
@@ -129,7 +184,8 @@ def decode_entities(raw: Optional[str]) -> list[dict]:
         return []
 
 
-ENTITY_TYPES = ("money", "date", "percent", "person", "org", "location")
+ENTITY_TYPES = ("money", "date", "percent", "person", "org", "location",
+                "legal_clause", "financial_term", "medical_condition")
 
 
 def entity_type_flags(entities: list[dict]) -> dict[str, bool]:
