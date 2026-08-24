@@ -12,10 +12,18 @@ from pydantic import BaseModel
 
 router = APIRouter()
 
+# Groq dropped as the default (2026-08-24) — llama-3.3-70b-versatile was
+# already dead (404 model_not_found in production, see ML-Unified's
+# EDGECASES.md EC-008 for the full history) and no free replacement that
+# actually worked reliably was found. Mistral is the default instead; groq
+# still selectable explicitly (BYOK-style), using groq/compound — its own
+# story is mixed (connects but has hit real rate-limit/payload errors under
+# this app's typical request sizes), so don't assume it's reliable either.
 _PROVIDERS = {
-    "groq":   {"env": "GROQ_API_KEY",    "model": "llama-3.3-70b-versatile"},
-    "gemini": {"env": "GEMINI_API_KEY",  "model": "gemini-3.6-flash"},
-    "cohere": {"env": "COHERE_API_KEY",  "model": "command-r-plus-08-2024"},
+    "mistral": {"env": "MISTRAL_API_KEY", "model": "mistral-small-latest"},
+    "groq":    {"env": "GROQ_API_KEY",    "model": "groq/compound"},
+    "gemini":  {"env": "GEMINI_API_KEY",  "model": "gemini-3.6-flash"},
+    "cohere":  {"env": "COHERE_API_KEY",  "model": "command-r-plus-08-2024"},
 }
 
 
@@ -28,7 +36,7 @@ class SuggestRequest(BaseModel):
     readiness:         list        = []
     narrative:         str         = ""
     low_variance_cols: list        = []
-    provider:          str         = "groq"
+    provider:          str         = "mistral"
 
 
 def _build_prompt(req: SuggestRequest) -> str:
@@ -115,6 +123,34 @@ async def _stream_groq(prompt: str, model: str, key: str) -> AsyncGenerator[str,
     yield _sse({"type": "done"})
 
 
+async def _stream_mistral(prompt: str, model: str, key: str) -> AsyncGenerator[str, None]:
+    payload = {
+        "model": model, "stream": True,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 1024, "temperature": 0.4,
+    }
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=60) as client:
+        async with client.stream("POST", "https://api.mistral.ai/v1/chat/completions",
+                                 json=payload, headers=headers) as resp:
+            if resp.status_code != 200:
+                yield _sse({"type": "error", "text": (await resp.aread()).decode()})
+                return
+            async for line in resp.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                chunk = line[5:].strip()
+                if chunk == "[DONE]":
+                    break
+                try:
+                    delta = json.loads(chunk)["choices"][0]["delta"].get("content", "")
+                    if delta:
+                        yield _sse({"type": "token", "text": delta})
+                except Exception:
+                    continue
+    yield _sse({"type": "done"})
+
+
 async def _stream_gemini(prompt: str, model: str, key: str) -> AsyncGenerator[str, None]:
     url      = (f"https://generativelanguage.googleapis.com/v1beta/models/"
                 f"{model}:streamGenerateContent?key={key}&alt=sse")
@@ -171,14 +207,17 @@ async def _stream_cohere(prompt: str, model: str, key: str) -> AsyncGenerator[st
 
 
 async def _stream(req: SuggestRequest) -> AsyncGenerator[str, None]:
-    provider = req.provider if req.provider in _PROVIDERS else "groq"
+    provider = req.provider if req.provider in _PROVIDERS else "mistral"
     cfg      = _PROVIDERS[provider]
     key      = os.environ.get(cfg["env"], "")
     if not key:
         yield _sse({"type": "error", "text": f"{cfg['env']} not configured on server."})
         return
     prompt = _build_prompt(req)
-    if provider == "groq":
+    if provider == "mistral":
+        async for chunk in _stream_mistral(prompt, cfg["model"], key):
+            yield chunk
+    elif provider == "groq":
         async for chunk in _stream_groq(prompt, cfg["model"], key):
             yield chunk
     elif provider == "gemini":

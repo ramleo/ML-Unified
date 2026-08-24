@@ -30,8 +30,11 @@ from routers.rag.llm import complete
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-_DEFAULT_PROVIDER = "groq"
-_DEFAULT_MODEL = "groq/compound"
+# Groq dropped from the default path entirely (2026-08-24) — no free
+# replacement that actually worked reliably was found (see query.py's
+# _DEFAULT_PROVIDER comment for the full history).
+_DEFAULT_PROVIDER = "mistral"
+_DEFAULT_MODEL = "mistral-small-latest"
 _ENV_KEYS = {
     "groq": "GROQ_API_KEY",
     "openai": "OPENAI_API_KEY",

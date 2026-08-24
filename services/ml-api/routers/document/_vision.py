@@ -1,5 +1,6 @@
 """Vision + OCR extraction for scanned/image documents.
-Vision cascade: Groq Qwen3.6-27B → Mistral medium → Gemini 2.0 Flash.
+Vision cascade: Mistral medium → Gemini 2.0 Flash. Groq dropped entirely
+(2026-08-24, see routers/rag/query.py's _DEFAULT_PROVIDER comment).
 OCR-first path: mistral-ocr-latest converts pages to markdown so scanned
 docs can use the same text cascade as digital PDFs.
 """
@@ -109,31 +110,6 @@ def locate_fields_from_ocr(fields: list[dict], page_meta: list[dict]) -> None:
 
 # ── Vision providers (raw response) ───────────────────────────────────────────
 
-def _groq_vision_raw(b64: str, prompt: str) -> str:
-    key = os.environ.get("GROQ_API_KEY", "")
-    if not key:
-        return ""
-    try:
-        import httpx
-        messages = [{"role": "user", "content": [
-            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
-            {"type": "text", "text": prompt},
-        ]}]
-        with httpx.Client(timeout=90) as client:
-            r = client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {key}"},
-                json={"model": "qwen/qwen3.6-27b",
-                      "messages": messages, "max_tokens": 1500},
-            )
-            r.raise_for_status()
-            return r.json()["choices"][0]["message"]["content"] or ""
-    except Exception as exc:
-        body = getattr(getattr(exc, "response", None), "text", "")[:300]
-        logger.error("Groq vision failed: %s %s", exc, body)
-        return ""
-
-
 def _mistral_vision_raw(b64: str, prompt: str) -> str:
     key = os.environ.get("MISTRAL_API_KEY", "")
     if not key:
@@ -186,8 +162,13 @@ def _gemini_vision_raw(b64: str, prompt: str) -> str:
 
 def _vision_cascade_raw(b64: str, prompt: str) -> str:
     from . import _llm as _llm_state
-    for name, fn in (("groq", _groq_vision_raw), ("mistral", _mistral_vision_raw),
-                     ("gemini", _gemini_vision_raw)):
+    # Groq dropped entirely from vision (2026-08-24, see routers/rag/query.py's
+    # _DEFAULT_PROVIDER comment for the full history) — no BYOK vision-provider
+    # selector exists in this app to keep it around for, and its
+    # qwen/qwen3.6-27b model was the confirmed source of EC-007's
+    # collage-hallucination bug (see mm_caption.py's looks_like_fabricated_
+    # collage), so removed outright rather than left unused.
+    for name, fn in (("mistral", _mistral_vision_raw), ("gemini", _gemini_vision_raw)):
         raw = fn(b64, prompt)
         if raw.strip():
             _llm_state.last_provider = f"{name} vision"

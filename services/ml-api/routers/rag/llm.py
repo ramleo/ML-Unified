@@ -135,7 +135,7 @@ def complete(provider: str, model: str, key: str, messages: list[dict], system: 
     (e.g. query expansion) treat this as an optional quality boost.
     """
     try:
-        if provider in ("groq", "openai"):
+        if provider in ("groq", "openai", "mistral", "perplexity"):
             full_messages = ([{"role": "system", "content": system}] if system else []) + messages
             return "".join(stream_groq_openai(provider, model, key, full_messages))
         elif provider == "claude":

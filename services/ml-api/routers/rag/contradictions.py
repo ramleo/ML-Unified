@@ -42,14 +42,12 @@ _SIM_CEILING = 0.93
 
 _MAX_PAIRS_TO_JUDGE = 6  # bounds LLM calls regardless of corpus size
 
-_JUDGE_PROVIDER = "groq"
-# Upgraded from groq/compound-mini (2026-07-31): the 8b model produced a
-# real false positive in live testing — "30 days from invoice date" vs. "30
-# days from issue" flagged as a discrepancy despite being the same term
-# worded differently. 70b-versatile is the same free Groq key already used
-# for main chat answers elsewhere in this app — no added cost, just more of
-# the shared free-tier budget and a slower per-call latency.
-_JUDGE_MODEL = "groq/compound"
+# Groq dropped from the default path entirely (2026-08-24) — no free
+# replacement that actually worked reliably was found (see query.py's
+# _DEFAULT_PROVIDER comment for the full history). Mistral is the
+# proven-reliable fallback used throughout this app.
+_JUDGE_PROVIDER = "mistral"
+_JUDGE_MODEL = "mistral-small-latest"
 
 _JUDGE_SYSTEM = (
     "You are given two short passages from two different documents. Decide "

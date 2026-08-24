@@ -1,6 +1,11 @@
 """LLM generation with a provider fallback cascade — mirrors the
-Groq → Mistral → Gemini cascade already used for vision captioning, so a
+Mistral → Gemini cascade already used for vision captioning, so a
 rate-limited/unavailable provider doesn't surface a raw error to chat users.
+Groq dropped from this automatic fallback list entirely (2026-08-24, see
+routers/rag/query.py's _DEFAULT_PROVIDER comment for the full history) — no
+free replacement model that actually worked reliably was found. Still
+directly selectable as the caller's own `provider` choice (BYOK); this list
+is only the automatic fallback tried after that.
 Split out of query.py to stay under the project's file-length limit.
 """
 from __future__ import annotations
@@ -15,7 +20,6 @@ logger = logging.getLogger(__name__)
 # Fallback order, tried after the caller's selected provider using each
 # provider's own server-side key.
 FALLBACK_CANDIDATES = [
-    ("groq", "groq/compound"),
     ("mistral", "mistral-small-latest"),  # proven reliable fallback elsewhere in this codebase (vision captioning)
     ("gemini", "gemini-3.6-flash"),
     ("cohere", "command-a-03-2025"),

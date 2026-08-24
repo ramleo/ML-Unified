@@ -205,7 +205,12 @@ def generate_chapters(segments: list[dict]) -> list[dict]:
 	never blocks ingestion on this being unavailable."""
 	if len(segments) < _MIN_SEGMENTS_FOR_CHAPTERS:
 		return []
-	key = os.environ.get("GROQ_API_KEY", "")
+	# Groq dropped from this automatic call entirely (2026-08-24, see
+	# routers/rag/query.py's _DEFAULT_PROVIDER comment for the full history)
+	# — Mistral is the proven-reliable default instead. Note this is
+	# unrelated to Whisper transcription above, which still uses Groq (a
+	# separate, currently-working service, not part of this change).
+	key = os.environ.get("MISTRAL_API_KEY", "")
 	if not key:
 		return []
 
@@ -219,20 +224,16 @@ def generate_chapters(segments: list[dict]) -> list[dict]:
 		"whole transcript is really just one topic, return a single chapter."
 	)
 	try:
-		import httpx
-		with httpx.Client(timeout=60) as client:
-			r = client.post(
-				"https://api.groq.com/openai/v1/chat/completions",
-				headers={"Authorization": f"Bearer {key}"},
-				json={"model": "groq/compound",
-					  "messages": [{"role": "user", "content": prompt}],
-					  "max_tokens": 500, "response_format": {"type": "json_object"}},
-			)
-			r.raise_for_status()
-			raw = r.json()["choices"][0]["message"]["content"]
-			data = json.loads(raw)
-			return [{"time": float(c["time"]), "label": str(c["label"])[:60]}
-					for c in data.get("chapters", []) if "time" in c and "label" in c]
+		from routers.rag.llm import complete
+		raw = complete("mistral", "mistral-small-latest", key,
+					   [{"role": "user", "content": prompt}])
+		# complete() has no forced-JSON mode (unlike the raw Groq call this
+		# replaced, which set response_format=json_object) — extract the
+		# first {...} block rather than assuming raw IS pure JSON.
+		start, end = raw.find("{"), raw.rfind("}") + 1
+		data = json.loads(raw[start:end]) if start >= 0 and end > start else {}
+		return [{"time": float(c["time"]), "label": str(c["label"])[:60]}
+				for c in data.get("chapters", []) if "time" in c and "label" in c]
 	except Exception as exc:
 		logger.warning("Chapter generation failed: %s", exc)
 		return []

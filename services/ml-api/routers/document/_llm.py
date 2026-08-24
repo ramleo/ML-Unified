@@ -1,7 +1,11 @@
 """LLM provider cascade for document field extraction (text path).
 Zero imports from other ml-api routers — self-contained for microservice extraction.
-Cascade order: Groq → Mistral (medium→large) → Gemini → Cohere → Cerebras.
-Vision/OCR lives in _vision.py.
+Cascade order: Mistral (medium→large) → Gemini → Cohere → Cerebras. Groq
+dropped from the automatic cascade (2026-08-24) — no free replacement model
+that actually worked reliably for this app's request pattern was found (see
+routers/rag/query.py's _DEFAULT_PROVIDER comment for the full history).
+Still selectable manually via BYOK (provider="groq"), just never tried
+automatically. Vision/OCR lives in _vision.py.
 """
 from __future__ import annotations
 
@@ -132,7 +136,7 @@ def _cohere(messages: list[dict], system: str) -> str:
 # Read by the router right after extraction to attribute results in the UI.
 last_provider: str = ""
 
-_CASCADE_ORDER = (("groq", _groq), ("mistral", _mistral), ("gemini", _gemini_text),
+_CASCADE_ORDER = (("mistral", _mistral), ("gemini", _gemini_text),
                   ("cohere", _cohere), ("cerebras", _cerebras))
 
 
@@ -247,11 +251,16 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
     else:
         raw = ""
         if tier == "simple":
-            # Simple doc → small fast model (fits well under free-tier limits);
-            # empty/invalid JSON falls through to the full cascade below.
-            raw = _groq(messages, system, model="groq/compound-mini", max_tokens=2500)
+            # Simple doc → fast path, tried before the full cascade below.
+            # Previously used Groq specifically for its free-tier speed;
+            # Groq dropped from the automatic path entirely (2026-08-24, see
+            # module docstring) with no equivalent small/fast free model
+            # found elsewhere, so this now just tries Mistral directly —
+            # still faster than the full cascade when it succeeds, since
+            # cascade order already puts Mistral first anyway.
+            raw = _mistral(messages, system)
             if raw.strip() and _parse_json(raw).get("fields"):
-                last_provider = "groq · fast"
+                last_provider = "mistral · fast"
             else:
                 logger.warning(
                     "Field extraction: fast-tier model returned empty/invalid JSON, "

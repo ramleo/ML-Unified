@@ -32,8 +32,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # ── Default model ──────────────────────────────────────────────────────────────
-_DEFAULT_PROVIDER = "groq"
-_DEFAULT_MODEL = "groq/compound"
+# Groq dropped from the default/automatic path entirely (2026-08-24) — no
+# free replacement model that actually works reliably for this app's request
+# pattern was found (llama-3.1-8b-instant/llama-3.3-70b-versatile 404'd;
+# groq/compound-mini/groq/compound connected but failed live twice with two
+# different real errors — a TPM rate limit on the underlying model it wraps,
+# then Request Entity Too Large). Groq is still selectable manually via BYOK
+# elsewhere in the app; it's just no longer tried automatically. Mistral was
+# already the proven-reliable fallback throughout this app (vision
+# captioning, generation.py's own fallback list).
+_DEFAULT_PROVIDER = "mistral"
+_DEFAULT_MODEL = "mistral-small-latest"
 
 # Query expansion always uses its own fixed, fast, server-key-only provider —
 # NEVER the user's selected/BYOK provider. It's an optional quality boost
@@ -41,8 +50,8 @@ _DEFAULT_MODEL = "groq/compound"
 # the same rate-limit budget the user's actual answer generation needs right
 # after it. Found live: selecting Cohere fired two real Cohere calls per
 # question (expansion + generation) against the same limit, both 429ing.
-_EXPANSION_PROVIDER = "groq"
-_EXPANSION_MODEL = "groq/compound-mini"
+_EXPANSION_PROVIDER = "mistral"
+_EXPANSION_MODEL = "mistral-small-latest"
 
 
 # ── SSE generator ──────────────────────────────────────────────────────────────

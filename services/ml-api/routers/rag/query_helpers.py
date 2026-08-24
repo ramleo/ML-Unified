@@ -62,8 +62,11 @@ class QueryRequest(BaseModel):
     query: str
     tool_context: str = ""
     history: list[dict] = []
-    provider: str = "groq"
-    model: str = "groq/compound"
+    # Groq dropped as the default (2026-08-24, see query.py's
+    # _DEFAULT_PROVIDER comment for the full history) — Mistral is the
+    # proven-reliable default instead. Still selectable explicitly.
+    provider: str = "mistral"
+    model: str = "mistral-small-latest"
     user_key: Optional[str] = None
     embedding_model: str = "minilm"  # "minilm" | "jina"
     session_id: str = ""

@@ -93,12 +93,13 @@ class DescribeImageRequest(BaseModel):
     image: str  # b64, any common image format — vision models are tolerant of the actual bytes
 
 
-# Same fallback order as generation.py's FALLBACK_CANDIDATES (Groq -> Mistral
-# -> Gemini -> Cohere), each using its own server-side key — this is a plain
-# text completion, not the billed image model, so it deliberately does NOT
-# go through check_and_record_call/the text2img budget pool.
+# Same fallback order as generation.py's FALLBACK_CANDIDATES (Mistral ->
+# Gemini -> Cohere; Groq dropped entirely 2026-08-24, see routers/rag/
+# query.py's _DEFAULT_PROVIDER comment for the full history), each using its
+# own server-side key — this is a plain text completion, not the billed
+# image model, so it deliberately does NOT go through
+# check_and_record_call/the text2img budget pool.
 _ENHANCE_CASCADE = [
-    ("groq", "groq/compound", "GROQ_API_KEY"),
     ("mistral", "mistral-small-latest", "MISTRAL_API_KEY"),
     ("gemini", "gemini-3.6-flash", "GEMINI_API_KEY"),
     ("cohere", "command-a-03-2025", "COHERE_API_KEY"),

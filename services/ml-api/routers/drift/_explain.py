@@ -5,8 +5,14 @@ import json
 import os
 from typing import Any
 
+# Groq dropped as the default (2026-08-24, see routers/rag/query.py's
+# _DEFAULT_PROVIDER comment for the full history) — Mistral is the
+# proven-reliable default instead. Still selectable explicitly via
+# provider="groq" (BYOK-style), just no longer what an unspecified/empty
+# provider falls back to.
 _PROVIDER_MODELS = {
     "groq":             "groq/compound",
+    "mistral":          "mistral-small-latest",
     "gemini":           "gemini-3.6-flash",
     "gemini-2.5-flash": "gemini-3.6-flash",
     "gemini-3.5-flash": "gemini-3.6-flash",
@@ -14,9 +20,10 @@ _PROVIDER_MODELS = {
 }
 
 _ENV_KEYS = {
-    "groq":   "GROQ_API_KEY",
-    "gemini": "GEMINI_API_KEY",
-    "cohere": "COHERE_API_KEY",
+    "groq":    "GROQ_API_KEY",
+    "mistral": "MISTRAL_API_KEY",
+    "gemini":  "GEMINI_API_KEY",
+    "cohere":  "COHERE_API_KEY",
 }
 
 _SYSTEM = (
@@ -84,8 +91,8 @@ def explain_stream(result: dict, provider: str):
     """Yield SSE-formatted strings for the drift explanation."""
     from routers.rag.llm import stream_groq_openai, stream_gemini, stream_cohere
 
-    provider = (provider or "groq").lower()
-    model    = _PROVIDER_MODELS.get(provider, "groq/compound")
+    provider = (provider or "mistral").lower()
+    model    = _PROVIDER_MODELS.get(provider, "mistral-small-latest")
     family   = "gemini" if provider.startswith("gemini") else provider
     env_var  = _ENV_KEYS.get(family, "")
     key      = os.environ.get(env_var, "")
@@ -106,9 +113,9 @@ def explain_stream(result: dict, provider: str):
             gen = stream_gemini(model, key, messages, _SYSTEM)
         elif family == "cohere":
             gen = stream_cohere(model, key, messages, _SYSTEM)
-        else:  # groq
+        else:  # groq or mistral — both OpenAI-Chat-Completions-compatible
             full_msgs = [{"role": "system", "content": _SYSTEM}] + messages
-            gen = stream_groq_openai("groq", model, key, full_msgs)
+            gen = stream_groq_openai(family, model, key, full_msgs)
 
         for token in gen:
             yield _sse({"type": "token", "text": token})

@@ -26,7 +26,11 @@ from routers.rag.llm import complete
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-_ENV_KEYS = {"groq": "GROQ_API_KEY", "gemini": "GEMINI_API_KEY", "cohere": "COHERE_API_KEY"}
+# Groq dropped from this automatic (no user choice at all) key-priority list
+# entirely (2026-08-24, see routers/rag/query.py's _DEFAULT_PROVIDER comment
+# for the full history) — Mistral is the proven-reliable default instead.
+_ENV_KEYS = {"mistral": "MISTRAL_API_KEY", "gemini": "GEMINI_API_KEY", "cohere": "COHERE_API_KEY"}
+_MODELS = {"mistral": "mistral-small-latest", "gemini": "gemini-3.6-flash", "cohere": "command-a-03-2025"}
 _QA_PATH = "data/rag_eval_mm_qa.json"
 
 
@@ -34,7 +38,7 @@ def _resolve_key() -> tuple[str, str, str]:
     for provider, env in _ENV_KEYS.items():
         key = os.environ.get(env, "")
         if key:
-            return provider, "groq/compound" if provider == "groq" else "gemini-3.6-flash", key
+            return provider, _MODELS[provider], key
     return "", "", ""
 
 

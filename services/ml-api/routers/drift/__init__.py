@@ -128,7 +128,7 @@ def get_drift_history(model_id: str):
 async def explain_drift(
     model_id: str,
     request: Request,
-    provider: str = Query(default="groq", description="LLM provider: groq | gemini | cohere"),
+    provider: str = Query(default="mistral", description="LLM provider: mistral | groq | gemini | cohere"),
 ):
     from app import MODELS  # noqa: PLC0415
     if model_id not in MODELS:
