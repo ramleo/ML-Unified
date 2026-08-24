@@ -250,3 +250,51 @@ discipline.
   remains (GPU-gated, not started).
 - **New, not yet built**: Multimodal RAG `.docx` upload support (deferred,
   "maybe next time").
+
+## 9. UI/UX improvement scope — researched, not built
+
+User asked: *"is there scope to improve UI/UX of the app, search online and
+tell."* Ran this as research-only (web search + a structural Explore-agent
+survey of the actual `multimodal-rag/` frontend), not implementation.
+
+**Web research** (2026 RAG chat UI/UX best practices) surfaced: numbered
+inline citations expanding to source cards with confidence indicators;
+streaming responses with a stop button and typing indicators; keyboard
+shortcuts, conversation branching, message pinning; document-preview
+citation highlighting; mobile composer must be docked (not floating/
+overlapping) with keyboard-safe padding; readable line length ~65-72 chars
+and line-height ~1.6; trust/adoption evaluated on capability transparency,
+recovery patterns, confidence display, and accessibility.
+
+**Structural survey** (Explore agent, `multimodal-rag/` — ~40 files, 5,505
+lines) found:
+- **Mobile is effectively unsupported.** Only `MmRagRunner.tsx` has any
+  responsive breakpoints (`lg:grid-cols-[...]`), collapsing the 3-column
+  workspace to a single stack below `lg` — nothing tuned narrower than that.
+  Notable since the app has a "share publicly" toggle, meaning shared links
+  can genuinely be opened on a phone.
+- **Chip/toolbar clutter is real.** `DocumentChipsRow.tsx` already stacks
+  two pill rows (doc names + "Only search" filters), now carrying 9 entity
+  types after this session's NER work. `CitationToolbar.tsx` covers ~15
+  detection modes in one flat dropdown; `CitationResultsPanel.tsx` renders
+  results as small 9-10px gray text blocks with minimal grouping.
+- **No skeleton loading states anywhere** — ingestion uses progress bars/
+  dots, everything else just uses disabled buttons + "…ing" text.
+- **Accessibility is inconsistent.** `ChatPanel.tsx` has real practice
+  (`aria-live="polite"` for streaming, `aria-label`s on feedback buttons);
+  no other file in the app uses any `aria-*`/`role`, relying on bare
+  `<button>`/`<select>` + `title` tooltips.
+- **Citation trust signals could go further** — the app already has a
+  groundedness badge (`EvidencePanel.tsx`) and a "why was this cited" trace
+  panel (MMRAG-08), ahead of most RAG tools, but nothing surfaces
+  confidence at the point a citation renders inline in the chat answer,
+  only after expanding.
+
+**Recommendation given** (not yet acted on): start with toolbar/chip
+grouping and aria coverage — both contained, don't touch the two files
+already near the 400-line cap (`CitationThumbnailPanel.tsx` at 375 lines,
+`DocumentSummaryPanel.tsx` at 310), no new dependency. Mobile responsiveness
+is the highest-value item long-term but a much bigger lift touching most of
+the 40 files — flagged as worth scoping separately if pursued.
+
+**Status: research only, nothing implemented or committed this turn.**
