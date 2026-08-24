@@ -9,7 +9,7 @@ from routers.rag.entities import extract_entities
 def build_done_event(*, source: str, session_id: str, save_scope: str, chunks: list[dict],
                      summary: dict, file_type: str, page_images: list[str],
                      revision_candidate: dict | None, transcript_text: str,
-                     transcript_segments: list[dict], chapters: list[dict]) -> dict:
+                     transcript_segments: list[dict], chapters: list[dict], deepfake: dict | None = None) -> dict:
     return {
         "done": True,
         "source": source,
@@ -98,4 +98,9 @@ def build_done_event(*, source: str, session_id: str, save_scope: str, chunks: l
         # short/silent transcript, or if the one extra LLM call failed —
         # never blocks ingestion on this being unavailable).
         "chapters": chapters,
+        # Audio-visual desync + voice-clone artifact heuristics (whole-clip,
+        # not per-chunk) — {} for non-video/audio uploads, absent-per-signal
+        # (None) when that signal couldn't be computed at all. See
+        # mm_deepfake.py's module docstring for what these are and aren't.
+        "deepfake": deepfake or None,
     }

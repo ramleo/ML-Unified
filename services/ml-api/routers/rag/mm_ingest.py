@@ -24,6 +24,7 @@ from routers.rag.mm_image import build_image_chunk, looks_like_image
 from routers.rag.mm_pdf import prepare_pdf, process_page
 from routers.rag.mm_video import (close_video, generate_chapters, looks_like_video, prepare_video,
                                   process_frame, reduced_frame_count, transcribe_video)
+from routers.rag.mm_deepfake import detect_video_deepfake_signals
 from routers.rag.mm_scenecut import detect_scene_cut_timestamps
 from routers.rag.mm_audio import looks_like_audio, transcribe_audio_upload
 from routers.rag.mm_revision import find_revision_candidate
@@ -88,6 +89,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
     transcript_text = ""
     transcript_segments: list[dict] = []
     chapters: list[dict] = []
+    deepfake: dict = {}
     if file_bytes[:4] == b"%PDF":
         file_type = "pdf"
     elif looks_like_csv(filename, content_type):
@@ -107,6 +109,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         transcript_text = cached.get("transcript_text", "")
         transcript_segments = cached.get("transcript_segments", [])
         chapters = cached.get("chapters", [])
+        deepfake = cached.get("deepfake", {})
         # The cache is keyed on file bytes, not session_id — a hit would
         # otherwise never re-check duplicates for THIS caller's session at
         # all (see mm_duplicates.refresh_duplicates_for_chunks docstring).
@@ -153,7 +156,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
             yield _sse({"step": "extract", "status": "running", "indeterminate": True})
             page_images = []
             try:
-                chunks, summary, transcript_text, transcript_segments, chapters = await loop.run_in_executor(
+                chunks, summary, transcript_text, transcript_segments, chapters, deepfake = await loop.run_in_executor(
                     _executor, lambda: transcribe_audio_upload(file_bytes, filename, source)
                 )
             except Exception as exc:
@@ -214,6 +217,14 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
                     for k in summary:
                         summary[k] += page_summary[k]
                     yield _sse({"step": "extract", "status": "running", "page": frame_idx, "pages": len(sample_times)})
+
+                # Whole-clip, once-per-video (not per-frame) — uses its own
+                # fresh WAV extraction, since transcribe_video() above
+                # already deleted its own. See mm_deepfake.py's module
+                # docstring for what these two signals are and aren't.
+                deepfake = await loop.run_in_executor(
+                    _executor, lambda: detect_video_deepfake_signals(tmp_path)
+                )
             except Exception as exc:
                 logger.error("Multimodal ingestion failed: %s", exc)
                 yield _sse({"error": f"Failed to process file: {exc}"})
@@ -258,7 +269,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         if chunks:
             cache_put(ckey, {"chunks": chunks, "page_images": page_images, "chunk_summary": summary,
                                    "transcript_text": transcript_text, "transcript_segments": transcript_segments,
-                                   "chapters": chapters})
+                                   "chapters": chapters, "deepfake": deepfake})
 
     if not chunks:
         yield _sse({"error": "No extractable content found (text, tables, figures, a describable image, or speech)."})
@@ -302,7 +313,7 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
         source=source, session_id=session_id, save_scope=save_scope, chunks=chunks,
         summary=summary, file_type=file_type, page_images=page_images,
         revision_candidate=revision_candidate, transcript_text=transcript_text,
-        transcript_segments=transcript_segments, chapters=chapters,
+        transcript_segments=transcript_segments, chapters=chapters, deepfake=deepfake,
     ))
 
 

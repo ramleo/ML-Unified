@@ -46,13 +46,17 @@ def transcribe_audio_upload(file_bytes: bytes, filename: str, source: str):
     clean up. Returns (chunks, chunk_summary, transcript_text,
     transcript_segments, chapters)."""
     from routers.rag.mm_video import generate_chapters, transcribe_video
+    from routers.rag.mm_deepfake import detect_audio_deepfake_signals
 
     tmp_path = prepare_audio(file_bytes, filename)
     try:
         chunks, transcript_count, transcript_text, transcript_segments = transcribe_video(tmp_path, source)
+        # Voice-clone artifact check only — no video frames exist for a
+        # standalone audio upload, so the AV-desync half doesn't apply here.
+        deepfake = detect_audio_deepfake_signals(tmp_path)
     finally:
         close_audio(tmp_path)
 
     summary = {"text": transcript_count, "table": 0, "figure": 0}
     chapters = generate_chapters(transcript_segments) if transcript_segments else []
-    return chunks, summary, transcript_text, transcript_segments, chapters
+    return chunks, summary, transcript_text, transcript_segments, chapters, deepfake
