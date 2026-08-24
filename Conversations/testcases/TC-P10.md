@@ -1040,16 +1040,18 @@ consistency sweep + ML-Unified CI fix + theme toggle rollout.
 **Source:** EC-005, this conversation (2026-08-23 noted / 2026-08-24 root-caused). Genuinely blocked on TC-P10-103, not a document-switching bug — cannot be tested end-to-end until that's fixed.
 **Source:** EC-005, this conversation (2026-08-23 noted / 2026-08-24 attempted, inconclusive — needs a better fixture).
 
-### TC-P10-099 (open)
-**Category:** E2E (unverified — needs test asset)
+### TC-P10-099 (Verified — no bug found)
+**Category:** E2E
 **Test Name:** Video timestamp-based citation jump (MMRAG-09) combined with document switching
 **Steps:**
 1. Upload a video document; ask a question that cites a specific timestamp/frame.
 2. Click the citation to jump the player to that timestamp.
 3. Switch to a different document and back; click the same video citation again.
 **Expected Result:** The player still seeks to the correct timestamp after the switch.
-**Automation Hint:** Playwright — needs a real video fixture with multiple distinct scenes/timestamps; not attempted this session (no video asset prepared).
-**Source:** EC-006, this conversation (2026-08-23 noted, not yet attempted).
+**Fixture built:** a synthetic ~16.5s MP4 (ffmpeg solid-color scenes + macOS `say`-generated narration) with 3 distinct segments — blue/"Blue Ocean strategy" (0-4s), red/"Red Alert protocol... 500 milliseconds" (4-10s), green/"Green Energy Initiative... 40%" (10-16.5s).
+**Verified live 2026-08-24:** asked "What triggers the red alert protocol?" — answered correctly, citing both a transcript chunk and two video-frame (visual-only) chunks. Clicking a transcript line seeked correctly (`currentTime: 4.42`). Clicking the video-frame citation (page 2, MMRAG-09's `seekTime` path, not the transcript `highlightedIndex` path) seeked correctly (`currentTime: 8.2`, matches the red segment). Added a second document (face.jpeg), switched to it, switched back to the video (resets to Page 1 thumbnail per TC-P10-096's confirmed behavior), re-clicked the SAME video-frame citation again — seeked to the identical `currentTime: 8.2`, matching exactly. No bug found; the timestamp-jump mechanism survives a document switch correctly.
+**Automation Hint:** Script the fixture generation (ffmpeg + `say`) and this exact flow as a real Playwright test — currently manual/ad hoc.
+**Source:** EC-006, this conversation (2026-08-23 noted / 2026-08-24 verified).
 
 ### TC-P10-100 (Fixed)
 **Category:** Bug (captioning hallucination)
