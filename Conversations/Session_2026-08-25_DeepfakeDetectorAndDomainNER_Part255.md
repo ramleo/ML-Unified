@@ -297,4 +297,83 @@ already near the 400-line cap (`CitationThumbnailPanel.tsx` at 375 lines,
 is the highest-value item long-term but a much bigger lift touching most of
 the 40 files — flagged as worth scoping separately if pursued.
 
-**Status: research only, nothing implemented or committed this turn.**
+**Status: research only in this turn — implemented in the next turn, see
+Section 10.**
+
+## 10. UI/UX #2 (toolbar/chip grouping) + #4 (aria coverage) — planned, built, shipped
+
+User: *"start with #2 (toolbar/chip grouping) and #4 (aria coverage)"* —
+picking two of the five findings from Section 9 to act on.
+
+### Planning (EnterPlanMode)
+Read `CitationToolbar.tsx`, `CitationResultsPanel.tsx`, `DocumentChipsRow.tsx`,
+`ContradictionsPanel.tsx`, and `DocumentTray.tsx` to ground the plan in the
+actual JSX rather than the earlier survey's summary. Per the standing "plan
+before proceeding" practice, wrote and got explicit approval (`ExitPlanMode`)
+for a concrete plan before touching any file. The prior plan file (domain-
+specific NER, already shipped) was overwritten — different task, not a
+continuation.
+
+### Scope
+Deliberately narrow — presentational-only, no new dependency, no backend
+change, no prop/behavior changes:
+- **`CitationToolbar.tsx`**: grouped the action `<select>`'s ~15 flat
+  `<option>`s into `<optgroup>`s (Describe / Detect / Verify), each only
+  rendered when it has at least one visible option — native HTML, zero new
+  dependency, `VisualAction` values unchanged. Added
+  `aria-label="Choose a detection or edit action"` to the `<select>` itself
+  (previously unlabeled beyond its placeholder option).
+- **`DocumentChipsRow.tsx`**: split the single "Only search:" chip row
+  (content types + 9 entity types mixed together) into two labeled sub-rows
+  — "Content type:" and "Contains:" — each only rendered under the same
+  conditions as before. Added `aria-label` to the "▸ summary"/"×" buttons
+  (symbol-only text isn't a real accessible name), matching their existing
+  `title` text.
+- **`DocumentTray.tsx`**: each document row was a `<div onClick=...>` with
+  no keyboard access at all — a real gap, not cosmetic. Added
+  `role="button"`, `tabIndex={0}`, an `onKeyDown` handler firing the same
+  action on Enter/Space, and `aria-label` naming the document; its "×"
+  button got the same `aria-label` treatment.
+- **`ContradictionsPanel.tsx`**: wrapped the results region in
+  `aria-live="polite"`, mirroring the exact pattern `ChatPanel.tsx` already
+  uses for streaming-answer announcements — so a screen-reader user is told
+  the contradiction-check result the same way sighted users see it appear.
+- **`DocumentSummaryPanel.tsx`**: added `role="alert"` to the red "Possible
+  deepfake signals" box (this session's own Section 3 feature) so it's
+  actually announced when it appears, rather than silently.
+
+### Build and live verification
+`tsc --noEmit` came back clean. Ran a real local dev server against the
+**live production HF Space backend** (pointed `NEXT_PUBLIC_ML_UNIFIED_URL`
+at `wram1708-ml-unified.hf.space` for this one test, since the local venv
+still has the unrelated missing-package gap noted in Section 3) and drove it
+via Playwright:
+- Uploaded a real PDF (legal/financial/medical/generic entity terms) — the
+  "Contains:" sub-row correctly showed all 9 entity chips separately from
+  "Only search:"/"All."
+- Uploaded a second file (a plain PNG) to get 2 chunk types — the
+  "Content type:" sub-row then correctly appeared alongside "Contains:".
+- Confirmed via `DOM` inspection (`browser_evaluate`) that the action
+  `<select>` actually contains real `<optgroup>` elements (only the
+  "Describe" group had entries for this test image, and empty groups
+  correctly didn't render).
+- Confirmed via `DOM` inspection that two `aria-live="polite"` regions exist
+  once 2 documents are loaded (ChatPanel's pre-existing one + the new
+  ContradictionsPanel one), and that the deepfake `role="alert"` box
+  correctly does NOT render when no video/audio was uploaded (conditional,
+  working as designed — not a bug).
+- Confirmed `DocumentTray`'s new `aria-label`s render correctly ("Select
+  ui_test.pdf", "Remove ui_test.pdf") in the live accessibility snapshot.
+
+Cleaned up all scratch test files (`ui_test.pdf`/`ui_test.png`, a stray
+`.playwright-mcp/` directory that had landed in `ml-portfolio` before
+discovering Playwright's allowed root was actually `ML-Unified`) and
+confirmed `git status` showed only the 5 intended files changed before
+committing. Committed and pushed (ml-portfolio `87e6fc1`) — frontend-only,
+so no HF Space upload needed per the plan's own verification section.
+
+## Commits this session (updated)
+
+| Repo | Commit | What |
+|---|---|---|
+| ml-portfolio | `87e6fc1` | UI/UX #2+#4: toolbar optgroups, chip-row split, aria coverage |
