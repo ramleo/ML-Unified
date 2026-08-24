@@ -19,7 +19,7 @@ _CHEAP: dict[str, tuple[str, str | None]] = {
     "gemini":     ("gemini-3.6-flash",         None),
     "claude":     ("claude-haiku-4-5-20251001", None),
     "openai":     ("gpt-4o-mini",               None),
-    "groq":       ("openai/gpt-oss-20b",      "https://api.groq.com/openai/v1"),
+    "groq":       ("llama-3.1-8b-instant",      "https://api.groq.com/openai/v1"),
     "cohere":     ("command-a-03-2025",         None),
     "mistral":    ("mistral-small-latest",      "https://api.mistral.ai/v1"),
     "perplexity": ("sonar",                     "https://api.perplexity.ai"),

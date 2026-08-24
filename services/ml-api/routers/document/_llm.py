@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # ── Provider implementations ──────────────────────────────────────────────────
 
 def _groq(messages: list[dict], system: str,
-          model: str = "openai/gpt-oss-120b", max_tokens: int = 4096) -> str:
+          model: str = "llama-3.3-70b-versatile", max_tokens: int = 4096) -> str:
     key = os.environ.get("GROQ_API_KEY", "")
     if not key:
         return ""
@@ -249,7 +249,7 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
         if tier == "simple":
             # Simple doc → small fast model (fits well under free-tier limits);
             # empty/invalid JSON falls through to the full cascade below.
-            raw = _groq(messages, system, model="openai/gpt-oss-20b", max_tokens=2500)
+            raw = _groq(messages, system, model="llama-3.1-8b-instant", max_tokens=2500)
             if raw.strip() and _parse_json(raw).get("fields"):
                 last_provider = "groq · fast"
             else:

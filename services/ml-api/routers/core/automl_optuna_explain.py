@@ -71,7 +71,7 @@ def _llm_explanation_raw(api_key: str, prompt: str, provider: str = "gemini-2.5"
             import openai  # noqa: PLC0415
             client = openai.OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
             resp = client.chat.completions.create(
-                model="openai/gpt-oss-120b", max_tokens=900,
+                model="llama-3.3-70b-versatile", max_tokens=900,
                 messages=[{"role": "user", "content": prompt}],
             )
             return resp.choices[0].message.content.strip(), None

@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # Fallback order, tried after the caller's selected provider using each
 # provider's own server-side key.
 FALLBACK_CANDIDATES = [
-    ("groq", "openai/gpt-oss-120b"),
+    ("groq", "llama-3.3-70b-versatile"),
     ("mistral", "mistral-small-latest"),  # proven reliable fallback elsewhere in this codebase (vision captioning)
     ("gemini", "gemini-3.6-flash"),
     ("cohere", "command-a-03-2025"),

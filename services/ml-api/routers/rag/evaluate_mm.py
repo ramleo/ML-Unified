@@ -34,7 +34,7 @@ def _resolve_key() -> tuple[str, str, str]:
     for provider, env in _ENV_KEYS.items():
         key = os.environ.get(env, "")
         if key:
-            return provider, "openai/gpt-oss-120b" if provider == "groq" else "gemini-3.6-flash", key
+            return provider, "llama-3.3-70b-versatile" if provider == "groq" else "gemini-3.6-flash", key
     return "", "", ""
 
 
