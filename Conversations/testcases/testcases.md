@@ -16,9 +16,12 @@ the relevant TC-*.md file. 2026-08-24 pass: 6 resolved (3 real findings closed
 vision-captioner collage hallucination, commits `9814f79`+`a14d356`; AI
 Sharpen's error message fixed AND its persistence-across-switch design
 confirmed intentional via code reading, commit `8e985ce`; plus 3 verified
-no-bug fixes), 3 open (2 blocked on missing test fixtures, 1 reopened after
-an unapproved model swap was caught and reverted, commit `7d561b7`; see
-EC-008's correction note).
+no-bug fixes), 3 open (1 reopened after an unapproved model swap was caught
+and reverted, commit `7d561b7` — see EC-008's correction note; EC-005 and
+EC-006 both need real fixtures — EC-005's was built and root-caused, turned
+out to be genuinely blocked on EC-008's same dead-Groq-model regression,
+not a fixture or switching problem after all; EC-006 still needs a video
+asset).
 
 ---
 

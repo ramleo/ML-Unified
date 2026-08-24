@@ -1027,15 +1027,17 @@ consistency sweep + ML-Unified CI fix + theme toggle rollout.
 **Automation Hint:** Unit-test `useSharpen`'s syncKey-change effect directly — assert all sharpen-result state resets to null/initial when `syncKey` changes, no live API call needed.
 **Source:** EC-004b, this conversation (2026-08-24). Original attempts were blocked by Gemini quota exhaustion (still unresolved as of this entry); resolved via code inspection instead once that path was confirmed unavailable.
 
-### TC-P10-098 (open)
-**Category:** E2E (unverified — needs suitable test content)
+### TC-P10-098 (Blocked — root cause identified, shared with TC-P10-103/EC-008)
+**Category:** E2E (blocked on a pre-existing, unrelated regression)
 **Test Name:** Contradiction-check citations remain correct after a manual document switch
 **Steps:**
 1. Upload two documents with genuinely overlapping, conflicting claims (e.g. two versions of a spec/invoice with different numbers for the same field).
 2. Click "Check documents for contradictions"; click into a resulting citation.
 3. Manually switch the active document via Session sources, then click the contradiction citation again.
 **Expected Result:** The citation still jumps to the correct page/document, not a stale or mismatched one.
-**Automation Hint:** Playwright — needs a two-document fixture with real overlapping/contradicting text; two unrelated photos (tried 2026-08-24) produce "0 overlapping passages checked" and can't exercise this path.
+**What actually happened (2026-08-24):** First attempt used two near-identical spec-sheet PDFs (same boilerplate, only 3 numbers changed) — returned "0 overlapping passages checked". Root cause: `contradictions.py`'s embedding-similarity pre-filter has a `_SIM_CEILING = 0.93` ("near-duplicate, trivially agree, not worth a judge call") — the two fixtures were similar enough to exceed it and get excluded, the OPPOSITE problem from what was expected. Rebuilt as a memo-vs-invoice pair (different structure/phrasing, same underlying $50,000-vs-$52,500 contract-value fact) — this correctly landed in the similarity band: "1 overlapping passage checked". But the result was still "No contradictions found" despite a genuine conflict. Confirmed via direct Space-log evidence (not inferred): `llm.complete() failed for provider=groq: ... llama-3.3-70b-versatile does not exist`, immediately followed by the endpoint returning `200 OK` anyway — `contradictions.py` hardcodes `_JUDGE_MODEL = "llama-3.3-70b-versatile"` (one of EC-008's two dead Groq models, see TC-P10-103) with NO fallback cascade (`llm.complete()` is best-effort, returns `""` on any failure) — so the judge call silently fails and the feature can never report a real contradiction right now, independent of any document-switching behavior.
+**Automation Hint:** Once TC-P10-103 is fixed with a working Groq model, re-run this exact memo/invoice fixture and confirm `checked_pairs: 1` with a real contradiction returned, THEN test the citation-click-after-switch behavior this TC was originally about.
+**Source:** EC-005, this conversation (2026-08-23 noted / 2026-08-24 root-caused). Genuinely blocked on TC-P10-103, not a document-switching bug — cannot be tested end-to-end until that's fixed.
 **Source:** EC-005, this conversation (2026-08-23 noted / 2026-08-24 attempted, inconclusive — needs a better fixture).
 
 ### TC-P10-099 (open)
