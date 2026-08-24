@@ -224,7 +224,7 @@ def generate_chapters(segments: list[dict]) -> list[dict]:
 			r = client.post(
 				"https://api.groq.com/openai/v1/chat/completions",
 				headers={"Authorization": f"Bearer {key}"},
-				json={"model": "llama-3.3-70b-versatile",
+				json={"model": "openai/gpt-oss-120b",
 					  "messages": [{"role": "user", "content": prompt}],
 					  "max_tokens": 500, "response_format": {"type": "json_object"}},
 			)

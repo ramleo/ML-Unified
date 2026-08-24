@@ -43,13 +43,13 @@ _SIM_CEILING = 0.93
 _MAX_PAIRS_TO_JUDGE = 6  # bounds LLM calls regardless of corpus size
 
 _JUDGE_PROVIDER = "groq"
-# Upgraded from llama-3.1-8b-instant (2026-07-31): the 8b model produced a
+# Upgraded from openai/gpt-oss-20b (2026-07-31): the 8b model produced a
 # real false positive in live testing — "30 days from invoice date" vs. "30
 # days from issue" flagged as a discrepancy despite being the same term
 # worded differently. 70b-versatile is the same free Groq key already used
 # for main chat answers elsewhere in this app — no added cost, just more of
 # the shared free-tier budget and a slower per-call latency.
-_JUDGE_MODEL = "llama-3.3-70b-versatile"
+_JUDGE_MODEL = "openai/gpt-oss-120b"
 
 _JUDGE_SYSTEM = (
     "You are given two short passages from two different documents. Decide "
@@ -65,7 +65,7 @@ _JUDGE_SYSTEM = (
 # an invoice are EXPECTED to differ in most of their text (different
 # structure, different boilerplate); only a same-amount/date/term
 # disagreement actually matters here. The worked counter-example below is a
-# real false positive caught in live testing: llama-3.1-8b-instant flagged
+# real false positive caught in live testing: openai/gpt-oss-20b flagged
 # "due within 30 days of invoice date" vs. "Due date: 30 days from issue" as
 # disagreeing, even though both state the same 30-day term in different
 # words — the model was pattern-matching on differing PHRASING, not
