@@ -1072,28 +1072,29 @@ consistency sweep + ML-Unified CI fix + theme toggle rollout.
 **Expected Result (after fix):** Re-verified live — 5/5 fresh ingests of the same photo returned the correct plain caption, 0 hallucinations reaching the final chunk text.
 **Source:** EC-007 follow-up, this conversation (2026-08-24) — a real example of "verify live before calling it done" catching a fix that looked complete but wasn't.
 
-### TC-P10-102 (open, correction of TC-P10-097's earlier conclusion)
-**Category:** Bug-Regression (unverified — root-caused, not yet fixed)
+### TC-P10-102 (Fixed)
+**Category:** Bug-Regression (Fixed)
 **Test Name:** AI Sharpen 502 is real Gemini quota exhaustion, not a transient blip
 **Steps:**
 1. Click "Sharpen image (AI)" on any citation.
 2. If it fails, check the HF Space logs (`huggingface.co/api/spaces/{id}/logs/run`) for the actual upstream error, not just the frontend's generic message.
-**Expected Result (what was first assumed):** A raw empty-body curl to `/rag/mm-deblur` returned 422 (validation working), which was read as "not a real outage" — this was an incomplete check, since it never exercised the actual Gemini call.
-**Actual Result (confirmed via real Space logs 2026-08-24):** `routers.rag.mm_deblur WARNING Deblur failed: Client error '429 Too Many Requests'` from `gemini-3.1-flash-lite-image:generateContent` — the image-gen model's quota/rate-limit is genuinely exhausted, and the backend surfaces that unhandled 429 to the frontend as a generic 502 with no informative message.
-**Fix (not yet done):** Backend should catch a 429 from the Gemini deblur call specifically and return a clear "temporarily rate-limited, try again later" message instead of a bare 502 — same UX pattern already used elsewhere in this app for provider failures.
-**Automation Hint:** Mock the Gemini deblur call to return 429, assert the frontend shows a specific rate-limit message rather than the current generic "Sharpen is temporarily unavailable" (which happens to read correctly by coincidence, not because the code distinguishes the cause).
-**Source:** EC-004b investigation, this conversation (2026-08-24) — corrects an earlier premature "confirmed not a real outage" conclusion once real evidence (Space logs) was actually checked.
+**Root cause (confirmed via real Space logs 2026-08-24):** `routers.rag.mm_deblur WARNING Deblur failed: Client error '429 Too Many Requests'` from `gemini-3.1-flash-lite-image:generateContent` — the image-gen model's quota/rate-limit is genuinely exhausted, and the backend was surfacing that unhandled 429 to the frontend as a generic 502 with no informative message (an earlier check that only sent an empty-body curl and saw a 422 had wrongly read this as "not a real outage").
+**Fix:** `mm_deblur.py` now catches `httpx.HTTPStatusError` specifically and returns a 429 with an accurate "rate-limited, try again in a few minutes" message when that's the real cause, distinct from the generic 502 for other failures. `useSharpen.ts` reads the response status instead of discarding it in a bare `throw new Error()`, surfacing the distinct message. Commit `8e985ce` (backend), `81eba10` (frontend).
+**Automation Hint:** Mock the Gemini deblur call to return 429, assert the frontend shows the specific rate-limit message, not the generic one.
+**Verified live 2026-08-24:** post-deploy, `curl -X POST /rag/mm-deblur -d '{}'` still returns 422 (no regression to the endpoint itself from the `app.py` edits alongside this fix).
+**Source:** EC-004b investigation, this conversation (2026-08-24) — corrects an earlier premature "confirmed not a real outage" conclusion once real evidence (Space logs) was actually checked. Note: this only fixes the ERROR MESSAGE distinction — whether a completed Sharpen result actually survives a document switch (EC-004b's original question) is still untested, since no live attempt has yet gotten past the Gemini quota to produce a result to test persistence on.
 
-### TC-P10-103 (open, spotted incidentally)
+### TC-P10-103 (Fixed)
 **Category:** Bug (production, unrelated to session's main work)
 **Test Name:** Groq chat models return model_not_found in the generation cascade
 **Steps:**
 1. Ask any question via `/rag/query` in production.
 2. Check HF Space logs for the provider cascade's attempts.
-**Expected Result:** Groq (the preferred/first provider) succeeds.
-**Actual Result (observed live 2026-08-24):** Two separate log lines showed Groq returning 404 `model_not_found` — `llama-3.1-8b-instant` and `llama-3.3-70b-versatile` "does not exist or you do not have access to it." The cascade recovered via Mistral both times, so the user-facing answer still succeeded, but the primary provider is silently broken — likely a Groq-side model deprecation/rename the app's hardcoded model strings haven't caught up to.
-**Automation Hint:** Hit `/rag/query` with a real question, assert the response's `provider` field is `groq`, not a fallback — would have caught this regression immediately.
-**Source:** EC-008, spotted incidentally in HF Space logs while diagnosing TC-P10-102 — not yet root-caused further (which model name is actually current on Groq wasn't checked).
+**Root cause (confirmed via real evidence, not web-search guess):** `llama-3.1-8b-instant` and `llama-3.3-70b-versatile` had been fully removed from Groq's account-level model list — a temporary diagnostic endpoint (`/_diag_groq_models`, since removed) hit Groq's real `/v1/models` with the actual deployed `GROQ_API_KEY` and confirmed neither model appears at all; the account now has `openai/gpt-oss-20b`, `openai/gpt-oss-120b`, `qwen/qwen3.6-27b` (already used for vision), `groq/compound`(-mini), and a couple of niche models instead. The cascade had been silently recovering via Mistral both times, so user-facing answers still succeeded, masking the regression.
+**Fix:** Replaced the two dead model strings across all 13 call sites (`routers/core/automl_explain.py`, `routers/core/automl_optuna_explain.py`, `routers/document/_llm.py`, `routers/rag/mm_text_to_image.py`, `routers/rag/generation.py`, `routers/rag/evaluate_mm.py`, `routers/rag/query.py`, `routers/rag/contradictions.py`, `routers/rag/query_helpers.py`, `routers/rag/mm_video_audio.py`, `routers/rag/agent_nodes.py`, `routers/rag/evaluate.py`, `routers/drift/_explain.py`) with `openai/gpt-oss-20b` (small/fast role) and `openai/gpt-oss-120b` (main generation role) — same size relationship as the old 8b/70b pairing. Commit `ab9aeef`.
+**Automation Hint:** Hit `/rag/query` with a real (non-cached) question, assert the response's `served_provider` field is `groq` with `primary_failure: null` — would have caught this regression immediately.
+**Verified live 2026-08-24:** a fresh, non-cached `/rag/query` call returned `"served_provider": "groq", "served_model": "openai/gpt-oss-120b", "primary_provider": null, "primary_failure": null"` — Groq succeeding on the first try, no fallback triggered. `expanded_queries` in the same response confirms the small-model role (`openai/gpt-oss-20b`) also works.
+**Source:** EC-008, spotted incidentally in HF Space logs while diagnosing TC-P10-102.
 
 ---
 
