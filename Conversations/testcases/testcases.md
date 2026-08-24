@@ -1,7 +1,7 @@
 # Test Cases — ML-Unified + ml-portfolio
 
 **Last updated:** 2026-08-24  
-**Total test cases:** ~1347, covering Parts 1–249+ (full range, no gaps).
+**Total test cases:** ~1348, covering Parts 1–249+ (full range, no gaps).
 **Open gaps:** none currently known — see "Coverage Gaps" below for
 pre-existing narrower gaps unrelated to Part ranges.
 
@@ -11,10 +11,11 @@ pre-existing narrower gaps unrelated to Part ranges.
 
 Tracked separately at [EDGECASES.md](testcases/EDGECASES.md) — a running list of
 edge cases as they're noticed, each of which also gets a numbered TC entry in
-the relevant TC-*.md file. 2026-08-24 pass: 3 resolved (1 real bug fixed —
-stale visualAction dropdown across document switches, commit `9dd24be`; 2
-verified no-bug), 4 open (2 blocked on missing test fixtures, 1 blocked on a
-transient backend blip, 1 new captioning-hallucination finding).
+the relevant TC-*.md file. 2026-08-24 pass: 4 resolved (2 real bugs fixed —
+stale visualAction dropdown across document switches, commit `9dd24be`;
+vision-captioner collage hallucination, commits `9814f79`+`a14d356`; 2
+verified no-bug), 3 open (2 blocked on missing test fixtures, 1 blocked on a
+transient backend blip).
 
 ---
 
@@ -37,10 +38,10 @@ transient backend blip, 1 new captioning-hallucination finding).
 | [TC-REC.md](testcases/TC-REC.md) | TC-REC | Parts 113–116 | 24 | ✅ |
 | [TC-P8.md](TC-P8.md) | TC-P8 | Parts 125–157 (RAG, Chat AI, Drift, AutoML, Feature Eng, Ensemble, SHAP, Optuna, KB) | 90 | ✅ |
 | [TC-P9.md](TC-P9.md) | TC-P9 | Parts 173–200 (Text-to-SQL feature sprint, Real-Time Analytics dashboard, index.html split + HF tracking, Vision fixes, Document Intelligence) | 128 | ✅ |
-| [TC-P10.md](TC-P10.md) | TC-P10 | Parts 201–249 (Document Intelligence provider cascade, Multimodal RAG + MMRAG-01→28 backlog, CV forensics, Inpainting, Sharpen/Deblur, homepage redesign, Adversarial Robustness Lab, Face Cloak, Style Cloak, adversarial training, sitewide theme sweep, CI fix, theme toggle, 2026-08-24 multi-doc edge-case pass) | 100 | ✅ |
+| [TC-P10.md](TC-P10.md) | TC-P10 | Parts 201–249 (Document Intelligence provider cascade, Multimodal RAG + MMRAG-01→28 backlog, CV forensics, Inpainting, Sharpen/Deblur, homepage redesign, Adversarial Robustness Lab, Face Cloak, Style Cloak, adversarial training, sitewide theme sweep, CI fix, theme toggle, 2026-08-24 multi-doc edge-case pass) | 101 | ✅ |
 | [TC-P11.md](TC-P11.md) | TC-P11 | Parts 158–172 (RAG tiered retrieval + web override, drift data versioning, EDA microservice deploy, full Text-to-SQL Agent build: guardrails, 4-engine DB support, ERD diagram, pagination, MSSQL, NL filter, saved queries, chart build-out-then-removal, follow-up suggestions) | 99 | ✅ |
 
-**Total: 17 files written, ~1347 test cases, covering Parts 1–249+ (full range).**
+**Total: 17 files written, ~1348 test cases, covering Parts 1–249+ (full range).**
 
 ---
 

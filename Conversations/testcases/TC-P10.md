@@ -1049,15 +1049,28 @@ consistency sweep + ML-Unified CI fix + theme toggle rollout.
 **Automation Hint:** Playwright — needs a real video fixture with multiple distinct scenes/timestamps; not attempted this session (no video asset prepared).
 **Source:** EC-006, this conversation (2026-08-23 noted, not yet attempted).
 
-### TC-P10-100 (open)
+### TC-P10-100 (Fixed)
 **Category:** Bug (captioning hallucination)
 **Test Name:** Vision captioner invents collage/multi-section structure on a single plain photo
 **Steps:**
 1. Upload a single, plain portrait photo (no collage, no multiple crops) as a standalone image document.
 2. Read its auto-generated caption (shown in the "Extracted from {file}" panel and as a floating description).
-**Expected Result:** Caption describes the actual single image; reproduced live 2026-08-24 (twice, same file) captioning a plain headshot as "a vertical collage of four cropped sections" / "a composite of cropped views" instead.
-**Automation Hint:** Ingest a known single-subject photo via the real API, assert the returned caption text doesn't contain collage/composite/section language for a non-collage source.
-**Source:** EC-007, this conversation (2026-08-24). Same hallucination MODE (inventing sub-image structure) as the OCR junk-table fix earlier this session (`is_junk_table_block` in `mm_caption.py`), but a different symptom — likely not covered by that fix. Root cause not yet investigated.
+**Expected Result:** Caption describes the actual single image, not an invented multi-panel structure.
+**Root cause (confirmed via a temporary diagnostic log, since removed):** Groq's Qwen vision model (`qwen/qwen3.6-27b`, first in the `_vision_cascade_raw` cascade in `_vision.py`) can complete its `<think>` block coherently but reason its way to a confidently wrong conclusion — inventing a 2×2/4-panel collage on one ordinary headshot. Confirmed live: the same ingest run showed Groq producing "The image is a collage of four cropped sections of a person's face..." while Mistral, called moments later on the identical image, correctly described it as one plain photo. Not a parsing bug — an unterminated `<think>` leak was already handled correctly by existing `strip_thinking()`; this is the model finishing its reasoning and still being wrong.
+**Fix:** `looks_like_fabricated_collage()` added to `mm_caption.py`, cross-checked in `mm_image.py` against object-detection's independently computed bbox sizes (a real N-panel collage tiles the frame, so no single detection would span most of it) — retries once via the terser prompt on contradiction. Commit `9814f79`.
+**Automation Hint:** Ingest a known single-subject photo via the real API 5+ times (the hallucination is non-deterministic), assert no returned caption matches collage/composite + crop/section/panel language.
+**Source:** EC-007, this conversation (2026-08-24). See TC-P10-101 for the live-verification follow-up that widened the detection regex.
+
+### TC-P10-101 (Fixed)
+**Category:** Bug-Regression (Fixed, found during verification of TC-P10-100)
+**Test Name:** Collage-hallucination regex too narrow, missed a wording variant live
+**Steps:**
+1. After TC-P10-100's fix (commit `9814f79`) deployed, re-ingest the same test photo 5 times via the real API.
+**Expected Result (what actually happened first):** All 5/5 attempts still showed the hallucination reaching the final caption — the deployed regex required "cropped" within a bounded window of a section/panel/view word, but the live response used a different, split-sentence wording ("...vertical composite featuring close-up **crops** of a young man's face... The **top section** displays...") that never matched.
+**Fix:** Widened `looks_like_fabricated_collage()` to two independent word-groups anywhere in the text — (collage|composite) AND (crops?|cropped|cropping|sections?|panels?|quadrants?|tiles?|views?) — relying on the object-detection contradiction check in `mm_image.py` as the real false-positive guard instead of word proximity. Commit `a14d356`.
+**Automation Hint:** Regression-test the regex directly against both observed wordings plus a legitimate collage caption (e.g. "a real collage of four photos from a birthday party" — should NOT trigger, no crop-word present).
+**Expected Result (after fix):** Re-verified live — 5/5 fresh ingests of the same photo returned the correct plain caption, 0 hallucinations reaching the final chunk text.
+**Source:** EC-007 follow-up, this conversation (2026-08-24) — a real example of "verify live before calling it done" catching a fix that looked complete but wasn't.
 
 ---
 
