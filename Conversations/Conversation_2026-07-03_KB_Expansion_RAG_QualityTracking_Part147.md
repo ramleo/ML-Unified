@@ -113,5 +113,5 @@ Precision improved at the cost of slight recall drop — expected trade-off. Pre
 ```bash
 curl -X POST https://wram1708-ml-unified.hf.space/rag/eval-run \
   -H "content-type: application/json" \
-  -d '{"provider": "cohere", "model": "command-a-03-2025", "user_key": "cohere_1eFAkmrGKlqELuUAVUOcTdQ4YNQVFh5qdhdkZ9re0zVB7F"}'
+  -d '{"provider": "cohere", "model": "command-a-03-2025", "user_key": "<REDACTED_COHERE_KEY>"}'
 ```
