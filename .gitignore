@@ -16,7 +16,6 @@ services/ml-api/routers/document/_corrections_store.json
 
 # Local artifacts
 .playwright-mcp/
-Conversations/
 conversation.md
 *.png
 test_clusters.csv
