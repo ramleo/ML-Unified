@@ -11,16 +11,21 @@ pre-existing narrower gaps unrelated to Part ranges.
 
 Tracked separately at [EDGECASES.md](testcases/EDGECASES.md) — a running list of
 edge cases as they're noticed, each of which also gets a numbered TC entry in
-the relevant TC-*.md file. 2026-08-24 pass: 7 resolved (4 real findings closed
-— stale visualAction dropdown across document switches, commit `9dd24be`;
-vision-captioner collage hallucination, commits `9814f79`+`a14d356`; AI
-Sharpen's error message fixed AND its persistence-across-switch design
-confirmed intentional via code reading, commit `8e985ce`; video timestamp
-citation jump verified correct across a document switch via a built
-synthetic video fixture; plus 3 verified no-bug fixes), 2 open (EC-005 root-
-caused — genuinely blocked on EC-008's dead-Groq-model regression, not a
-switching bug; EC-008 itself reopened after an unapproved model swap was
-caught and reverted, commit `7d561b7` — see its correction note).
+the relevant TC-*.md file. **All 8 items from this pass are now resolved,
+none open.** Real findings closed: stale visualAction dropdown across
+document switches (commit `9dd24be`); vision-captioner collage hallucination
+(commits `9814f79`+`a14d356`); AI Sharpen's error message fixed and its
+persistence-across-switch design confirmed intentional via code reading
+(commit `8e985ce`); video timestamp citation jump verified correct across a
+document switch (built synthetic fixture); contradiction-check detection
+verified working end-to-end once its Groq-dependency was fixed (its original
+citation-click test design turned out to test a feature that doesn't exist);
+Groq dropped entirely from every automatic/default path across `ml-api` and
+`ml-eda` per explicit instruction, after two earlier attempts (a unilateral
+`openai/gpt-oss-*` swap that was reverted, then `groq/compound` which hit
+real rate-limit/payload errors) — commit `9747241`, `ml-eda`'s copy deployed
+separately (`wram1708/ml-eda` Space), pending only a `MISTRAL_API_KEY` secret
+the user needs to add manually. Plus 3 verified no-bug fixes.
 
 ---
 
