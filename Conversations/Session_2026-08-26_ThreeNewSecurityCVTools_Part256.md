@@ -240,8 +240,106 @@ SfM), #33 (gait analysis), #45 (Phone-video → 3D Gaussian Splat scanner),
 cybersecurity-flavored items from the original brainstorm list are now
 largely shipped (deepfake detection, steganography, CAPTCHA hardening,
 malware-image triage, face cloak/deanonymization, keystroke inference).
-User flagged "a few cybersecurity related pending items" remain — session
-ended before re-surveying in detail; next session should re-check
-`project_pending_master_list.md` against `capabilities.ts` fresh (per the
-list's own standing "always verify before presenting" lesson) before
-proposing what's actually left.
+
+---
+
+## 4. Verifying "already shipped" claims and surveying what's genuinely left
+
+User asked to confirm the "already shipped" cybersecurity list was accurate
+rather than trusting the summary at face value — checked directly against
+the codebase instead of memory: `deepfake detection` (`mm_deepfake.py`) and
+`steganography` (`mm_steganography.py`) are real backend routers, but they
+are features INSIDE Multimodal RAG, not standalone `capabilities.ts` tool
+cards — that's why a grep of `capabilities.ts` alone didn't surface them.
+`captcha-hardening-lab`, `malware-image-triage`, `face-cloak`,
+`face-deanonymization-demo`, and `video-keystroke-inference` are all
+confirmed standalone tool card IDs. All six are genuinely done.
+
+User then asked specifically about #32/#33/#45/#46 — clarified these are
+categorized as **Computer Vision brainstorm**, not cybersecurity (though
+#32/#33 have forensics/surveillance-adjacent uses), and none are built.
+
+Asked "other pending items in computer vision" — re-verified the full
+remaining CV backlog against `capabilities.ts` (confirmed none secretly
+shipped): #11 (Social Reels Creator, High), #12 (Gesture-Controlled
+Desktop, High), #13 (Sign Language Translator, High), #21 (live-webcam
+surveillance, High, architecturally different — no upload step), #29 (PPE
+compliance check, Medium), #30 (fire/smoke detection, Blocked — already
+researched and rejected, don't re-offer without new evidence), #32, #33,
+#45, #46 (as above), #49 (wildlife re-identification, Medium), #52
+(backyard astrophotography anomaly CV, Medium), and #14 (Medical Scan
+Analyzer, ruled out — no way to self-verify medical output).
+
+## 5. Cybersecurity feature research (web search, no build)
+
+User asked to "research cybersecurity related features that we can do,
+search online." Web-searched current (2026) AI-cybersecurity project
+ideas, LLM prompt-injection detection technique papers, phishing-detection
+ML research, email-spoofing (SPF/DKIM/DMARC) tooling, AI-generated-malware
+detection research, AI-generated-code stylistic-fingerprint research, and
+malicious browser-extension detection research. Filtered out ideas that
+already overlap with shipped tools (e.g. deepfake voice detection is
+already partly covered by `mm_deepfake.py`'s voice-clone spectral-flatness
+flag). Presented a ranked shortlist, no build started — added to
+`project_pending_master_list.md` as new rows #53-56 so they aren't lost:
+
+- **#53 — LLM prompt injection detection playground** (Medium effort, high
+  fit): paste an untrusted document/prompt, run real published detection
+  techniques against it — known-answer detection (embed a canary
+  instruction, check if the LLM still follows the real system prompt after
+  ingesting untrusted content) and spotlighting (delimiter-based context
+  separation). A real public benchmark (Open-Prompt-Injection on GitHub)
+  exists for honestly validating detection accuracy rather than guessing.
+  High fit since this codebase is already LLM/RAG-heavy; zero overlap with
+  anything shipped.
+- **#54 — Email header authentication checker (SPF/DKIM/DMARC)** (Low
+  effort): paste raw email headers, parse `Received`/`SPF`/`DKIM`/`DMARC`/
+  `Authentication-Results`, cross-check the claimed sending domain's real
+  DNS records, flag spoofing risk. Zero ML, pure parsing + DNS lookups —
+  the same honest-engineering pattern as `qr-phishing-detector`'s RDAP
+  domain-age check. Near-zero build risk.
+- **#55 — AI-generated code detector** (Medium effort, real risk): real
+  research shows different LLMs (GPT/Claude/Gemini) have measurably
+  distinct stylistic fingerprints in generated code (comment verbosity,
+  naming conventions, characteristic phrasings) — topical given "vibe
+  coding" supply-chain concerns. Flagged explicitly as carrying the same
+  overclaiming risk already rejected for fire-detection/signature-
+  verification: would need real validation against actual human-vs-AI code
+  samples before shipping a confidence number, not assumed accurate.
+- **#56 — Browser extension permission risk analyzer** (Low effort): paste
+  a Chrome extension's `manifest.json`, flag high-risk permission
+  combinations (e.g. `<all_urls>` + `webRequest` + `cookies`) against a
+  documented risk taxonomy. Zero ML, no dataset dependency.
+
+Recommended lowest-risk next picks: #54 or #56 (near-guaranteed clean
+ship, zero ML); #53 as the most novel/on-theme option if a more ambitious
+build is wanted.
+
+## 6. Combined Computer Vision + Cybersecurity pending list
+
+User asked to combine both categories into one list. Full combined table
+(sorted roughly by effort), cross-checked against `capabilities.ts` so
+nothing here is secretly already built:
+
+| # | Item | Category | Effort | Note |
+|---|---|---|---|---|
+| 53 | LLM prompt injection detection playground | Cybersecurity | Medium | Real published techniques; high fit, LLM/RAG-heavy codebase |
+| 54 | Email header authentication checker (SPF/DKIM/DMARC) | Cybersecurity | Low | Zero ML, pure parsing + DNS |
+| 55 | AI-generated code detector | Cybersecurity | Medium | Real stylistic-fingerprint research; needs honest validation before shipping a confidence number |
+| 56 | Browser extension permission risk analyzer | Cybersecurity | Low | Zero ML, rule-based |
+| 45 | Phone-video → 3D Gaussian Splat scanner | Computer Vision | Medium | Nerfstudio/gsplat |
+| 46 | SAM3 "magic rotoscope" | Computer Vision | Medium | Text-prompted object tracking/masking through video |
+| 49 | Wildlife re-identification | Computer Vision | Medium | DINOv3 embedding re-ID, needs a new backend model |
+| 52 | Backyard astrophotography anomaly CV | Computer Vision | Medium | Image stacking + meteor/satellite streak detection |
+| 29 | PPE compliance check (hard hat/vest) | Computer Vision | Medium | Existing detector may not distinguish these classes |
+| 32 | Crime scene reconstruction (SfM) | Computer Vision | High | COLMAP-style pipeline, real engineering lift |
+| 33 | Gait analysis | Computer Vision | High | Needs pose tracking across frames + pattern matching |
+| 11 | Social Reels Creator | Computer Vision | High | Broadest scope — video + captions + music |
+| 12 | Gesture-Controlled Desktop | Computer Vision | High | Real-time webcam pipeline, awkward fit for a hosted demo |
+| 13 | Sign Language Translator | Computer Vision | High | Needs a pretrained sign-language model + live camera |
+| 21 | Live-webcam surveillance/intrusion alerting | Computer Vision | High | Architecturally different — no upload step |
+| 30 | Fire/smoke/gas detection | Computer Vision | Blocked | Already researched and rejected — don't re-offer without new evidence |
+| 14 | Medical Scan Analyzer | Computer Vision | — | Ruled out — no way to self-verify medical output |
+
+Session ended here — no build started for any item in this combined list;
+next session should confirm with the user which item(s) to pursue.
