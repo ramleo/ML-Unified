@@ -37,15 +37,23 @@ from fastapi import APIRouter
 from PIL import Image, ImageDraw, ImageEnhance
 from pydantic import BaseModel
 
+from routers.document._llm import _parse_json
 from routers.document._vision import _vision_cascade_raw
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# Mistral vision (the first provider in _vision_cascade_raw) forces
+# response_format=json_object regardless of prompt wording — a plain
+# "reply with just the text" instruction still comes back JSON-wrapped, so
+# this prompt asks for a specific JSON shape and _read_captcha parses it
+# with the same _parse_json helper used elsewhere in this codebase for
+# exactly this reason, rather than string-matching a raw response that may
+# or may not actually be raw text depending which provider answered.
 _READ_PROMPT = (
-    "This image is a CAPTCHA. Reply with ONLY the exact text or characters "
-    "shown in the image, nothing else — no punctuation, no explanation. If "
-    "you genuinely cannot make out any characters, reply with exactly: none."
+    'This image is a CAPTCHA. Return JSON only: {"text": "<the exact '
+    'characters shown, or empty string if you genuinely cannot make any '
+    'out>"}. No other keys, no explanation.'
 )
 
 
@@ -98,8 +106,11 @@ def _harden_image(img: Image.Image, intensity: float) -> Image.Image:
 
 
 def _read_captcha(img: Image.Image) -> str:
-    answer = _vision_cascade_raw(_encode(img), _READ_PROMPT)
-    return answer.strip()
+    raw = _vision_cascade_raw(_encode(img), _READ_PROMPT)
+    parsed = _parse_json(raw)
+    if isinstance(parsed.get("text"), str):
+        return parsed["text"].strip()
+    return raw.strip()
 
 
 class CaptchaSolveRequest(BaseModel):
