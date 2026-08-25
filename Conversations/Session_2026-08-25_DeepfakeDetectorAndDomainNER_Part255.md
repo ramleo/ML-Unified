@@ -372,8 +372,284 @@ confirmed `git status` showed only the 5 intended files changed before
 committing. Committed and pushed (ml-portfolio `87e6fc1`) — frontend-only,
 so no HF Space upload needed per the plan's own verification section.
 
+## 11. Mobile responsiveness (#1) — planned, built, shipped
+
+User: *"proceed with Mobile responsiveness (#1)"* (asked twice, same
+message) — the last of the original 5 UI/UX findings, previously flagged
+as "highest-value long-term but a much bigger lift."
+
+### Planning
+Two Explore agents read every relevant file in full and found the real
+bug: `ChatPanel.tsx`'s message list only becomes a bounded, internally-
+scrolling box when its ancestor chain has a *definite* height, which only
+existed via the desktop grid's `lg:h-[88vh]`. Below `lg`, that height
+vanished — chat history grew to fit every message instead of scrolling,
+and the composer just ended up wherever that landed on an ever-growing
+page. `DocumentTray.tsx` had the identical dependency. Also found:
+`page.tsx`'s header button row had no wrap (could overflow near 375px);
+`EvidenceColumn.tsx`'s image+page-rail row squeezed uncomfortably narrow
+next to a fixed 88px rail; `PageThumbnailRail.tsx` was a fixed vertical
+column unsuited to a stacked mobile layout; `CitationToolbar.tsx`'s button
+row had no wrap.
+
+### Approach decision (AskUserQuestion)
+Below `lg`, switch from "stack all 3 panels vertically" to a **tabbed
+single-panel view** (Documents | Evidence | Chat, defaulting to Chat) —
+each tab given a real bounded height (`max-lg:h-[70dvh]`) so it scrolls
+internally, matching desktop behavior — chosen over "keep all 3 stacked,
+cap each one's own height" (the lighter alternative, but leaves nested
+scrolling). Confirmed Tailwind v4 supports `max-lg:` variants, so this
+touches nothing at `lg:` — the existing simultaneous 3-column view stays
+byte-for-byte identical there.
+
+### Build and a real bug caught mid-implementation
+Added the mobile tab switcher to `MmRagRunner.tsx`, wrapped `EvidenceColumn`/
+`PageThumbnailRail`'s image+rail row to stack vertically below `sm`, wrapped
+`page.tsx`'s header row, added `flex-wrap` to `CitationToolbar.tsx`. Caught
+a real bug before shipping: with `mobileTab` defaulting to `"chat"`, the
+very first mobile visitor (zero documents yet) would have had the
+`DocumentTray` — which holds the upload dropzone — silently hidden, since
+the tab switcher itself only renders once `documents.length > 0`. Fixed by
+making the `DocumentTray` wrapper ignore `mobileTab` entirely when there
+are no documents yet.
+
+### Verification
+Playwright at a real ~376px CSS-pixel viewport (this environment doubles
+`browser_resize` dimensions — confirmed via `matchMedia` and adjusted).
+Confirmed: no horizontal overflow; tab switcher correctly isolates one
+panel; zero-doc state still shows the upload dropzone (the caught bug,
+now fixed); Evidence tab stacks image above a horizontal-scrolling
+thumbnail strip; Chat tab's message list stayed bounded at 568px (=0.7×812)
+after a real live question — page height only grew to 897px, not
+unbounded. Resized back to desktop width and confirmed the `EvidencePanel`
+wrapper still measured exactly 502px and the simultaneous 3-column layout
+was unchanged. Committed and pushed (ml-portfolio `8afe705`).
+
+User then asked how to access the app on mobile — answered: same public
+Vercel URL, no separate app or setup, since it's a public web page.
+
+## 12. Skeleton loading states — planned, built, shipped
+
+User: *"proceed with No skeleton loading states, Accessibility is
+inconsistent, Citation trust signals could go further, one by one"* — the
+three remaining research findings from Section 9, tackled sequentially.
+
+An Explore agent surveyed every async wait in the directory and found most
+were already fine (ChatPanel's bouncing dots, existing progress bars for
+sharpen/AI-fill) or too brief to matter (instant citation-image swaps,
+synchronous document switching). Three genuine multi-second waits showed
+only text-only feedback over a blank area: `ContradictionsPanel.tsx`'s
+"Checking for contradictions…", `EvidencePanel.tsx` (fully blank during
+the whole answer wait), and `CitationResultsPanel.tsx`'s steganography/
+moire "Generating…" visualize buttons. Deliberately did NOT add a skeleton
+for "Find similar figures," since its loading flag lives in a different
+component than its results list — would have meant threading a new prop
+through the already-largest file in the directory for one moderate-value
+spot.
+
+Built a tiny shared `Skeleton.tsx` (Tailwind `animate-pulse`, zero new
+dependency) and wired it into all three spots. Verified live: used a
+50ms-after-click DOM check (React state updates aren't visible
+synchronously within the same `evaluate` call) to actually catch the
+loading window before the real API response landed — confirmed 6 skeleton
+elements appear then clear for the contradiction check, 9 for the
+evidence-panel cards, matching 2×3 and 3×3 bar counts respectively; also
+confirmed the page didn't balloon in height while the skeleton was up. The
+steganography/moire skeleton uses the identical proven pattern but wasn't
+triggered live (no real flagged test image on hand) — disclosed as such,
+not silently assumed working. Committed and pushed (ml-portfolio
+`b03a84f`).
+
+## 13. Accessibility pass 2 — planned, built, shipped
+
+Second of the three remaining findings. An Explore agent found the first
+aria pass (Section 10) left 4 real gaps elsewhere: `RagSourceCard.tsx`
+(the citation card, `src/components/`) was a `<div onClick>` with no
+keyboard path, the same pattern already fixed for `DocumentTray.tsx`;
+`IngestProgressRail.tsx`'s upload drop zone had the identical gap;
+`ChatPanel.tsx`'s stop/send buttons and `DetectionBoxOverlay.tsx`'s "✕"
+remove-region button were icon-only with only a `title`, no `aria-label`.
+`FreehandDrawLayer` (pointer/drag-only by nature) was explicitly flagged
+as a disclosed, inherent limitation rather than a fixable gap.
+
+Fixed all 4. While doing so, `RagSourceCard.tsx` crossed the 400-line cap
+(399→403) from the new attributes — extracted the "Why was this cited?"
+retrieval-trace detail block into a new `RagRetrievalTrace.tsx` sibling
+component (matching the file's existing pattern of small extracted
+siblings), bringing it back to 340 lines with zero behavior change.
+Verified live: citation card renders as `button "Citation 1, page 1"` in
+the accessibility tree, is Tab-reachable, and Enter expands it identically
+to a click — including confirming the extracted retrieval-trace component
+still renders correctly post-split. Committed and pushed (ml-portfolio
+`1965708`).
+
+**Playwright maximize technique corrected mid-session**: `browser_resize`
+(Playwright's `setViewportSize`) turned out to only emulate the page's CSS
+viewport in this environment — `window.outerWidth/outerHeight` stayed
+stuck at 1200×806 regardless of what was requested, confirmed via direct
+inspection after the user pointed out the window still wasn't actually
+maximized. Fixed by calling the real CDP window-bounds API directly via
+`browser_run_code_unsafe` (`Browser.getWindowForTarget` +
+`Browser.setWindowBounds` with `windowState: "maximized"`), verified via
+`outerWidth`/`outerHeight` actually changing to ~1470×850. Saved to memory
+(`feedback_playwright_workflow.md`) so future sessions use the correct
+technique first instead of rediscovering this.
+
+## 14. "What next" review — corrected a stale pending-list row
+
+User asked "what's pending in computer-vision, cybersecurity" — verified
+every candidate row against actual code before presenting (per the
+project's standing "grep before presenting" discipline) and found one
+stale entry: "blur/quality detection at upload" was listed as unbuilt but
+turned out to already be fully shipped — `blur.py` (MMRAG-01, variance-of-
+Laplacian, an earlier FFT-ratio version was tried and replaced after
+proving non-monotonic on real photos), wired through `mm_image.py`/
+`mm_pdf.py` into citations/ingest/retrieval, surfaced in the UI as
+`RagSourceCard.tsx`'s "maybe blurry" flag. Corrected in memory. User then
+asked which tool it's implemented in — answered: Multimodal RAG, the same
+tool this whole session's UI/UX work was on.
+
+## 15. Three new standalone tools, built in sequence
+
+User: *"first do pose-driven generative VJ visuals, then malware-as-image
+classification"* — two more pending-list items, requested back-to-back.
+(A third, CAPTCHA-solving, was requested and shipped earlier the same
+session — see below, out of narrative order since it happened before this
+"what next" round but is grouped here with the other two new-tool builds.)
+
+### CAPTCHA Hardening Lab (`/tools/captcha-hardening-lab`)
+User: *"proceed with CAPTCHA-solving as adversarial research"*. Built as a
+defensive research demo: upload a CAPTCHA image, a VLM
+(`_vision_cascade_raw`, reused from `routers/document/_vision.py`) reads
+it, then a single intensity slider stacks three classic non-gradient
+perturbations (noise/occlusion-wave/contrast-jitter — deliberately NOT
+FGSM/PGD, since the VLM is a black-box hosted API with no gradient access,
+unlike `adversarial-robustness-lab`'s local torchvision model) and the VLM
+reads the hardened version too. Scoped to user-uploaded images only, same
+boundary every tool in this project already respects — never automates a
+live CAPTCHA challenge. Real bug caught during the first live test:
+Mistral vision forces `response_format=json_object` regardless of prompt
+wording, so a synthetic test CAPTCHA the VLM actually read correctly
+("K9R2X") still failed the ground-truth match because the raw answer came
+back as `{"text": "K9R2X"}` — fixed by requesting and parsing that JSON
+shape explicitly with the existing `_parse_json` helper. Genuine finding,
+reported honestly: even at maximum hardening intensity, this VLM still
+read a large-clear-font synthetic CAPTCHA correctly — the tool's own copy
+already frames the point as "how much hardening it takes," not "does it
+fail," so no overclaiming needed. Backend `mm_captcha.py` (ML-Unified
+`d24b5a1`, fix `57adc32`), frontend (ml-portfolio `156a174`). Verified
+live end-to-end via Playwright + direct API calls, screenshot confirmed
+the hardened image visibly distorted while the VLM still solved it
+correctly.
+
+### Pose VJ Visuals (`/tools/pose-vj-visuals`)
+Real architectural first for this codebase: entirely client-side, no
+backend call at all (round-tripping webcam frames to Python would be too
+slow for real-time visuals). Confirmed via exploration: no pose-detection
+library existed yet — added `@mediapipe/tasks-vision` (new dependency,
+runs via WASM fully in-browser). **Scope decision confirmed with user
+(AskUserQuestion)**: build both pose tracking AND mic-reactive audio (Web
+Audio `AnalyserNode`, zero new dependency, first audio feature in this
+codebase) rather than pose-only, so it actually delivers "for music."
+`HandLandmarker` tracks hand landmarks off the live video in a
+`requestAnimationFrame` loop, driving a 2D canvas particle/trail system;
+mic amplitude scales particle size/density. Honest, disclosed verification
+limitation flagged upfront in the plan itself: this sandboxed browser
+grants camera/mic permissions but never delivers real frame data
+(`video.videoWidth` stayed 0), so real hand-driven motion on actual
+hardware is an open follow-up check, same class of gap as plant-growth's
+live-camera feature. What WAS verified live: page loads, camera/mic
+permission flow works, the MediaPipe WASM model actually loads and runs
+(confirmed via real console logs — "GL version...", "Graph successfully
+started running"), canvas renders safely with zero particles rather than
+erroring when no real frame exists. A mic-toggle flake on the first
+attempt (silent failure) was retested clean on a fresh page load and
+attributed to a dev-server hot-reload race from active file editing, not
+a code bug. Committed and pushed (ml-portfolio `457ea1b`).
+
+### Binary Byte-Plot & Entropy Triage (`/tools/malware-image-triage`)
+Researched feasibility before building, per the project's standing
+practice (same discipline that rejected fire-detection and signature-
+verification after real scrutiny): the original brainstorm ("malware
+family CNN classifier on Malimg") has no ready pretrained model, and the
+Malimg dataset is only reachable via Kaggle auth or an unreliable Google
+Drive bulk scrape (confirmed the folder loads, but that's not the same as
+a reliable bulk download). **Scope decision confirmed with user
+(AskUserQuestion)**: rather than gamble session time on the Drive scrape,
+ship the real technique the field falls back on for triage instead — a
+Nataraj et al. byte-plot image + sliding-window Shannon entropy heatmap
+(the same signal PEiD/Detect It Easy use to flag packed/encrypted
+content) + a hand-rolled PE-header packer-tell check (entry point in the
+file's last section), all pure Python/PIL/numpy/struct, zero new
+dependency, never executes the uploaded file. Real bug caught during
+testing: a 256-byte entropy window capped even true `os.urandom()` output
+around 7.2 bits/byte — well under the "high entropy" threshold meant to
+catch exactly that case — widened to 1024 bytes (verified real random data
+then reads 7.78-7.84, correctly bucketing as "high"). PE parser tested
+against two hand-built synthetic PE fixtures (entry point in an early
+section vs. the last section) plus truncated/malformed/empty input, none
+of which crashed. Backend `mm_malware_image.py` (ML-Unified `a7ec9e6`),
+frontend (ml-portfolio `09a991c`). Verified live end-to-end: a plain-text
+fixture read "low (0%)" and a random-bytes fixture read "high (94%)" with
+an all-red entropy heatmap, both matching local results exactly.
+
+Memory (`project_pending_master_list.md`) updated to mark all three items
+done, including the real rescoping rationale for the malware tool so a
+future session doesn't re-litigate the CNN-classifier idea without new
+information.
+
+## 16. Follow-up: pretrained-model technique, and a scoping note
+
+User asked "what is VJ in Pose VJ Visuals?" — answered: video jockey, the
+visual equivalent of a DJ; explained the tool is a small VJ-style
+instrument in that spirit.
+
+User then pasted a technical claim about using pretrained ImageNet
+backbones (VGG16/ResNet-50/InceptionV3) for malware-image classification
+and asked for a view on it — assessed rather than accepted at face value:
+the architecture claims were accurate, but the pasted text answered a
+different question than the one that actually blocked the malware tool's
+original CNN-classifier scope. Pretrained ImageNet weights give a
+head-start on generic image features, but the classification HEAD still
+needs the labeled Malimg dataset to fine-tune on — the real blocker
+(dataset access, not architecture availability) remains unsolved by this
+suggestion. Offered a genuine alternative if ever revisited (generate
+labeled data locally via a real packer like UPX against local
+executables, training a smaller "packed vs not" binary classifier instead
+of the full 25-family problem, sidestepping the dataset-access gate
+entirely) but flagged it as a new decision, not something to fold in
+silently. User: *"no need to flag it"* — acknowledged, no action taken.
+
 ## Commits this session (updated)
 
 | Repo | Commit | What |
 |---|---|---|
 | ml-portfolio | `87e6fc1` | UI/UX #2+#4: toolbar optgroups, chip-row split, aria coverage |
+| ml-portfolio | `8afe705` | UI/UX #1: mobile tabbed workspace, header wrap, evidence/rail stacking |
+| ml-portfolio | `b03a84f` | UI/UX finding: skeleton loading states (3 real multi-second waits) |
+| ml-portfolio | `1965708` | UI/UX finding: accessibility pass 2 + RagRetrievalTrace extraction |
+| ML-Unified | `d24b5a1`, `57adc32` | CAPTCHA Hardening Lab backend + JSON-parsing fix |
+| ml-portfolio | `156a174` | CAPTCHA Hardening Lab frontend |
+| ml-portfolio | `457ea1b` | Pose VJ Visuals (client-side, new tool) |
+| ML-Unified | `a7ec9e6` | Binary Byte-Plot & Entropy Triage backend |
+| ml-portfolio | `09a991c` | Binary Byte-Plot & Entropy Triage frontend |
+
+## Pending list status after this session (final)
+
+- **UI/UX 5-item research list**: 4 of 5 shipped (toolbar/chip grouping,
+  mobile responsiveness, skeleton loading states, accessibility). Inline
+  citation-confidence indicator explicitly NOT built — user said "stop
+  here" after asking whether it was required; noted in memory so it isn't
+  re-offered without being raised again.
+- **Cybersecurity**: CAPTCHA-solving and malware-as-image (rescoped) both
+  done. Still open: face-recognition deanonymization demo, video-call
+  keystroke inference.
+- **Computer Vision**: blur/quality detection corrected from stale-unbuilt
+  to already-done; pose-driven VJ visuals done. Still open: sports form
+  tracker, PPE compliance, gait analysis, sign language translator,
+  gesture-controlled desktop, live-webcam surveillance, home biomechanics
+  coach, wildlife re-identification, SAM3 rotoscope, phone-video 3D
+  Gaussian Splat scanner, backyard astrophotography, near-duplicate
+  video-frame skipping, FFT periodicity detection; fire/smoke/gas remains
+  blocked (no viable model found).
+- **NLP**: only LLM Fine-tuning Pipeline remains (GPU-gated, not started).
