@@ -20,3 +20,4 @@ facenet-pytorch>=2.6.0  # InceptionResnetV1 face-embedding model, MIT license (m
 langgraph>=0.2.0
 langchain-core>=0.3.0
 spacy>=3.7.0,<3.8.0
+dnspython>=2.6.0  # SPF/DMARC/DKIM DNS TXT lookups (email_auth_check.py)
