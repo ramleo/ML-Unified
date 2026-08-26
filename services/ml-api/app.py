@@ -55,6 +55,7 @@ from routers.vision import router as vision_router, init_vision_models
 from routers.document import router as document_router
 from routers.email_auth_check import router as email_auth_router
 from routers.prompt_injection_check import router as prompt_injection_router
+from routers.ai_code_detector import router as ai_code_detector_router
 
 from routers.core.shared import (
     _detect_gpu, MODELS, _fetch_hf_models, _load,
@@ -212,6 +213,7 @@ app.include_router(vision_router)
 app.include_router(document_router)
 app.include_router(email_auth_router, tags=["email-auth"])
 app.include_router(prompt_injection_router, tags=["prompt-injection"])
+app.include_router(ai_code_detector_router, tags=["ai-code-detect"])
 
 
 if __name__ == "__main__":
