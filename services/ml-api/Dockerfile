@@ -16,6 +16,13 @@ COPY requirements-base.txt .
 RUN pip install --no-cache-dir -r requirements-base.txt \
     && python -m spacy download en_core_web_sm
 
+# groundingdino-py + supervision (mm_rotoscope.py) are installed with --no-deps:
+# both declare an unpinned, non-headless opencv-python dependency that would
+# collide with opencv-python-headless (installed below in requirements.txt) and
+# typically fails to import in this slim image at all (missing libGL.so.1).
+# Their actual other deps are already satisfied by requirements-base.txt above.
+RUN pip install --no-cache-dir --no-deps "groundingdino-py==0.4.0" "supervision==0.6.0"
+
 # Layer 2: lightweight / frequently-changing packages — only this layer rebuilds when adding new tools
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

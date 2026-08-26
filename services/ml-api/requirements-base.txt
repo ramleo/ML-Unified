@@ -21,3 +21,15 @@ langgraph>=0.2.0
 langchain-core>=0.3.0
 spacy>=3.7.0,<3.8.0
 dnspython>=2.6.0  # SPF/DMARC/DKIM DNS TXT lookups (email_auth_check.py)
+sam2>=1.1.0  # video object tracking (mm_rotoscope.py); Apache 2.0, ungated
+# groundingdino-py + supervision are installed separately in the Dockerfile with
+# --no-deps: both declare an unpinned, non-headless opencv-python dependency that
+# would collide with opencv-python-headless above (and typically fails to import
+# in a slim Docker image at all, missing libGL.so.1). Their actual other runtime
+# deps (verified locally — groundingdino.util.inference only needs cv2.imread/
+# cvtColor-level calls, which opencv-python-headless already provides) are listed
+# here so they resolve normally alongside the rest of this file's pins.
+addict>=2.4.0       # groundingdino-py dependency (mm_rotoscope.py)
+pycocotools>=2.0.0  # groundingdino-py dependency (mm_rotoscope.py)
+yapf>=0.40.0        # groundingdino-py dependency (mm_rotoscope.py)
+matplotlib>=3.9.0   # supervision dependency (mm_rotoscope.py)
