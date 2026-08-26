@@ -54,6 +54,7 @@ from routers.rag import initialize_rag
 from routers.vision import router as vision_router, init_vision_models
 from routers.document import router as document_router
 from routers.email_auth_check import router as email_auth_router
+from routers.prompt_injection_check import router as prompt_injection_router
 
 from routers.core.shared import (
     _detect_gpu, MODELS, _fetch_hf_models, _load,
@@ -210,6 +211,7 @@ app.include_router(rag_analytics_router, prefix="/rag", tags=["rag"])
 app.include_router(vision_router)
 app.include_router(document_router)
 app.include_router(email_auth_router, tags=["email-auth"])
+app.include_router(prompt_injection_router, tags=["prompt-injection"])
 
 
 if __name__ == "__main__":
