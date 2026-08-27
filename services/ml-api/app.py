@@ -43,6 +43,7 @@ from routers.rag.mm_crime_scene_reconstruction import router as rag_mm_crime_sce
 from routers.rag.mm_rotoscope import router as rag_mm_rotoscope_router
 from routers.rag.mm_astro_anomaly import router as rag_mm_astro_anomaly_router
 from routers.rag.mm_wildlife_reid import router as rag_mm_wildlife_reid_router
+from routers.rag.mm_ppe_compliance import router as rag_mm_ppe_compliance_router
 from routers.rag.mm_robust_training import router as rag_mm_robust_training_router
 from routers.rag.mm_depth import router as rag_mm_depth_router
 from routers.rag.mm_captcha import router as rag_mm_captcha_router
@@ -207,6 +208,7 @@ app.include_router(rag_mm_crime_scene_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_rotoscope_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_astro_anomaly_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_wildlife_reid_router, prefix="/rag", tags=["rag"])
+app.include_router(rag_mm_ppe_compliance_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_style_cloak_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_robust_training_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_depth_router, prefix="/rag", tags=["rag"])
