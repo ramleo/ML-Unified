@@ -16,7 +16,11 @@ chromadb>=0.5.0
 rank-bm25>=0.2.2
 onnxruntime>=1.18.0
 timm>=1.0.0  # ResNet backbone for microsoft/table-transformer-detection (mm_tables.py)
-facenet-pytorch>=2.6.0  # InceptionResnetV1 face-embedding model, MIT license (mm_face_cloak.py)
+# facenet-pytorch is installed separately in the Dockerfile with --no-deps: it
+# pins torch<2.3.0, which conflicts with sam2's torch>=2.5.1 floor below. Its
+# own actual runtime deps (numpy, Pillow, requests, tqdm) are already satisfied
+# by pins elsewhere in this file / requirements.txt; only torch/torchvision are
+# left unpinned by facenet-pytorch so they resolve to satisfy sam2 instead.
 langgraph>=0.2.0
 langchain-core>=0.3.0
 spacy>=3.7.0,<3.8.0

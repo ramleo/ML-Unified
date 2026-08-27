@@ -23,6 +23,13 @@ RUN pip install --no-cache-dir -r requirements-base.txt \
 # Their actual other deps are already satisfied by requirements-base.txt above.
 RUN pip install --no-cache-dir --no-deps "groundingdino-py==0.4.0" "supervision==0.6.0"
 
+# facenet-pytorch (mm_face_cloak.py) is also installed with --no-deps: it pins
+# torch<2.3.0, which conflicts with sam2's torch>=2.5.1 floor above. Its other
+# actual runtime deps (numpy, Pillow, requests, tqdm) are already satisfied by
+# requirements-base.txt/requirements.txt; only torch/torchvision are left to
+# resolve freely so they satisfy sam2 instead.
+RUN pip install --no-cache-dir --no-deps "facenet-pytorch==2.6.0"
+
 # Layer 2: lightweight / frequently-changing packages — only this layer rebuilds when adding new tools
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
