@@ -38,3 +38,4 @@ addict>=2.4.0       # groundingdino-py dependency (mm_rotoscope.py)
 pycocotools>=2.0.0  # groundingdino-py dependency (mm_rotoscope.py)
 yapf>=0.40.0        # groundingdino-py dependency (mm_rotoscope.py)
 matplotlib>=3.9.0   # supervision dependency (mm_rotoscope.py)
+yara-python>=4.5.0  # real YARA engine binding (yara_scan.py); prebuilt manylinux wheel, no libyara compile needed

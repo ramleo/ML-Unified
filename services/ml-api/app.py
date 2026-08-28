@@ -64,6 +64,7 @@ from routers.ai_code_detector import router as ai_code_detector_router
 from routers.siem_triage import router as siem_triage_router
 from routers.tls_headers_check import router as tls_headers_router
 from routers.attack_surface_check import router as attack_surface_router
+from routers.yara_scan import router as yara_scan_router
 
 from routers.core.shared import (
     _detect_gpu, MODELS, _fetch_hf_models, _load,
@@ -230,6 +231,7 @@ app.include_router(ai_code_detector_router, tags=["ai-code-detect"])
 app.include_router(siem_triage_router, tags=["siem-triage"])
 app.include_router(tls_headers_router, tags=["tls-headers"])
 app.include_router(attack_surface_router, tags=["attack-surface"])
+app.include_router(yara_scan_router, tags=["yara-scan"])
 
 
 if __name__ == "__main__":
