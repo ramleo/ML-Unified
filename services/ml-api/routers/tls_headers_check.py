@@ -16,7 +16,6 @@ endpoint being used to port-scan the Space's own internal network or hit
 cloud metadata endpoints (169.254.169.254, etc.).
 """
 
-import ipaddress
 import logging
 import socket
 import ssl
@@ -26,6 +25,8 @@ import certifi
 import httpx
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
+
+from routers.security_shared import normalize_host, resolve_public_ip
 
 logger = logging.getLogger(__name__)
 
@@ -41,34 +42,6 @@ _SECURITY_HEADERS = [
     ("Referrer-Policy", "referrer_policy"),
     ("Permissions-Policy", "permissions_policy"),
 ]
-
-
-def _normalize_host(raw: str) -> str:
-    host = raw.strip().lower()
-    host = host.split("://", 1)[-1]
-    host = host.split("/", 1)[0]
-    host = host.split(":", 1)[0]
-    return host
-
-
-def _resolve_and_guard(host: str) -> str | None:
-    """Resolves the hostname and returns the first public IP found, or
-    None if resolution fails or every resolved address is private/
-    internal — the caller must refuse to connect in that case."""
-    try:
-        infos = socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)
-    except socket.gaierror:
-        return None
-    for info in infos:
-        ip_str = info[4][0]
-        try:
-            ip = ipaddress.ip_address(ip_str)
-        except ValueError:
-            continue
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
-            continue
-        return ip_str
-    return None
 
 
 def _check_tls(host: str, resolved_ip: str) -> dict:
@@ -159,8 +132,8 @@ def _check_headers(host: str) -> dict:
 
 
 def run_tls_headers_scan(raw_host: str) -> dict:
-    host = _normalize_host(raw_host)
-    resolved_ip = _resolve_and_guard(host)
+    host = normalize_host(raw_host)
+    resolved_ip = resolve_public_ip(host)
     if resolved_ip is None:
         return {
             "host": host,
