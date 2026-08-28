@@ -36,6 +36,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py .
 COPY routers/ routers/
+COPY security/ security/
 COPY shared/ shared/
 COPY frontend/ frontend/
 COPY --chown=appuser:appuser models/ models/
