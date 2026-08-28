@@ -227,7 +227,7 @@ a real licensing wall (no royalty-free music source in this project);
 live camera + zone-alert loop, no upload step) and genuinely high effort,
 not just a scoping problem.
 
-## Session-end state
+## Session-end state (original, Part 259)
 
 Six items shipped this session: #46 (deploy resumed and completed, one
 real overclaim caught and fixed via live testing), #52, #49, #29, #13
@@ -237,3 +237,112 @@ User Guide gap-fill and the homepage alphabetical-sort fix. All commit
 hashes recorded in `project_pending_master_list.md`. No item was shipped
 without either a real measured accuracy number or an explicit disclosed
 limitation where perfect accuracy wasn't achievable.
+
+## 7. Cybersecurity feature research (appended later, 2026-08-27/28)
+
+Asked to research and list good cybersecurity features to add, then to go
+build one. Researched online first (real technique verification, not
+assumed), producing an initial shortlist of six non-duplicate,
+CPU-feasible ideas:
+
+1. Malicious Package Scanner (npm/PyPI) — paste a `package.json`/
+   `requirements.txt` or a source file; run real static heuristics
+   (GuardDog/Semgrep-style: `eval`/`exec`/`subprocess` calls, install-script
+   hooks, base64/hex-obfuscated blobs, typosquat Levenshtein-distance
+   against top-1000 package names). Pure heuristics, no ML, "signals not
+   verdict" — same honest framing as AI Code Detector. Real published
+   technique (Datadog's GuardDog).
+2. Password Strength + Breach Exposure Checker — zxcvbn-ts strength
+   scoring + Have I Been Pwned k-anonymity breach lookup, password never
+   leaves the browser except as a 5-char hash prefix.
+3. TLS/Security-Headers Scanner — given a domain, live TLS handshake
+   (cert chain/expiry/self-signed/weak-cipher check) + HTTP
+   security-header audit (CSP, HSTS, X-Frame-Options, etc.),
+   Mozilla-Observatory-style. Same "live DNS/network, zero ML" category as
+   the Email Auth Checker.
+4. Attack-Surface / Exposed-Path Scanner — given a domain, checks common
+   misconfig tells: exposed `.git`/`.env`/`.DS_Store`, directory listing,
+   outdated CMS version fingerprints, open common ports via banner-safe
+   checks. Safe, non-intrusive — no active exploitation.
+5. Log-Based Brute-Force / Anomaly Triage — paste an auth/nginx access
+   log; detect brute-force clusters, credential-stuffing patterns, and
+   impossible-travel-style timing anomalies. Pure stats/heuristics.
+6. YARA-Rule File Scanner — run a small curated YARA ruleset against an
+   uploaded file (never executes it) to flag known malicious
+   patterns/macros — complements the existing entropy-based
+   Malware-Image-Triage tool rather than duplicating it.
+
+User picked #2 (Password Strength + Breach Exposure Checker) to build
+first — full build/deploy detail already recorded as its own row in
+`project_pending_master_list.md` (item #58, ml-portfolio commit
+`127abea`). Key points: user explicitly chose the real `zxcvbn-ts`
+library over a hand-rolled entropy heuristic (asked via AskUserQuestion);
+HIBP's password-range API was confirmed via research to need no API key
+and to be purpose-built for direct browser calls — a deliberate,
+disclosed deviation from this codebase's only prior precedent
+(`qr-phishing-detector` proxies its external reputation checks through
+the backend specifically because those need a secret key). A real
+JSX whitespace-collapse bug (`password{s} —\nthis password` rendering as
+"passwords— this", the same class of bug as ASL Fingerspelling's earlier
+`{" "}` fix) was caught via live Playwright verification and fixed before
+calling it done.
+
+### Deeper cybersecurity idea dump — user pasted a large external list
+
+The user separately pasted a large cybersecurity-project list from
+another AI conversation (Application Security, Endpoint/OS Security,
+Identity/Access/Crypto, Cloud/Infrastructure, SOC/Orchestration domains,
+plus a "Network IDS / Phishing Classifier / UEBA / SIEM Triage Agent"
+comparison table) and asked to go through it. Triaged every item against
+this specific project's real constraints — hosted, stateless, CPU-only
+HF Space, no persistent local agent, no live cloud credentials, never
+executes untrusted files — rather than treating the list at face value.
+Full triage below, preserved for future reference (do not re-derive from
+scratch next time this list comes up):
+
+**✅ Buildable here, no rescope needed — genuinely new**
+
+| Idea | Why it fits |
+|---|---|
+| Keystroke Biometric Auth-Risk Demo | Pure client-side JS keydown/keyup timing + KNN/distance scoring. Different from the existing Video-Call Keystroke Inference (that infers keys from *video*; this is literal typing-rhythm biometrics). No overlap. |
+| DNS Tunneling / Exfiltration Detector | Paste or live-query DNS records → Shannon entropy + subdomain-length/count heuristics. Zero ML, zero GPU, same category as the Email Auth Checker. |
+| SIEM Alert Triage Agent (LLM-judge) | Paste a batch of raw alerts → an LLM judge prioritizes/explains them. Reuses the exact fixed-key Mistral pattern already built for Prompt Injection Playground / AI Code Detector — low incremental effort. |
+| Phishing Email Body Classifier | Different angle from what's shipped: existing tools check URLs/headers, not email *text* (urgency language, spoofed display-name tricks, generic greeting). Real NLP technique, CPU-friendly (TF-IDF + classic classifier). Needs a real labeled corpus (Enron + a phishing corpus like Nazario) — same one-time-local-training pattern as ASL Fingerspelling. |
+| AI-Powered SAST Scanner | AST parsing + pattern rules for SQLi/XSS/hardcoded secrets in pasted source code. Broader version of the earlier "npm/PyPI scanner" pick from the shortlist above — worth merging into one tool rather than building both separately. |
+
+**🔁 Real technique, but needs a scope change to fit a hosted demo**
+
+| Idea | Problem | Rescope |
+|---|---|---|
+| Malware PE Header Classifier | Substantially overlaps with the already-shipped Malware-Image-Triage tool's packer-tell check (entry-point-in-last-section). | Extend that tool with deeper PE-header fields rather than shipping a separate one. |
+| Crypto/TLS Downgrade Detector | Same technique as the earlier shortlisted "TLS/Security-Headers Scanner." | Fold into that one tool instead of building twice. |
+| Supply Chain Dependency Predictor | Needs a trained regression model on GitHub metadata + live GitHub API rate limits. | Ship as a live-heuristic version (stars/last-commit/maintainer-count red flags) like Email Auth Checker's live-DNS pattern, not a trained predictor. |
+| Malicious Pull-Request Detector | No git repo exists to scan in a hosted demo. | Rescope to "paste a diff/patch" and heuristically flag suspicious deltas (sensitive file touches, obfuscated additions). |
+| IAM Least-Privilege Optimizer | Needs real AWS CloudTrail logs + IAM policy exports most users won't have on hand. | Accept pasted/uploaded policy+log JSON, disclose synthetic-data caveat like Crime Scene Reconstruction did. |
+| Honeytoken/Canarytoken Deployer | Real version needs an always-on webhook listener and lives in the user's actual infra — this project has neither. | Scope down to: generate one realistic decoy credential + a single trackable URL, disclose that the real product (Canarytokens.org) does the persistent part. |
+| Network IDS (CICIDS2017) | Not really a new tool — this is "run the existing AutoML Pipeline on a labeled network-flow dataset." | Doesn't need new infra; could be a demo dataset added to AutoML, not a standalone project. |
+| Automated Incident-Response Playbook | Can't actually isolate a host or disable a user from a hosted demo — must never imply it does. | Advisory-only: paste an incident description, get a suggested playbook (deterministic rules + LLM judge), clearly labeled "suggests, does not execute." |
+
+**❌ Not buildable in this architecture at all — same class as #12 (Gesture-Controlled Desktop)**
+
+| Idea | Why it's a hard no here |
+|---|---|
+| Ransomware Canary & Entropy Blocker | Requires a persistent OS-level daemon watching the live filesystem — a hosted web page cannot do this, full stop, same sandbox limit as #12. |
+| Process Injection Detector | Needs live Windows Sysmon telemetry streaming from the user's own machine in real time — no such data source exists for a web demo. |
+| UEBA Engine | Same problem — needs real, ongoing local auth/Sysmon logs from an actual environment, not a one-shot upload. |
+| Adaptive Risk-Based Auth Engine | Needs an actual multi-session login history (IP drift, device fingerprint over time) — a stateless portfolio tool has no persistent user accounts to build this risk profile from. |
+
+Recommended build order given to the user from the "buildable now" list:
+DNS Tunneling Detector (smallest, self-contained) → SIEM Alert Triage
+Agent (highest reuse of existing backend pattern) → Phishing Email Body
+Classifier (most novel, needs the one-time local training step).
+
+### Deferred items — grouped together per explicit user request
+
+The user then asked to formally group the **not-buildable** cybersecurity
+items above together with **#11/#12/#21** (the CV-backlog items ruled out
+earlier this same session, see section 6 above) into one explicit
+"Deferred" section in `project_pending_master_list.md`, rather than
+leaving them scattered as individually-struck rows — done immediately
+after this log entry; see that file's new "Deferred — not buildable in
+this hosted architecture" section for the authoritative, up-to-date list.
