@@ -26,7 +26,10 @@ import json
 import logging
 import re
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+
+from security.rate_limit import limiter, LLM_LIMIT
+from security.budget import check_and_record_call
 from pydantic import BaseModel, Field
 
 from routers.rag.llm import complete
@@ -223,5 +226,7 @@ def run_prompt_injection_check(text: str) -> PromptInjectionCheckResponse:
 
 
 @router.post("/check", response_model=PromptInjectionCheckResponse)
-def check_prompt_injection(req: PromptInjectionCheckRequest):
+@limiter.limit(LLM_LIMIT)
+def check_prompt_injection(request: Request, req: PromptInjectionCheckRequest):
+    check_and_record_call("prompt-injection-check", pool="prompt_injection", daily_cap_env="PROMPT_INJECTION_DAILY_CAP")
     return run_prompt_injection_check(req.text)

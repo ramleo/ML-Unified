@@ -17,7 +17,10 @@ import json
 import logging
 import re
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+
+from security.rate_limit import limiter, LLM_LIMIT
+from security.budget import check_and_record_call
 from pydantic import BaseModel, Field
 
 from routers.rag.llm import complete
@@ -113,5 +116,7 @@ def run_triage(groups: list[AlertGroupIn]) -> list[TriageVerdict] | None:
 
 
 @router.post("/judge", response_model=list[TriageVerdict] | None)
-def judge_alerts(req: SiemTriageRequest):
+@limiter.limit(LLM_LIMIT)
+def judge_alerts(request: Request, req: SiemTriageRequest):
+    check_and_record_call("siem-triage", pool="siem_triage", daily_cap_env="SIEM_TRIAGE_DAILY_CAP")
     return run_triage(req.groups)

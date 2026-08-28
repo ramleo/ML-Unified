@@ -17,7 +17,10 @@ import json
 import logging
 import re
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+
+from security.rate_limit import limiter, LLM_LIMIT
+from security.budget import check_and_record_call
 from pydantic import BaseModel, Field
 
 from routers.rag.llm import complete
@@ -89,5 +92,7 @@ def run_judge(code: str) -> AiCodeJudgeVerdict | None:
 
 
 @router.post("/judge", response_model=AiCodeJudgeVerdict | None)
-def judge_code(req: AiCodeJudgeRequest):
+@limiter.limit(LLM_LIMIT)
+def judge_code(request: Request, req: AiCodeJudgeRequest):
+    check_and_record_call("ai-code-detector", pool="ai_code_detector", daily_cap_env="AI_CODE_DETECTOR_DAILY_CAP")
     return run_judge(req.code)

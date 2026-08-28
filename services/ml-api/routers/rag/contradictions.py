@@ -23,7 +23,10 @@ import logging
 import re
 from typing import Callable, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+
+from security.rate_limit import limiter, LLM_LIMIT
+from security.budget import check_and_record_call
 from pydantic import BaseModel
 
 from routers.rag.cache import cosine_sim
@@ -286,10 +289,12 @@ class ContradictionsRequest(BaseModel):
 
 
 @router.post("/contradictions")
-def check_contradictions(req: ContradictionsRequest):
+@limiter.limit(LLM_LIMIT)
+def check_contradictions(request: Request, req: ContradictionsRequest):
     """Scan this session's uploaded documents for cross-document factual
     contradictions. Always uses a fixed server-key-only provider (never the
     caller's selected/BYOK provider) — same reasoning as query expansion."""
+    check_and_record_call("contradictions", pool="contradictions", daily_cap_env="CONTRADICTIONS_DAILY_CAP")
     from routers.rag import get_rag_state
     from routers.rag.query import _resolve_key
 
@@ -310,10 +315,12 @@ class ReconciliationRequest(BaseModel):
 
 
 @router.post("/reconciliation")
-def check_reconciliation(req: ReconciliationRequest):
+@limiter.limit(LLM_LIMIT)
+def check_reconciliation(request: Request, req: ReconciliationRequest):
     """MMRAG-20: scan one contract against one or more invoices (all from
     this session's own uploads) for amount/date/term discrepancies. Same
     fixed server-key-only judge provider as /rag/contradictions."""
+    check_and_record_call("reconciliation", pool="contradictions", daily_cap_env="CONTRADICTIONS_DAILY_CAP")
     from routers.rag import get_rag_state
     from routers.rag.query import _resolve_key
 

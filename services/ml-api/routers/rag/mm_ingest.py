@@ -16,6 +16,8 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import AsyncGenerator
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+
+from security.file_gate import scan_upload_bytes
 from fastapi.responses import StreamingResponse
 
 from routers.rag.ingest import index_chunks
@@ -345,6 +347,18 @@ async def mm_ingest(
                             detail="Only PDF, image (PNG/JPG/GIF/WEBP/BMP/TIFF), CSV, video "
                                    "(MP4/MOV/WEBM/AVI/MKV), or audio (MP3/WAV/M4A/OGG/FLAC/AAC) "
                                    "files are supported.")
+
+    # None of the accepted content types above should ever contain an
+    # embedded executable/EICAR/webshell pattern — a match here is a real,
+    # high-confidence signal on this specific upload path, so this one
+    # blocks outright rather than just logging (unlike file_gate's default
+    # advisory framing, which is right for less content-constrained routes).
+    yara_matches = scan_upload_bytes(file_bytes, path="/rag/mm-ingest")
+    if yara_matches:
+        raise HTTPException(
+            status_code=400,
+            detail=f"This file matched a security pattern ({', '.join(m['rule'] for m in yara_matches)}) and was rejected.",
+        )
 
     return StreamingResponse(
         _stream(file_bytes, filename, embedding_mode, save_scope, session_id, content_type),

@@ -9,6 +9,14 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi import _rate_limit_exceeded_handler
+
+from security.origin_policy import get_cors_kwargs
+from security.rate_limit import limiter
+from security.body_size import enforce_body_size
 
 from routers import shap as _shap_router
 from routers import pipeline as _pipeline_router
@@ -97,12 +105,23 @@ async def _lifespan(app: FastAPI):
 
 
 app = FastAPI(title="ML API", lifespan=_lifespan)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+# Was allow_origins=["*"] — a real, confirmed gap (any origin could call
+# every one of this backend's ~50 public routers). Now an explicit
+# allowlist + Vercel-preview regex; see security/origin_policy.py.
+app.add_middleware(CORSMiddleware, **get_cors_kwargs())
+
+# Rate limiting (security/rate_limit.py) — was ZERO rate limiting on any
+# route before this. default_limits on the Limiter gives every route a
+# baseline limit; SlowAPIMiddleware is what actually enforces that default
+# for routes with no explicit @limiter.limit(...) decorator.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+# Global request-body size cap (security/body_size.py) — defense-in-depth
+# beneath the handful of routers that already cap uploads individually.
+app.add_middleware(BaseHTTPMiddleware, dispatch=enforce_body_size)
 
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "frontend")), name="static")
 
