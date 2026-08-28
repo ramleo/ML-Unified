@@ -30,6 +30,27 @@ import os
 
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from starlette.requests import Request
+
+
+def get_client_ip(request: Request) -> str:
+    """Real bug found via live testing on the deployed HF Space: raw
+    `request.client.host` (what `get_remote_address` reads) is just the last
+    TCP hop before uvicorn — on this platform that's a ROTATING pool of
+    Hugging Face's own internal proxy IPs, not the real caller. Confirmed
+    directly from the Space's own request logs: 65 rapid requests to the
+    same route from one client showed ~8 different `request.client.host`
+    values, scattering what should have been one rate-limit bucket across
+    several and letting every request through. Reading the real client IP
+    from `X-Forwarded-For` (the standard header any reverse proxy sets,
+    first entry = original client) is the correct fix on any platform
+    fronted by a proxy — not specific to HF Spaces. Falls back to the raw
+    peer address only if the header is absent (e.g. direct local testing)."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return get_remote_address(request)
+
 
 _BACKEND = os.environ.get("RATE_LIMIT_BACKEND", "memory")
 _REDIS_URL = os.environ.get("REDIS_URL", "")
@@ -46,4 +67,4 @@ LLM_LIMIT = os.environ.get("RATE_LIMIT_LLM", "10/minute")
 # @limiter.limit(LLM_LIMIT) decorator, which overrides the default for that
 # route only. Requires SlowAPIMiddleware (added in app.py) to actually
 # enforce default_limits on undecorated routes.
-limiter = Limiter(key_func=get_remote_address, storage_uri=_storage_uri, default_limits=[HEURISTIC_LIMIT])
+limiter = Limiter(key_func=get_client_ip, storage_uri=_storage_uri, default_limits=[HEURISTIC_LIMIT])
