@@ -25,6 +25,7 @@ langgraph>=0.2.0
 langchain-core>=0.3.0
 spacy>=3.7.0,<3.8.0
 dnspython>=2.6.0  # SPF/DMARC/DKIM DNS TXT lookups (email_auth_check.py)
+certifi>=2024.0.0  # explicit CA bundle for real TLS chain verification (tls_headers_check.py)
 sam2>=1.1.0  # video object tracking (mm_rotoscope.py); Apache 2.0, ungated
 # groundingdino-py + supervision are installed separately in the Dockerfile with
 # --no-deps: both declare an unpinned, non-headless opencv-python dependency that
