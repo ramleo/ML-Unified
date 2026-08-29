@@ -14,7 +14,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi import _rate_limit_exceeded_handler
 
-from security.origin_policy import get_cors_kwargs
+from security.origin_policy import get_cors_kwargs, enforce_origin
 from security.rate_limit import limiter
 from security.body_size import enforce_body_size
 
@@ -110,6 +110,15 @@ app = FastAPI(title="ML API", lifespan=_lifespan)
 # every one of this backend's ~50 public routers). Now an explicit
 # allowlist + Vercel-preview regex; see security/origin_policy.py.
 app.add_middleware(CORSMiddleware, **get_cors_kwargs())
+
+# Hard block, not just CORS headers: Hugging Face Spaces' own proxy
+# injects its own permissive CORS policy in front of this app, so
+# CORSMiddleware's headers alone are NOT actually enforced on the live
+# Space (confirmed live — a disallowed-origin request still got CORS
+# headers back). enforce_origin instead outright rejects (403) a
+# disallowed Origin before any router runs, which the proxy can't
+# override since it isn't a header negotiation.
+app.add_middleware(BaseHTTPMiddleware, dispatch=enforce_origin)
 
 # Rate limiting (security/rate_limit.py) — was ZERO rate limiting on any
 # route before this. default_limits on the Limiter gives every route a
