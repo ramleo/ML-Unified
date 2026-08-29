@@ -21,6 +21,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # The 400-line limit used to be a rule someone had to remember, which meant
+  # it was skipped exactly when following it was inconvenient. Now it fails the
+  # build. See scripts/check-file-length.sh for what the baseline does.
+  file-length:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check file lengths
+        run: ./scripts/check-file-length.sh
+
   test:
     runs-on: ubuntu-latest
     steps:

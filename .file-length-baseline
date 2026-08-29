@@ -1,0 +1,17 @@
+# Files already over the 400-line limit when this gate was added.
+#
+# Each line pins a file at its current size: it may shrink or hold, but
+# CI fails if it grows. This is a debt register, not a set of exemptions —
+# once a file drops to 400 lines or fewer, delete its line here so the
+# normal limit applies again.
+#
+# Regenerate with: scripts/check-file-length.sh --update
+# format: <max-lines> <path>
+1693 services/ml-api/frontend/common.css
+1961 services/ml-api/frontend/eda.html
+5017 services/ml-api/frontend/index.html
+1328 services/ml-api/frontend/vision.html
+403 services/ml-api/routers/core/automl.py
+408 services/ml-api/routers/eda.py
+410 services/ml-api/routers/pipeline_builder/automl_stage.py
+868 services/ml-vision/app.py
