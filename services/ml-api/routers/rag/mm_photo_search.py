@@ -41,6 +41,8 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from security.file_gate import scan_upload_bytes
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -88,7 +90,7 @@ class DuplicatesRequest(BaseModel):
     threshold: float = 0.97
 
 
-def _decode_and_embed(photos: list[PhotoItem]) -> tuple[list, list[str], int]:
+def _decode_and_embed(photos: list[PhotoItem], path: str = "/rag/mm-photo-search") -> tuple[list, list[str], int]:
     """Shared by search and duplicate-detection: decode each photo, drop
     anything invalid/oversized, and CLIP-embed the rest in one batched call.
     Returns (embeddings, filenames-in-the-same-order, skipped-count)."""
@@ -110,6 +112,7 @@ def _decode_and_embed(photos: list[PhotoItem]) -> tuple[list, list[str], int]:
             if len(raw) > _MAX_IMAGE_BYTES:
                 skipped += 1
                 continue
+            scan_upload_bytes(raw, path=path)
             img = Image.open(io.BytesIO(raw)).convert("RGB")
             images.append(img)
             filenames.append(p.filename)
@@ -134,13 +137,14 @@ def search_photos(
     if not query and not query_image:
         raise HTTPException(status_code=400, detail="query or query_image is required")
 
-    image_embeds, filenames, skipped = _decode_and_embed(photos)
+    image_embeds, filenames, skipped = _decode_and_embed(photos, path="/rag/mm-photo-search/search")
 
     from PIL import Image
 
     if query_image:
         try:
             raw = base64.b64decode(query_image, validate=True)
+            scan_upload_bytes(raw, path="/rag/mm-photo-search/search")
             ref_img = Image.open(io.BytesIO(raw)).convert("RGB")
         except Exception:
             raise HTTPException(status_code=400, detail="Could not decode the reference image.")
@@ -192,7 +196,7 @@ def find_duplicates(photos: list[PhotoItem], threshold: float = 0.97) -> dict:
     _MAX_PHOTOS. Singleton "groups" (nothing similar enough to any other
     photo) are dropped — they're not duplicates of anything, not worth
     reporting."""
-    image_embeds, filenames, skipped = _decode_and_embed(photos)
+    image_embeds, filenames, skipped = _decode_and_embed(photos, path="/rag/mm-photo-search/duplicates")
 
     n = len(filenames)
     norms = image_embeds / np.linalg.norm(image_embeds, axis=1, keepdims=True)

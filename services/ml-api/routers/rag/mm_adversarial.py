@@ -131,6 +131,7 @@ from pydantic import BaseModel
 from . import mm_adversarial_attacks as attacks
 from . import mm_adversarial_defenses as defenses
 from . import mm_adversarial_models as models
+from security.file_gate import scan_upload_bytes
 
 router = APIRouter()
 
@@ -184,6 +185,7 @@ def run_adversarial_demo(
         raw = base64.b64decode(image_b64, validate=True)
         if len(raw) > _MAX_IMAGE_BYTES:
             raise HTTPException(status_code=400, detail="Image too large (max 8MB).")
+        scan_upload_bytes(raw, path="/rag/mm-adversarial/run")
         img = Image.open(io.BytesIO(raw)).convert("RGB")
     except HTTPException:
         raise

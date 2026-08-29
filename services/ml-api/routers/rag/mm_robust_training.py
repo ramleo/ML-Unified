@@ -65,6 +65,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 from routers.rag.mm_robust_training_samples import SAMPLE_DIGITS
+from security.file_gate import scan_upload_bytes
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -245,6 +246,7 @@ def run_robust_training_upload(image_b64: str, intended_label: int, epsilon: flo
         raw = base64.b64decode(image_b64, validate=True)
         if len(raw) > 8 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="Image too large (max 8MB).")
+        scan_upload_bytes(raw, path="/rag/mm-robust-training/run-upload")
     except HTTPException:
         raise
     except Exception:

@@ -29,6 +29,8 @@ from fastapi import APIRouter, HTTPException
 from PIL import Image
 from pydantic import BaseModel
 
+from security.file_gate import scan_upload_bytes
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -82,7 +84,9 @@ def estimate_depth(b64: str) -> dict:
     per-image — there's no cross-image scale to preserve, each depth map
     only needs to be internally consistent for the parallax effect."""
     try:
-        img = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
+        raw = base64.b64decode(b64)
+        scan_upload_bytes(raw, path="/rag/mm-depth")
+        img = Image.open(io.BytesIO(raw)).convert("RGB")
     except Exception as exc:
         logger.warning("Depth: could not decode image: %s", exc)
         return {"depth_map": None, "width": 0, "height": 0, "error": "could not decode image"}

@@ -69,6 +69,8 @@ from fastapi import APIRouter, HTTPException
 from PIL import Image
 from pydantic import BaseModel
 
+from security.file_gate import scan_upload_bytes
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -186,6 +188,7 @@ def run_style_cloak(image_b64: str, epsilon: float) -> dict:
         raw = base64.b64decode(image_b64, validate=True)
         if len(raw) > 8 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="Image too large (max 8MB).")
+        scan_upload_bytes(raw, path="/rag/mm-style-cloak/run")
         img = Image.open(io.BytesIO(raw)).convert("RGB")
     except HTTPException:
         raise

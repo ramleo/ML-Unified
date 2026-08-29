@@ -58,6 +58,7 @@ from routers.document._vision import mistral_ocr_pages
 from routers.rag._image_gen_budget import check_and_record_call
 from routers.rag.mm_caption import clean_ocr_text
 from routers.rag.mm_deblur_classify import classify_and_describe
+from security.file_gate import scan_upload_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -327,6 +328,7 @@ def deblur_image(body: DeblurRequest):
     if not key:
         raise HTTPException(status_code=502, detail="Sharpen is not configured (missing GEMINI_API_KEY).")
 
+    scan_upload_bytes(base64.b64decode(body.image), path="/rag/mm-deblur")
     try:
         if body.bbox:
             return _sharpen_region(key, body.image, body.bbox)
