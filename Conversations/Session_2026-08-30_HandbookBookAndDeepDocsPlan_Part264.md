@@ -291,3 +291,154 @@ Point 7 is the one that serves the stated purpose.
 6. **Search one source badly, and you will conclude the thing does not exist.**
    Four bad queries against Wikimedia produced "there are no suitable free
    images". Openverse and then Pexels both disproved it within minutes.
+
+---
+
+# Part 264b — after the compaction: the first five deep chapters shipped
+
+Written after the context was compacted, appended here rather than started as a
+new log so the whole handbook job stays in one file.
+
+## 8. What changed
+
+### The handbook is committed and pushed
+
+It was uncommitted for the whole of the first half of this session. It is now
+live on `main`.
+
+| Commit | What |
+|---|---|
+| `e1e99ef` | the book rebuild plus the first five deep chapters — 16 files |
+| `eeb085a` | browser-only tags for two tools, and a wrong URL in the book |
+
+Both pushed to `github.com/ramleo/ML-Portfolio`.
+
+### The five deep chapters exist
+
+`docs/chapters/<capability-id>.md` — a new directory. Five files, ~12,200 words:
+
+| File | Words | Tool |
+|---|---|---|
+| `automl.md` | 2,522 | AutoML Pipeline |
+| `shap.md` | 2,293 | SHAP Explainability |
+| `optuna.md` | 2,440 | Optuna Tuning |
+| `preprocessing.md` | 2,439 | Data Preprocessing |
+| `featureeng.md` | 2,495 | Feature Engineering |
+
+**Note the file names are capability ids, not route names.** `featureeng`, not
+`feature-engineering`. The generator keys off `capabilities.ts`, so the chapter
+file has to match the id there. Two ids differ from their route — `featureeng`
+and `featureselect` — and that mismatch caused a real bug, below.
+
+All five follow the seven-point template from §5 above, ending with **Likely
+interview questions** with worked answers.
+
+### How the generator picks them up
+
+`scripts/build-handbook.py`, now 345 lines:
+
+- `CHAPTERS = ROOT / "docs" / "chapters"` and a `read_deep(tool_id)` beside
+  `read_guide`.
+- `has_chapter(c)` = has a guide **or** a deep chapter. Both the part list and
+  the chapter list use it, so a tool with only a deep chapter now gets one.
+- Emission order inside a chapter: description quote → **At a glance** table →
+  the guide, if any → the deep chapter. When a tool has **both**, the guide is
+  given a `## Using the tool` heading first, so its sections do not read as if
+  they belonged to the facts table above them. That heading is suppressed when
+  there is no deep chapter, which keeps the 36 existing chapters byte-identical.
+- Deep chapters use `##` as their top heading level and are inserted **as
+  written** — no level shifting. Guides are still shifted, because they carry
+  their own `#` title. Verified in the built HTML: the deep sections render as
+  real `<h2>`s alongside *At a glance*.
+- The colophon paragraph was reworded — it used to claim chapters exist only for
+  tools that ship a guide, which is no longer true.
+
+Result: **36 chapters → 41. 236 KB → 315 KB.**
+
+## 9. Two defects found and fixed
+
+### "Where it runs" was wrong for two tools
+
+The **At a glance** table's *Where it runs* row is derived from the card's tags:
+
+```python
+if {"Local Compute", "Client-Side", "Browser-Only"} & tags: ...
+```
+
+Data Preprocessing and Feature Engineering both run **entirely in the browser** —
+`preprocessCSV()` in `src/lib/preprocessing.ts` and `applyTransforms()` in
+`src/lib/feTransforms.ts`, with no network call in either path (feature
+engineering's only `fetch` is the optional AI-suggest button). Neither card
+carried a `Local Compute` tag, so the book printed *"On the server"* three
+paragraphs above chapter text saying the opposite.
+
+Seventeen other tools already carry that tag; these two were simply missed.
+Fixed by adding it to both cards in `capabilities.ts` — which also makes the tag
+filter on the ML Pipeline area page find them, and puts the chip on the card.
+
+**This was raised and held rather than done silently, because tags are visible
+site content, not just book data.** The owner chose the fix.
+
+### The book printed a URL that 404s
+
+`| **Find it at** | /tools/featureeng |` — that route does not exist. The line
+was built from `c['id']`, and two ids are not their route. Now built from
+`internalLink`, the same value the site navigates with, falling back to the id.
+Only those two were wrong; the other 48 already matched.
+
+## 10. A process mistake worth not repeating
+
+The owner said **"first commit the handbook"**. That was read as *"handbook now,
+chapters later"* — so `docs/chapters/` was moved out of the repo, the book
+regenerated without it, and a chapters-free commit staged. The owner stopped it:
+*"why deep chapters should stay uncommitted? do they not belong to handbook?"*
+
+They do. The split was invented, not asked for. The chapters were restored from
+the scratchpad, the book regenerated, and everything committed as one piece.
+
+**The lesson: "first X" means "X before the other thing", not "X minus the part
+I decided to defer".** When a commit's contents are ambiguous, list the files and
+ask — do not narrow the scope unilaterally.
+
+## 11. Verification actually performed
+
+- `python3 scripts/build-handbook.py` — 41 chapters, 4 parts, 50 tools in the
+  appendix, 315 KB.
+- `npx next build` — compiles clean, `/handbook` prerenders.
+- Built HTML inspected: 49 tables render as tables (`remark-gfm` working), 41
+  `bk-chapter` anchors, deep sections at `<h2>`.
+- `./scripts/check-file-length.sh` — passes; `build-handbook.py` is 345 lines,
+  under the 400 gate. `.md` files are not gated.
+- Area page HTML after the tag change: `Local Compute` now appears on
+  `/tools/ml-pipeline`.
+
+**Still not verified, carried over from §2:** the printed folio digits in the
+PDF. This machine cannot turn a PDF page into an image. Click *Download as PDF*
+on `/handbook` and check the contents page against a chapter's folio by eye.
+
+## 12. What remains of the 50-tool job
+
+**10 tools still have no chapter at all:**
+
+`ensemble` · `drift` · `feature-selection` · `pipeline-builder` ·
+`pipeline-cinema` · `depth-parallax` · `face-liveness` · `pose-vj-visuals` ·
+`text-to-image` · `rag-analytics`
+
+**36 tools have a guide and still need the "how it works and why" half.** The
+`## Using the tool` heading machinery is already in place for them.
+
+The owner reads the first five and confirms depth and tone before the rest
+proceed. Everything in §5 above — the template, the code map, the two accepted
+warnings — still applies unchanged.
+
+## 13. Uncommitted at the end of this session
+
+**ml-portfolio: nothing.** Clean tree, both commits pushed.
+
+**ML-Unified: 16 paths, none created by this session.** Three modified
+(`CLAUDE.md`, `services/ml-sql/requirements.txt`,
+`services/ml-vision/Dockerfile`), nine that look like CI test output and may
+want a `.gitignore` rule rather than a commit (`catboost_info/`,
+`data/chroma_db/`, six `ci-test-*` model and schema files), and four real
+untracked files (`services/ml-vision/README.md`, `test_invoice.pdf`,
+`test_llm_invoice_items.py`, `test_pipeline.csv`). Left untouched.
