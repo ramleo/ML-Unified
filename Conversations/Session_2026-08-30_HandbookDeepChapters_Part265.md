@@ -1,4 +1,7 @@
-# Session 2026-08-30 (Part 265) — the handbook's deep chapters, 39 of 50 written
+# Session 2026-08-30 (Part 265) — the handbook's deep chapters, 50 of 50 written
+
+*Amended after the run resumed the same day and finished. The counts below are
+final; §5 records how the open decision was resolved.*
 
 Continues Part 264 / 264b
 (`Session_2026-08-30_HandbookBookAndDeepDocsPlan_Part264.md`), which holds the
@@ -9,11 +12,11 @@ Read that first — this log records only what changed after it.
 
 ## 0. Where things stand in one paragraph
 
-Every one of the 50 tools has a chapter in the book. **39 now carry a deep,
-hand-written chapter** explaining how the tool actually works; the remaining 11
-carry only the short in-app guide they already shipped. All 39 are committed and
-pushed. The work stopped mid-run because the owner flagged the token burn rate,
-and a decision on how to finish the last 11 is open.
+Every one of the 50 tools has a chapter in the book, and **all 50 now carry a
+deep, hand-written chapter** explaining how the tool actually works. All are
+committed and pushed. The run was paused mid-way when the owner flagged the
+token burn rate; it resumed the same day, in batches of five at full depth, and
+finished. The coverage audit reports no gaps.
 
 ---
 
@@ -23,9 +26,9 @@ and a decision on how to finish the last 11 is open.
 |---|---|
 | Tools in `capabilities.ts` | 50 |
 | Chapters in the book | 50 |
-| **Deep chapters written** | **39** |
-| Remaining | 11 |
-| `public/handbook.md` | ~1,400 lines, roughly 700 KB |
+| **Deep chapters written** | **50** |
+| Remaining | 0 |
+| `public/handbook.md` | 1,443 lines, 863 KB |
 
 Coverage by area, all verified by script against the real files:
 
@@ -34,7 +37,7 @@ Coverage by area, all verified by script against the real files:
 | ML Pipeline | 11 of 11 | 0 |
 | Language & Documents | 4 of 4 | 0 |
 | Computer Vision | 14 of 14 | 0 |
-| Security & Trust | 10 of 21 | **11** |
+| Security & Trust | 21 of 21 | 0 |
 
 ---
 
@@ -42,6 +45,9 @@ Coverage by area, all verified by script against the real files:
 
 | Commit | What |
 |---|---|
+| `3e165ae` | Face Cloak, Face Deanonymization, Style Cloak, Video Keystroke Inference, Extension Permission Analyzer — **50 of 50** |
+| `50d3383` | AI Code Detector, Keystroke Biometric Auth-Risk, Adversarial Robustness Lab, CAPTCHA Hardening Lab, Malware Image Triage |
+| `65a50cf` | Prompt Injection Playground (was §3's uncommitted file) |
 | `6cfa73b` | Phishing Classifier, SIEM Triage, QR Phishing Detector |
 | `f24bd5b` | DNS Tunneling, Malicious Package Scanner, Attack Surface |
 | `af0c035` | YARA, TLS/Headers, Email Auth, Password Audit |
@@ -61,62 +67,73 @@ All pushed to `github.com/ramleo/ML-Portfolio`.
 
 ---
 
-## 3. UNCOMMITTED — one file
+## 3. UNCOMMITTED — none
 
-`docs/chapters/prompt-injection-playground.md` — written, complete, not
-committed. It is the 40th chapter. Committing it is nearly free.
+`docs/chapters/prompt-injection-playground.md` was the one outstanding file when
+this log was first written. It was committed as `65a50cf`. Both repos' working
+trees are clean.
 
 ---
 
-## 4. The 11 tools still without a deep chapter
+## 4. The tools still without a deep chapter — none
 
-All Security & Trust:
+The eleven listed here originally were all Security & Trust:
 
 `ai-code-detector` · `keystroke-biometric-auth-risk` ·
 `adversarial-robustness-lab` · `captcha-hardening-lab` · `malware-image-triage` ·
 `face-deanonymization-demo` · `video-keystroke-inference` ·
 `extension-permission-analyzer` · `face-cloak` · `style-cloak` ·
-`prompt-injection-playground` *(written, uncommitted — see §3)*
+`prompt-injection-playground`
 
-So committing §3 leaves **10**.
-
-**Half-read when work stopped:** the AI Code Detector. Its stylometry lives in
-`src/app/tools/ai-code-detector/stylometry.ts` — signals are comment density,
-generic names, boilerplate explanatory phrasing, formal docstrings, and absence
-of mess with mechanically uniform spacing; the overall label is
-`several`/`few`/`none` at 3+/1+/0 signals, deliberately never a probability. The
-backend (`routers/ai_code_detector.py`) adds one LLM opinion on a fixed server
-key whose prompt is written to answer "inconclusive" unless a tell is clear.
-The module docstring's own line is the chapter's spine: *no peer-reviewed
-benchmark validates a reliable general-purpose AI-vs-human code detector.*
+All eleven are now written and committed. A coverage script that reads the tool
+ids straight out of `src/data/capabilities.ts` and compares them against
+`docs/chapters/*.md` reports **50 of 50, missing: NONE**.
 
 ---
 
-## 5. THE OPEN DECISION — how to finish
+## 5. THE OPEN DECISION — resolved
 
-The owner stopped the run: **21% of usage in about 10 minutes.**
+The owner stopped the run at **21% of usage in about 10 minutes.**
 
 No agents were used at any point. The cost is the method: for each chapter, read
 the tool's real frontend and backend source (4–6 file reads), then write roughly
-1,800 words. Times 39.
+1,800 words.
 
-Three options were put to the owner and **none has been chosen yet**:
+Three options were put to the owner:
 
 1. **Stop at 39/40.** The remaining tools keep their in-app guides in the book.
-2. **Shorter chapters for the rest** — about half the length, less code reading:
-   the mechanism and the interview questions, without the full
-   limits-and-rationale treatment.
+2. **Shorter chapters for the rest** — about half the length, less code reading.
 3. **Carry on as-is** — roughly another 20% of usage.
 
-Recommendation given: option 2 to finish, option 1 if the last ten are
-low-value.
+**The owner chose option 3, with one modification: batches of five, committed
+between batches.** "let the chapters be detailed, do in batches of 5 chapters."
+Two batches finished the job. Batching turned out to be the useful part — it
+gives a natural checkpoint, a clean commit boundary, and a place for the owner
+to stop the run without losing work.
 
 **The lesson to carry forward: flag the burn rate BEFORE starting a long
-repetitive run, not 21% into it.**
+repetitive run, not 21% into it.** The batch structure is the practical form of
+that lesson — propose the batch size up front and let the owner set the pace.
 
 ---
 
-## 6. What each chapter contains
+## 6. Verification run after each batch
+
+Same four checks both times, all passing:
+
+- `python3 scripts/build-handbook.py` — regenerates `public/handbook.md`
+- the coverage audit above — ids in `capabilities.ts` vs. files in `docs/chapters/`
+- `./scripts/check-file-length.sh` — 627 tracked source files, none over 400
+  lines except pinned debt (`.md` is not gated, which is why the chapters
+  themselves are exempt)
+- `npx next build` — compiled successfully
+
+No backend files were touched in either batch, so no HF Space upload was
+required.
+
+---
+
+## 7. What each chapter contains
 
 The 7-point template from Part 264 §5, unchanged: what problem it solves; how it
 works step by step; the model or algorithm; why these choices; how to read the
@@ -132,7 +149,7 @@ Two conventions held throughout:
 
 ---
 
-## 7. Findings worth keeping (a sample — each is in its chapter)
+## 8. Findings worth keeping (a sample — each is in its chapter)
 
 - **Feature Selection's "mutual information"** is `-0.5*log(1-r^2)` from a
   Pearson correlation — linear dependence only. Its "trees" are single stumps,
@@ -162,7 +179,7 @@ Two conventions held throughout:
 
 ---
 
-## 8. Also done this session, before the chapters
+## 9. Also done this session, before the chapters
 
 Recorded in Part 264b but repeated here because it is easy to lose:
 
@@ -183,7 +200,7 @@ Recorded in Part 264b but repeated here because it is easy to lose:
 
 ---
 
-## 9. Commands
+## 10. Commands
 
 ```bash
 python3 scripts/build-handbook.py     # regenerate; CI fails if the .md is stale
@@ -206,7 +223,7 @@ print(len(ids), len(deep), sorted(set(ids) - deep))
 
 ---
 
-## 10. Standing constraints (unchanged)
+## 11. Standing constraints (unchanged)
 
 - Ask before every `git commit`, in both repos.
 - **Never spawn a subagent without asking.** None were used this session.
