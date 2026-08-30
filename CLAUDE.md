@@ -7,3 +7,5 @@
 3. **No file over 400 lines** — before touching any file, check its line count (`wc -l`). If it is over 350 lines, modularize it first via a subagent, then add the feature.
 
 4. **HF Space upload is mandatory after every backend commit** — after any `git push origin main` that includes backend changes (`services/ml-api/**`), immediately upload all changed `.py` files to HF Space using `api.upload_file()` with token from `git remote get-url hf`. Repo: `wram1708/ml-unified`, `repo_type="space"`, strip `services/ml-api/` prefix from path. Never close out backend work without this step.
+
+5. **Batch deploys; two failures = stop** — every HF upload triggers a 2-5 min rebuild during which the Space serves proxy 500s that never reach the app. Accumulate ALL related changes locally, deploy ONCE, verify ONCE (confirm the new code is actually serving — not just stage=RUNNING — before any UI test). If the same error appears twice, STOP all retries and find the root cause with direct evidence (raw API call, Space logs at `huggingface.co/api/spaces/{id}/logs/run`) before any third attempt. The user's time is the scarcest resource in this project.
