@@ -350,14 +350,18 @@ at a time with minimal re-reads, and no speculative re-recording was performed.
   `test_llm_invoice_items.py`, `test_pipeline.csv`) — still the owner's call.
 - **Three handbook navigation requests** — search bar, return-to-position
   scrolling, and a video marker in the contents. See §13.
+- **A reported bug: 2x speed does not work properly for audio**, on both handbook
+  surfaces — the recorded demo clips and the chapter read-aloud bar — and worst
+  for the live-narrated voices. Not reproduced yet. See §13.4.
 
 ---
 
-## 13. Requested next — handbook navigation (not started)
+## 13. Requested next — handbook navigation and one bug (not started)
 
 Three asks raised at the end of this session, all about *moving around* the
-handbook rather than its content. Recorded here verbatim in intent; none of them
-has been designed or estimated yet.
+handbook rather than its content, plus one reported bug. Recorded here verbatim
+in intent; none of them has been designed, estimated, or in the bug's case even
+reproduced.
 
 ### 13.1 A search bar in the handbook
 
@@ -402,6 +406,71 @@ which matters because the list grows every batch.
 
 **Per the standing no-emoji rule, the marker must be an inline SVG, not a
 character like ▶ or a video emoji.**
+
+### 13.4 BUG — 2x speed does not work properly for audio
+
+Reported by the owner, **not yet reproduced or root-caused**. Worst at 2x, and
+specifically noted as bad *for the list of added voices* — i.e. the
+voice-override picker, rather than the baked-in "As recorded" track.
+
+**It affects both surfaces, and both of them are in the handbook section:**
+
+- the **recorded demo clips** (`HandbookDemo.tsx` + `DemoVoice.tsx`), and
+- the **read-aloud bar** for the chapter text itself (`HandbookAudio.tsx`).
+
+That is worth stating plainly because the two are separate pieces of code that
+happen to share the same defect. They both speak through
+`speechSynthesis` on their own clock, independent of anything they are supposed
+to be keeping time with.
+
+Two findings from a read of the code, offered as **the most likely explanation,
+not a confirmed cause** — nobody has reproduced this yet:
+
+1. **The narrator never learns the video sped up.** `DemoVoice.tsx` schedules
+   cues off `video.currentTime` (line 171), which does keep up when the clip is
+   sped up — the *cues* fire at the right frames. But the speaking itself is
+   `src/lib/presenter/voice.ts:68`, which hardcodes:
+
+   ```ts
+   u.rate = 0.95;
+   u.pitch = 0.95;
+   ```
+
+   Nothing anywhere reads `video.playbackRate`. So at 2x the picture arrives at
+   each cue in half the time while every line still takes its full wall-clock
+   length to speak. Lines would run into each other, or get cut off by the next
+   cue firing — which matches "not working properly" far better than silence
+   would.
+
+2. **The read-aloud bar tops out at 1.5 — there is no 2x to select.** Its speed
+   selector (`HandbookAudio.tsx:373`) offers
+   `[0.75, 0.85, 0.95, 1, 1.1, 1.25, 1.5]`. So on that surface the report has two
+   possible readings and both need addressing: 2x is not offered at all, *and*
+   the fastest settings that are offered may already sound wrong. Unlike the
+   clips, this bar has no video to stay in sync with — its `u.rate` is set from
+   the picker (`HandbookAudio.tsx:219`), so if 1.25 and 1.5 already misbehave the
+   cause is not desync but the voice itself: many OS voices degrade badly above
+   about 1.5, and the compact voices most machines ship degrade earliest. That
+   would be a ceiling in the platform, not a bug in this code — but it has not
+   been checked, and it must be before anyone claims either.
+
+Note the asymmetry that makes this consistent with the report: the **"As
+recorded"** track is muxed into the video file, so the browser resamples it with
+the picture and 2x simply works. Every **live-narrated** voice — browser voices
+and any bring-your-own-key provider — is spoken independently of the video and
+therefore does not scale. That is exactly "especially for the list of added
+voices".
+
+Fixing the clip side likely means passing the video's current `playbackRate`
+into the presenter and multiplying `u.rate` by it. Fixing the reading-bar side
+is likely just extending the selector — assuming the voices hold up, which is
+the thing to check first. Both share one caveat: `speechSynthesis` clamps rate
+(roughly 0.1–10) and real OS voices degrade well before the clamp, so 2x may be
+reachable for the browser path and not for a hosted provider returning a fixed
+audio file, which cannot be sped up this way at all.
+
+**Reproduce on both surfaces before changing anything.** Two separate files are
+involved and they may not have the same defect.
 
 ---
 
