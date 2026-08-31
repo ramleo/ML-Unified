@@ -17,7 +17,7 @@ from typing import AsyncGenerator
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from security.file_gate import scan_upload_bytes
+from security.file_gate import blocking_matches, scan_upload_bytes
 from fastapi.responses import StreamingResponse
 
 from routers.rag.ingest import index_chunks
@@ -349,11 +349,21 @@ async def mm_ingest(
                                    "files are supported.")
 
     # None of the accepted content types above should ever contain an
-    # embedded executable/EICAR/webshell pattern — a match here is a real,
-    # high-confidence signal on this specific upload path, so this one
-    # blocks outright rather than just logging (unlike file_gate's default
-    # advisory framing, which is right for less content-constrained routes).
-    yara_matches = scan_upload_bytes(file_bytes, path="/rag/mm-ingest")
+    # embedded executable/EICAR/webshell pattern — a match on one of those is
+    # a real, high-confidence signal on this specific upload path, so this
+    # route blocks outright rather than just logging (unlike file_gate's
+    # default advisory framing, which is right for less constrained routes).
+    #
+    # But only on those. This once blocked on ANY match, which included
+    # High_Overall_Entropy — a rule whose own description says it is "true of
+    # ordinary compressed formats" and "informational, not a verdict on its
+    # own". Since every PDF, JPEG, WebP, MP4 and MP3 is compressed and scores
+    # around 7.94 against a 7.5 threshold, this route rejected effectively
+    # every real file it was given. Measured before the fix: a 106 KB PDF at
+    # 7.947 and one of this site's own 2.7 KB thumbnails at 7.940, both 400.
+    # The advisory match is still scanned for and still logged by file_gate;
+    # it just no longer decides the request.
+    yara_matches = blocking_matches(scan_upload_bytes(file_bytes, path="/rag/mm-ingest"))
     if yara_matches:
         raise HTTPException(
             status_code=400,
