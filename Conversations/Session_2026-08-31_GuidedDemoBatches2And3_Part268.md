@@ -348,10 +348,64 @@ at a time with minimal re-reads, and no speculative re-recording was performed.
   over from Part 267).
 - Three untracked files in ML-Unified root (`test_invoice.pdf`,
   `test_llm_invoice_items.py`, `test_pipeline.csv`) — still the owner's call.
+- **Three handbook navigation requests** — search bar, return-to-position
+  scrolling, and a video marker in the contents. See §13.
 
 ---
 
-## 13. Standing constraints unchanged
+## 13. Requested next — handbook navigation (not started)
+
+Three asks raised at the end of this session, all about *moving around* the
+handbook rather than its content. Recorded here verbatim in intent; none of them
+has been designed or estimated yet.
+
+### 13.1 A search bar in the handbook
+
+The handbook is 17,406 lines across 50 chapters in a single page. There is a
+table of contents and nothing else — no way to find a term without the browser's
+own Ctrl-F, which on a document this size is slow and gives no sense of *where*
+a hit lives.
+
+Worth knowing before designing this: the site already has live-search matching
+logic in `wordMatch.ts` (prefix + stemmer + irregular list, deliberately not a
+lemmatizer — see the `search-matching-hybrid` note), so there is an existing
+convention to follow rather than a new one to invent.
+
+### 13.2 Return-to-position scrolling
+
+> *"option to scroll up from wherever a user wants to scroll up in handbook
+> section, it tedious to scroll up every time whenever i scroll down to a
+> particular part of handbook."*
+
+The complaint is concrete: having scrolled deep into a chapter, getting back up
+means dragging all the way. What is wanted is a way back up from wherever you
+are — at minimum a back-to-top affordance, and possibly a "return to where I
+was" that survives a jump. Worth clarifying which of the two is meant before
+building, since they are different features:
+
+- **back to top** — one button, always available, trivial
+- **return to previous position** — remembers where you jumped *from*, so
+  following a contents link and coming back is one click
+
+### 13.3 A video marker in the contents
+
+Eleven of the fifty chapters now have a guided demo, and nothing in the table of
+contents says which. A reader scanning the index cannot tell that chapter 43 has
+a clip and chapter 44 did not until this session.
+
+Implementation note for whoever picks this up: the contents list is generated
+markup in `public/handbook.md`, and the set of chapters with demos is already
+available programmatically — `demoForChapter(id)` in `src/data/demos/index.ts`
+is exactly this lookup, and `DemoLauncher.tsx` already uses it to decide where to
+insert a launch button. So the marker can be derived rather than hand-maintained,
+which matters because the list grows every batch.
+
+**Per the standing no-emoji rule, the marker must be an inline SVG, not a
+character like ▶ or a video emoji.**
+
+---
+
+## 14. Standing constraints unchanged
 
 - **"first tell" = stop.** Text only until an explicit "proceed".
 - **Never spawn a subagent without asking.** None were used this session,
