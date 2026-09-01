@@ -364,11 +364,22 @@ handbook rather than its content, plus one reported bug. Recorded here verbatim
 in intent; at the time of writing none had been designed, estimated, or in the
 bug's case even reproduced.
 
-> **Status as of 2026-09-01 (Part 269).** 13.1 is shipped. 13.2 is partly
-> shipped — the mechanical difficulty is solved by a chapter rail, the
-> "return to where I jumped from" half is not built. 13.3 and 13.4 are
-> untouched. Per-item notes are inline below; the build is written up in
-> `Session_2026-09-01_HandbookSearchAndChapterRail_Part269.md`.
+> **Status as of 2026-09-01 (Part 270).** 13.1, 13.3 and 13.4 are all
+> shipped. 13.2 is partly shipped — the mechanical difficulty is solved by a
+> chapter rail, the "return to where I jumped from" half is not built.
+> Per-item notes are inline below; the builds are written up in
+> `Session_2026-09-01_HandbookSearchAndChapterRail_Part269.md` (13.1, 13.2)
+> and `Session_2026-09-01_ContentsDemoMarkersAndSpeedBug_Part270.md`
+> (13.3, 13.4).
+>
+> **Two claims in 13.4 below are wrong and are left in place with this
+> correction rather than edited away.** Voices do *not* degrade above 1.5 on
+> the machine this was measured on — the same sentence tracks `base/rate`
+> within ~5% to 3x with every word-boundary event still firing. And a hosted
+> provider's fixed audio file *can* be sped up: it plays through an
+> `HTMLAudioElement`, which has a `playbackRate`. Part 270 §6 has the
+> measurements. The first hypothesis in 13.4 — that the narrator never learns
+> the video sped up — was correct and was the whole bug.
 
 ### 13.1 A search bar in the handbook — SHIPPED 2026-09-01
 
@@ -411,7 +422,7 @@ building, since they are different features:
 > 387,000px page. The second half — remembering where a jump came *from* — is
 > **still not built**.
 
-### 13.3 A video marker in the contents — STILL OPEN
+### 13.3 A video marker in the contents — SHIPPED 2026-09-01
 
 Eleven of the fifty chapters now have a guided demo, and nothing in the table of
 contents says which. A reader scanning the index cannot tell that chapter 43 has
@@ -427,7 +438,13 @@ which matters because the list grows every batch.
 **Per the standing no-emoji rule, the marker must be an inline SVG, not a
 character like ▶ or a video emoji.**
 
-### 13.4 BUG — 2x speed does not work properly for audio — STILL OPEN, NOT REPRODUCED
+### 13.4 BUG — 2x speed does not work properly for audio — FIXED 2026-09-01
+
+> Reproduced, root-caused and fixed in Part 270 across two commits: `4ea631e`
+> (the clip narrator now speaks at the clip's speed — 8 of 10 lines were being
+> cut off mid-sentence at 2x, now 0) and `9dcf66b` (1.75x and 2x added to the
+> read-aloud bar, which had no defect beyond not offering them). See the
+> correction in the status block above before trusting the analysis below.
 
 Reported by the owner, **not yet reproduced or root-caused**. Worst at 2x, and
 specifically noted as bad *for the list of added voices* — i.e. the

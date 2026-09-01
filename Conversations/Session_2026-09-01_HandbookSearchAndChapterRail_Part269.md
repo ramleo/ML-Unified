@@ -354,6 +354,11 @@ Chrome workaround.
 
 ## 12. Still open
 
+> **Updated 2026-09-01 (Part 270).** Two of these are now closed: the video
+> marker in the contents (`9c6aa36`) and the 2x-speed audio bug (`4ea631e`,
+> `9dcf66b`). See `Session_2026-09-01_ContentsDemoMarkersAndSpeedBug_Part270.md`.
+> The rest stand as written.
+
 Carried from Part 268 §12/§13, none started:
 
 - **A video marker in the contents** (§13.3) — 11 of 50 chapters have a demo
