@@ -224,6 +224,15 @@ Fix: a shared `place(page, at)` helper, called after a 600 ms settle, again
 after `waitFor`, and again after any action — since a click that reveals a panel
 pushes everything below it out from under the box.
 
+> **Correction, 2026-09-01 (Part 271 §5).** This fix was incomplete, and the
+> incompleteness was found only by re-recording another clip and watching it.
+> `place()` re-measures where an anchor *is*; it returns early when the anchor
+> is **gone**, leaving the box frozen at its last position. The multimodal RAG
+> clip spent fourteen seconds ringing the search-filter chips because
+> `mmrag-add` lives on the upload dropzone, which unmounts the moment ingest
+> finishes. "Moved" and "unmounted" are indistinguishable from inside `place()`.
+> Fixed properly in `dd67442`: no anchor now hides the spotlight.
+
 ### 5.4 Assertions were case-sensitive against *rendered* text
 
 The DNS clip failed on `"Possible DNS tunneling channel"`. The tool was working
@@ -339,9 +348,17 @@ at a time with minimal re-reads, and no speculative re-recording was performed.
 
 ## 12. Still open
 
-- **The three oldest clips** (`automl`, `text-to-sql`, `multimodal-rag`) predate
-  the spotlight fix, so their highlight boxes may sit slightly off. Four minutes
-  of compute, no API cost. Not started — needs the owner's word.
+- ~~**The three oldest clips**~~ — **HANDLED 2026-09-01 (Part 271 §4–§7).**
+
+  > **Correction.** Two claims here were wrong. **"No API cost"** — `automl` is
+  > free, but `multimodal-rag` costs 3 paid calls per recording and
+  > `text-to-sql` 1. And **"highlight boxes may sit slightly off"** badly
+  > understates it: reviewing the clips frame by frame found `multimodal-rag`
+  > promising a citation click it never performed and reading out counts that
+  > were off screen, and `text-to-sql` narrating SQL, a results table, a chart
+  > and self-explanation over an unpressed button and an empty panel. Those are
+  > script faults; re-recording alone would not have touched them.
+  > `automl` was reviewed and deliberately left un-refilmed.
 - **Part 1 of the handbook** — 11 chapters, one demo. Needs `preprocessing` (367)
   and `feature-selection` (369) split before anchoring.
 - **The hosted TTS path has still never run against a live paid vendor** (carried
@@ -400,7 +417,7 @@ logic in `wordMatch.ts` (prefix + stemmer + irregular list, deliberately not a
 lemmatizer — see the `search-matching-hybrid` note), so there is an existing
 convention to follow rather than a new one to invent.
 
-### 13.2 Return-to-position scrolling
+### 13.2 Return-to-position scrolling — SHIPPED 2026-09-01 (Part 271 §3, `d3217eb`)
 
 > *"option to scroll up from wherever a user wants to scroll up in handbook
 > section, it tedious to scroll up every time whenever i scroll down to a

@@ -334,12 +334,20 @@ appear.
 
 Carried forward, unchanged except where noted:
 
-- **Return-to-position scrolling** — the unbuilt half of Part 268 §13.2. The
-  rail solves getting back up; nothing remembers where a jump came from. More
-  worth doing after this session, since the contents markers give readers one
-  more reason to jump.
-- **The three oldest clips** (`automl`, `text-to-sql`, `multimodal-rag`) predate
-  the spotlight fix. ~4 minutes of compute, no API cost.
+- ~~**Return-to-position scrolling**~~ — **BUILT 2026-09-01, Part 271 §3**
+  (`d3217eb`). One slot rather than a stack, shown on distance rather than on
+  the jump.
+- ~~**The three oldest clips**~~ — **HANDLED 2026-09-01, Part 271 §4–§7.**
+  `multimodal-rag` (`83221be`) and `text-to-sql` (`a6ef651`) re-recorded after
+  script fixes; `automl` reviewed and deliberately left alone.
+
+  Two claims in this line were wrong. **"~4 minutes of compute, no API cost"** —
+  `automl` is indeed free, but `multimodal-rag` costs 3 paid calls per run and
+  `text-to-sql` 1 (see Part 271 §9). And the clips were not merely *stale*:
+  reviewing them frame by frame found that two of the three were narrating
+  claims the screen did not support, which re-recording alone would not have
+  fixed. The spotlight fix `1820f7b` also did **not** cover the mmrag case — see
+  Part 271 §5.
 - **Part 1 of the handbook** — blocked on splitting `preprocessing/page.tsx`
   (367) and `feature-selection/page.tsx` (369) before `data-wt` anchors go in.
 - **The hosted TTS path** has still never run against a live paid vendor. Its
@@ -351,6 +359,12 @@ Carried forward, unchanged except where noted:
 
 **Closed this session:** the video marker in the contents (Part 268 §13.3) and
 the 2x-speed audio bug (Part 268 §13.4).
+
+**Closed in Part 271 (2026-09-01, later the same day):** return-to-position
+scrolling, and the three oldest clips. Newly opened there: three diagnosed but
+unfixed problems in `text-to-sql` (Part 271 §8), and the fact that the other
+**eight** clips have still never been reviewed — a hit rate of two defects in
+three reviewed argues they should be.
 
 ---
 
