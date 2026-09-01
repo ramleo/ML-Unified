@@ -348,22 +348,36 @@ at a time with minimal re-reads, and no speculative re-recording was performed.
   over from Part 267).
 - Three untracked files in ML-Unified root (`test_invoice.pdf`,
   `test_llm_invoice_items.py`, `test_pipeline.csv`) — still the owner's call.
-- **Three handbook navigation requests** — search bar, return-to-position
-  scrolling, and a video marker in the contents. See §13.
+- **Three handbook navigation requests** — search bar (**shipped 2026-09-01,
+  Part 269**), return-to-position scrolling (**partly shipped**), and a video
+  marker in the contents (**still open**). See §13.
 - **A reported bug: 2x speed does not work properly for audio**, on both handbook
   surfaces — the recorded demo clips and the chapter read-aloud bar — and worst
   for the live-narrated voices. Not reproduced yet. See §13.4.
 
 ---
 
-## 13. Requested next — handbook navigation and one bug (not started)
+## 13. Requested next — handbook navigation and one bug
 
 Three asks raised at the end of this session, all about *moving around* the
 handbook rather than its content, plus one reported bug. Recorded here verbatim
-in intent; none of them has been designed, estimated, or in the bug's case even
-reproduced.
+in intent; at the time of writing none had been designed, estimated, or in the
+bug's case even reproduced.
 
-### 13.1 A search bar in the handbook
+> **Status as of 2026-09-01 (Part 269).** 13.1 is shipped. 13.2 is partly
+> shipped — the mechanical difficulty is solved by a chapter rail, the
+> "return to where I jumped from" half is not built. 13.3 and 13.4 are
+> untouched. Per-item notes are inline below; the build is written up in
+> `Session_2026-09-01_HandbookSearchAndChapterRail_Part269.md`.
+
+### 13.1 A search bar in the handbook — SHIPPED 2026-09-01
+
+> Built in Part 269 across four commits: `2c10e82` (bar, contents indexing,
+> substring matching, chapter rail, two positioning fixes), `f5abd25` (clear
+> button), `4894b39` (undo history), `43ef795` (the Cmd-K hint). The note below
+> about reusing `wordMatch.ts` was followed — it moved to `src/lib/search/` and
+> gained an opt-in substring flag rather than having its behaviour changed
+> underneath the RAG panel that also uses it.
 
 The handbook is 17,406 lines across 50 chapters in a single page. There is a
 table of contents and nothing else — no way to find a term without the browser's
@@ -391,7 +405,13 @@ building, since they are different features:
 - **return to previous position** — remembers where you jumped *from*, so
   following a contents link and coming back is one click
 
-### 13.3 A video marker in the contents
+> **2026-09-01:** the first half is effectively covered by the chapter rail
+> shipped in `2c10e82` — a full-height drag target on the right edge with a
+> tick per chapter, which removes the need to find a 4px scrollbar thumb on a
+> 387,000px page. The second half — remembering where a jump came *from* — is
+> **still not built**.
+
+### 13.3 A video marker in the contents — STILL OPEN
 
 Eleven of the fifty chapters now have a guided demo, and nothing in the table of
 contents says which. A reader scanning the index cannot tell that chapter 43 has
@@ -407,7 +427,7 @@ which matters because the list grows every batch.
 **Per the standing no-emoji rule, the marker must be an inline SVG, not a
 character like ▶ or a video emoji.**
 
-### 13.4 BUG — 2x speed does not work properly for audio
+### 13.4 BUG — 2x speed does not work properly for audio — STILL OPEN, NOT REPRODUCED
 
 Reported by the owner, **not yet reproduced or root-caused**. Worst at 2x, and
 specifically noted as bad *for the list of added voices* — i.e. the
