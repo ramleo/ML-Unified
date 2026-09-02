@@ -177,7 +177,7 @@ def _run_automl(df: pd.DataFrame, target: str, task_type: str, cfg: Optional[Dic
     for algo in models:
         try:
             est = _get_estimator(algo, task_type)
-            pipe = Pipeline([("pre", _build_preprocessor(X)), ("est", est)])
+            pipe = Pipeline([("prep", _build_preprocessor(X)), ("est", est)])
             scores = cross_val_score(pipe, X, y_enc, cv=cv, scoring=scoring)
             sc = float(scores.mean())
             if task_type == "regression":

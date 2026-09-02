@@ -2,6 +2,7 @@
 import collections
 import io
 import json
+import logging
 import os
 import time
 from typing import Dict
@@ -23,6 +24,7 @@ from routers.core.shared import (
 )
 from shared.progress import StreamingTask
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # ── Request monitoring state (exported for middleware in app.py) ──────────────
@@ -68,22 +70,34 @@ def get_metrics():
 
 @router.get("/models")
 def list_models():
-    return [
-        {
+    """Every registered model, described.
+
+    Read defensively on purpose. This used to index m["schema"]["title"] and
+    friends directly, so a single entry written without a schema — the Pipeline
+    Builder's AutoML stage did exactly that — raised KeyError and returned 500
+    for the *whole list*, taking the Data Drift tool down with it. One bad
+    entry should cost you that entry, not the endpoint.
+    """
+    out = []
+    for mid, m in MODELS.items():
+        schema = m.get("schema")
+        if not isinstance(schema, dict):
+            logger.warning("model '%s' has no schema — listing it with placeholders", mid)
+            schema = {}
+        out.append({
             "id":          mid,
-            "title":       m["schema"]["title"],
-            "description": m["schema"].get("description", ""),
-            "task":        m["schema"]["task"],
-            "accent":      m["schema"]["accent"],
-            "model":       m["schema"]["model"],
-            "metric":      m["schema"]["metric"],
-            "metricLabel": m["schema"]["metricLabel"],
-            "classes":     m["classes"],
-            "class_names": m["schema"].get("output", {}).get("class_names"),
+            "title":       schema.get("title", mid),
+            "description": schema.get("description", ""),
+            "task":        schema.get("task", m.get("task", "unknown")),
+            "accent":      schema.get("accent", "#64748b"),
+            "model":       schema.get("model", m.get("algo", "unknown")),
+            "metric":      schema.get("metric", ""),
+            "metricLabel": schema.get("metricLabel", ""),
+            "classes":     m.get("classes"),
+            "class_names": (schema.get("output") or {}).get("class_names"),
             "builtin":     mid in _BUILTIN_IDS,
-        }
-        for mid, m in MODELS.items()
-    ]
+        })
+    return out
 
 
 @router.get("/schemas/{model_id}")
