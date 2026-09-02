@@ -65,11 +65,17 @@ def _process_numeric(
     if name in baseline:
         ref_mean = baseline[name]["mean"]
         ref_std  = baseline[name]["std"]
+        ref_source = baseline[name].get("source", "training")
     else:
+        # No measured baseline for this column, so the midpoint of its declared
+        # range stands in. That is a guess, not a measurement, and every number
+        # derived from it below — the z score, the PSI, the KS test — inherits
+        # that. It used to be reported as "ref_mean" with nothing saying so.
         fmin     = float(field.get("min", 0))
         fmax     = float(field.get("max", 1))
         ref_mean = (fmin + fmax) / 2
         ref_std  = max((fmax - fmin) / 6, 1e-9)
+        ref_source = "schema_range"
 
     vals = [
         float(r[name])
@@ -101,6 +107,7 @@ def _process_numeric(
         "type":        "numeric",
         "ref_mean":    round(ref_mean, 4),
         "ref_std":     round(ref_std, 4),
+        "ref_source":  ref_source,
         "recent_mean": round(r_mean, 4) if r_mean is not None else None,
         "recent_std":  round(r_std, 4)  if r_std  is not None else None,
         "drift_score": drift_score,
