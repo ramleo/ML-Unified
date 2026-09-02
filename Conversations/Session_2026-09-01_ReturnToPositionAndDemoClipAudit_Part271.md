@@ -487,14 +487,14 @@ before blaming them.
 - **The other eight clips have never been reviewed.** Two of three reviewed had
   real defects; that rate does not justify assuming the rest are fine. Free to
   check — costs only time.
-- **The three text-to-sql items in §8.** Diagnosed, not fixed, no go-ahead yet.
+- ~~**The three text-to-sql items in §8.**~~ **CLOSED 2026-09-02, Part 272 §2** (`3132301`).
 - **`automl`** — reviewed, deliberately not re-recorded (§4.3).
 - **Nothing checked on live Vercel.** Parts 269, 270 and 271 were all verified
   against localhost only. The return pill, the contents demo markers, the
   read-aloud speeds and both new clips are unverified in production.
-- **Part 1 of the handbook** — still blocked on splitting
-  `tools/preprocessing/page.tsx` (367) and `tools/feature-selection/page.tsx`
-  (369).
+- ~~**Part 1 of the handbook** — blocked on splitting~~ **UNBLOCKED and 8 of 11
+  chapters built, 2026-09-02, Part 272 §5/§8.** It was three files needing a
+  split, not two: `pipeline-builder/page.tsx` was 397.
 - **The hosted TTS path** has still never run against a live paid vendor.
 - **`QueryResultPanel.tsx` and `UserGuideModal.tsx` are both 403 lines**, past
   the 400-line limit. Pre-existing; worked around rather than split.
