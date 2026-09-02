@@ -166,9 +166,9 @@ def _optuna_tune(
                 "depth":         trial.suggest_int("depth", 4, 10),
                 "l2_leaf_reg":   trial.suggest_float("l2_leaf_reg", 1.0, 10.0),
             }
-            est = (CatBoostClassifier(random_seed=42, verbose=0, **params)
+            est = (CatBoostClassifier(random_seed=42, verbose=0, allow_writing_files=False, **params)
                    if task == "classification"
-                   else CatBoostRegressor(random_seed=42, verbose=0, **params))
+                   else CatBoostRegressor(random_seed=42, verbose=0, allow_writing_files=False, **params))
 
         pl = Pipeline([("prep", ColumnTransformer(transformers, remainder="drop")), ("model", est)])
         try:
@@ -271,8 +271,8 @@ def _build_tuned_estimator(algorithm: str, task: str, best_params: dict, is_imba
         return (LGBMClassifier(random_state=42, verbose=-1, class_weight=cw, **best_params)
                 if task == "classification"
                 else LGBMRegressor(random_state=42, verbose=-1, **best_params))
-    return (CatBoostClassifier(random_seed=42, verbose=0, **best_params)
+    return (CatBoostClassifier(random_seed=42, verbose=0, allow_writing_files=False, **best_params)
             if task == "classification"
-            else CatBoostRegressor(random_seed=42, verbose=0, **best_params))
+            else CatBoostRegressor(random_seed=42, verbose=0, allow_writing_files=False, **best_params))
 
 

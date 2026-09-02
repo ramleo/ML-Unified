@@ -211,6 +211,7 @@ def _automl_reg(p, X, y_enc, selected_models, tune, n_trials, transformers,
     cv_split = KFold(n_splits=5, shuffle=True, random_state=42)
     X_cv, y_cv = _cv_sample(X, y_enc)
     cv_results = []
+    failed_models: list = []
     _pct_steps_r = [12, 26, 40, 48, 55]
     _model_idx_r = 0
 
@@ -218,7 +219,7 @@ def _automl_reg(p, X, y_enc, selected_models, tune, n_trials, transformers,
         "Random Forest":     lambda: RandomForestRegressor(n_estimators=100, random_state=42),
         "XGBoost":           lambda: XGBRegressor(n_estimators=100, random_state=42, verbosity=0),
         "LightGBM":          lambda: LGBMRegressor(n_estimators=100, random_state=42, verbose=-1),
-        "CatBoost":          lambda: CatBoostRegressor(iterations=100, random_seed=42, verbose=0),
+        "CatBoost":          lambda: CatBoostRegressor(iterations=100, random_seed=42, verbose=0, allow_writing_files=False),
         "Extra Trees":       lambda: ExtraTreesRegressor(n_estimators=100, random_state=42),
         "Decision Tree":     lambda: DecisionTreeRegressor(random_state=42),
         "KNN":               lambda: KNeighborsRegressor(n_neighbors=5),
@@ -239,7 +240,11 @@ def _automl_reg(p, X, y_enc, selected_models, tune, n_trials, transformers,
             _folds = cross_val_score(_pl, X_cv, y_cv, cv=cv_split, scoring="neg_mean_absolute_error")
             cv_results.append({"algorithm": name, "score": round(-float(_folds.mean()), 4), "fold_scores": [round(-float(s), 4) for s in _folds]})
         except Exception as _e:
+            # Swallowing this entirely is how CatBoost went missing from every
+            # leaderboard on the Space for months: five models requested, four
+            # returned, no error anywhere the caller could see it.
             print(f"{name} CV failed: {_e}", flush=True)
+            failed_models.append({"algorithm": name, "reason": str(_e).strip().splitlines()[-1][:200]})
 
     if not cv_results:
         raise RuntimeError("All selected models failed CV")
@@ -247,7 +252,7 @@ def _automl_reg(p, X, y_enc, selected_models, tune, n_trials, transformers,
     winner = min(cv_results, key=lambda r: r["score"])["algorithm"]
     automl_result = {
         "winner": winner, "selection_metric": "MAE", "is_imbalanced": False,
-        "n_rows": len(X), "n_input_cols": len(X.columns), "cv_results": cv_results,
+        "n_rows": len(X), "n_input_cols": len(X.columns), "cv_results": cv_results, "failed_models": failed_models,
         "task": "regression", "gpu": _detect_gpu(),
     }
     estimator = _REG_MAP.get(winner, lambda: RandomForestRegressor(n_estimators=100, random_state=42))()
@@ -296,7 +301,7 @@ def _single_reg_estimator(algorithm, XGBRegressor, LGBMRegressor, CatBoostRegres
     if algorithm == "LightGBM":
         return LGBMRegressor(n_estimators=100, random_state=42, verbose=-1)
     if algorithm == "CatBoost":
-        return CatBoostRegressor(iterations=100, random_seed=42, verbose=0)
+        return CatBoostRegressor(iterations=100, random_seed=42, verbose=0, allow_writing_files=False)
     if algorithm == "Gradient Boosting":
         return GradientBoostingRegressor(n_estimators=100, random_state=42)
     return RandomForestRegressor(n_estimators=100, random_state=42)

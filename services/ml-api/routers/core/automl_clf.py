@@ -210,6 +210,7 @@ def _automl_clf(p, X, y_enc, selected_models, tune, n_trials, transformers,
     cv_split = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     X_cv, y_cv = _cv_sample(X, y_enc)
     cv_results = []
+    failed_models: list = []
     _pct_steps = [12, 26, 40, 48, 55]
     _model_idx = 0
 
@@ -217,7 +218,7 @@ def _automl_clf(p, X, y_enc, selected_models, tune, n_trials, transformers,
         "Random Forest": lambda: RandomForestClassifier(n_estimators=100, random_state=42, class_weight=cw),
         "XGBoost":       lambda: XGBClassifier(n_estimators=100, random_state=42, eval_metric="logloss", verbosity=0),
         "LightGBM":      lambda: LGBMClassifier(n_estimators=100, random_state=42, class_weight=cw, verbose=-1),
-        "CatBoost":      lambda: CatBoostClassifier(iterations=100, random_seed=42, verbose=0),
+        "CatBoost":      lambda: CatBoostClassifier(iterations=100, random_seed=42, verbose=0, allow_writing_files=False),
         "Extra Trees":   lambda: ExtraTreesClassifier(n_estimators=100, random_state=42, class_weight=cw),
         "Decision Tree": lambda: __import__("sklearn.tree", fromlist=["DecisionTreeClassifier"]).DecisionTreeClassifier(random_state=42, class_weight=cw),
         "KNN":           lambda: KNeighborsClassifier(n_neighbors=5),
@@ -238,7 +239,11 @@ def _automl_clf(p, X, y_enc, selected_models, tune, n_trials, transformers,
             _folds = cross_val_score(_pl, X_cv, y_cv, cv=cv_split, scoring=sel_metric)
             cv_results.append({"algorithm": name, "score": round(float(_folds.mean()), 4), "fold_scores": [round(float(s), 4) for s in _folds]})
         except Exception as _e:
+            # Swallowing this entirely is how CatBoost went missing from every
+            # leaderboard on the Space for months: five models requested, four
+            # returned, no error anywhere the caller could see it.
             print(f"{name} CV failed: {_e}", flush=True)
+            failed_models.append({"algorithm": name, "reason": str(_e).strip().splitlines()[-1][:200]})
 
     if not cv_results:
         raise RuntimeError("All selected models failed CV")
@@ -246,7 +251,7 @@ def _automl_clf(p, X, y_enc, selected_models, tune, n_trials, transformers,
     winner = max(cv_results, key=lambda r: r["score"])["algorithm"]
     automl_result = {
         "winner": winner, "selection_metric": sel_label, "is_imbalanced": is_imbal,
-        "n_rows": len(X), "n_input_cols": len(X.columns), "cv_results": cv_results,
+        "n_rows": len(X), "n_input_cols": len(X.columns), "cv_results": cv_results, "failed_models": failed_models,
         "task": "classification", "gpu": _detect_gpu(),
     }
     estimator = _CLF_MAP.get(winner, lambda: RandomForestClassifier(n_estimators=100, random_state=42, class_weight=cw))()
@@ -298,7 +303,7 @@ def _single_clf_estimator(algorithm, cw, XGBClassifier, LGBMClassifier, CatBoost
     if algorithm == "LightGBM":
         return LGBMClassifier(n_estimators=100, random_state=42, verbose=-1)
     if algorithm == "CatBoost":
-        return CatBoostClassifier(iterations=100, random_seed=42, verbose=0)
+        return CatBoostClassifier(iterations=100, random_seed=42, verbose=0, allow_writing_files=False)
     if algorithm == "Random Forest":
         return RandomForestClassifier(n_estimators=100, random_state=42)
     return GradientBoostingClassifier(n_estimators=100, random_state=42)

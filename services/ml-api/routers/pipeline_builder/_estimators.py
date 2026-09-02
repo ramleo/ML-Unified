@@ -82,8 +82,11 @@ def _get_estimator(algo: str, task_type: str, params: dict | None = None):
         return lgb.LGBMClassifier(**kw) if is_clf else lgb.LGBMRegressor(**kw)
     if algo == "CatBoost":
         import catboost as cb
+        # allow_writing_files=False or CatBoost tries to mkdir catboost_info in
+        # the working directory, which is read-only on the Space — every fit
+        # failed there while succeeding locally.
         kw = dict(iterations=n_est, depth=max_d or 6, learning_rate=lr,
-                  verbose=0, random_state=42)
+                  verbose=0, random_state=42, allow_writing_files=False)
         return cb.CatBoostClassifier(**kw) if is_clf else cb.CatBoostRegressor(**kw)
     raise ValueError(f"Unknown algorithm: {algo}")
 
