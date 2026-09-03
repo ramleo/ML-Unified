@@ -461,15 +461,19 @@ emits** (`failed_models`), or on `stage == RUNNING`.
 
 ## 13. Still open
 
-- **Part 1: 3 of 11 chapters left** — `pipeline-cinema` (ch 9),
-  `realtime-analytics` (ch 10), `shap` (ch 11). No page among them is over the
-  length limit, so nothing blocks them.
-- **Parts 2, 3, 4 of the handbook** have never been surveyed for demo coverage.
+- ~~**Part 1: 3 of 11 chapters left**~~ **DONE 2026-09-03, Part 273 §4/§7/§8.**
+  All three built; **Part 1 is 11 of 11.** `realtime-analytics` did turn out to
+  be blocked — not by length, but by empty Supabase keys locally (Part 273 §7.1).
+- ~~**Parts 2, 3, 4 of the handbook** have never been surveyed for demo coverage.~~
+  **SURVEYED 2026-09-03, Part 273 §3.** Part 2 is 2/4, Part 3 is **0/14**,
+  Part 4 is 8/21. **21 of 50 overall** — the count reframes the whole backlog.
 - **The hosted TTS path** has still never run against a live paid vendor.
 - **`QueryResultPanel.tsx` (403) and `UserGuideModal.tsx` (403)** are over the
   400-line limit. Pre-existing; worked around, not fixed.
-- **Two unexplained `400 Bad Request`** console errors on the pipeline-builder
-  page at load. Noticed during a probe, not chased.
+- ~~**Two unexplained `400 Bad Request`** console errors on the pipeline-builder
+  page at load.~~ **EXPLAINED 2026-09-03, Part 273 §7.1.** `/api/track` rejecting
+  because `SUPABASE_SERVICE_ROLE_KEY` is empty in `.env.local`. Every page does it
+  locally; production does not. Never a bug.
 - **Drift threshold judgement:** a 1.5-sigma shift grades "medium", not "high".
   Deliberately not changed — that is a product decision, not a defect.
 - Three untracked `test_*` files in the ML-Unified root — still the owner's call.
