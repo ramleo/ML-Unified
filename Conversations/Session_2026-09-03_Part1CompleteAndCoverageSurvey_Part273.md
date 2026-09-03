@@ -384,18 +384,22 @@ needed. They were never a bug.
 
 ## 12. Still open
 
-- **`optuna/page.tsx:118`** — the same `c.name` → `undefined` bug fixed in SHAP.
-  One line. Cheapest item on this list.
-- **Nothing from Parts 269–272 verified on live Vercel.** The return pill,
-  contents demo markers, read-aloud speeds and eight clips were all checked
-  against localhost only. Chapter 10 proved the live path works; this is one
-  browser session, no rebuilds, no API calls.
-- **The demo target is undecided** — see §3. 29 chapters remain uncovered and
-  the recommendation is to cover roughly a third of them, not all.
+- ~~**`optuna/page.tsx:118`** — the same `c.name` → `undefined` bug fixed in SHAP.~~
+  **DONE 2026-09-04, `a3a8b8e`.** Took two lines, not one — the inline state type
+  declared `name: string`, so the fallback would not compile until it was widened.
+- ~~**Nothing from Parts 269–272 verified on live Vercel.**~~ **WITHDRAWN
+  2026-09-04, Part 274 §3.** Never an owner request — mine, carried four
+  sessions without evidence anything was broken. The owner uses the site daily.
+  The one item in that area with real evidence, the empty local Supabase keys,
+  was already diagnosed in §7.1.
+- **The demo target is still undecided** — but three more were built
+  2026-09-04 (ch 12, 13, 41), taking coverage to **24 of 50** with Parts 1 and 2
+  both complete. See Part 274 §8 and §12 for the remaining shortlist.
 - **`pipeline-cinema/page.tsx` is 371 lines.** It was 348 when touched, so it was
   legitimately under the threshold — but the next feature there needs a split
   first. Clean cut: the transport control row plus the three icon components
   into `PipelineCinemaControls.tsx`, taking the page back to ~260.
+  *(Two comparable splits were done this way on 2026-09-04 — Part 274 §6.1.)*
 - **`QueryResultPanel.tsx` (403) and `UserGuideModal.tsx` (403)** — still over
   the 400-line limit. Pre-existing.
 - **The hosted TTS path** has still never run against a live paid vendor.
