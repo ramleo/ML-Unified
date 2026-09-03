@@ -357,3 +357,69 @@ The reconciliation work left six uploads on the Space across probes and takes;
 all six were deleted by name and `/rag/uploads` returns `{"sources":[]}`. Document
 Intelligence stores nothing beyond a 24-hour in-memory cache. The prompt injection
 tool stores nothing at all.
+
+---
+
+## 14. After the log — the two plan files, deleted
+
+Written up after §13 was committed (`abec086`), so this section is appended
+rather than woven in.
+
+### 14.1 What was deleted
+
+Both files in `~/.claude/plans/`, leaving that directory empty:
+
+| File | Written | What it was |
+|---|---|---|
+| `plan-multimodal-rag-curious-charm.md` | 2026-08-28 23:08 | the App Safeguard Plan (§4) |
+| `plan-multimodal-rag-curious-charm-agent-a910e50e588d79f52.md` | 2026-08-28 23:07 | a subagent's `slowapi` verification plan |
+
+The second one was not in §4's write-up. It surfaced only because the deletion
+was verified with an `ls` rather than assumed, and it was one minute older than
+the file it belonged to.
+
+### 14.2 Why the second file existed, and why that is worth knowing
+
+The `-agent-<hash>` suffix marks a **subagent's own plan file**. It exists
+because of a specific collision: the safeguard planning needed to know whether
+`slowapi` was safe to adopt, and the honest way to find out is to install it —
+but **plan mode is read-only**, so the check could only get halfway.
+
+The half that ran is the half that mattered:
+
+> `slowapi` 0.1.10 — pure-Python wheel. `limits` 5.8.0 — also pure Python.
+> **No compiler toolchain invoked.**
+
+That is what made `slowapi` the safe pick over hand-rolled throttling: a package
+needing a C compiler is a real risk on a HF Space build. The rest of the file —
+start a scratch server, fire five rapid requests, confirm `200,200,200,429,429`
+— was parked as a resumable recipe and never needed, because implementation
+started and `rate_limit.py` now runs the real version of that test in production
+at `LLM_LIMIT` = `10/minute`.
+
+**The general shape, worth recognising again:** plan mode produces artifacts that
+look like open work but are actually paused *verification*. They go stale the
+moment the thing they were verifying ships, and nothing deletes them.
+
+### 14.3 A claim corrected
+
+Recommending the second deletion, this session said the pure-Python wheel
+finding was "already recorded in `project_app_safeguards_shipped.md`". **It was
+not** — that memory listed the shipped modules and `LLM_LIMIT`, but not the
+wheel evidence or the versions.
+
+Caught before the file was gone for good and added to that memory, which is now
+the only copy. Deleting the last record of a finding while claiming it is stored
+elsewhere is a cheap mistake to make and an expensive one to discover later.
+
+---
+
+## 15. Memory written this session
+
+| File | Status | Why |
+|---|---|---|
+| `project_demo_clip_audit.md` | updated | recount to 24/50; the `expect` value fix; index-vs-name rule (4th statement); page-chunking trap; Part 3 WebGL blocker |
+| `project_app_safeguards_shipped.md` | **new** | the plan file read like a to-do list; now carries the slowapi/limits wheel evidence too (§14.3) |
+| `feedback_withdraw_stale_recommendations.md` | **new** | the §3 lesson — my suggestions are not the owner's backlog |
+
+Both new files indexed in `MEMORY.md`.
