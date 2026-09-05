@@ -172,9 +172,13 @@ def find_contradictions(
     candidates = candidates[:_MAX_PAIRS_TO_JUDGE]
 
     contradictions = []
+    judge_failures = 0  # same distinction as the reconciliation path below
     for sim, i, j in candidates:
         verdict = judge_fn(chunks[i]["text"], chunks[j]["text"])
-        if verdict and verdict["contradicts"]:
+        if verdict is None:
+            judge_failures += 1
+            continue
+        if verdict["contradicts"]:
             contradictions.append({
                 "similarity": round(sim, 3),
                 "explanation": verdict["explanation"],
@@ -182,7 +186,8 @@ def find_contradictions(
                 "chunk_b": {"text": chunks[j]["text"], "source": chunks[j]["source"], "page": chunks[j]["page"]},
             })
 
-    return {"checked_pairs": len(candidates), "sources": sources, "contradictions": contradictions}
+    return {"checked_pairs": len(candidates), "judge_failures": judge_failures,
+            "sources": sources, "contradictions": contradictions}
 
 
 def make_llm_judge(provider: str, model: str, key: str,
@@ -254,10 +259,20 @@ def find_reconciliation(
     candidates = candidates[:_MAX_PAIRS_TO_JUDGE]
 
     discrepancies = []
+    # A judge call that never answered — rate-limited, timed out, unparseable
+    # — used to fall into the same branch as one that answered "these agree",
+    # so a provider outage produced a confident empty report. On a tool whose
+    # entire job is catching a discrepancy before you pay it, "I could not
+    # check" must never render as "nothing found". Counted and returned so
+    # the caller can say which of the two happened.
+    judge_failures = 0
     for _, sim, i, j in candidates:
         c_chunk, inv_chunk = contract_chunks[i], invoice_chunks[j]
         verdict = judge_fn(c_chunk["text"], inv_chunk["text"])
-        if not (verdict and verdict["contradicts"]):
+        if verdict is None:
+            judge_failures += 1
+            continue
+        if not verdict["contradicts"]:
             continue
         # Never silently drop a flagged pair on confirm_fn's say-so alone —
         # live testing showed BOTH calls can independently miss the same
@@ -278,7 +293,8 @@ def find_reconciliation(
             "invoice_chunk": {"text": inv_chunk["text"], "source": inv_chunk["source"], "page": inv_chunk["page"]},
         })
 
-    return {"checked_pairs": len(candidates), "contract_source": contract_source,
+    return {"checked_pairs": len(candidates), "judge_failures": judge_failures,
+            "contract_source": contract_source,
             "invoice_sources": invoice_sources, "discrepancies": discrepancies}
 
 
