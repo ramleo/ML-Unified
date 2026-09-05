@@ -20,10 +20,19 @@ OPENAI_COMPAT_BASES = {
 }
 
 
-def stream_groq_openai(provider: str, model: str, key: str, messages: list[dict]):
+def stream_groq_openai(provider: str, model: str, key: str, messages: list[dict],
+                       max_retries: int | None = None):
+    """`max_retries` overrides the SDK's own retry count (default 2). Pass 0
+    from callers that already pace themselves: a 429 from a per-second limit
+    cannot be outrun by a retry landing 0.4s later, so the SDK's two extra
+    attempts only triple the round trips before the caller learns it failed."""
     import openai
     base_url = OPENAI_COMPAT_BASES.get(provider)  # None => real OpenAI's own API
-    client = openai.OpenAI(api_key=key, **({"base_url": base_url} if base_url else {}))
+    client = openai.OpenAI(
+        api_key=key,
+        **({"base_url": base_url} if base_url else {}),
+        **({"max_retries": max_retries} if max_retries is not None else {}),
+    )
     with client.chat.completions.create(
         model=model, messages=messages, stream=True
     ) as stream:
@@ -139,7 +148,8 @@ def stream_cohere(model: str, key: str, messages: list[dict], system: str):
         raise
 
 
-def complete(provider: str, model: str, key: str, messages: list[dict], system: str = "") -> str:
+def complete(provider: str, model: str, key: str, messages: list[dict], system: str = "",
+             max_retries: int | None = None) -> str:
     """Non-streaming convenience wrapper — collects a streaming call into one string.
 
     Best-effort: returns "" on any failure rather than raising, since callers
@@ -148,7 +158,7 @@ def complete(provider: str, model: str, key: str, messages: list[dict], system: 
     try:
         if provider in ("groq", "openai", "mistral", "perplexity"):
             full_messages = ([{"role": "system", "content": system}] if system else []) + messages
-            return "".join(stream_groq_openai(provider, model, key, full_messages))
+            return "".join(stream_groq_openai(provider, model, key, full_messages, max_retries))
         elif provider == "claude":
             return "".join(stream_claude(model, key, messages, system))
         elif provider == "gemini":

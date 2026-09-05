@@ -129,9 +129,14 @@ def make_llm_judge(provider: str, model: str, key: str,
         if not key:
             return None
         _pace()
+        # max_retries=0: _pace() already guarantees the spacing the limit
+        # wants, so a failure here is not transient congestion the SDK can
+        # retry its way out of — it is the provider refusing. Its two extra
+        # attempts land inside the same window, fail identically, and only
+        # delay the fallback.
         raw = complete(provider, model, key,
                        [{"role": "user", "content": f"Passage A: {text_a}\n\nPassage B: {text_b}"}],
-                       system=system)
+                       system=system, max_retries=0)
         return _parse_judge_response(raw)
 
     return judge
@@ -145,8 +150,19 @@ _FALLBACK_PROVIDER = "gemini"
 _FALLBACK_MODEL = "gemini-3.6-flash"
 
 
+def new_chain_state() -> dict:
+    """A latch shared between chains built for the same request.
+
+    A reconciliation scan builds two chains — judge and confirm — off the same
+    primary key. With a latch each, a dead primary is rediscovered twice per
+    scan instead of once. Callers that build more than one chain should make
+    a single state here and hand it to all of them."""
+    return {"primary_down": False}
+
+
 def make_judge_chain(primary_provider: str, primary_model: str, primary_key: str,
                      fallback_key: str, system: str = _JUDGE_SYSTEM,
+                     state: Optional[dict] = None,
                      ) -> Callable[[str, str], Optional[dict]]:
     """A judge that tries `primary_provider`, then Gemini.
 
@@ -163,7 +179,9 @@ def make_judge_chain(primary_provider: str, primary_model: str, primary_key: str
     fallback = make_llm_judge(_FALLBACK_PROVIDER, _FALLBACK_MODEL, fallback_key, system) if fallback_key else None
     if primary is None and fallback is not None:
         logger.warning("judge: no %s key, using %s", primary_provider, _FALLBACK_PROVIDER)
-    state = {"primary_down": primary is None}
+    state = new_chain_state() if state is None else state
+    if primary is None:
+        state["primary_down"] = True
 
     def judge(text_a: str, text_b: str) -> Optional[dict]:
         if not state["primary_down"] and primary is not None:

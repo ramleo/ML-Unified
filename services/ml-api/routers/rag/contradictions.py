@@ -31,7 +31,7 @@ from routers.rag.cache import cosine_sim
 from routers.rag.entities import decode_entities
 from routers.rag.contradictions_judge import (
     _RECONCILE_JUDGE_SYSTEM, _RECONCILE_CONFIRM_SYSTEM,
-    _FALLBACK_PROVIDER, make_judge_chain,
+    _FALLBACK_PROVIDER, make_judge_chain, new_chain_state,
 )
 
 logger = logging.getLogger(__name__)
@@ -260,9 +260,13 @@ def check_reconciliation(request: Request, req: ReconciliationRequest):
 
     key = _resolve_key(_JUDGE_PROVIDER, None)
     fallback_key = _resolve_key(_FALLBACK_PROVIDER, None)
+    # One latch for both chains: the judge and the confirm step share a key,
+    # so whichever discovers the primary is down should spare the other the
+    # same discovery.
+    chain_state = new_chain_state()
     judge_fn = make_judge_chain(_JUDGE_PROVIDER, _JUDGE_MODEL, key, fallback_key,
-                                system=_RECONCILE_JUDGE_SYSTEM)
+                                system=_RECONCILE_JUDGE_SYSTEM, state=chain_state)
     confirm_fn = make_judge_chain(_JUDGE_PROVIDER, _JUDGE_MODEL, key, fallback_key,
-                                  system=_RECONCILE_CONFIRM_SYSTEM)
+                                  system=_RECONCILE_CONFIRM_SYSTEM, state=chain_state)
     return find_reconciliation(state, req.session_id, req.contract_source,
                                req.invoice_sources, state.embedding_fn, judge_fn, confirm_fn)
