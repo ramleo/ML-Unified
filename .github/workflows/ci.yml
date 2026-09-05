@@ -47,6 +47,24 @@ jobs:
             services/ml-vision/requirements.txt
             requirements-dev.txt
 
+      # The runner ships ~25GB of toolchains this job never touches, and the
+      # ml-api install needs every byte of it.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
+
+      # Nothing pins torch, so pip resolves the default PyPI build — which
+      # drags in the whole CUDA runtime (nvidia-*, triton, cuda-toolkit) on a
+      # runner that has no GPU and tests that never ask for one. That is what
+      # filled the disk. Installing the CPU wheels first satisfies sam2's
+      # torch>=2.5.1 floor, so the requirements steps below leave torch alone.
+      - name: Install CPU-only PyTorch
+        run: |
+          pip install --no-cache-dir torch torchvision \
+            --index-url https://download.pytorch.org/whl/cpu
+
       - name: Install ml-api base dependencies
         run: pip install -r services/ml-api/requirements-base.txt
 
