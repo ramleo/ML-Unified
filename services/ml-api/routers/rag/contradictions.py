@@ -21,6 +21,8 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
+import time
 from typing import Callable, Optional
 
 from fastapi import APIRouter, HTTPException, Request
@@ -190,6 +192,29 @@ def find_contradictions(
             "sources": sources, "contradictions": contradictions}
 
 
+# Mistral allows 1.00 requests/second on mistral-small (see the org's limits
+# page). A reconciliation scan makes up to six judge calls plus a confirm
+# call per flagged pair, in a loop with no gap, so every call after the first
+# was guaranteed a 429 — and the SDK's own retries land 0.4-1.0s later, still
+# inside the same one-second window, so they 429 too. Spacing our own calls
+# is the only thing that fixes it; a faster retry cannot outrun a per-second
+# limit. Slightly over one second, because the limiter's window and ours are
+# not aligned and a call landing on the boundary is a wasted round trip.
+_MIN_CALL_INTERVAL = 1.15
+_pace_lock = threading.Lock()
+_last_call_at = 0.0
+
+
+def _pace() -> None:
+    """Block until at least _MIN_CALL_INTERVAL has passed since the last call."""
+    global _last_call_at
+    with _pace_lock:
+        wait = _MIN_CALL_INTERVAL - (time.monotonic() - _last_call_at)
+        if wait > 0:
+            time.sleep(wait)
+        _last_call_at = time.monotonic()
+
+
 def make_llm_judge(provider: str, model: str, key: str,
                    system: str = _JUDGE_SYSTEM) -> Callable[[str, str], Optional[dict]]:
     """Builds a judge_fn bound to one provider/model/key — the concrete
@@ -203,6 +228,7 @@ def make_llm_judge(provider: str, model: str, key: str,
     def judge(text_a: str, text_b: str) -> Optional[dict]:
         if not key:
             return None
+        _pace()
         raw = complete(provider, model, key,
                        [{"role": "user", "content": f"Passage A: {text_a}\n\nPassage B: {text_b}"}],
                        system=system)
