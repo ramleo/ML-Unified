@@ -81,7 +81,18 @@ def stream_gemini(model: str, key: str, messages: list[dict], system: str):
                     except json.JSONDecodeError:
                         continue
     except httpx.HTTPStatusError as exc:
-        logger.error("Gemini HTTP error: %s", exc.response.status_code)
+        # The status alone says almost nothing: a 429 from Google can mean the
+        # per-minute quota, the per-day one, a project with no billing, or an
+        # API that was never enabled, and the body names which. Logging only
+        # the code cost a day of guessing. The body is streamed, so it has to
+        # be read before it can be looked at, and read() on an already-closed
+        # response raises — hence the inner guard.
+        try:
+            exc.response.read()
+            detail = exc.response.text[:400]
+        except Exception:
+            detail = "<body unavailable>"
+        logger.error("Gemini HTTP %s: %s", exc.response.status_code, detail)
         raise
 
 
