@@ -335,3 +335,176 @@ change. Any logging change ships with a privacy page change.
 - **`verify-recon-warning.mjs`** — untracked in `ml-portfolio`; keep as a
   test or delete.
 - **Three `RENDER_*` secrets** — now unused.
+
+---
+
+## 12. Why the Mistral key was dead — the answer, at last
+
+Written after §11, same day, when the user asked the obvious follow-up:
+**"check why is mistral key dead?"** Yesterday the answer was a shrug and a
+fallback. This time the logs the day had already taught us to read gave a
+definite answer in about fifteen minutes and without spending a paid call.
+
+### 12.1 What the log said
+
+The Space log buffer still held everything since the 14:59 startup:
+
+```
+15:08:00  POST api.mistral.ai/v1/chat/completions  429
+15:08:00  429   (SDK retry)
+15:08:01  429   (SDK retry)
+llm.complete() failed for provider=mistral:
+  Error code: 429 - {'object':'error','message':'Rate limit exceeded',
+                     'type':'rate_limited','code':'1300'}
+```
+
+Twelve Mistral calls since startup. **Twelve 429s. Zero 200s, ever.**
+
+The decisive detail was the timestamp, not the status. `15:08:00` was the
+first Mistral request in the nine minutes since the Space booted — cold, no
+burst, an empty rate window. It was refused anyway. **A per-second limit
+cannot be exceeded by a single cold request.** Yesterday's `_pace()` fix was
+a real bug fixed for a real reason, but it was never this cause.
+
+And 429, not 401, meant the credential was being *authenticated* and then
+*refused*. The key was never "dead" in the sense everyone assumes.
+
+### 12.2 Eliminating everything, one screenshot at a time
+
+The user supplied console screenshots on request; each one closed a door.
+
+| Hypothesis | Evidence | Verdict |
+|---|---|---|
+| Our burst pacing | Cold call, 9 min idle | ✗ |
+| Per-second / TPM ceiling | Well under 1.00 req/s and 20,000 TPM | ✗ |
+| Monthly token budget | Limits page has no monthly cap for chat models — only audio has one, and it reads `-` | ✗ |
+| Model alias mismatch | See 12.3 | ✗ |
+| Invalid / revoked key | Would be 401 | ✗ |
+| Expired key | Console: active, **never** expires | ✗ |
+| Stale key (Space holds an older one) | Console: **created 3 hours ago**, last used today | ✗ |
+
+The Billing page: no payment method, no subscription, **US$0.00 credits**.
+
+One trap worth naming. The user's earlier "usage 0.00 USD all month" reading
+felt like proof that nothing had been consumed. It proves nothing at all —
+on a free tier nothing is *billed*, so the dollar figure sits at zero whether
+you burned every token or none. **It is the wrong meter**, and it had been
+quietly reassuring us for a day.
+
+### 12.3 Testing the alias without ever touching the key
+
+The last live hypothesis was that our `mistral-small-latest` resolved to a
+snapshot the org has no allocation for, versus the `mistral-small-2603` the
+limits page actually lists.
+
+Testing it needed the key. The key exists only as an HF Space secret, and
+handing a live credential to a shell is exactly the mistake §7 of this same
+log is about. So the Space tested it for us: `/rag/query` accepts an
+arbitrary `provider` and `model` and falls back to its own `MISTRAL_API_KEY`.
+Two POSTs, two model names, then read the log. **The secret never moved.**
+
+First attempt returned in 1.0s with no upstream request logged — a cache hit
+on an identical query. A probe that never reaches the thing being probed
+looks exactly like a probe that succeeded. Re-ran with unique queries:
+
+```
+17:08:52  mistral-small-2603     429  code 1300
+17:09:07  mistral-small-latest   429  code 1300
+```
+
+**Identical.** The explicit snapshot — the one the org's own limits page
+grants 1.00 req/s and 20,000 TPM — refused a cold ~500-token request. Alias
+hypothesis dead, and it was mine.
+
+### 12.4 The answer
+
+Every variable was eliminated except the organization itself. Mistral
+authenticates the key and refuses to serve completions to this org
+regardless of model, volume or timing. A key **created three hours earlier**
+had never once returned a 200 — a fresh key cannot have exhausted anything.
+
+That is the shape of an org holding valid credentials that has never been
+enabled to serve. On Mistral that gate is phone verification on the
+organization, which fits everything visible: no payment method, no
+subscription, zero credits, and a complete limits table displayed anyway.
+Stated to the user as the likely cause with the reasoning shown, not as a
+confirmed one — it cannot be confirmed from outside the console.
+
+**Nothing in this codebase is at fault.** Pacing, alias, rate ceilings and
+monthly caps all came back clean. What the user has is one sentence for
+support: *error code 1300, type rate_limited, on `mistral-small-2603`, first
+call from a key created today, org has never received a 200.*
+
+### 12.5 The one thing that was ours
+
+Visible in every trace above: **three identical 429s per call site.** The
+OpenAI SDK retries twice before our code sees a failure, and the judge and
+confirm paths each latched independently — so one dead provider cost six
+round trips and ~4 seconds per scan instead of one.
+
+Three changes, all small:
+
+- `llm.py` — `stream_groq_openai` and `complete` now take `max_retries`,
+  threaded into the OpenAI client. Default unchanged for every other caller.
+- `contradictions_judge.py` — judge calls pass `max_retries=0`. `_pace()`
+  already guarantees the spacing the limit wants, so a failure there is a
+  refusal, not congestion a retry can outrun; the SDK's extra attempts land
+  inside the same window, fail identically, and only delay the fallback.
+  Added `new_chain_state()`, a latch that can be shared.
+- `contradictions.py` — the reconciliation endpoint builds **one** latch and
+  hands it to both chains, so whichever finds the primary dead spares the
+  other the same discovery.
+
+Measured with a stubbed dead primary over 3 judge+confirm rounds:
+
+| | Mistral round trips | Gemini calls |
+|---|---|---|
+| Before | 6 | 6 |
+| After | **1** | 6 |
+
+Fallback count unchanged — no answer is lost. Ruff 0.9.10 (CI's pin) clean.
+The ml-api pytest suite could not run locally (`slowapi` and the rest absent
+from the venv); that coverage is CI's, and it was reported as CI's.
+
+**`4cbbf59`**, pushed, all three files uploaded to the Space. Space restarted
+17:23:41 and the deployed source was re-read from the Space to confirm the
+fix is what it is actually serving.
+
+A deliberate gap, stated rather than papered over: the behavioural proof is
+the local stub test. No live reconciliation scan was run against the Space,
+because that spends real Gemini calls on a self-check — which §10.7 of this
+log is precisely about. The deployed-source check is what could be proven
+for free.
+
+### 12.6 Lessons
+
+9. **The timestamp is the evidence, not the status code.** A 429 says
+   "refused". A 429 on a cold call after nine minutes of silence says
+   "refused for a reason that has nothing to do with rate".
+10. **$0.00 usage on a free tier measures nothing.** No spend is the
+    definition of the tier, not a reading of consumption.
+11. **A probe that hits a cache is not a probe.** A 1.0s response with no
+    upstream log line is a null result wearing a green tick.
+12. **The service can test the credential for you.** Any endpoint that takes
+    a model name and falls back to a server key will run the experiment
+    without the secret ever entering a shell.
+13. **Say which hypothesis was yours when it dies.** The alias theory was
+    mine, argued confidently, and wrong.
+
+---
+
+## 13. Still open (revised after §12)
+
+Resolved since §11: the **Mistral diagnosis** (answered — org-level, not
+ours) and the **double-latch** (fixed, `4cbbf59`).
+
+- **contract-invoice-reconciliation clip** — unrecorded. The tool works now.
+- **Mistral** — check whether phone verification is pending on the org; if
+  not, open a support ticket with the sentence in §12.4. Gemini carries the
+  judge in the meantime and has not failed once.
+- **Logging spec** — agreed, nothing built. §9 has the order.
+- **Five paid clips** — document-intelligence, multimodal-rag, optuna,
+  prompt-injection-playground, text-to-sql.
+- **`verify-recon-warning.mjs`** — untracked in `ml-portfolio`; keep as a
+  test or delete.
+- **Three `RENDER_*` secrets** — now unused.
