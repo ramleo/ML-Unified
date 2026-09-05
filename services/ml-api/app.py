@@ -80,14 +80,15 @@ from routers.core.shared import (
     HERE,
 )
 from routers.core.monitoring import _req_log, _SKIP_PATHS
+from security.log_redact import install as _install_log_redaction
 
 # uvicorn only configures its own loggers — without this every logger.info()
 # in routers/ is silently dropped and never shows up in HF Space logs.
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
-# Gemini's key travels in the URL, and httpx logs whole URLs — install the
-# scrubber immediately after basicConfig, before any router can log a request.
-from security.log_redact import install as _install_log_redaction
+# Gemini's key travels in the URL, and httpx logs whole URLs. The filter
+# attaches to the handlers basicConfig just created, so the call belongs here
+# rather than at import time — before any router can log a request.
 _install_log_redaction()
 
 
