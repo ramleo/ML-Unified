@@ -234,20 +234,21 @@ exposes; service-role access only, so the public dashboard cannot reach it.
 short enough that this is not a permanent archive of other people's
 documents.
 
-**Why the hash earns its place.** The file is deleted; the fingerprint is
-not. Two uploads of the same file produce the same hash, so a repeat can be
-spotted without either copy having been kept. If a malicious sample turns up
-later, hashing it and searching this table says exactly when and how often it
-came through. It can also be checked against public malware databases without
-the file ever having been stored.
+**Why the hash earns its place.** The file is deleted; the fingerprint is not.
+Same file, same hash, so a repeat is visible without either copy being kept —
+and a sample identified later can be searched for, or checked against public
+malware databases, with nothing ever having been stored.
 
 **Filenames are stored (decided 2026-09-05).** `report.pdf` is harmless;
-`john-smith-payslip-march.pdf` is not, and filenames often carry a name and a
-document type. The reasoning for storing them anyway: a filename without its
-contents is a different order of exposure from the contents themselves — a
-payslip's filename reveals a name, its contents reveal a salary, an employer,
-an address and a tax number. That is why filenames live here under the 30-day
-expiry and restricted access, and never in `events`.
+`john-smith-payslip-march.pdf` is not. Kept anyway because a filename without
+its contents is a different order of exposure — the name reveals a person, the
+document reveals a salary, an employer, an address and a tax number. Hence the
+30-day expiry and restricted access, and never in `events`.
+
+**Built 2026-09-06.** `supabase/security_log.sql` (RLS on, no policies, 30-day
+purge), a WRITE-ONLY `/api/security-log` with no GET, and one capture-phase
+listener on every `input[type=file]` — chosen over hooking the transport
+because uploads go out as FormData *and* as base64 JSON.
 
 **Content is NOT stored** — see §10, this is undecided. Today the security
 log records facts *about* an upload, not the upload.
@@ -394,7 +395,6 @@ names wrapped in `instrument()` — §5's own argument, applied to itself.
 request body, and put on a ContextVar so every judge call carries it.
 `events.meta->>'run_id'` joins to `llm_calls.run_id`.
 
-**Not built:** 55 of 56 tools still call `fetch` directly (81 sites); stages
-1, 2, 3, 4, 6, 8 emit nothing; `security_log` (§5b) has no table; the
-retention cron is decided but unscheduled; no route but reconciliation
-accepts a `run_id`.
+**Everything in this spec is now built.** Remaining, all in §10: search
+queries as a salted hash; whether to store content at all; and the two naming
+conventions already in `events` — pre-existing, and renaming orphans rows.
