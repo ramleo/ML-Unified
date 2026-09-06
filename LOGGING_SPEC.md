@@ -1,6 +1,8 @@
 # Logging Specification
 
-**Status:** specification agreed 2026-09-05, not yet implemented.
+**Status:** agreed 2026-09-05. **Partially implemented 2026-09-06** — §9 items
+1, 4 and 9 built, plus the `trackedFetch` funnel items 2 and 3 need. One tool
+migrated; 55 not. See §11.
 **Owner:** this file is the single source of truth for what the site logs.
 Change the logging, change this file, and change the privacy page (see §7).
 
@@ -188,6 +190,11 @@ Separate from the user journey, and joined to it.
 | `latency_ms` | |
 | `session_id`, `run_id` | joins to the `events` table |
 
+**Built 2026-09-06.** Table created with RLS enabled and no policies, so the
+public anon key cannot read it while the service-role key (which bypasses RLS)
+still writes. The shared secret is **`AIRAML_LOG_TOKEN`**, set both as a Space
+secret and as a Vercel environment variable.
+
 **How the Space writes it:** the Space posts to a new authenticated route on
 Vercel, which writes to Supabase. **Not** by putting a Supabase service-role
 key on the Space — the Space's logs were found leaking a Gemini key on
@@ -289,8 +296,10 @@ turns a true page into a false one.
 
 Supabase free tier is 500 MB. At the expected volume this is not a
 constraint for a long time, but the decision should be made rather than
-drifted into. **Open question:** delete rows older than 90 days, or keep
-indefinitely? Not yet decided.
+drifted into. **Decided 2026-09-06: 14 months.** The industry norm — GA4 offers 2 / 14 / 26,
+defaults to 26, and most privacy guidance recommends 14. Long enough for
+year-on-year comparison, short enough not to hoard. NOT automatic: deleting
+the rows needs a `pg_cron` job, not yet scheduled.
 
 ---
 
@@ -352,10 +361,40 @@ Agreed wording if content is ever stored:
 
 ### Smaller ones
 
-- **Retention** for `events` and `llm_calls` (§8) — 90 days or indefinite.
-- **Search queries** — store a hash rather than only the length? A hash would
-  let repeat zero-result searches be counted without storing the text.
+- ~~**Retention**~~ — decided 2026-09-06: 14 months (§8). The cron job to
+  enforce it is still unscheduled.
+- ~~**Search queries**~~ — decided 2026-09-06: a **salted** hash, not the text
+  and not only the length. Length alone is unactionable; a hash counts repeat
+  zero-result searches. Salted because an unsalted hash of a short query is
+  recoverable by hashing a dictionary. Not yet built — item 5.
 - **`session_end`** — worth the unreliability of `visibilitychange`?
 - **Free tier only.** The owner's constraint is that everything stays on free
   tiers. Supabase's database allowance is small; verify the current figure on
   the dashboard before committing to content storage of any kind.
+
+---
+
+## 11. What is built (2026-09-06)
+
+| Piece | File | State |
+|---|---|---|
+| §4 vocabulary | `ml-portfolio/src/lib/logEvents.ts` | Done — 28 event names, 6 error classes, 4 stages, `classifyStatus`/`classifyThrown` |
+| Frontend funnel | `ml-portfolio/src/lib/trackedFetch.ts` | Done — emits `run_success`/`run_error` for any caller that uses it |
+| §5 sink route | `ml-portfolio/src/app/api/llm-log/route.ts` | Gated on `AIRAML_LOG_TOKEN`, 404s if unset |
+| §5 Space side | `services/ml-api/routers/rag/call_log.py` | ContextVar + fire-and-forget poster |
+| §5 instrumentation | `services/ml-api/routers/rag/llm.py` | Done — all four `stream_*` wrapped |
+| §7 privacy page | `ml-portfolio/src/app/privacy/page.tsx` | Done, same change per §7 |
+| Stage 5/7 in a tool | `ReconciliationReport.tsx` | ONE tool only |
+
+**Why `llm.py` was wrapped, not edited per call site:** the four `stream_*`
+functions were renamed `_stream_*_raw` and re-exposed under their original
+names wrapped in `instrument()` — §5's own argument, applied to itself.
+
+**The join key:** `run_id` is minted client-side per press, sent in the
+request body, and put on a ContextVar so every judge call carries it.
+`events.meta->>'run_id'` joins to `llm_calls.run_id`.
+
+**Not built:** 55 of 56 tools still call `fetch` directly (81 sites); stages
+1, 2, 3, 4, 6, 8 emit nothing; `security_log` (§5b) has no table; the
+retention cron is decided but unscheduled; no route but reconciliation
+accepts a `run_id`.

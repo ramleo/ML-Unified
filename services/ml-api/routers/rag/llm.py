@@ -6,6 +6,8 @@ from __future__ import annotations
 import json
 import logging
 
+from routers.rag.call_log import instrument
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,7 +22,7 @@ OPENAI_COMPAT_BASES = {
 }
 
 
-def stream_groq_openai(provider: str, model: str, key: str, messages: list[dict],
+def _stream_groq_openai_raw(provider: str, model: str, key: str, messages: list[dict],
                        max_retries: int | None = None, max_tokens: int | None = None):
     """`max_retries` overrides the SDK's own retry count (default 2). Pass 0
     from callers that already pace themselves: a 429 from a per-second limit
@@ -44,7 +46,7 @@ def stream_groq_openai(provider: str, model: str, key: str, messages: list[dict]
                 yield content
 
 
-def stream_claude(model: str, key: str, messages: list[dict], system: str):
+def _stream_claude_raw(model: str, key: str, messages: list[dict], system: str):
     import anthropic
     client = anthropic.Anthropic(api_key=key)
     with client.messages.stream(
@@ -57,7 +59,7 @@ def stream_claude(model: str, key: str, messages: list[dict], system: str):
             yield text
 
 
-def stream_gemini(model: str, key: str, messages: list[dict], system: str):
+def _stream_gemini_raw(model: str, key: str, messages: list[dict], system: str):
     import httpx
 
     url = (
@@ -106,7 +108,7 @@ def stream_gemini(model: str, key: str, messages: list[dict], system: str):
         raise
 
 
-def stream_cohere(model: str, key: str, messages: list[dict], system: str):
+def _stream_cohere_raw(model: str, key: str, messages: list[dict], system: str):
     import httpx
 
     formatted = []
@@ -179,3 +181,31 @@ def complete(provider: str, model: str, key: str, messages: list[dict], system: 
     except Exception as exc:
         logger.warning("llm.complete() failed for provider=%s: %s", provider, exc)
     return ""
+
+
+# ── Instrumented public names ─────────────────────────────────────────────────
+# LOGGING_SPEC.md §5: "inside routers/rag/llm.py, in complete() and the
+# stream_* functions — the single funnel every provider call passes through.
+# Not at the twelve individual Gemini call sites, which is how half of them end
+# up uninstrumented."
+#
+# The raw generators above are left exactly as they were and wrapped here, so
+# every existing caller keeps importing the same four names and gets recording
+# for free. instrument() re-raises, so failure behaviour is unchanged.
+
+def stream_groq_openai(provider: str, model: str, key: str, messages: list[dict],
+                       max_retries: int | None = None, max_tokens: int | None = None):
+    return instrument(provider, model,
+                      _stream_groq_openai_raw(provider, model, key, messages, max_retries, max_tokens))
+
+
+def stream_claude(model: str, key: str, messages: list[dict], system: str):
+    return instrument("claude", model, _stream_claude_raw(model, key, messages, system))
+
+
+def stream_gemini(model: str, key: str, messages: list[dict], system: str):
+    return instrument("gemini", model, _stream_gemini_raw(model, key, messages, system))
+
+
+def stream_cohere(model: str, key: str, messages: list[dict], system: str):
+    return instrument("cohere", model, _stream_cohere_raw(model, key, messages, system))

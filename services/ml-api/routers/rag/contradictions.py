@@ -29,6 +29,7 @@ from pydantic import BaseModel
 
 from routers.rag.cache import cosine_sim
 from routers.rag.entities import decode_entities
+from routers.rag.call_log import set_call_context
 from routers.rag.contradictions_judge import (
     _RECONCILE_JUDGE_SYSTEM, _RECONCILE_CONFIRM_SYSTEM,
     make_judge_chain, new_chain_state,
@@ -223,6 +224,7 @@ def check_contradictions(request: Request, req: ContradictionsRequest):
     check_and_record_call("contradictions", pool="contradictions", daily_cap_env="CONTRADICTIONS_DAILY_CAP")
     from routers.rag import get_rag_state
     from routers.rag.query import _resolve_key
+    set_call_context(session_id=req.session_id, tool="contradictions")
 
     try:
         state = get_rag_state()
@@ -237,6 +239,9 @@ class ReconciliationRequest(BaseModel):
     session_id: str
     contract_source: str
     invoice_sources: list[str]
+    # Minted client-side per press (LOGGING_SPEC.md §3 stage 5). Optional so an
+    # older cached frontend still works — it just logs a row with no join key.
+    run_id: str = ""
 
 
 @router.post("/reconciliation")
@@ -248,6 +253,10 @@ def check_reconciliation(request: Request, req: ReconciliationRequest):
     check_and_record_call("reconciliation", pool="contradictions", daily_cap_env="CONTRADICTIONS_DAILY_CAP")
     from routers.rag import get_rag_state
     from routers.rag.query import _resolve_key
+    # Tag every judge call this request goes on to make, so its row in
+    # llm_calls can be joined to the click in events by run_id.
+    set_call_context(session_id=req.session_id, run_id=req.run_id,
+                     tool="contract-invoice-reconciliation")
 
     try:
         state = get_rag_state()
