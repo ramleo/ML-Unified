@@ -695,7 +695,7 @@ Their own advice — *implement retry with exponential backoff* — does not
 apply here. Backoff assumes congestion that clears in seconds; this was
 measured refusing for hours. `max_retries=0` plus the latch stays.
 
-**`<pending>`** demotes it where it was primary:
+**`db8f2eb`** demotes it where it was primary:
 
 - `generation.py` cascade → `cohere, mistral, gemini`. Cohere first (free,
   reliable), Mistral second (free when capacity exists, one ~0.5s round trip
@@ -745,3 +745,94 @@ was mine, so the mechanism I measured was the one I had created.
 21. **A schema default only applies to callers who omit the field.** The
     "default provider" was not what any real user was using, and the only
     caller exercising it was my own probe.
+
+---
+
+## 16. Groq was dead too, and nobody knew
+
+Chasing the Gemini spend led straight into a bug that had nothing to do with
+cost. Asked whether Groq could be the free default for the site chatbot
+(§15.4), the honest first step was to check rather than assume.
+
+### 16.1 Four names, four failures
+
+`/api/chat` on the live site returned *"Something went wrong"* for Groq while
+Gemini answered normally — and Claude returned its own *"not configured yet"*
+message. That third response is what made the first one legible: a missing
+key produces the polite message, so Groq **had** a key and was throwing.
+
+Every Groq model name in the two repos, tested live through the Space:
+
+| Model | Where | Result |
+|---|---|---|
+| `llama-3.1-8b-instant` | site chatbot | 404 `model_not_found` |
+| `llama-3.3-70b-versatile` | tools chat | 404 `model_not_found` |
+| `gemma2-9b-it` | tools chat | 400 `model_decommissioned` |
+| `mixtral-8x7b-32768` | tools chat | 400 `model_decommissioned` |
+
+Groq had retired all four. Anyone selecting Groq in either chat had been
+getting an error, silently, for however long that has been true. It was found
+only because a cost question happened to walk past it.
+
+### 16.2 The user's three replacements
+
+Offered `qwen/qwen3.6-27b`, `qwen/qwen3.8-27b`, `minimaxai/minimax-m2.7`.
+Tested rather than trusted, which was worth doing in both directions:
+
+- Both Qwen names **exist** — refused for an unrelated reason, below.
+- `minimaxai/minimax-m2.7` → 404. Groq's message covers two cases without
+  distinguishing them ("does not exist **or you do not have access to it**"),
+  so it was left out rather than shipped as a broken dropdown entry. The user
+  later dropped it.
+
+The Qwen refusal was the interesting part:
+
+> Request too large ... on **output tokens per minute (OTPM): Limit 1000,
+> Requested 2048.**
+
+Not the model, not the key — the *ask*. With no `max_tokens` set, the SDK
+requested 2048, and Groq rejects the whole request up front when expected
+output exceeds the tier cap. It never generates a token, so the log reads
+exactly like a dead provider. `llm.py` now accepts `max_tokens` and
+`generation.py` caps Groq at 900.
+
+Notably the site chatbot already sent `max_tokens: 400`, so its only problem
+was the retired model name — two different bugs wearing the same error
+message.
+
+### 16.3 What shipped
+
+- **`94df800`** (ml-portfolio) — tools chat defaults to Cohere; chatbot model
+  → `qwen/qwen3.6-27b`; four dead names removed from the tools list, two
+  verified ones added.
+- **`33acb43`** (ML-Unified) — `max_tokens` on the OpenAI-compat streamer,
+  Groq capped at 900.
+
+Verified after deploy, and the first check failed honestly: a Groq query came
+back `served_provider: cohere` — the call had landed while the Space was
+still serving old code. Re-run against the rebuilt Space:
+`served_provider: groq`, no fallback, 123 tokens, a complete answer, and **no
+`<think>` leakage** despite Qwen being a reasoning model.
+
+Final state of the four providers:
+
+| Provider | State |
+|---|---|
+| Cohere | free, reliable — tools-chat default |
+| Groq | free, working again — capped at 900 output tokens |
+| Gemini | **paid** — no longer any chat's default, last in the cascade |
+| Mistral | intermittent by design — demoted, kept as a free bonus |
+
+### 16.4 Lessons
+
+22. **A generic error message hides the difference between two bugs.** "Something
+    went wrong" covered a retired model in one app and an oversized request in
+    another; only the raw API body separated them.
+23. **The provider that answers politely tells you about the one that doesn't.**
+    Claude's "not configured yet" proved Groq's key existed, which turned a
+    vague failure into a specific one.
+24. **Test the names you are handed, including the ones you expect to work.**
+    Two of three were fine, one was not, and the two that were fine failed for
+    a reason nobody had guessed.
+25. **Verify after the rebuild, not during it.** The first post-deploy check
+    measured the old code and would have read as a failed fix.
