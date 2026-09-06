@@ -232,22 +232,48 @@ error also proved the option was supported rather than silently ignored.
 Real visitors are unaffected: Turnstile runs invisibly, nothing to click.
 
 ---
-
 ## 10. Still open
 
-Unchanged from Part 278 §10 — all decisions rather than construction:
+Carried over from Part 278 §10, restated in full here so this file stands on
+its own. Every one is a **decision not yet made**, not construction left
+half-finished — which is why none of them is a bug.
 
-- Search queries as a salted hash rather than a length.
-- Whether to store uploaded content at all (§10 of the spec).
-- Two naming conventions in `events`: `tool_open` carries display names, run
-  events carry slugs. Renaming orphans existing rows.
-- `demo_abandon` — reasoned about, never exercised.
-- Site chatbot still defaults to Gemini; Cohere is not wired into
-  `/api/chat`.
-- Returning visitors keep their old provider via localStorage.
-- `verify-recon-warning.mjs` — still untracked in `ml-portfolio`.
+1. **Search queries as a salted hash rather than a length.** Decided, not
+   implemented. Length alone cannot tell one repeated zero-result search from
+   several different ones, which is the thing worth knowing. Note the contrast
+   with Part 278 §11.3: for a SEARCH box a hash is the privacy-preserving
+   *upgrade*; for a PASSWORD box even the length is too much. The difference is
+   what an attacker can do with the field.
+
+2. **Whether to store uploaded content at all** (spec §10). Today only
+   metadata is kept — filename, size, mime, a SHA-256 of the bytes. Keeping the
+   content would make an incident far easier to investigate and is a materially
+   larger privacy promise to make. Not a code change; a policy one.
+
+3. **Two naming conventions in `events`.** `tool_open`/`tool_close` carry
+   display names ("Data Drift Detection"); run events carry slugs ("drift").
+   Pre-existing, not introduced by this work. Unifying them would orphan every
+   existing row, so the cost is in the data, not the code.
+
+4. **`demo_abandon` — reasoned about, never exercised.** The event is wired and
+   the logic is argued through, but no run has ever emitted one. Untested code
+   on an untrodden path; treat any conclusion drawn from its absence as
+   unproven.
+
+5. **Site chatbot still defaults to Gemini.** Cohere is not wired into
+   `/api/chat` at all. Gemini is the one paid provider, so this is the only
+   default in the app that costs money per call.
+
+6. **Returning visitors keep their old provider**, persisted in localStorage.
+   So any change of default reaches new visitors only — which also means
+   testing a new default in your own browser will not show it.
+
+7. **`verify-recon-warning.mjs` — still untracked in `ml-portfolio`.** It is
+   the user's file. It must not be deleted, and it is not mine to commit.
 
 New from this part:
 
-- **Ad-blocker users' uploads go unlogged** (§7). Accepted deliberately, not
-  an oversight.
+8. **Ad-blocker users' uploads go unlogged** (§7). A consequence of failing
+   closed: no Turnstile token, no row. Accepted deliberately rather than
+   overlooked — but it means the security log is a floor on upload activity,
+   never a complete record. Anything that treats it as complete is wrong.
