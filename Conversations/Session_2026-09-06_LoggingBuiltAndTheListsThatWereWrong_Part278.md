@@ -16,9 +16,8 @@ part worth keeping.
 
 ## 1. What was asked, in order
 
-The session opened on the handbook — one clip left to record — and ended with
-the whole logging spec built. Every step in between was the user asking for
-one thing at a time and checking the answer.
+Opened on the handbook with one clip left to record; ended with the whole
+logging spec built. Every step was one ask at a time, each answer checked.
 
 | Ask | Outcome |
 |---|---|
@@ -62,44 +61,37 @@ scan now costs nothing.
 
 ### 3.1 The funnel argument, applied twice
 
-There is no shared fetch wrapper in `ml-portfolio` — 81 raw `fetch()` calls
-across 58 files. §5 of the spec already makes the argument for the backend:
-
-> Not at the twelve individual Gemini call sites, which is how half of them
-> end up uninstrumented.
-
-That reasoning holds identically on the frontend, so `trackedFetch` was built
-first and call sites migrated to it. Same move on the backend: the four
-`stream_*` functions in `llm.py` were renamed `_stream_*_raw` and re-exposed
-under their original names wrapped in `instrument()`, so every existing caller
-got recording for free.
+No shared fetch wrapper existed — 81 raw `fetch()` calls across 58 files. §5
+already makes the argument for the backend — *"not at the twelve individual
+Gemini call sites, which is how half of them end up uninstrumented"* — and it
+holds identically on the frontend, so `trackedFetch` was built first and call
+sites migrated to it. Same move on the backend: the four `stream_*` functions
+in `llm.py` were renamed `_stream_*_raw` and re-exposed under their original
+names wrapped in `instrument()`, so every caller got recording for free.
 
 ### 3.2 The Space never holds a database key
 
 `llm_calls` is written by a Vercel route the Space posts to with a shared
-secret (`AIRAML_LOG_TOKEN`), not by giving the Space a Supabase key. The Space
-was caught leaking a Gemini key in plaintext on 2026-09-05; a database key is
-far worse. Gated to 404 when the secret is unset, so a deploy that forgets it
-fails closed.
+secret (`AIRAML_LOG_TOKEN`), not by putting a Supabase key on the Space — its
+logs were caught leaking a Gemini key on 2026-09-05, and a database key is far
+worse. 404s when the secret is unset, so a deploy that forgets it fails closed.
 
-Verified end to end: 8 Cohere calls, each followed by
-`POST /api/llm-log 200 OK`. A 200 there only happens after the insert
-succeeds.
+Verified end to end: 8 Cohere calls, each followed by `POST /api/llm-log
+200 OK` — and a 200 there only happens after the insert succeeds.
 
 ### 3.3 Stages 2, 3, 6, 8
 
-- **Search** — debounced 800ms, which is not cosmetic: typing "segmentation"
-  would emit twelve rows, eleven for prefixes nobody searched, and the early
-  ones all look like zero-result searches. That corrupts the exact number the
-  spec calls the most valuable row on the page.
-- **Demos** — abandonment decided on *unmount*, not on pause. Pausing to read
-  a caption is normal.
-- **Exports** — 21 files build their own download, so instead of 21 edits:
-  a capture-phase listener for rendered `<a download>`, plus a patched
-  `URL.createObjectURL` for the programmatic saves on detached anchors that
-  bubble nowhere.
-- **Sessions** — `visibilitychange`, not `beforeunload`, which mobile
-  browsers routinely never fire. `session_end` is a floor, not a measurement.
+- **Search** — debounced 800ms, not cosmetic: typing "segmentation" would emit
+  twelve rows, eleven for prefixes nobody searched, and the early ones all look
+  like zero-result searches — corrupting the exact number the spec calls the
+  most valuable row on the page.
+- **Demos** — abandonment decided on *unmount*, not pause. Pausing to read a
+  caption is normal.
+- **Exports** — 21 files build their own download, so instead of 21 edits: a
+  listener for rendered `<a download>` plus a patched `URL.createObjectURL`
+  for programmatic saves on detached anchors that bubble nowhere.
+- **Sessions** — `visibilitychange`, not `beforeunload`, which mobile browsers
+  routinely never fire. `session_end` is a floor, not a measurement.
 
 ---
 
@@ -117,10 +109,9 @@ not happen*.
    clean success.
 
 `trackedFetch` now takes `streaming: true` and wraps the body, recording when
-the stream actually ends: finished → success with the real duration, broke →
-error, cancelled → success with `completed: false` (mostly someone pressing
-Stop; counting that as an error would inflate the error rate with people
-changing their minds).
+the stream ends: finished → success with the real duration, broke → error,
+cancelled → success with `completed: false` (mostly someone pressing Stop, and
+counting that as an error would inflate the rate with changed minds).
 
 ---
 
@@ -147,11 +138,10 @@ backend as `API` — AutoML train, the whole pipeline builder, the site chatbot,
 and **DriftRunner's actual drift-detection call**, while happily instrumenting
 its two metadata loads.
 
-**Then the transformer went too wide.** Running it over everything swept up
-`KeepAlive`, which pings `/health` on a timer from every open tab. Logging
-that as `run_success` would have made the number meaningless — the same
-failure as `tool_open` counting uploads, which had been fixed two commits
-earlier.
+**Then the transformer went too wide.** It swept up `KeepAlive`, which pings
+`/health` on a timer from every open tab; logging that as `run_success` would
+have made the number meaningless — the same failure as `tool_open` counting
+uploads, fixed two commits earlier.
 
 **Said "not deployed yet" without checking.** Vercel had already deployed it.
 
@@ -159,21 +149,17 @@ earlier.
 
 ## 6. A verification that reported clean while not running
 
-Three separate attempts to compare lint against a baseline printed a
-reassuring `0 vs 0`:
+Three attempts to compare lint against a baseline printed a reassuring
+`0 vs 0`: `zsh` does not word-split unquoted `$FILES` (eslint got one giant
+filename), `eslint -f unix` is not installed here and emits nothing, and the
+`grep` pattern matched neither output.
 
-1. `zsh` does not word-split unquoted `$FILES`, so eslint received one giant
-   filename and matched nothing.
-2. `eslint -f unix` is not installed in this project and emits nothing at all.
-3. The `grep` pattern did not match the formatter's output either way.
+**A broken check that reports "clean" is worse than no check** — it
+manufactures confidence. Fixed by proving the harness can fail: inject a type
+error, confirm `tsc` reports exactly 1, remove it.
 
-**A broken check that reports "clean" is worse than no check**, because it
-manufactures confidence. The fix was to prove the harness can fail: inject a
-deliberate type error, confirm `tsc` reports exactly 1, then remove it.
-
-That test caught a second real problem — the `git checkout` used to undo the
-injection silently reverted `useFSAISuggest`'s instrumentation, which was
-restored and re-verified.
+That caught a second problem — the `git checkout` undoing the injection had
+silently reverted `useFSAISuggest`'s instrumentation, restored and re-verified.
 
 ---
 
@@ -219,19 +205,18 @@ exactly 400 twice rather than shipped over.
 
 ## 9. The clip, at last
 
-Recorded on the rebuilt recorder: 11 steps, 159s, 10.3 MB. **All 25
-walkthrough clips are now on the rebuilt recorder.**
+11 steps, 159s, 10.3 MB. **All 25 walkthrough clips are now on the rebuilt
+recorder.**
 
-Steps 10 and 11 had to be rewritten first. They were written around a Mistral
-false positive and spent a third of the narration on the yellow "Unconfirmed"
-badge. With Cohere judging, both findings come back confirmed, the badge never
-renders, and `expect: "Unconfirmed"` would have aborted the recorder — the
-same guard that stopped three attempts yesterday, firing for the opposite
-reason.
+Steps 10 and 11 were rewritten first. Built around a Mistral false positive,
+they spent a third of the narration on the yellow "Unconfirmed" badge — and
+with Cohere judging both findings come back confirmed, the badge never
+renders, and `expect: "Unconfirmed"` would have aborted the recorder. The same
+guard that stopped three attempts yesterday, firing for the opposite reason.
 
-The rewrite describes the *mechanism*, not this run's outcome. A script that
-names what the judge returned goes stale the moment the judge improves, which
-is exactly what happened. New guards are on values the model does not choose:
+The rewrite describes the *mechanism*, not this run's outcome: a script naming
+what the judge returned goes stale the moment the judge improves, which is
+precisely what happened. New guards sit on values the model does not choose —
 the report header, and verbatim invoice PDF text.
 
 **Audited frame by frame**, not by exit code — the lesson from the audit that
@@ -266,95 +251,80 @@ on the side-by-side passages; the closing card points at the live site.
 Written after §10 listed it as the only unbuilt piece, when the user asked the
 fair question: *"then what are you waiting for?"*
 
-**What it records:** filename, extension, size, mime, a SHA-256 of the bytes,
-prompt length, session and run id, country. **Never the file.** 30-day
-retention, purged at 03:41 — after the analytics purge at 03:17, and far
-shorter than the 14 months analytics get, because these fields are more
-sensitive.
+**Records:** filename, ext, size, mime, a SHA-256 of the bytes, prompt length,
+session/run id, country. **Never the file.** 30-day retention, purged at 03:41
+— after the analytics purge at 03:17, and far shorter than analytics' 14
+months because these fields are more sensitive.
 
 ### 11.1 One listener, because uploads have two shapes
 
-Tools send files two different ways: **FormData** for the ML endpoints,
-**base64 inside a JSON body** for most of the vision ones. Hooking the
-transport would have caught the first and silently missed the second — the
-same class of miss as Part 278 §5's narrow detection pattern, which is why it
-was avoided this time rather than discovered afterwards.
+Tools send files as **FormData** (ML endpoints) *and* as **base64 in JSON**
+(most vision ones). Hooking the transport would have caught the first and
+silently missed the second — §5's narrow-pattern miss, avoided this time
+rather than discovered afterwards.
 
-So the hook is a capture-phase `change` listener on every `input[type=file]`.
-Every tool has one, whatever it does with the file next. The tool name comes
-from the URL, so a tool added later is covered the day it ships.
+So: a capture-phase `change` listener on every `input[type=file]`. Every tool
+has one whatever it does next, and the tool name comes from the URL, so a tool
+added later is covered the day it ships.
 
-It logs on **select**, not on send. A file chosen and then abandoned still
-went into the page, and for a log whose question is "was anything malicious
-put in here", that is the honest boundary.
+It logs on **select**, not send. A file chosen then abandoned still went into
+the page, and for "was anything malicious put in here" that is the honest
+boundary.
 
 ### 11.2 Two independent locks on readability
 
-§5b requires the table to be unreadable by anything the site exposes. That is
-enforced twice, and the two do not back each other up — they fail separately:
-
-1. **RLS on, no policies.** The anon key the browser holds can read nothing.
-   The database refuses.
-2. **No GET handler.** `/api/security-log` exports `POST` only. There is no
-   URL that returns this data because none was written.
+§5b requires the table to be unreadable by anything the site exposes, enforced
+twice — and the two fail separately rather than backing each other up:
+**RLS on with no policies** (the browser's anon key reads nothing; the database
+refuses) and **no GET handler** (there is no URL that returns this data
+because none was written).
 
 Lock 2 is one line someone could add in six months without knowing why it was
-missing; Lock 1 would still refuse. Loosen Lock 1 and there is still no URL to
-ask through.
-
-The `sha256` column takes a 64-character hex digest or null and nothing else,
-so it cannot quietly become a place content is smuggled into.
+missing; Lock 1 still refuses. Loosen Lock 1 and there is still no URL to ask
+through.
 
 ### 11.3 The password tool, and why nothing changes there
 
-The user asked whether the Password Strength checker should be tracked in the
-database after all, and asked for the recommendation to be researched rather
-than asserted.
+Asked whether the Password checker should be tracked after all, with the
+recommendation researched rather than asserted.
 
-**The answer is no, and the current design is already the recommended one.**
-The consensus is to do all password analysis in the browser and transmit
-nothing — not the password, not a hash, not the length. The tool already does
-the harder half correctly: for the breach check it computes SHA-1 locally,
-sends only the first 5 hex characters to the API and matches the suffix in the
-browser. That is k-anonymity — the API learns that someone checked a password
-sharing a 5-character prefix with roughly 800 others, and never learns which.
+**No — the current design is already the recommended one.** The consensus is
+to analyse in the browser and transmit nothing: not the password, not a hash,
+not the length. The tool already does the harder half — for the breach check
+it computes SHA-1 locally and sends only the first 5 hex characters, matching
+the suffix in the browser. That is k-anonymity: the API learns someone checked
+a password sharing a prefix with ~800 others, never which.
 
-**Length is the specific thing not to log.** It is the most useful single clue
-for guessing a password, and recording it buys nothing the tool does not
-already do client-side.
+**Length is the specific thing not to log** — the single most useful clue for
+guessing a password, and it buys nothing the tool does not already do
+client-side.
 
-One clarification worth writing down, because "nothing is logged" is not
-literally true: `tool_open` / `tool_close` still fire for that page. What is
-excluded is anything about the password. Usage is ours to measure; the secret
-is not. Confirmed too that the pwnedpasswords call is deliberately NOT wrapped
-in `trackedFetch`, so a breach check creates no row.
+Worth recording because "nothing is logged" is not literally true:
+`tool_open`/`tool_close` still fire there. Only the password is excluded —
+usage is ours to measure, the secret is not. The pwnedpasswords call is also
+deliberately not wrapped in `trackedFetch`, so a breach check creates no row.
 
-The exclusion is enforced in **both** halves — the client helper and the
-server route — because a promise that depends on every caller remembering is
-not a promise.
+Enforced in **both** halves, client and server: a promise that depends on
+every caller remembering is not a promise.
 
 ### 11.4 A test that proved nothing, and the control that fixed it
 
-The first exclusion test loaded `/tools/password-audit`, tried to upload a
-file, and reported **0 rows**. That result was worthless: the page has no file
-input at all, so there was nothing to block.
+The first exclusion test loaded `/tools/password-audit`, tried to upload, and
+reported **0 rows** — worthless, because that page has no file input at all.
 
-Redone properly — inject a real `File` and a real `change` event on the
-password page (**0 rows**), then the identical injection on
-`yara-file-scanner` (**1 row**). The second half is the control that makes the
-first half mean something.
+Redone: inject a real `File` and `change` event on the password page
+(**0 rows**), then the identical injection on `yara-file-scanner` (**1 row**).
+The second half is what makes the first mean anything. The browser-computed
+SHA-256 also matched `shasum -a 256` exactly.
 
-The browser-computed SHA-256 was also checked against `shasum -a 256` on the
-same file: identical digest.
-
-This is Part 278 §6's rule applied on purpose rather than after being caught:
-**prove the check can fail before trusting a pass.**
+§6's rule applied on purpose rather than after being caught: **prove the check
+can fail before trusting a pass.**
 
 ### 11.5 Privacy page
 
-Storing filenames for 30 days is a real disclosure, so §7 obliged an update in
-the same commit. It now says what is kept, for how long, that the file itself
-is discarded, why a filename is kept at all, and that the Password checker is
+Filenames kept for 30 days is a real disclosure, so §7 obliged an update in
+the same commit: what is kept, for how long, that the file itself is
+discarded, why a filename is kept at all, and that the Password checker is
 excluded entirely.
 
 **Commits:** `020d7ec` (ML-Unified — SQL + spec), `8f38298` (ml-portfolio —
@@ -364,6 +334,67 @@ client, sink, privacy).
 editor. Until then the client posts to a table that does not exist and fails
 silently — nothing breaks, nothing is recorded.
 
-**`LOGGING_SPEC.md` is now fully implemented.** What remains is in §10 and is
-all decision, not construction: search queries as a salted hash, whether to
-store content at all, and the two naming conventions already in `events`.
+**`LOGGING_SPEC.md` is now fully implemented.** What remains is §10, all
+decision rather than construction.
+
+---
+
+## 12. A comment that claimed a protection that did not exist
+
+The user read §11.2's "two locks" and asked the question that mattered:
+
+> *"you said 'that file contains only code for writing', isn't it risky, what
+> if someone unauthorized writes something harmful?"*
+
+Checking it produced something worse than the risk. The route's header said it
+was **"origin-checked"**. There was no origin check anywhere in the file; the
+only real protection was field clamping.
+
+**A comment asserting a protection that does not exist is worse than no
+comment** — the next reader stops looking. §5's habit in a new costume:
+describing a state rather than checking it, written into source where it
+outlives the conversation.
+
+### 12.1 Exposure, and what was added
+
+A public POST with no origin check, no rate limit, no body cap. An attacker
+could not read the table, reach another, run SQL, or store anything large —
+every field is clamped, `sha256` takes 64 hex chars or null. They *could*
+insert junk rows, and **a security log you can flood is one you cannot
+trust**: a real event can be buried under ten thousand fabricated ones.
+
+Added: an **Origin allow-list** (stops another site POSTing from a visitor's
+browser; does *not* stop curl, which can send any Origin — no header check
+can), a **60/min per-IP limit** (best-effort; serverless instances share no
+memory), and a **4KB body cap**. Residual risk is stated in the file, with the
+real fix if ever needed: a server-minted signed token, not a bigger header
+check.
+
+### 12.2 The ordering bug the test found
+
+The guards were placed *after* the Supabase env check. Locally, where that key
+is empty, **every request returned the same 500** and not one guard was
+reached — the test could not tell blocked from allowed. Guards run first now,
+which is also right on the merits: a forged request should be refused on its
+own terms, not masked by a 500 about our own configuration.
+
+### 12.3 Verified separately, with a control
+
+| Case | Result |
+|---|---|
+| no Origin | 403 |
+| Origin: evil.example | 403 |
+| 5KB body | 413 |
+| good Origin | 500 — guards passed, local Supabase key empty |
+| 65th rapid POST | 429 |
+| real browser upload | 500, correct payload |
+
+The fourth row is the control: without it, five rejections prove only that the
+route rejects everything.
+
+One more catch: the browser run first returned **429**, which looked like a
+bug and was not — the rate-limit test seconds earlier had eaten the same
+bucket, since localhost sends no `x-forwarded-for` and both fell into
+`unknown`. Restarting cleared it.
+
+**Commit:** `c91dbd0`.
