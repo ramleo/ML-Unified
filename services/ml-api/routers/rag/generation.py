@@ -19,10 +19,16 @@ logger = logging.getLogger(__name__)
 
 # Fallback order, tried after the caller's selected provider using each
 # provider's own server-side key.
+# Cohere sits ahead of Gemini deliberately (2026-09-06). Mistral began
+# refusing every call with a 429 the day before, which made this cascade's
+# second entry the de-facto provider for every question on the site — and
+# that entry was Gemini, the only paid key here. Cohere was verified serving
+# a real query end to end (200 OK, full answer, no Gemini call) before being
+# promoted; Gemini stays as the last resort it was meant to be.
 FALLBACK_CANDIDATES = [
     ("mistral", "mistral-small-latest"),  # proven reliable fallback elsewhere in this codebase (vision captioning)
-    ("gemini", "gemini-3.6-flash"),
     ("cohere", "command-a-03-2025"),
+    ("gemini", "gemini-3.6-flash"),
 ]
 
 

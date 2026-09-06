@@ -36,7 +36,13 @@ def expand_query(query: str, provider: str, model: str, key: str) -> tuple[list[
     if not key:
         return [query], None
 
-    text = complete(provider, model, key, [{"role": "user", "content": query}], system=_EXPANSION_SYSTEM)
+    # max_retries=0: expansion is optional — this function degrades to
+    # [query] alone on any failure — so a dead provider must cost one round
+    # trip, not the SDK's three. Observed 2026-09-06: with Mistral refusing
+    # every call, every question on the site opened with three doomed
+    # requests and ~2s of latency before retrieval even started.
+    text = complete(provider, model, key, [{"role": "user", "content": query}],
+                    system=_EXPANSION_SYSTEM, max_retries=0)
     if not text:
         return [query], None
 
