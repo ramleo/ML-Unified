@@ -118,3 +118,41 @@ select cron.schedule(
 -- Has this exact file been seen before? (The point of the hash.)
 --   select ts, tool, filename, size_bytes from security_log
 --    where sha256 = '<paste hash here>' order by ts desc;
+
+-- ── Reading these tables in IST ──────────────────────────────────────────
+-- Storage stays UTC: unambiguous, unaffected by daylight saving anywhere, and
+-- still correct if the site is ever read from another country. These views
+-- change only the DISPLAY.
+--
+-- security_invoker = true is load-bearing, not boilerplate. A view runs with
+-- its OWNER's permissions by default, which would let the browser's anon key
+-- read security_log THROUGH the view and walk straight past the RLS that is
+-- the entire reason the table is locked. With it, the caller's own
+-- permissions apply and the lock holds. A view is an ordinary way to undo
+-- that protection by accident.
+
+create or replace view public.security_log_ist
+with (security_invoker = true) as
+select id, (ts at time zone 'Asia/Kolkata') as ts_ist,
+       session_id, run_id, tool, filename, ext,
+       size_bytes, mime, sha256, prompt_len, country
+from public.security_log;
+
+create or replace view public.llm_calls_ist
+with (security_invoker = true) as
+select id, (ts at time zone 'Asia/Kolkata') as ts_ist,
+       service, tool, provider, model, status, http_status,
+       error_code, error_message, latency_ms, session_id, run_id
+from public.llm_calls;
+
+-- No id column here: `events` predates this spec and the column list in §2
+-- does not include one. Verified against the live table rather than assumed.
+create or replace view public.events_ist
+with (security_invoker = true) as
+select (created_at at time zone 'Asia/Kolkata') as ts_ist,
+       type, path, session_id, country, referrer, duration_ms, meta
+from public.events;
+
+--   select * from events_ist       order by ts_ist desc limit 20;
+--   select * from security_log_ist order by ts_ist desc limit 20;
+--   select * from llm_calls_ist    order by ts_ist desc limit 20;
