@@ -296,10 +296,13 @@ turns a true page into a false one.
 
 Supabase free tier is 500 MB. At the expected volume this is not a
 constraint for a long time, but the decision should be made rather than
-drifted into. **Decided 2026-09-06: 14 months.** The industry norm — GA4 offers 2 / 14 / 26,
-defaults to 26, and most privacy guidance recommends 14. Long enough for
-year-on-year comparison, short enough not to hoard. NOT automatic: deleting
-the rows needs a `pg_cron` job, not yet scheduled.
+drifted into. **Decided 2026-09-06: 14 months.** GA4 offers 2 / 14 / 26 and defaults to 26;
+most privacy guidance recommends 14. Long enough for year-on-year comparison,
+short enough not to hoard.
+
+Job written: **`supabase/retention.sql`** — a `purge_old_analytics()` function
+plus a daily `pg_cron` schedule, check queries, and a Vercel-cron fallback.
+**Run it once in the SQL editor**; until then retention is an intention.
 
 ---
 
@@ -321,7 +324,6 @@ first:
    first**, not at the end.
 
 ---
-
 ## 10. Open questions
 
 ### Storing content itself — UNDECIDED
@@ -361,8 +363,7 @@ Agreed wording if content is ever stored:
 
 ### Smaller ones
 
-- ~~**Retention**~~ — decided 2026-09-06: 14 months (§8). The cron job to
-  enforce it is still unscheduled.
+- ~~**Retention**~~ — 14 months (§8); `supabase/retention.sql` awaits one run.
 - ~~**Search queries**~~ — decided 2026-09-06: a **salted** hash, not the text
   and not only the length. Length alone is unactionable; a hash counts repeat
   zero-result searches. Salted because an unsalted hash of a short query is
@@ -373,7 +374,6 @@ Agreed wording if content is ever stored:
   the dashboard before committing to content storage of any kind.
 
 ---
-
 ## 11. What is built (2026-09-06)
 
 | Piece | File | State |
