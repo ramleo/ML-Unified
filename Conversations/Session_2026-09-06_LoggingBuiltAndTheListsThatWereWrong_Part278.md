@@ -2,7 +2,7 @@
 
 ## Logging built, and the lists that were wrong
 
-**16 commits.** 12 in `ml-portfolio`, 4 in `ML-Unified`. Same day as Part 277,
+**19 commits.** 13 in `ml-portfolio`, 6 in `ML-Unified`. Same day as Part 277,
 which covered the provider audit; this is everything after it.
 
 `LOGGING_SPEC.md` went from "agreed, nothing built" to fully implemented.
@@ -243,10 +243,12 @@ on the side-by-side passages; the closing card points at the live site.
 
 ## 10. Still open
 
-- **`security_log` (§5b)** — table does not exist. Filenames, hashes, 30-day
-  expiry, restricted access. The only unbuilt piece of the spec.
+- ~~**`security_log` (§5b)**~~ — built after this list was written; see §11.
 - **Search queries as a salted hash** — decided, not implemented. Length alone
-  cannot count repeat zero-result searches.
+  cannot count repeat zero-result searches. (Note the contrast with §11.3: for
+  a SEARCH box a hash is the privacy-preserving upgrade; for a PASSWORD box
+  even the length is too much. The difference is what an attacker can do with
+  the field.)
 - **`demo_abandon`** — reasoned about, never exercised.
 - **Site chatbot still defaults to Gemini** — Cohere is not wired into
   `/api/chat` at all.
@@ -256,3 +258,112 @@ on the side-by-side passages; the closing card points at the live site.
 - **Two naming conventions in `events`** — `tool_open`/`tool_close` carry
   display names ("Data Drift Detection"), run events carry slugs ("drift").
   Pre-existing; renaming would orphan existing rows.
+
+---
+
+## 11. §5b built — the security log
+
+Written after §10 listed it as the only unbuilt piece, when the user asked the
+fair question: *"then what are you waiting for?"*
+
+**What it records:** filename, extension, size, mime, a SHA-256 of the bytes,
+prompt length, session and run id, country. **Never the file.** 30-day
+retention, purged at 03:41 — after the analytics purge at 03:17, and far
+shorter than the 14 months analytics get, because these fields are more
+sensitive.
+
+### 11.1 One listener, because uploads have two shapes
+
+Tools send files two different ways: **FormData** for the ML endpoints,
+**base64 inside a JSON body** for most of the vision ones. Hooking the
+transport would have caught the first and silently missed the second — the
+same class of miss as Part 278 §5's narrow detection pattern, which is why it
+was avoided this time rather than discovered afterwards.
+
+So the hook is a capture-phase `change` listener on every `input[type=file]`.
+Every tool has one, whatever it does with the file next. The tool name comes
+from the URL, so a tool added later is covered the day it ships.
+
+It logs on **select**, not on send. A file chosen and then abandoned still
+went into the page, and for a log whose question is "was anything malicious
+put in here", that is the honest boundary.
+
+### 11.2 Two independent locks on readability
+
+§5b requires the table to be unreadable by anything the site exposes. That is
+enforced twice, and the two do not back each other up — they fail separately:
+
+1. **RLS on, no policies.** The anon key the browser holds can read nothing.
+   The database refuses.
+2. **No GET handler.** `/api/security-log` exports `POST` only. There is no
+   URL that returns this data because none was written.
+
+Lock 2 is one line someone could add in six months without knowing why it was
+missing; Lock 1 would still refuse. Loosen Lock 1 and there is still no URL to
+ask through.
+
+The `sha256` column takes a 64-character hex digest or null and nothing else,
+so it cannot quietly become a place content is smuggled into.
+
+### 11.3 The password tool, and why nothing changes there
+
+The user asked whether the Password Strength checker should be tracked in the
+database after all, and asked for the recommendation to be researched rather
+than asserted.
+
+**The answer is no, and the current design is already the recommended one.**
+The consensus is to do all password analysis in the browser and transmit
+nothing — not the password, not a hash, not the length. The tool already does
+the harder half correctly: for the breach check it computes SHA-1 locally,
+sends only the first 5 hex characters to the API and matches the suffix in the
+browser. That is k-anonymity — the API learns that someone checked a password
+sharing a 5-character prefix with roughly 800 others, and never learns which.
+
+**Length is the specific thing not to log.** It is the most useful single clue
+for guessing a password, and recording it buys nothing the tool does not
+already do client-side.
+
+One clarification worth writing down, because "nothing is logged" is not
+literally true: `tool_open` / `tool_close` still fire for that page. What is
+excluded is anything about the password. Usage is ours to measure; the secret
+is not. Confirmed too that the pwnedpasswords call is deliberately NOT wrapped
+in `trackedFetch`, so a breach check creates no row.
+
+The exclusion is enforced in **both** halves — the client helper and the
+server route — because a promise that depends on every caller remembering is
+not a promise.
+
+### 11.4 A test that proved nothing, and the control that fixed it
+
+The first exclusion test loaded `/tools/password-audit`, tried to upload a
+file, and reported **0 rows**. That result was worthless: the page has no file
+input at all, so there was nothing to block.
+
+Redone properly — inject a real `File` and a real `change` event on the
+password page (**0 rows**), then the identical injection on
+`yara-file-scanner` (**1 row**). The second half is the control that makes the
+first half mean something.
+
+The browser-computed SHA-256 was also checked against `shasum -a 256` on the
+same file: identical digest.
+
+This is Part 278 §6's rule applied on purpose rather than after being caught:
+**prove the check can fail before trusting a pass.**
+
+### 11.5 Privacy page
+
+Storing filenames for 30 days is a real disclosure, so §7 obliged an update in
+the same commit. It now says what is kept, for how long, that the file itself
+is discarded, why a filename is kept at all, and that the Password checker is
+excluded entirely.
+
+**Commits:** `020d7ec` (ML-Unified — SQL + spec), `8f38298` (ml-portfolio —
+client, sink, privacy).
+
+**Awaiting one action:** `supabase/security_log.sql` run once in the SQL
+editor. Until then the client posts to a table that does not exist and fails
+silently — nothing breaks, nothing is recorded.
+
+**`LOGGING_SPEC.md` is now fully implemented.** What remains is in §10 and is
+all decision, not construction: search queries as a salted hash, whether to
+store content at all, and the two naming conventions already in `events`.
