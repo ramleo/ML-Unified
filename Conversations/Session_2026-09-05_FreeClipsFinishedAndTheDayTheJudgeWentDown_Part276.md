@@ -643,3 +643,105 @@ on.
 17. **Offer an option and still argue against it.** Having built the evidence
     for the judge swap, the right answer was that the saving did not justify
     the risk.
+
+---
+
+## 15. Mistral answered — and both theories were wrong
+
+The user sent a nine-line ticket (§14 asked; the first draft ran to a page
+and the user's reply was *"you think they will read all that??"* — the short
+version kept the two facts that stop a canned answer: a cold 429 after ten
+idle minutes, and a key that had never once returned a 200). Mistral replied
+the same day.
+
+### 15.1 The answer, verbatim in substance
+
+> Free (evaluation/prototyping) access to Studio operates on a **best-effort
+> basis — there's no reserved model capacity.** When paid subscribers are
+> using the models, free-tier requests can be rejected, **even if you're well
+> under the RPS/TPM numbers shown on your Limits page.** This is expected
+> behavior for free mode, not a bug or account block.
+>
+> Since you're on free mode with no payment method, you're **not being
+> blocked by a hidden monthly token cap** ... credits are not consumed while
+> on free mode.
+
+### 15.2 The scoreboard
+
+| Section | Theory | Verdict |
+|---|---|---|
+| §12.4 | Org-level refusal, likely pending phone verification | Right shape, wrong reason |
+| §14.4 | Monthly token cap exhausted | Wrong |
+| — | No reserved capacity; rejected when paid traffic is busy | **Correct** |
+
+Neither theory was testable from outside, because the variable is **other
+people's load**. The same request succeeds at 3am and fails at 3pm. Every
+experiment in §12 and §14 assumed the answer was a property of our account —
+a limit, a cap, a block, a key. It was a property of the shared system at the
+moment we asked.
+
+That also explains the one thing that never fit: a free allowance large
+enough that a portfolio site should not exhaust it in five days (§14.4's
+"tension worth holding"). It never was exhausted.
+
+### 15.3 What it changes in the code
+
+Mistral is not down, was never mis-keyed, and needs no fix. It is
+**non-deterministic by design** — and that is worse than being broken,
+because a provider that works at 3am and fails at 3pm cannot be first
+anywhere. It was first in four places.
+
+Their own advice — *implement retry with exponential backoff* — does not
+apply here. Backoff assumes congestion that clears in seconds; this was
+measured refusing for hours. `max_retries=0` plus the latch stays.
+
+**`<pending>`** demotes it where it was primary:
+
+- `generation.py` cascade → `cohere, mistral, gemini`. Cohere first (free,
+  reliable), Mistral second (free when capacity exists, one ~0.5s round trip
+  when not), Gemini last because it is the only paid key.
+- `query_helpers.py` `QueryRequest` default → `cohere` / `command-a-03-2025`.
+  The comment it replaces called Mistral "the proven-reliable default", which
+  is exactly the claim support disproved.
+
+Left alone deliberately: the judge's Mistral primary and the Mistral-pinned
+query expansion. Both are optional-degrading and now cost one round trip;
+changing them buys little and the judge's accuracy is worth more than the
+call (§14.6).
+
+### 15.4 The real Gemini exposure — a second correction
+
+§14.5 said Mistral's death "silently promoted Gemini to de-facto provider for
+every question on the site". True in outcome, **wrong in mechanism**, and the
+mechanism matters.
+
+`useRagChat.ts:50` and `Chatbot.tsx:76` both open with
+`useState("gemini")`, and the UI sends `provider` explicitly on every
+request. So visitors were never using the backend default at all — they were
+choosing Gemini directly. The cascade only ever applied to callers that omit
+the field, which in practice meant the diagnostic probes in §12.3 and §14.5.
+
+So the backend reorder is correct and worth having, but it is **not** the
+change that stops the spend. That change is two `useState` lines in
+`ml-portfolio`, and it is a user-facing default, so it was raised rather than
+made.
+
+The lesson is narrower than "check the frontend": a default in a schema is
+only a default for callers who *omit the field*. The probe that omitted it
+was mine, so the mechanism I measured was the one I had created.
+
+### 15.5 Lessons
+
+18. **Some causes are unobservable from the client.** "Best-effort, no
+    reserved capacity" cannot be distinguished from a cap, a block or a dead
+    key by any experiment run from outside — every §12/§14 test assumed the
+    answer lived in our account.
+19. **Ask the vendor sooner.** Two sections of inference were beaten by one
+    nine-line ticket. The evidence gathered was not wasted — it is what made
+    the ticket short enough to be read — but the ticket could have gone out
+    a day earlier.
+20. **Non-deterministic is worse than broken.** A dependency that fails
+    honestly gets handled; one that works intermittently gets trusted.
+21. **A schema default only applies to callers who omit the field.** The
+    "default provider" was not what any real user was using, and the only
+    caller exercising it was my own probe.

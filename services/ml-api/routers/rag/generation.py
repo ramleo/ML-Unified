@@ -19,15 +19,20 @@ logger = logging.getLogger(__name__)
 
 # Fallback order, tried after the caller's selected provider using each
 # provider's own server-side key.
-# Cohere sits ahead of Gemini deliberately (2026-09-06). Mistral began
-# refusing every call with a 429 the day before, which made this cascade's
-# second entry the de-facto provider for every question on the site — and
-# that entry was Gemini, the only paid key here. Cohere was verified serving
-# a real query end to end (200 OK, full answer, no Gemini call) before being
-# promoted; Gemini stays as the last resort it was meant to be.
+# Order set 2026-09-06 after Mistral support confirmed what a day of 429s
+# meant: free Studio access has NO RESERVED CAPACITY. Free requests are
+# served best-effort and rejected whenever paid traffic is using the model,
+# however far under the published RPS/TPM the caller is. So Mistral is not
+# "down" and was never mis-keyed — it is non-deterministic by design, and
+# cannot be first in a cascade whose whole job is to be dependable.
+#
+# Cohere first (free and reliable, verified serving a real query end to end),
+# Mistral second (free, works whenever capacity exists, costs one ~0.5s round
+# trip when it does not — see max_retries=0 in the judge and expansion), and
+# Gemini last because it is the only paid key here.
 FALLBACK_CANDIDATES = [
-    ("mistral", "mistral-small-latest"),  # proven reliable fallback elsewhere in this codebase (vision captioning)
     ("cohere", "command-a-03-2025"),
+    ("mistral", "mistral-small-latest"),  # free when capacity allows; best-effort, never guaranteed
     ("gemini", "gemini-3.6-flash"),
 ]
 
