@@ -377,7 +377,7 @@ The user supplied console screenshots on request; each one closed a door.
 |---|---|---|
 | Our burst pacing | Cold call, 9 min idle | ✗ |
 | Per-second / TPM ceiling | Well under 1.00 req/s and 20,000 TPM | ✗ |
-| Monthly token budget | Limits page has no monthly cap for chat models — only audio has one, and it reads `-` | ✗ |
+| Monthly token budget | Limits page has no monthly cap for chat models — only audio has one, and it reads `-` | **✗ — WRONG, see §14** |
 | Model alias mismatch | See 12.3 | ✗ |
 | Invalid / revoked key | Would be 401 | ✗ |
 | Expired key | Console: active, **never** expires | ✗ |
@@ -416,7 +416,7 @@ looks exactly like a probe that succeeded. Re-ran with unique queries:
 grants 1.00 req/s and 20,000 TPM — refused a cold ~500-token request. Alias
 hypothesis dead, and it was mine.
 
-### 12.4 The answer
+### 12.4 The answer *(superseded — see §14)*
 
 Every variable was eliminated except the organization itself. Mistral
 authenticates the key and refuses to serve completions to this org
@@ -499,12 +499,147 @@ Resolved since §11: the **Mistral diagnosis** (answered — org-level, not
 ours) and the **double-latch** (fixed, `4cbbf59`).
 
 - **contract-invoice-reconciliation clip** — unrecorded. The tool works now.
-- **Mistral** — check whether phone verification is pending on the org; if
-  not, open a support ticket with the sentence in §12.4. Gemini carries the
-  judge in the meantime and has not failed once.
+- **Mistral** — **§14 supersedes this.** Read API → Usage: monthly token cap
+  or org-level block. The remedy is pay-as-you-go if it is the cap, not a
+  support ticket and not credits.
 - **Logging spec** — agreed, nothing built. §9 has the order.
 - **Five paid clips** — document-intelligence, multimodal-rag, optuna,
   prompt-injection-playground, text-to-sql.
 - **`verify-recon-warning.mjs`** — untracked in `ml-portfolio`; keep as a
   test or delete.
 - **Three `RENDER_*` secrets** — now unused.
+
+---
+
+## 14. Correction to §12 — and the drain it exposed
+
+Written 2026-09-06, after the user pasted Mistral's own help article. Two
+things in §12 are wrong. They are marked in place rather than edited away,
+because a log that quietly rewrites its own mistakes is worth less than one
+that shows them.
+
+### 14.1 What the doc says
+
+> The API enforces three limits:
+> **Requests per second** (concurrent requests) · **Tokens per minute**
+> (input + output throughput) · **Tokens per month** (overall consumption
+> cap).
+>
+> Rate limits ... are **set at the organization level and apply across all
+> your workspaces.**
+
+### 14.2 Wrong thing #1 — the monthly cap
+
+§12.2 eliminated "monthly token budget" on the grounds that the Limits page
+shows no monthly cap for chat models. The page doesn't display one in the
+per-model cards; **the limit exists anyway.** Absence from a UI panel was
+read as absence from the system. The row is struck, and the hypothesis is
+live again.
+
+### 14.3 Wrong thing #2 — the reasoning, which is worse
+
+§12.4's load-bearing argument was: *a key created three hours ago cannot have
+exhausted anything.* The doc kills it in one clause — limits are **set at the
+organization level**. The budget belongs to the org, not to the key. A key
+minted three hours ago inherits whatever the org has been spending since
+Mistral became the default RAG provider on 2026-08-24.
+
+Key age proves nothing, and a conclusion was built on it anyway. §12.6's
+lesson 13 was about naming a dead hypothesis as mine; this is the same fault
+one level down — not a wrong guess but a wrong *inference*, stated with the
+same confidence as the parts that were actually evidenced.
+
+### 14.4 The revised picture
+
+Monthly-cap exhaustion now fits every observation:
+
+| Observation | Fits? |
+|---|---|
+| Cold 429 after 9 minutes idle | ✓ a monthly cap ignores idle time |
+| Both `-latest` and `-2603` refused | ✓ org-level, not per-model |
+| $0.00 billed | ✓ free mode is never billed |
+| Zero 200s, ever | ✓ once the cap is hit, everything stops |
+
+Still unconfirmed — **API → Usage** settles it, and remains unread. One
+tension worth holding: Mistral's free allowance is generally understood to be
+large, so a portfolio site exhausting it in five days is surprising. If Usage
+shows headroom, the cap theory dies too and it is back to an org-level block.
+
+Also from the doc, and it changes the remedy: tiers unlock only through
+**pay-as-you-go**, and track **cumulative billed amount**. *"Adding credits
+does not raise your rate limits."* Topping up the US$0.00 balance would
+achieve nothing. §12.4's advice to open a support ticket was wrong.
+
+### 14.5 The drain §12 never noticed
+
+The user's reply to all this was the sharp question of the day:
+
+> *"gemini is paid one, if it is used in every call then my credits will get
+> exhausted"*
+
+Correct, and worse than assumed. `generation.py`'s cascade was
+`mistral → gemini → cohere`. Mistral being dead did not just break the judge
+— it silently promoted **Gemini, the only paid key here, to de-facto provider
+for every question on the site.** That had been true for a day. §12 diagnosed
+the dead provider in detail and never once asked what was answering in its
+place.
+
+Cohere was already third in that list and had never been reached. Probed
+through the Space (same trick as §12.3 — the service tests its own secret):
+
+```
+05:27:26  POST https://api.cohere.ai/v2/chat  "HTTP/1.1 200 OK"
+```
+
+143 tokens, full correct answer, no Gemini call in the trace.
+
+A second finding fell out of the same log: **three Mistral 429s fired before
+Cohere ran, on a query that had not selected Mistral at all.** Query
+expansion pins Mistral deliberately (so it cannot spend the selected
+provider's budget — see `query.py`'s comment), so every question on the site,
+whatever provider the user picked, opened with three doomed requests and ~2s
+of latency. Yesterday's `max_retries=0` covered the judge only.
+
+**`51d6866`** — Cohere promoted ahead of Gemini; expansion passes
+`max_retries=0`. Deployed, and the Space's served source re-read to confirm.
+
+### 14.6 The judge fallback — offered, then argued against
+
+Cohere was tested on judge-shaped JSON, including the paraphrase pair that is
+a recorded live false positive ("due within 30 days of invoice date" vs "Due
+date: 30 days from issue"):
+
+| Case | Expected | Cohere | Parser |
+|---|---|---|---|
+| USD 12,500 vs USD 15,200 | true | true | ✅ |
+| the 30-day paraphrase | false | false | ✅ |
+
+Case A arrived inside a ```json fence; `_parse_judge_response`'s `\{.*\}`
+regex handles it, verified by feeding both verbatim responses through the
+real parser.
+
+Then the swap was recommended **against**, having offered it:
+
+- the drain was Q&A, and `51d6866` already closed it; reconciliation is a
+  handful of calls behind a two-document upload
+- judge errors cost more than Q&A errors — this is the tool that shipped a
+  false "No discrepancies found" the day before
+- two passing cases show capability, not equivalence
+
+Gemini stays the judge's fallback. Cohere is now a known-viable substitute if
+Gemini ever fails, which is worth having written down and not worth acting
+on.
+
+### 14.7 Lessons
+
+14. **"Not shown in the UI" is not "does not exist."** A limits page that
+    omits a limit is a rendering decision, not a fact about the system.
+15. **Check whether an inference is load-bearing before trusting it.** The
+    key-age argument was never evidence; it was a plausible sentence doing
+    the work of one.
+16. **When a provider dies, ask what took over.** A whole section can be
+    spent diagnosing a dead dependency without noticing the fallback is the
+    expensive one.
+17. **Offer an option and still argue against it.** Having built the evidence
+    for the judge swap, the right answer was that the saving did not justify
+    the risk.
