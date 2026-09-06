@@ -229,10 +229,10 @@ exposes; service-role access only, so the public dashboard cannot reach it.
 | `sha256` | the fingerprint; see below |
 | `prompt_len` | length only, for now |
 | `country` | from the platform header, as with `events` |
+| `ip_hash` | **added 2026-09-06.** Salted HMAC of the caller's IP, never the IP — so the rate limit can be enforced in the database, which every serverless instance shares (an in-memory counter is defeated by spreading requests around). Server-only salt, so it cannot be reversed. |
 
 **Retention: 30 days, then deleted.** Long enough to investigate an incident,
-short enough that this is not a permanent archive of other people's
-documents.
+short enough not to be a permanent archive of other people's documents.
 
 **Why the hash earns its place.** The file is deleted; the fingerprint is not.
 Same file, same hash, so a repeat is visible without either copy being kept —

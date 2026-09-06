@@ -20,12 +20,19 @@ create table if not exists public.security_log (
   mime        text,
   sha256      text,          -- the fingerprint; the file itself is discarded
   prompt_len  int,           -- length only
-  country     text
+  country     text,
+  -- A salted HMAC of the caller's IP, never the IP itself. Exists so the rate
+  -- limit below can be enforced in the DATABASE, which every serverless
+  -- instance shares — an in-memory limit in the route is defeated by simply
+  -- spreading requests across instances. The salt lives only on the server,
+  -- so this cannot be reversed into an address by anyone reading the table.
+  ip_hash     text
 );
 
 create index if not exists security_log_ts_idx     on public.security_log (ts desc);
 create index if not exists security_log_sha256_idx on public.security_log (sha256);
 create index if not exists security_log_run_idx    on public.security_log (run_id);
+create index if not exists security_log_ip_idx     on public.security_log (ip_hash, ts desc);
 
 -- RLS ON, and NO policies, on purpose. The anon key the browser holds can then
 -- read nothing here at all, while the service-role key (which bypasses RLS)
@@ -39,6 +46,49 @@ alter table public.security_log enable row level security;
 -- payslip's NAME reveals a person, its CONTENTS reveal a salary, an employer,
 -- an address and a tax number. So it lives here, under 30-day expiry and
 -- restricted access, and never in the table the public dashboard reads.
+
+-- ── Durable rate limit ───────────────────────────────────────────────────
+-- The route cannot enforce this on its own: serverless functions do not share
+-- memory, so a per-instance counter is defeated by spreading requests around.
+-- Counting rows here is shared by definition.
+--
+-- This does NOT stop a forged Origin header — nothing header-based can, since
+-- headers are attacker-controlled. What it does is bound the damage: an
+-- attacker who can reach this endpoint still cannot fill the table, and a
+-- security log that cannot be flooded is one whose contents stay meaningful.
+--
+-- Returns true if the row was written, false if the caller is over its limit.
+create or replace function public.log_security_event(
+  p_session_id text, p_run_id text, p_tool text, p_filename text,
+  p_ext text, p_size_bytes bigint, p_mime text, p_sha256 text,
+  p_prompt_len int, p_country text, p_ip_hash text
+) returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  recent int;
+begin
+  select count(*) into recent
+    from public.security_log
+   where ip_hash = p_ip_hash
+     and ts > now() - interval '1 minute';
+
+  -- A person uploading files cannot approach 60/min; a script can.
+  if recent >= 60 then
+    return false;
+  end if;
+
+  insert into public.security_log
+    (session_id, run_id, tool, filename, ext, size_bytes, mime, sha256,
+     prompt_len, country, ip_hash)
+  values
+    (p_session_id, p_run_id, p_tool, p_filename, p_ext, p_size_bytes, p_mime,
+     p_sha256, p_prompt_len, p_country, p_ip_hash);
+  return true;
+end;
+$$;
 
 -- ── 30-day retention (§5b) ───────────────────────────────────────────────
 -- Long enough to investigate an incident, short enough that this is not a
