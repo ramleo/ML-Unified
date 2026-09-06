@@ -92,27 +92,40 @@ def _parse_judge_response(raw: str) -> Optional[dict]:
 
 
 
-# Mistral allows 1.00 requests/second on mistral-small (see the org's limits
-# page). A reconciliation scan makes up to six judge calls plus a confirm
-# call per flagged pair, in a loop with no gap, so every call after the first
-# was guaranteed a 429 — and the SDK's own retries land 0.4-1.0s later, still
-# inside the same one-second window, so they 429 too. Spacing our own calls
-# is the only thing that fixes it; a faster retry cannot outrun a per-second
-# limit. Slightly over one second, because the limiter's window and ours are
-# not aligned and a call landing on the boundary is a wasted round trip.
-_MIN_CALL_INTERVAL = 1.15
+# A reconciliation scan makes up to six judge calls plus a confirm call per
+# flagged pair, in a loop with no gap, so without spacing every call after
+# the first was guaranteed a 429 — and the SDK's own retries land 0.4-1.0s
+# later, inside the same window, so they 429 too. A faster retry cannot
+# outrun a per-second limit; spacing our own calls is the only fix.
+#
+# The interval is per-provider because the limits are: Mistral allows 1.00
+# request/second on mistral-small (its org limits page), while Cohere's free
+# trial keys are capped per MINUTE (20/min on v2/chat) — a Mistral-shaped
+# 1.15s gap would trip that on the fourth call. Slightly over the exact
+# figure in both cases, because the limiter's window and ours are not
+# aligned and a call landing on the boundary is a wasted round trip.
+#
+# If the Cohere key is ever upgraded from trial to production (500/min),
+# 3.1 here is pure waiting and should come down to ~0.15.
+_MIN_CALL_INTERVAL = {
+    "cohere": 3.1,    # 20 req/min trial limit
+    "mistral": 1.15,  # 1.00 req/s
+}
+_DEFAULT_CALL_INTERVAL = 1.15
 _pace_lock = threading.Lock()
-_last_call_at = 0.0
+_last_call_at: dict[str, float] = {}
 
 
-def _pace() -> None:
-    """Block until at least _MIN_CALL_INTERVAL has passed since the last call."""
-    global _last_call_at
+def _pace(provider: str) -> None:
+    """Block until this provider's own minimum interval has passed since the
+    last call made to it. Tracked per-provider: falling back from a paced-out
+    provider to a fresh one should not inherit the previous one's wait."""
+    interval = _MIN_CALL_INTERVAL.get(provider, _DEFAULT_CALL_INTERVAL)
     with _pace_lock:
-        wait = _MIN_CALL_INTERVAL - (time.monotonic() - _last_call_at)
+        wait = interval - (time.monotonic() - _last_call_at.get(provider, 0.0))
         if wait > 0:
             time.sleep(wait)
-        _last_call_at = time.monotonic()
+        _last_call_at[provider] = time.monotonic()
 
 
 def make_llm_judge(provider: str, model: str, key: str,
@@ -128,7 +141,7 @@ def make_llm_judge(provider: str, model: str, key: str,
     def judge(text_a: str, text_b: str) -> Optional[dict]:
         if not key:
             return None
-        _pace()
+        _pace(provider)
         # max_retries=0: _pace() already guarantees the spacing the limit
         # wants, so a failure here is not transient congestion the SDK can
         # retry its way out of — it is the provider refusing. Its two extra
@@ -143,54 +156,84 @@ def make_llm_judge(provider: str, model: str, key: str,
 
 
 # One provider being down should not turn a reconciliation report into
-# silence. Mistral is primary; Gemini answers when it cannot. The pairing is
-# the project's own — evaluate_mm.py already treats mistral-small-latest and
-# gemini-3.6-flash as equivalents for judging — not a model picked here.
-_FALLBACK_PROVIDER = "gemini"
-_FALLBACK_MODEL = "gemini-3.6-flash"
+# silence, so judging runs down a cascade rather than a single provider.
+#
+# Order set 2026-09-06, matching generation.py's answer cascade and for the
+# same reasons:
+#   1. Cohere  — free and, unlike Mistral, dependable. Verified serving.
+#   2. Mistral — free, but Mistral support confirmed free Studio access has
+#      no reserved capacity: it is rejected whenever paid traffic is using
+#      the model, however far under the published limits the caller is. Worth
+#      one round trip before reaching for the paid key, not worth being first.
+#   3. Gemini  — LAST, because it is the only PAID key in this project. It
+#      used to be second, which meant a scan billed Gemini for every pair the
+#      moment Mistral hiccuped. That is what this ordering exists to stop.
+#
+# The pairing is not invented here — evaluate_mm.py already treats these
+# models as equivalents for judging.
+JUDGE_CANDIDATES = [
+    ("cohere", "command-a-03-2025"),
+    ("mistral", "mistral-small-latest"),
+    ("gemini", "gemini-3.6-flash"),
+]
 
 
 def new_chain_state() -> dict:
-    """A latch shared between chains built for the same request.
+    """A cursor shared between chains built for the same request.
+
+    `index` is how far down JUDGE_CANDIDATES the scan has been forced. It only
+    ever moves forward: once a provider has failed, every remaining pair in
+    the same scan would fail on it the same way, and each attempt costs a
+    paced second or three. The point is to finish the report, not to keep
+    proving a provider is down.
 
     A reconciliation scan builds two chains — judge and confirm — off the same
-    primary key. With a latch each, a dead primary is rediscovered twice per
-    scan instead of once. Callers that build more than one chain should make
-    a single state here and hand it to all of them."""
-    return {"primary_down": False}
-
-
-def make_judge_chain(primary_provider: str, primary_model: str, primary_key: str,
-                     fallback_key: str, system: str = _JUDGE_SYSTEM,
-                     state: Optional[dict] = None,
-                     ) -> Callable[[str, str], Optional[dict]]:
-    """A judge that tries `primary_provider`, then Gemini.
-
-    The first failure latches: when the primary is rate-limited or its key is
-    dead, every remaining pair in the same scan would fail the same way, and
-    each attempt costs a paced second plus the SDK's retries. So after one
-    failure the rest of the scan goes straight to the fallback — the point is
-    to finish the report, not to keep proving the primary is down.
-
-    Returns None only when both are unavailable, which the callers count as a
-    judge failure rather than a clean pair.
+    candidates. With a cursor each, a dead provider is rediscovered twice per
+    scan instead of once. Callers building more than one chain should make a
+    single state here and hand it to all of them.
     """
-    primary = make_llm_judge(primary_provider, primary_model, primary_key, system) if primary_key else None
-    fallback = make_llm_judge(_FALLBACK_PROVIDER, _FALLBACK_MODEL, fallback_key, system) if fallback_key else None
-    if primary is None and fallback is not None:
-        logger.warning("judge: no %s key, using %s", primary_provider, _FALLBACK_PROVIDER)
+    return {"index": 0}
+
+
+def make_judge_chain(resolve_key: Callable[[str, Optional[str]], str],
+                     system: str = _JUDGE_SYSTEM,
+                     state: Optional[dict] = None,
+                     candidates: Optional[list[tuple[str, str]]] = None,
+                     ) -> Callable[[str, str], Optional[dict]]:
+    """A judge that walks JUDGE_CANDIDATES until one answers.
+
+    Keys come from `resolve_key(provider, None)` — the server-side env key for
+    each provider, never a caller-supplied one, since this endpoint takes no
+    user key. Candidates with no configured key are dropped at build time.
+
+    Returns None only when every remaining candidate is unavailable, which the
+    callers count as a judge failure rather than a clean pair.
+    """
+    candidates = JUDGE_CANDIDATES if candidates is None else candidates
+    judges: list[tuple[str, Callable[[str, str], Optional[dict]]]] = []
+    for provider, model in candidates:
+        key = resolve_key(provider, None)
+        if key:
+            judges.append((provider, make_llm_judge(provider, model, key, system)))
+        else:
+            logger.warning("judge: no key configured for %s, skipping it", provider)
+    if not judges:
+        logger.error("judge: no provider has a key — every pair will be a judge failure")
     state = new_chain_state() if state is None else state
-    if primary is None:
-        state["primary_down"] = True
 
     def judge(text_a: str, text_b: str) -> Optional[dict]:
-        if not state["primary_down"] and primary is not None:
-            verdict = primary(text_a, text_b)
+        for i in range(state["index"], len(judges)):
+            provider, fn = judges[i]
+            verdict = fn(text_a, text_b)
             if verdict is not None:
+                state["index"] = i  # never go back to one that already failed
                 return verdict
-            state["primary_down"] = True
-            logger.warning("judge: %s failed, falling back to %s for the rest of this scan",
-                           primary_provider, _FALLBACK_PROVIDER)
-        return fallback(text_a, text_b) if fallback is not None else None
+            if i + 1 < len(judges):
+                logger.warning("judge: %s failed, falling back to %s for the rest of this scan",
+                               provider, judges[i + 1][0])
+            else:
+                logger.warning("judge: %s failed and it was the last candidate", provider)
+        state["index"] = len(judges)
+        return None
 
     return judge

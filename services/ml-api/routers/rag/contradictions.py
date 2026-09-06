@@ -31,7 +31,7 @@ from routers.rag.cache import cosine_sim
 from routers.rag.entities import decode_entities
 from routers.rag.contradictions_judge import (
     _RECONCILE_JUDGE_SYSTEM, _RECONCILE_CONFIRM_SYSTEM,
-    _FALLBACK_PROVIDER, make_judge_chain, new_chain_state,
+    make_judge_chain, new_chain_state,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,12 +47,10 @@ _SIM_CEILING = 0.93
 
 _MAX_PAIRS_TO_JUDGE = 6  # bounds LLM calls regardless of corpus size
 
-# Groq dropped from the default path entirely (2026-08-24) — no free
-# replacement that actually worked reliably was found (see query.py's
-# _DEFAULT_PROVIDER comment for the full history). Mistral is the
-# proven-reliable fallback used throughout this app.
-_JUDGE_PROVIDER = "mistral"
-_JUDGE_MODEL = "mistral-small-latest"
+# Which providers judge, and in what order, lives in
+# contradictions_judge.JUDGE_CANDIDATES — this endpoint no longer names one.
+# It used to pin Mistral as "the proven-reliable fallback", which 2026-09-06
+# disproved.
 
 def _collect_session_chunks(state, session_id: str) -> list[dict]:
     """All chunks uploaded by this session, across all its source documents,
@@ -231,9 +229,7 @@ def check_contradictions(request: Request, req: ContradictionsRequest):
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
-    key = _resolve_key(_JUDGE_PROVIDER, None)
-    judge_fn = make_judge_chain(_JUDGE_PROVIDER, _JUDGE_MODEL, key,
-                                _resolve_key(_FALLBACK_PROVIDER, None))
+    judge_fn = make_judge_chain(_resolve_key)
     return find_contradictions(state, req.session_id, state.embedding_fn, judge_fn)
 
 
@@ -258,15 +254,13 @@ def check_reconciliation(request: Request, req: ReconciliationRequest):
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
-    key = _resolve_key(_JUDGE_PROVIDER, None)
-    fallback_key = _resolve_key(_FALLBACK_PROVIDER, None)
-    # One latch for both chains: the judge and the confirm step share a key,
-    # so whichever discovers the primary is down should spare the other the
-    # same discovery.
+    # One cursor for both chains: the judge and the confirm step run down the
+    # same candidate list, so whichever discovers a provider is down should
+    # spare the other the same discovery.
     chain_state = new_chain_state()
-    judge_fn = make_judge_chain(_JUDGE_PROVIDER, _JUDGE_MODEL, key, fallback_key,
-                                system=_RECONCILE_JUDGE_SYSTEM, state=chain_state)
-    confirm_fn = make_judge_chain(_JUDGE_PROVIDER, _JUDGE_MODEL, key, fallback_key,
-                                  system=_RECONCILE_CONFIRM_SYSTEM, state=chain_state)
+    judge_fn = make_judge_chain(_resolve_key, system=_RECONCILE_JUDGE_SYSTEM,
+                                state=chain_state)
+    confirm_fn = make_judge_chain(_resolve_key, system=_RECONCILE_CONFIRM_SYSTEM,
+                                  state=chain_state)
     return find_reconciliation(state, req.session_id, req.contract_source,
                                req.invoice_sources, state.embedding_fn, judge_fn, confirm_fn)

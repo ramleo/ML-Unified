@@ -145,7 +145,17 @@ def stream_cohere(model: str, key: str, messages: list[dict], system: str):
                     except json.JSONDecodeError:
                         continue
     except httpx.HTTPStatusError as exc:
-        logger.error("Cohere HTTP error: %s", exc.response.status_code)
+        # Same lesson as the Gemini branch above: a bare status code cost a
+        # day of guessing there. Cohere's 429 body distinguishes the trial
+        # key's per-minute cap from a monthly one, and its 400 names the
+        # retired model — neither is inferable from the number alone. Now
+        # load-bearing: Cohere is the first judge in JUDGE_CANDIDATES.
+        try:
+            exc.response.read()
+            detail = exc.response.text[:400]
+        except Exception:
+            detail = "<body unavailable>"
+        logger.error("Cohere HTTP %s: %s", exc.response.status_code, detail)
         raise
 
 
