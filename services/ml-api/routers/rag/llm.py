@@ -21,7 +21,7 @@ OPENAI_COMPAT_BASES = {
 
 
 def stream_groq_openai(provider: str, model: str, key: str, messages: list[dict],
-                       max_retries: int | None = None):
+                       max_retries: int | None = None, max_tokens: int | None = None):
     """`max_retries` overrides the SDK's own retry count (default 2). Pass 0
     from callers that already pace themselves: a 429 from a per-second limit
     cannot be outrun by a retry landing 0.4s later, so the SDK's two extra
@@ -34,7 +34,8 @@ def stream_groq_openai(provider: str, model: str, key: str, messages: list[dict]
         **({"max_retries": max_retries} if max_retries is not None else {}),
     )
     with client.chat.completions.create(
-        model=model, messages=messages, stream=True
+        model=model, messages=messages, stream=True,
+        **({"max_tokens": max_tokens} if max_tokens is not None else {}),
     ) as stream:
         for chunk in stream:
             delta = chunk.choices[0].delta

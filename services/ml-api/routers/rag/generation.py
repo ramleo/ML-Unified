@@ -37,6 +37,14 @@ FALLBACK_CANDIDATES = [
 ]
 
 
+# Groq's free tier caps OUTPUT tokens per minute at 1000, and refuses the
+# whole request up front if the expected output exceeds it — asking for the
+# SDK default of 2048 gets a 429 before a single token is generated, which
+# reads as "Groq is down" rather than "ask for less". 900 leaves headroom
+# under the cap; anything longer is not servable on this tier anyway.
+_MAX_TOKENS = {"groq": 900}
+
+
 def classify_error(exc: object) -> str:
     """Short, user-facing reason for a provider failure — the raw exception
     text (status codes, full URLs) is logged in full server-side but isn't
@@ -57,7 +65,8 @@ def open_stream(provider: str, model: str, key: str, messages: list[dict], syste
     failure, so a bad/typo'd provider still cascades to a known-good one."""
     if provider in ("groq", "openai", "mistral", "perplexity"):
         full_messages = [{"role": "system", "content": system_prompt}] + messages if system_prompt else messages
-        return stream_groq_openai(provider, model, key, full_messages)
+        return stream_groq_openai(provider, model, key, full_messages,
+                                  max_tokens=_MAX_TOKENS.get(provider))
     if provider == "claude":
         return stream_claude(model, key, messages, system_prompt)
     if provider == "gemini":
