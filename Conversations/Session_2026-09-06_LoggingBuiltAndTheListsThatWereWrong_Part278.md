@@ -338,7 +338,6 @@ silently — nothing breaks, nothing is recorded.
 decision rather than construction.
 
 ---
-
 ## 12. A comment that claimed a protection that did not exist
 
 The user read §11.2's "two locks" and asked the question that mattered:
@@ -392,9 +391,10 @@ own terms, not masked by a 500 about our own configuration.
 The fourth row is the control: without it, five rejections prove only that the
 route rejects everything.
 
-One more catch: the browser run first returned **429**, which looked like a
-bug and was not — the rate-limit test seconds earlier had eaten the same
-bucket, since localhost sends no `x-forwarded-for` and both fell into
-`unknown`. Restarting cleared it.
+One more catch: the browser run first returned **429** — not a bug; the
+rate-limit test seconds earlier had eaten the same bucket, since localhost
+sends no `x-forwarded-for`. Restarting cleared it.
 
-**Commit:** `c91dbd0`.
+**Commit:** `c91dbd0`. **Continues in Part 279** (this file is at its 400-line
+limit): the rate limit moved into the database, Turnstile closing the
+forged-Origin hole, and the IST views.
