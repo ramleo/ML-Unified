@@ -300,9 +300,9 @@ drifted into. **Decided 2026-09-06: 14 months.** GA4 offers 2 / 14 / 26 and defa
 most privacy guidance recommends 14. Long enough for year-on-year comparison,
 short enough not to hoard.
 
-Job written: **`supabase/retention.sql`** — a `purge_old_analytics()` function
-plus a daily `pg_cron` schedule, check queries, and a Vercel-cron fallback.
-**Run it once in the SQL editor**; until then retention is an intention.
+**Live since 2026-09-06.** `supabase/retention.sql` was run; `cron.job` shows
+`purge-old-analytics`, `17 3 * * *`, active. Nothing is actually deleted until
+November 2027 — the oldest row is from the day this was built.
 
 ---
 
@@ -363,7 +363,7 @@ Agreed wording if content is ever stored:
 
 ### Smaller ones
 
-- ~~**Retention**~~ — 14 months (§8); `supabase/retention.sql` awaits one run.
+- ~~**Retention**~~ — 14 months (§8), scheduled and active since 2026-09-06.
 - ~~**Search queries**~~ — decided 2026-09-06: a **salted** hash, not the text
   and not only the length. Length alone is unactionable; a hash counts repeat
   zero-result searches. Salted because an unsalted hash of a short query is
