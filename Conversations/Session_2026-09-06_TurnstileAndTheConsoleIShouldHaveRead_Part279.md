@@ -384,3 +384,6 @@ Verified live, both branches: normal run reports groq / `fell_back_from: null`;
 mismatch reports groq with `fell_back_from: "nosuchprovider"`. **Not yet
 exercised: a genuine provider failure** (groq down, mistral answering) — that
 needs a real outage to reproduce.
+
+**Continues in Part 280** — re-recording the five clips that predate the
+title/closing cards, and the two production bugs the recorder's guard exposed.
