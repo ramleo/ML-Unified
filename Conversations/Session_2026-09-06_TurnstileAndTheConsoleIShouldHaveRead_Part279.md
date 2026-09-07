@@ -277,3 +277,59 @@ New from this part:
    closed: no Turnstile token, no row. Accepted deliberately rather than
    overlooked — but it means the security log is a floor on upload activity,
    never a complete record. Anything that treats it as complete is wrong.
+
+---
+## 11. The chatbot default, and the Groq models that were already dead
+
+§10.5 said the site chatbot still defaulted to Gemini — the one paid provider,
+so every visitor who never touched the picker cost money. Cohere was wired into
+`/api/chat` and made the default (`0cc69e4`). `COHERE_API_KEY` was already in
+Vercel. Verified live with a real reply, including multi-turn role mapping.
+
+Two things had to change, not one: the route's default AND `Chatbot.tsx`'s
+initial state. Leaving the UI on `"gemini"` would have kept sending the paid
+provider explicitly, so the route default would never have fired.
+
+### 11.1 A reply nobody had read
+
+Testing the Groq option returned the model's raw `<think>` monologue with the
+real answer truncated away. Pre-existing: yesterday's swap off the retired
+`llama-3.1-8b-instant` fixed the **404** and stopped there. The status code was
+checked; the reply body never was. Fixed with `reasoning_format: "hidden"` plus
+a `stripThinking()` fallback, and 400 -> 900 max_tokens because hidden reasoning
+still spends the budget (`be8fd4f`).
+
+### 11.2 Both Llama names were dead, in five places
+
+Sweeping instead of patching one file. Every name tested live:
+
+| Model | State |
+|---|---|
+| `qwen/qwen3.8-27b` | works, clean |
+| `qwen/qwen3.6-27b` | works, leaks `<think>` without the flag |
+| `groq/compound`, `-mini` | work, not reasoning models |
+| `llama-3.3-70b-versatile`, `llama-3.1-8b-instant` | **404, retired** |
+
+`/api/ai-explain` was dead end to end — `{"error":"Groq 404"}` — and
+`/api/ai-tools`' Groq default 404'd, so every tool's AI chat failed on Groq.
+Both fixed and re-verified (`c0d4b4a`). The reconciliation card also advertised
+a Groq model that tool never used; its judge cascade is Cohere/Mistral/Gemini.
+
+`reasoning_format` is gated on Groq + qwen: it is not a standard
+OpenAI-compatible field and would 400 on OpenAI, Together or Perplexity, which
+share the same helper.
+
+### 11.3 A change that did nothing, and made a log lie
+
+`PROVIDER_MODEL` in `useQueryRunner.ts` is **analytics only** — the request body
+sends `provider`, never `model`. Editing it changed no behaviour and made the
+Model-breakdown chart report a model that was never called. The real model lives
+in `services/ml-sql/routers/_providers.py`, which still names the retired
+`llama-3.3-70b-versatile`, so text-to-sql's Groq option is broken on the backend.
+
+**Check whether a value is wired to anything before "fixing" it.** A wrong value
+in a log is worse than no value: it is believed.
+
+**Still open:** the ml-sql model. It needs a decision (`groq/compound` avoids
+reasoning entirely; qwen needs the flag in a path that parses output as SQL) and
+an upload to ml-sql's OWN HF Space — the `hf` remote here is ml-unified only.
