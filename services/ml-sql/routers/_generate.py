@@ -250,6 +250,25 @@ def _build_sample_q_prompt(schema_text: str) -> str:
     )
 
 
+def _clean_suggestions(raw: str, min_len: int, limit: int) -> list[str]:
+    """Pull question lines out of a numbered/bulleted LLM list.
+
+    groq/compound is chattier than the retired llama it replaced and sometimes
+    opens with a markdown header ("**Five analyst-focused questions**"), which
+    used to survive into the UI as a suggestion chip. Requiring a "?" drops
+    headers, preambles and trailing commentary in one rule, since every line
+    we want here is a question.
+    """
+    out = []
+    for line in raw.strip().splitlines():
+        line = line.strip().lstrip("*#").strip()
+        line = line.lstrip("0123456789.-) ").strip()
+        line = line.rstrip("*").strip()
+        if len(line) > min_len and line.endswith("?"):
+            out.append(line)
+    return out[:limit]
+
+
 async def generate_sample_questions(schema: "DBSchema", provider: str, key: str) -> list[str]:
     """LLM-generated sample questions tailored to the loaded DB schema."""
     from ._schema import schema_to_prompt_text
@@ -260,8 +279,7 @@ async def generate_sample_questions(schema: "DBSchema", provider: str, key: str)
         raw = await call_provider(provider, prompt, cfg["model"], key)
     except Exception:
         return []
-    lines = [l.strip().lstrip("0123456789.-) ") for l in raw.strip().splitlines() if l.strip()]
-    return [l for l in lines if len(l) > 10][:5]
+    return _clean_suggestions(raw, 10, 5)
 
 
 def _build_followup_prompt(question: str, sql: str, columns: list[str], rows_preview: list) -> str:
@@ -287,8 +305,7 @@ async def generate_followup_suggestions(
         raw = await call_provider(provider, prompt, cfg["model"], key)
     except Exception:
         return []
-    lines = [l.strip().lstrip("0123456789.-) ") for l in raw.strip().splitlines() if l.strip()]
-    return [l for l in lines if len(l) > 8][:3]
+    return _clean_suggestions(raw, 8, 3)
 
 
 async def generate_sql(
