@@ -345,7 +345,11 @@ async def generate_sql(
             raw = await call_provider(p, prompt, cfg["model"], k)
             if i > 0:
                 logger.warning("SQL generation fell back to %s after %d failed attempt(s)", p, i)
-            return _extract_sql(raw), p, cfg["model"]
+            # Both get_provider_cfg() and call_provider() silently treat an
+            # unknown name as groq, so `p` is what was ASKED for, not what ran.
+            # Report the name that matches the model we actually used.
+            canonical = p if p in _PROVIDERS else "groq"
+            return _extract_sql(raw), canonical, cfg["model"]
         except RateLimitError as exc:
             logger.warning("SQL generation: %s rate-limited", p)
             rate_limited.append(p)
