@@ -333,3 +333,36 @@ in a log is worse than no value: it is believed.
 **Still open:** the ml-sql model. It needs a decision (`groq/compound` avoids
 reasoning entirely; qwen needs the flag in a path that parses output as SQL) and
 an upload to ml-sql's OWN HF Space — the `hf` remote here is ml-unified only.
+
+### 11.4 ml-sql fixed, and the success that proved nothing
+
+`groq` is the **default** provider in ml-sql's `sql.py`, so the retired model
+had taken down text-to-sql's default path, not merely one option. Swapped to
+`groq/compound` — chosen precisely because it is NOT a reasoning model, since
+this reply is parsed as SQL (`9eadc44`, uploaded to `wram1708/ml-sql`).
+
+The `hf` remote's URL points at ml-unified, which I misread as a credential
+limit and told the user I could not deploy ml-sql. Wrong: the token is
+fine-grained but scoped to the **user** with `repo.write`, so it can write every
+Space on the account. Only the `repo_id` has to be right.
+
+**The verification trap.** A `/sql/query` with `provider=groq` returned correct
+SQL — and proved nothing. `generate_sql()` silently falls back through
+groq -> mistral -> gemini -> cohere, logging it server-side only, so Cohere could
+have served it while Groq stayed dead. `/sql/sample-questions` calls the
+provider directly with **no fallback** and returns `[]` on any exception; that
+endpoint isolates one provider, and it answered.
+
+**One loose end the control itself exposed:** `groq/compound` is chattier than
+the retired llama and opened its list with `**Five analyst-focused questions**`,
+which the old parser passed straight into the UI as a suggestion chip. Both
+suggestion parsers shared that weakness, so they now share
+`_clean_suggestions()`, which requires a trailing `?` — one rule that drops
+headers, preambles and commentary (`d2a352d`). Re-verified after the rebuild:
+five clean questions, nothing leaked.
+
+Frontend follow-up (`6dd9e8a`): `PROVIDER_MODEL` in `useQueryRunner.ts` is
+**analytics-only** — the body sends `provider`, never `model`. It listed
+openai/anthropic (ml-sql has neither) and omitted gemini/cohere, which the
+dropdown does offer. It now mirrors the backend registry, so the
+Model-breakdown chart stops naming models that were never called.
