@@ -318,10 +318,13 @@ async def generate_sql(
     history: list[dict] | None = None,
     glossary: str = "",
     correction: str = "",
-) -> str:
-    """Call LLM (non-streaming) and return extracted SQL string.
+) -> tuple[str, str, str]:
+    """Call LLM (non-streaming); return (sql, provider_used, model_used).
 
     Tries the requested provider first; falls back to others if it fails.
+    The provider actually used is returned, not just logged: the fallback was
+    invisible to the caller, so the UI kept naming the requested provider and
+    analytics recorded a model that was never called.
     """
     prompt = _build_sql_prompt(question, schema_text, prev_sql, error, history, glossary, correction)
 
@@ -342,7 +345,7 @@ async def generate_sql(
             raw = await call_provider(p, prompt, cfg["model"], k)
             if i > 0:
                 logger.warning("SQL generation fell back to %s after %d failed attempt(s)", p, i)
-            return _extract_sql(raw)
+            return _extract_sql(raw), p, cfg["model"]
         except RateLimitError as exc:
             logger.warning("SQL generation: %s rate-limited", p)
             rate_limited.append(p)
