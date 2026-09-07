@@ -366,3 +366,22 @@ Frontend follow-up (`6dd9e8a`): `PROVIDER_MODEL` in `useQueryRunner.ts` is
 openai/anthropic (ml-sql has neither) and omitted gemini/cohere, which the
 dropdown does offer. It now mirrors the backend registry, so the
 Model-breakdown chart stops naming models that were never called.
+
+### 11.5 Making the silent fallback visible
+
+`generate_sql()` now returns `(sql, provider_used, model_used)` and the
+`sql_generated` event carries `provider`, `model` and `fell_back_from`. The UI
+tells the user when a fallback happened; analytics logs what ran, keeping
+`requested_provider` alongside (`6867b43`, `a16a8d6`).
+
+The control on the new reporting immediately caught a bug in it: a request
+naming an unknown provider returned `provider: "nosuchprovider"` with
+`model: "groq/compound"`. Both `get_provider_cfg()` and `call_provider()`
+silently treat an unknown name as groq, so the loop variable was the name
+ASKED for, not the one that ran — the exact mislabelling the change existed to
+remove. Fixed by canonicalising (`2cdff28`).
+
+Verified live, both branches: normal run reports groq / `fell_back_from: null`;
+mismatch reports groq with `fell_back_from: "nosuchprovider"`. **Not yet
+exercised: a genuine provider failure** (groq down, mistral answering) — that
+needs a real outage to reproduce.
