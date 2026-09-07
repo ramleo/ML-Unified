@@ -260,9 +260,8 @@ half-finished — which is why none of them is a bug.
    on an untrodden path; treat any conclusion drawn from its absence as
    unproven.
 
-5. **Site chatbot still defaults to Gemini.** Cohere is not wired into
-   `/api/chat` at all. Gemini is the one paid provider, so this is the only
-   default in the app that costs money per call.
+5. ~~**Site chatbot still defaults to Gemini.**~~ **Closed** — Cohere wired in
+   and made the default (`0cc69e4`); see §11.
 
 6. **Returning visitors keep their old provider**, persisted in localStorage.
    So any change of default reaches new visitors only — which also means
