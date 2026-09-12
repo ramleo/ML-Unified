@@ -21,6 +21,8 @@ import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from security.file_gate import scan_upload_bytes
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -39,7 +41,9 @@ def inpaint_region(body: InpaintRequest):
     try:
         from PIL import Image, ImageDraw
 
-        img = Image.open(io.BytesIO(base64.b64decode(body.image))).convert("RGB")
+        raw = base64.b64decode(body.image)
+        scan_upload_bytes(raw, path="/rag/mm-inpaint")
+        img = Image.open(io.BytesIO(raw)).convert("RGB")
         w, h = img.size
         if w == 0 or h == 0 or len(body.bbox) != 4:
             raise HTTPException(status_code=400, detail="Invalid image or bbox.")

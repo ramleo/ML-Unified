@@ -41,11 +41,20 @@ router = APIRouter(prefix="/prompt-injection")
 
 _MAX_TEXT_LEN = 20_000
 
-# Groq dropped from the default path entirely (2026-08-24, see query.py's
-# _DEFAULT_PROVIDER comment) — Mistral is this app's proven-reliable
-# server-key fallback for background judge calls.
-_JUDGE_PROVIDER = "mistral"
-_JUDGE_MODEL = "mistral-small-latest"
+# Judge cascade, tried in order. Mistral alone was the whole judge until
+# 2026-09-07, when the Space log showed it returning 429 on every attempt
+# (free-tier capacity contention, which Mistral support confirmed is
+# best-effort with no reserved capacity — not something we can fix). The
+# endpoint still answered 200 while HALF THIS TOOL had not run, quietly
+# downgrading a real injection from "high" to "medium".
+#
+# Cohere leads because it is free and reliable; Mistral stays as the second
+# opinion. Gemini is deliberately absent — it is the only paid key, and this
+# endpoint is public and unauthenticated.
+_JUDGE_CANDIDATES = [
+    ("cohere", "command-a-03-2025"),
+    ("mistral", "mistral-small-latest"),
+]
 
 _JUDGE_SYSTEM = (
     "You are a security classifier. You will be shown a block of text that "
@@ -149,6 +158,10 @@ class PromptInjectionCheckRequest(BaseModel):
 class PromptInjectionCheckResponse(BaseModel):
     heuristic_hits: list[PatternHit]
     llm_verdict: LlmVerdict | None
+    # False when no judge provider could be reached. Without this the UI cannot
+    # tell "the judge cleared this" from "the judge never answered", and the
+    # tool claims two independent checks while having run one.
+    judge_ran: bool = True
     overall_risk: str
     overall_reason: str
 
@@ -188,16 +201,35 @@ def _parse_judge_response(raw: str) -> LlmVerdict | None:
     )
 
 
-def run_judge(text: str) -> LlmVerdict | None:
-    key = _resolve_key(_JUDGE_PROVIDER, None)
-    if not key:
-        return None
-    raw = complete(_JUDGE_PROVIDER, _JUDGE_MODEL, key,
-                   [{"role": "user", "content": text}], system=_JUDGE_SYSTEM)
-    return _parse_judge_response(raw)
+def run_judge(text: str) -> tuple[LlmVerdict | None, bool]:
+    """Return (verdict, judge_ran).
+
+    `judge_ran` is the point of the tuple: a None verdict used to be
+    indistinguishable from "the judge read this and found nothing", so an
+    unreachable provider silently made the tool weaker with no way for the
+    caller — or the user — to tell.
+    """
+    for provider, model in _JUDGE_CANDIDATES:
+        key = _resolve_key(provider, None)
+        if not key:
+            continue
+        try:
+            raw = complete(provider, model, key,
+                           [{"role": "user", "content": text}], system=_JUDGE_SYSTEM)
+        except Exception as exc:
+            logger.warning("prompt-injection judge: %s failed: %s", provider, exc)
+            continue
+        verdict = _parse_judge_response(raw)
+        if verdict is not None:
+            return verdict, True
+        logger.warning("prompt-injection judge: %s returned unparseable output", provider)
+    logger.error("prompt-injection judge: every candidate failed (%s)",
+                 ", ".join(p for p, _ in _JUDGE_CANDIDATES))
+    return None, False
 
 
-def _combine_verdict(hits: list[PatternHit], judge: LlmVerdict | None) -> tuple[str, str]:
+def _combine_verdict(hits: list[PatternHit], judge: LlmVerdict | None,
+                    judge_ran: bool = True) -> tuple[str, str]:
     strong_categories = {"direct_override", "jailbreak"}
     has_strong_heuristic = any(h.category in strong_categories for h in hits)
     has_weak_heuristic = bool(hits) and not has_strong_heuristic
@@ -211,16 +243,23 @@ def _combine_verdict(hits: list[PatternHit], judge: LlmVerdict | None) -> tuple[
                          if has_strong_heuristic else
                          "The LLM judge flagged this with high confidence.")
     if has_weak_heuristic or judge_flags:
-        return "medium", "Some suspicious signal found, but not a strong match — review manually."
+        reason = "Some suspicious signal found, but not a strong match — review manually."
+        if not judge_ran:
+            reason += " The LLM judge could not be reached, so this is the pattern check alone."
+        return "medium", reason
+    if not judge_ran:
+        # Never report a clean "low" on half the evidence.
+        return "low", ("No injection pattern matched. The LLM judge could not be reached, "
+                       "so only the pattern check ran — treat this as inconclusive.")
     return "low", "No injection pattern matched and the LLM judge found no manipulation attempt."
 
 
 def run_prompt_injection_check(text: str) -> PromptInjectionCheckResponse:
     hits = detect_heuristics(text)
-    judge = run_judge(text)
-    risk, reason = _combine_verdict(hits, judge)
+    judge, judge_ran = run_judge(text)
+    risk, reason = _combine_verdict(hits, judge, judge_ran)
     return PromptInjectionCheckResponse(
-        heuristic_hits=hits, llm_verdict=judge,
+        heuristic_hits=hits, llm_verdict=judge, judge_ran=judge_ran,
         overall_risk=risk, overall_reason=reason,
     )
 

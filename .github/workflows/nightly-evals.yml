@@ -1,0 +1,74 @@
+name: Nightly Evals
+
+# Phase 4 of the testing plan: the probabilistic half.
+#
+# Phases 1-3 test code whose output is fixed — routing, fallback order,
+# spend caps, schema shape, the arithmetic validator. This job tests the
+# part a model decides, by sending documents whose correct answers are
+# known because we wrote them, and checking PROPERTIES of what comes back
+# rather than its exact wording. See services/ml-api/evals/README.md.
+#
+# Nightly, not per push, for three reasons: every run costs real provider
+# calls, the answers legitimately move between runs, and a suite that goes
+# red because a free tier was busy is a suite people turn off. A failure
+# here triggers GitHub's own built-in failure-notification email to the
+# repo owner — the same free mechanism security-watch.yml uses, no paid
+# alerting, no webhook.
+#
+# No API keys live in this repo's Actions secrets and none are added here.
+# The job posts to the deployed Space, which already holds them. That also
+# makes this an end-to-end test of the real wiring — router, cascade, keys
+# — which is exactly where the silent fall-through to the paid provider
+# lived, and which an in-process test would not have exercised.
+
+on:
+  schedule:
+    - cron: "20 3 * * *"   # 03:20 UTC daily
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Run a single golden by id (blank runs all)"
+        required: false
+        default: ""
+
+jobs:
+  document-goldens:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Deliberately not the ml-api requirements files. The runner needs
+      # to build a PDF and make an HTTP request; installing torch and the
+      # rest to do that would turn a two-minute job into a fifteen-minute
+      # one for no benefit.
+      - name: Install the two things the runner needs
+        run: pip install --no-cache-dir httpx pymupdf
+
+      # A Space that has been idle sleeps, and a cold start takes longer
+      # than the first document's timeout. Waking it first means a real
+      # failure is a real failure, not a cold start.
+      - name: Wake the Space
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 \
+                   https://wram1708-ml-unified.hf.space/ || true)
+            echo "attempt $attempt: HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 20
+          done
+          echo "The Space did not answer. Failing before spending any provider calls."
+          exit 1
+
+      - name: Run the document golden set
+        working-directory: services/ml-api
+        run: |
+          if [ -n "${{ inputs.only }}" ]; then
+            python -m evals.run --only "${{ inputs.only }}"
+          else
+            python -m evals.run
+          fi

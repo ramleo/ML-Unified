@@ -16,6 +16,7 @@ from .shared import (
     download_model,
     ort_session,
 )
+from security.file_gate import scan_upload_bytes
 
 router = APIRouter(tags=["vision"])
 
@@ -191,6 +192,7 @@ async def segment_image(
         raise HTTPException(400, f"Unknown model: {model_name}")
 
     raw = await file.read()
+    scan_upload_bytes(raw, path="/segment-image")
 
     # color_segmentation is fast — return plain JSON (no streaming needed)
     if model_name == "color_segmentation":

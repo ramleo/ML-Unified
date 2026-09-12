@@ -112,6 +112,19 @@ rule High_Overall_Entropy {
 }
 '''
 
+# Rules that describe a property of the file rather than evidence of intent.
+# Entropy above 7.5 bits/byte is the defining characteristic of ANY compressed
+# format — measured: an ordinary PDF is 7.947 and a 2.7 KB WebP thumbnail is
+# 7.940 — so on a route that accepts PDFs and images it fires on essentially
+# every legitimate upload. The rule's own description already says it is
+# "informational, not a verdict on its own"; this set is what lets a caller
+# act on that sentence instead of just reading it.
+#
+# A caller that blocks uploads must block on `matches - ADVISORY_RULES`, never
+# on `matches`. Reported matches still include the advisory ones: the standalone
+# scanner shows them, and file_gate logs them.
+ADVISORY_RULES = frozenset({"High_Overall_Entropy"})
+
 _builtin_rules: yara.Rules | None = None
 
 

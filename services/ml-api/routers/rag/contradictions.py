@@ -18,9 +18,7 @@ in later without touching this function or its caller.
 """
 from __future__ import annotations
 
-import json
 import logging
-import re
 from typing import Callable, Optional
 
 from fastapi import APIRouter, HTTPException, Request
@@ -31,6 +29,11 @@ from pydantic import BaseModel
 
 from routers.rag.cache import cosine_sim
 from routers.rag.entities import decode_entities
+from routers.rag.call_log import set_call_context
+from routers.rag.contradictions_judge import (
+    _RECONCILE_JUDGE_SYSTEM, _RECONCILE_CONFIRM_SYSTEM,
+    make_judge_chain, new_chain_state,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,65 +48,10 @@ _SIM_CEILING = 0.93
 
 _MAX_PAIRS_TO_JUDGE = 6  # bounds LLM calls regardless of corpus size
 
-# Groq dropped from the default path entirely (2026-08-24) — no free
-# replacement that actually worked reliably was found (see query.py's
-# _DEFAULT_PROVIDER comment for the full history). Mistral is the
-# proven-reliable fallback used throughout this app.
-_JUDGE_PROVIDER = "mistral"
-_JUDGE_MODEL = "mistral-small-latest"
-
-_JUDGE_SYSTEM = (
-    "You are given two short passages from two different documents. Decide "
-    "whether they make a factual claim about the same specific thing (e.g. "
-    "same date, amount, name, or status) but DISAGREE with each other. "
-    "Passages that are simply about different topics, that agree, or that "
-    "are just differently worded but consistent, are NOT a contradiction. "
-    "Reply with ONLY a JSON object, no other text: "
-    '{"contradicts": true|false, "explanation": "one short sentence"}'
-)
-
-# MMRAG-20: same judge, same JSON shape, narrower question — a contract and
-# an invoice are EXPECTED to differ in most of their text (different
-# structure, different boilerplate); only a same-amount/date/term
-# disagreement actually matters here. The worked counter-example below is a
-# real false positive caught in live testing: groq/compound-mini flagged
-# "due within 30 days of invoice date" vs. "Due date: 30 days from issue" as
-# disagreeing, even though both state the same 30-day term in different
-# words — the model was pattern-matching on differing PHRASING, not
-# comparing the actual VALUE. Spelling that exact failure mode out is doing
-# real work here, not decorative.
-_RECONCILE_JUDGE_SYSTEM = (
-    "Passage A is a clause from a CONTRACT. Passage B is a line from an "
-    "INVOICE. Decide whether they refer to the SAME amount, date, quantity, "
-    "or term but state a DIFFERENT VALUE for it (e.g. contract says "
-    "$50,000, invoice bills $52,500 — different values, IS a discrepancy). "
-    "Two passages that state the SAME value in different wording are NOT a "
-    "discrepancy — e.g. contract says 'due within 30 days of invoice date' "
-    "and invoice says 'Due date: 30 days from issue' both mean 30 days: "
-    "NOT a discrepancy, even though the sentences look different. Judge the "
-    "underlying value, not the phrasing. If they're about unrelated "
-    "matters, or state the same value, that is NOT a discrepancy. Reply "
-    "with ONLY a JSON object, no other text: "
-    '{"contradicts": true|false, "explanation": "one short sentence"}'
-)
-
-# A single small-model judge call is noisy enough that a real false positive
-# was observed live (see comment above) — for reconciliation specifically
-# (not the generic /rag/contradictions path, which keeps its original
-# single-call behavior unchanged), a positive verdict gets ONE independent
-# re-check with a differently-worded question before being reported. This
-# only doubles LLM calls for the rare candidates that got flagged in the
-# first place, not the whole judged set.
-_RECONCILE_CONFIRM_SYSTEM = (
-    "Passage A is a clause from a CONTRACT. Passage B is a line from an "
-    "INVOICE. A first pass flagged these as stating DIFFERENT values for "
-    "the same amount/date/quantity/term. Double-check carefully: do they "
-    "actually state a different VALUE, or do they state the SAME value in "
-    "different words (which is NOT a discrepancy)? Reply with ONLY a JSON "
-    "object, no other text: "
-    '{"contradicts": true|false, "explanation": "one short sentence"}'
-)
-
+# Which providers judge, and in what order, lives in
+# contradictions_judge.JUDGE_CANDIDATES — this endpoint no longer names one.
+# It used to pin Mistral as "the proven-reliable fallback", which 2026-09-06
+# disproved.
 
 def _collect_session_chunks(state, session_id: str) -> list[dict]:
     """All chunks uploaded by this session, across all its source documents,
@@ -126,23 +74,6 @@ def _collect_session_chunks(state, session_id: str) -> list[dict]:
         chunks.append({"text": text, "source": src, "page": meta.get("page"),
                        "entities": decode_entities(meta.get("entities"))})
     return chunks
-
-
-def _parse_judge_response(raw: str) -> Optional[dict]:
-    """Best-effort JSON extraction — reasoning models occasionally wrap the
-    JSON in prose or a markdown fence despite the system prompt."""
-    if not raw:
-        return None
-    match = re.search(r"\{.*\}", raw, re.DOTALL)
-    if not match:
-        return None
-    try:
-        obj = json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return None
-    if "contradicts" not in obj:
-        return None
-    return {"contradicts": bool(obj["contradicts"]), "explanation": str(obj.get("explanation", "")).strip()}
 
 
 def find_contradictions(
@@ -172,9 +103,13 @@ def find_contradictions(
     candidates = candidates[:_MAX_PAIRS_TO_JUDGE]
 
     contradictions = []
+    judge_failures = 0  # same distinction as the reconciliation path below
     for sim, i, j in candidates:
         verdict = judge_fn(chunks[i]["text"], chunks[j]["text"])
-        if verdict and verdict["contradicts"]:
+        if verdict is None:
+            judge_failures += 1
+            continue
+        if verdict["contradicts"]:
             contradictions.append({
                 "similarity": round(sim, 3),
                 "explanation": verdict["explanation"],
@@ -182,28 +117,9 @@ def find_contradictions(
                 "chunk_b": {"text": chunks[j]["text"], "source": chunks[j]["source"], "page": chunks[j]["page"]},
             })
 
-    return {"checked_pairs": len(candidates), "sources": sources, "contradictions": contradictions}
+    return {"checked_pairs": len(candidates), "judge_failures": judge_failures,
+            "sources": sources, "contradictions": contradictions}
 
-
-def make_llm_judge(provider: str, model: str, key: str,
-                   system: str = _JUDGE_SYSTEM) -> Callable[[str, str], Optional[dict]]:
-    """Builds a judge_fn bound to one provider/model/key — the concrete
-    implementation find_contradictions() is deliberately kept ignorant of
-    (OCP: swap in a different judge later without touching that function).
-    `system` defaults to the generic contradiction prompt so the existing
-    /rag/contradictions endpoint is unaffected; MMRAG-20's reconciliation
-    endpoint passes _RECONCILE_JUDGE_SYSTEM instead."""
-    from routers.rag.llm import complete
-
-    def judge(text_a: str, text_b: str) -> Optional[dict]:
-        if not key:
-            return None
-        raw = complete(provider, model, key,
-                       [{"role": "user", "content": f"Passage A: {text_a}\n\nPassage B: {text_b}"}],
-                       system=system)
-        return _parse_judge_response(raw)
-
-    return judge
 
 
 def find_reconciliation(
@@ -254,10 +170,20 @@ def find_reconciliation(
     candidates = candidates[:_MAX_PAIRS_TO_JUDGE]
 
     discrepancies = []
+    # A judge call that never answered — rate-limited, timed out, unparseable
+    # — used to fall into the same branch as one that answered "these agree",
+    # so a provider outage produced a confident empty report. On a tool whose
+    # entire job is catching a discrepancy before you pay it, "I could not
+    # check" must never render as "nothing found". Counted and returned so
+    # the caller can say which of the two happened.
+    judge_failures = 0
     for _, sim, i, j in candidates:
         c_chunk, inv_chunk = contract_chunks[i], invoice_chunks[j]
         verdict = judge_fn(c_chunk["text"], inv_chunk["text"])
-        if not (verdict and verdict["contradicts"]):
+        if verdict is None:
+            judge_failures += 1
+            continue
+        if not verdict["contradicts"]:
             continue
         # Never silently drop a flagged pair on confirm_fn's say-so alone —
         # live testing showed BOTH calls can independently miss the same
@@ -278,7 +204,8 @@ def find_reconciliation(
             "invoice_chunk": {"text": inv_chunk["text"], "source": inv_chunk["source"], "page": inv_chunk["page"]},
         })
 
-    return {"checked_pairs": len(candidates), "contract_source": contract_source,
+    return {"checked_pairs": len(candidates), "judge_failures": judge_failures,
+            "contract_source": contract_source,
             "invoice_sources": invoice_sources, "discrepancies": discrepancies}
 
 
@@ -297,14 +224,14 @@ def check_contradictions(request: Request, req: ContradictionsRequest):
     check_and_record_call("contradictions", pool="contradictions", daily_cap_env="CONTRADICTIONS_DAILY_CAP")
     from routers.rag import get_rag_state
     from routers.rag.query import _resolve_key
+    set_call_context(session_id=req.session_id, tool="contradictions")
 
     try:
         state = get_rag_state()
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
-    key = _resolve_key(_JUDGE_PROVIDER, None)
-    judge_fn = make_llm_judge(_JUDGE_PROVIDER, _JUDGE_MODEL, key)
+    judge_fn = make_judge_chain(_resolve_key)
     return find_contradictions(state, req.session_id, state.embedding_fn, judge_fn)
 
 
@@ -312,6 +239,9 @@ class ReconciliationRequest(BaseModel):
     session_id: str
     contract_source: str
     invoice_sources: list[str]
+    # Minted client-side per press (LOGGING_SPEC.md §3 stage 5). Optional so an
+    # older cached frontend still works — it just logs a row with no join key.
+    run_id: str = ""
 
 
 @router.post("/reconciliation")
@@ -323,14 +253,23 @@ def check_reconciliation(request: Request, req: ReconciliationRequest):
     check_and_record_call("reconciliation", pool="contradictions", daily_cap_env="CONTRADICTIONS_DAILY_CAP")
     from routers.rag import get_rag_state
     from routers.rag.query import _resolve_key
+    # Tag every judge call this request goes on to make, so its row in
+    # llm_calls can be joined to the click in events by run_id.
+    set_call_context(session_id=req.session_id, run_id=req.run_id,
+                     tool="contract-invoice-reconciliation")
 
     try:
         state = get_rag_state()
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
-    key = _resolve_key(_JUDGE_PROVIDER, None)
-    judge_fn = make_llm_judge(_JUDGE_PROVIDER, _JUDGE_MODEL, key, system=_RECONCILE_JUDGE_SYSTEM)
-    confirm_fn = make_llm_judge(_JUDGE_PROVIDER, _JUDGE_MODEL, key, system=_RECONCILE_CONFIRM_SYSTEM)
+    # One cursor for both chains: the judge and the confirm step run down the
+    # same candidate list, so whichever discovers a provider is down should
+    # spare the other the same discovery.
+    chain_state = new_chain_state()
+    judge_fn = make_judge_chain(_resolve_key, system=_RECONCILE_JUDGE_SYSTEM,
+                                state=chain_state)
+    confirm_fn = make_judge_chain(_resolve_key, system=_RECONCILE_CONFIRM_SYSTEM,
+                                  state=chain_state)
     return find_reconciliation(state, req.session_id, req.contract_source,
                                req.invoice_sources, state.embedding_fn, judge_fn, confirm_fn)

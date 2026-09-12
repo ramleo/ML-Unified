@@ -39,6 +39,7 @@ from pydantic import BaseModel
 
 from routers.document._llm import _parse_json
 from routers.document._vision import _vision_cascade_raw
+from security.file_gate import scan_upload_bytes
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -126,6 +127,7 @@ def _matches(answer: str, ground_truth: str) -> bool:
 
 @router.post("/mm-captcha/solve")
 def solve_captcha(req: CaptchaSolveRequest):
+    scan_upload_bytes(base64.b64decode(req.image), path="/rag/mm-captcha/solve")
     original_img = _decode(req.image)
     hardened_img = _harden_image(original_img, req.intensity)
 

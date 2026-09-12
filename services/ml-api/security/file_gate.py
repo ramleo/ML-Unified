@@ -24,7 +24,7 @@ identical, so no router that calls it needs to change.
 """
 from __future__ import annotations
 
-from routers.yara_scan import _get_builtin_rules, _run_match
+from routers.yara_scan import ADVISORY_RULES, _get_builtin_rules, _run_match
 from security.events import log_security_event
 
 
@@ -45,3 +45,16 @@ def scan_upload_bytes(data: bytes, path: str = "", client_ip: str = "") -> list[
             detail=", ".join(m["rule"] for m in matches),
         )
     return matches
+
+
+def blocking_matches(matches: list[dict]) -> list[dict]:
+    """The subset of `scan_upload_bytes()`'s matches that actually justify
+    refusing a file: evidence of intent (EICAR, an embedded PE, a webshell),
+    not a property every compressed file shares.
+
+    This exists because /rag/mm-ingest treated a bare entropy match as a
+    verdict and so rejected every real PDF, image, video and audio file it was
+    ever given — the whole input of the Multimodal RAG tool. A caller that
+    blocks should ask this function, not test `matches` for truthiness.
+    """
+    return [m for m in matches if m["rule"] not in ADVISORY_RULES]

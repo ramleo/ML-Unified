@@ -1,0 +1,66 @@
+name: Security Watch
+
+# Free real-time-ish alerting for the deployed HF Space: polls the
+# /security/status endpoint (services/ml-api/routers/security_status.py)
+# every 30 minutes and fails this job if any event type spikes past its
+# threshold. A failed scheduled workflow run triggers GitHub's own,
+# built-in failure-notification email to the repo owner — zero new paid
+# infrastructure, zero new webhook/Slack/Discord setup. This is the free
+# half of the paid-upgrade table's "Logging / SIEM" row: swap-in later is
+# pointing a paid log drain (Datadog/Sentry/Better Stack) at the same
+# underlying event stream instead of this cron poll — nothing about the
+# app itself changes either way.
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  check-security-events:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Poll /security/status and compare against thresholds
+        env:
+          SECURITY_STATUS_TOKEN: ${{ secrets.SECURITY_STATUS_TOKEN }}
+          SPACE_URL: "https://wram1708-ml-unified.hf.space"
+        run: |
+          set -e
+          response=$(curl -s -w "\n%{http_code}" --max-time 60 \
+            -H "x-admin-token: $SECURITY_STATUS_TOKEN" \
+            "$SPACE_URL/security/status?window_seconds=1800")
+          status_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+
+          if [ "$status_code" != "200" ]; then
+            echo "Could not reach /security/status (HTTP $status_code) — Space may be cold-starting or unreachable this cycle. Not failing the job for a single missed poll."
+            echo "$body"
+            exit 0
+          fi
+
+          echo "Event counts (last 30 min): $body"
+
+          python3 - "$body" << 'PYEOF'
+          import json, sys
+
+          # Thresholds per event type over the 30-minute window — a real
+          # attack/probe looks like a sustained burst, not one-off noise
+          # from normal (or even slightly abusive-but-harmless) use.
+          THRESHOLDS = {
+              "origin_blocked": 20,
+              "rate_limit_exceeded": 100,
+              "oversized_request": 30,
+              "file_gate_flagged": 1,     # any real YARA match is worth knowing about
+              "budget_exceeded": 10,
+          }
+
+          body = json.loads(sys.argv[1])
+          counts = body.get("counts", {})
+          breaches = {k: v for k, v in counts.items() if v >= THRESHOLDS.get(k, 999999)}
+
+          if breaches:
+              print("THRESHOLD BREACHED:", breaches)
+              print("Full counts:", counts)
+              sys.exit(1)
+          print("All event types within normal range:", counts)
+          PYEOF

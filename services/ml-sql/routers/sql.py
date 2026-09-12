@@ -226,12 +226,13 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
                 "columns": sum(len(t.columns) for t in schema.tables.values())})
 
     sql = None; result = None; last_error = None; prev_sql = None
+    used_provider = req.provider; used_model = get_provider_cfg(req.provider)["model"]
     for attempt in range(1, 4):
         if attempt > 1:
             await asyncio.sleep(2 ** (attempt - 2))
             yield _sse({"type": "retry", "attempt": attempt, "error": last_error})
         try:
-            sql = await generate_sql(
+            sql, used_provider, used_model = await generate_sql(
                 safe_question, schema_text, req.provider, key,
                 prev_sql, last_error, req.history or None, req.glossary, req.correction,
             )
@@ -243,7 +244,12 @@ async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
         except Exception as e:
             last_error = f"SQL generation error: {e}"; prev_sql = sql; continue
 
-        yield _sse({"type": "sql_generated", "sql": sql})
+        # Name the provider that actually answered. On a fallback this differs
+        # from req.provider, and without it the UI and analytics both report the
+        # provider the user picked rather than the one that did the work.
+        yield _sse({"type": "sql_generated", "sql": sql,
+                    "provider": used_provider, "model": used_model,
+                    "fell_back_from": req.provider if used_provider != req.provider else None})
         try:
             stype = session["type"]
             paged = paginate_mssql_sql(sql, 1, 50) if stype == "mssql" else paginate_sql(sql, 1, 50)

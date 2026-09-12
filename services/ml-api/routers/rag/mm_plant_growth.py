@@ -77,6 +77,7 @@ from routers.rag.mm_plant_growth_reid import (
     measure_groups,
     propose_groups,
 )
+from security.file_gate import scan_upload_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -347,6 +348,10 @@ def plant_growth_endpoint(body: PlantGrowthRequest):
     for i, frame in enumerate(body.frames):
         if not frame.image.strip():
             raise HTTPException(status_code=400, detail=f"frame {i} is missing an image")
+        try:
+            scan_upload_bytes(base64.b64decode(frame.image), path="/rag/mm-plant-growth")
+        except Exception:
+            pass
 
     if len(body.frames) == 1:
         if body.auto_detect:
@@ -366,6 +371,10 @@ def plant_growth_group_propose(body: ProposeGroupsRequest):
     for i, img in enumerate(photos):
         if not img.strip():
             raise HTTPException(status_code=400, detail=f"photo {i} is missing an image")
+        try:
+            scan_upload_bytes(base64.b64decode(img), path="/rag/mm-plant-growth-group/propose")
+        except Exception:
+            pass
     return propose_groups(photos, body.auto_detect)
 
 
@@ -376,5 +385,10 @@ def plant_growth_group_measure(body: MeasureGroupsRequest):
     if not body.groups:
         raise HTTPException(status_code=400, detail="no groups to measure")
     photos = [p.image for p in body.photos]
+    for img in photos:
+        try:
+            scan_upload_bytes(base64.b64decode(img), path="/rag/mm-plant-growth-group/measure")
+        except Exception:
+            pass
     groups = [{"group_id": g.group_id, "photo_indices": g.photo_indices} for g in body.groups]
     return measure_groups(photos, groups)

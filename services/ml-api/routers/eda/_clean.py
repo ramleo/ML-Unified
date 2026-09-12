@@ -16,6 +16,21 @@ def run_clean(file_bytes: bytes, config_str: str, filename: str) -> dict:
     except Exception as e:
         raise HTTPException(400, f"Invalid config JSON: {e}")
 
+    # Shape, not just syntax. Sending "outliers": "iqr" instead of an object
+    # used to reach `.get("enabled")` on a string and raise, which FastAPI
+    # turns into an unhandled 500 — and an unhandled 500 is produced OUTSIDE
+    # the CORS middleware, so the browser reports a CORS failure and the real
+    # cause is invisible from the client. A caller sending the wrong shape
+    # deserves to be told which key is wrong.
+    if not isinstance(cfg, dict):
+        raise HTTPException(400, "Config must be a JSON object.")
+    for key in ("imputation", "outliers"):
+        if key in cfg and cfg[key] is not None and not isinstance(cfg[key], dict):
+            raise HTTPException(
+                400, f"Config key '{key}' must be an object, got {type(cfg[key]).__name__}.")
+    if "drop_cols" in cfg and cfg["drop_cols"] is not None and not isinstance(cfg["drop_cols"], list):
+        raise HTTPException(400, "Config key 'drop_cols' must be a list of column names.")
+
     try:
         df = pd.read_csv(io.BytesIO(file_bytes))
     except Exception as e:
@@ -28,8 +43,6 @@ def run_clean(file_bytes: bytes, config_str: str, filename: str) -> dict:
     # 1. Dedup
     if cfg.get("dedup", False):
         df = df.drop_duplicates()
-    rows_after_dedup  = len(df)
-    rows_removed_dedup = rows_before - rows_after_dedup
 
     # 2. Drop ID cols
     drop_id_cols = cfg.get("drop_cols") or cfg.get("drop_id_cols") or []

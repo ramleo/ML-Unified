@@ -8,7 +8,11 @@ class RateLimitError(Exception):
     """Raised when all attempted providers return HTTP 429."""
 
 _PROVIDERS: dict[str, dict] = {
-    "groq":    {"env": "GROQ_API_KEY",    "model": "llama-3.3-70b-versatile"},
+    # llama-3.3-70b-versatile was retired by Groq and 404s (verified live
+    # 2026-09-07), and groq is the default provider here, so the tool's
+    # default path was dead. groq/compound is deliberately NOT a reasoning
+    # model: qwen would emit a <think> block, and this reply is parsed as SQL.
+    "groq":    {"env": "GROQ_API_KEY",    "model": "groq/compound"},
     "mistral": {"env": "MISTRAL_API_KEY", "model": "codestral-latest"},
     "gemini":  {"env": "GEMINI_API_KEY",  "model": "gemini-3.6-flash"},
     "cohere":  {"env": "COHERE_API_KEY",  "model": "command-r-plus-08-2024"},

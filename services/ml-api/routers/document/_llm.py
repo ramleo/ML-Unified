@@ -1,6 +1,6 @@
 """LLM provider cascade for document field extraction (text path).
 Zero imports from other ml-api routers — self-contained for microservice extraction.
-Cascade order: Mistral (medium→large) → Gemini → Cohere → Cerebras. Groq
+Cascade order: Cohere → Mistral (medium→large) → Gemini. Groq
 dropped from the automatic cascade (2026-08-24) — no free replacement model
 that actually worked reliably for this app's request pattern was found (see
 routers/rag/query.py's _DEFAULT_PROVIDER comment for the full history).
@@ -122,7 +122,11 @@ def _cohere(messages: list[dict], system: str) -> str:
             r = client.post(
                 "https://api.cohere.ai/v2/chat",
                 headers={"Authorization": f"Bearer {key}"},
-                json={"model": "command-r-plus", "messages": fmt, "temperature": 0,
+                # "command-r-plus" is retired: v2/chat 404'd every call, so
+                # this provider was silently dead and the paid Gemini key
+                # served in its place. command-a-03-2025 is what the other
+                # nine Cohere call sites here use, verified on this Space.
+                json={"model": "command-a-03-2025", "messages": fmt, "temperature": 0,
                       "response_format": {"type": "json_object"}},
             )
             r.raise_for_status()
@@ -136,8 +140,19 @@ def _cohere(messages: list[dict], system: str) -> str:
 # Read by the router right after extraction to attribute results in the UI.
 last_provider: str = ""
 
-_CASCADE_ORDER = (("mistral", _mistral), ("gemini", _gemini_text),
-                  ("cohere", _cohere), ("cerebras", _cerebras))
+# Gemini is the only PAID key here and this endpoint is public, so it goes
+# LAST. It used to sit second behind Mistral, which 429s nearly every request
+# (no reserved free capacity, Part 276 §15) — so second was in practice first,
+# and free Cohere sat third, unreached. Order now matches generation.py's
+# FALLBACK_CANDIDATES: free and reliable, then free and best-effort, then paid.
+#
+# Cerebras is deliberately absent: its key is valid (the 401 was a stale
+# secret, replaced 2026-09-12) but the account is free and free accounts get
+# 402 payment-required on every call. A provider that cannot succeed is not a
+# fallback, just a wasted round trip in front of the paid key. Still reachable
+# as provider="cerebras" if that account is ever upgraded.
+_CASCADE_ORDER = (("cohere", _cohere), ("mistral", _mistral),
+                  ("gemini", _gemini_text))
 
 
 def _cascade(messages: list[dict], system: str) -> str:
@@ -241,7 +256,11 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
         + f"Document text:\n{text[:14000]}"
     )
     global last_provider
-    _provider_map = {"groq": _groq, "mistral": _mistral, "gemini": _gemini_text, "cohere": _cohere}
+    # Every provider is selectable here, Cerebras included — it was missing,
+    # so a broken Cerebras key could not be tested directly and sat unnoticed
+    # returning 401.
+    _provider_map = {"groq": _groq, "mistral": _mistral, "gemini": _gemini_text,
+                     "cohere": _cohere, "cerebras": _cerebras}
     fn = _provider_map.get(provider)
     messages = [{"role": "user", "content": prompt}]
     if fn:
@@ -256,8 +275,9 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
             # Groq dropped from the automatic path entirely (2026-08-24, see
             # module docstring) with no equivalent small/fast free model
             # found elsewhere, so this now just tries Mistral directly —
-            # still faster than the full cascade when it succeeds, since
-            # cascade order already puts Mistral first anyway.
+            # still faster than the full cascade when it succeeds. (Cascade
+            # order used to put Mistral first; it is now Cohere first with the
+            # paid key last — see _CASCADE_ORDER.)
             raw = _mistral(messages, system)
             if raw.strip() and _parse_json(raw).get("fields"):
                 last_provider = "mistral · fast"

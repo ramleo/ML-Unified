@@ -45,6 +45,7 @@ from routers.rag.mm_qr_phishing_reputation import (
     _enrich_with_reputation_and_age,
     _registrable_domain,
 )
+from security.file_gate import scan_upload_bytes
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -214,6 +215,7 @@ def scan_qr_codes(image_b64: str) -> dict:
     if len(raw) > _MAX_IMAGE_BYTES:
         return {"found": False, "qr_codes": [], "reputation_checked": False, "error": "Image too large (max 10MB)."}
 
+    scan_upload_bytes(raw, path="/rag/mm-qr-phishing/scan")
     arr = np.frombuffer(raw, dtype=np.uint8)
     img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     if img is None:

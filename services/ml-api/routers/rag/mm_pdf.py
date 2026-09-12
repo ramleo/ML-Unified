@@ -220,18 +220,25 @@ def _caption_prompt() -> str:
     )
 
 
-def _caption_page(b64: str) -> tuple[str, bool, tuple[str, list[list[str]]] | None]:
+def _caption_page(b64: str, scoped: bool = False) -> tuple[str, bool, tuple[str, list[list[str]]] | None]:
     """Returns (chunk_text, number_mismatch, chart) — mismatch flags when
     the caption and the OCR pass cite disjoint numbers for the same
     figure, a real sign one of the two misread a value rather than a
     generic caveat. chart is (chart_type, rows) when the vision model
-    identified genuine extractable chart values (MMRAG-14), else None."""
+    identified genuine extractable chart values (MMRAG-14), else None.
+
+    scoped=True means b64 is a CROP of one visual, so caption and OCR
+    describe the same thing and disagreeing numbers mean one of them
+    misread. scoped=False means b64 is a whole page: the caption may
+    describe the chart while the OCR is dominated by an unrelated table
+    beside it, and disjoint numbers are then the normal case, not a
+    misread. Only the scoped call can flag."""
     raw = _vision_cascade_raw(b64, _caption_prompt())
     caption = extract_caption(raw, 500)
     chart = extract_chart_data(raw)
     ocr_md, _ = mistral_ocr_pages([b64])
     ocr_text = clean_ocr_text(ocr_md)[:_OCR_TEXT_CAP]
-    mismatch = numbers_disagree(caption, ocr_text)
+    mismatch = numbers_disagree(caption, ocr_text) if scoped else False
     if not ocr_text:
         return caption, False, chart
     if not caption:
@@ -302,7 +309,7 @@ def process_page(doc, page_num: int, source: str) -> tuple[list[dict], str, dict
         # blended whole-page description.
         for rect in regions:
             region_b64 = _crop_region_b64(page, rect)
-            caption, mismatch, chart = _caption_page(region_b64)
+            caption, mismatch, chart = _caption_page(region_b64, scoped=True)
             if not caption:
                 continue
             bbox = _norm_box(page, rect.x0, rect.y0, rect.x1, rect.y1)

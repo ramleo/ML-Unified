@@ -46,6 +46,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from PIL import Image
 
 from routers.rag.mm_video import prepare_video
+from security.file_gate import scan_upload_bytes
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -181,6 +182,7 @@ async def track_object(video: UploadFile = File(...), text_prompt: str = Form(..
         raise HTTPException(status_code=400, detail="Type a short description of the object to track.")
 
     file_bytes = await video.read()
+    scan_upload_bytes(file_bytes, path="/rag/mm-rotoscope/track")
     try:
         cap, tmp_path, _n_frames, duration_s = prepare_video(file_bytes)
     except ValueError as exc:

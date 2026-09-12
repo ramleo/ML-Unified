@@ -35,6 +35,8 @@ from fastapi import APIRouter, HTTPException
 from PIL import Image
 from pydantic import BaseModel
 
+from security.file_gate import scan_upload_bytes
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -105,7 +107,9 @@ def embed_watermark(b64: str, label: str = _DEFAULT_LABEL) -> dict:
     {"ok": False, "error": <str>} if the image is too small to hold the
     fixed-size payload with at least 1x redundancy per bit."""
     try:
-        img = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
+        raw = base64.b64decode(b64)
+        scan_upload_bytes(raw, path="/rag/mm-watermark/embed")
+        img = Image.open(io.BytesIO(raw)).convert("RGB")
         w, h = img.size
         ycc = cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2YCrCb).astype(np.float32)
         y = ycc[:, :, 0]
@@ -147,7 +151,9 @@ def verify_watermark(b64: str) -> dict:
     agreed), scaled down when the checksum failed since that's the stronger
     signal it isn't actually watermarked (or was too badly damaged)."""
     try:
-        img = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
+        raw = base64.b64decode(b64)
+        scan_upload_bytes(raw, path="/rag/mm-watermark/verify")
+        img = Image.open(io.BytesIO(raw)).convert("RGB")
         w, h = img.size
         ycc = cv2.cvtColor(np.asarray(img), cv2.COLOR_RGB2YCrCb).astype(np.float32)
         y = ycc[:, :, 0]

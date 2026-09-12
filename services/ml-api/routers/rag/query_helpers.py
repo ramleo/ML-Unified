@@ -62,11 +62,14 @@ class QueryRequest(BaseModel):
     query: str
     tool_context: str = ""
     history: list[dict] = []
-    # Groq dropped as the default (2026-08-24, see query.py's
-    # _DEFAULT_PROVIDER comment for the full history) — Mistral is the
-    # proven-reliable default instead. Still selectable explicitly.
-    provider: str = "mistral"
-    model: str = "mistral-small-latest"
+    # Groq dropped as the default (2026-08-24). Mistral replaced it as the
+    # "proven-reliable" default, which 2026-09-06 disproved: Mistral support
+    # confirmed free Studio access has no reserved capacity and is rejected
+    # whenever paid traffic is using the model, so it can 429 every call for
+    # hours through no fault of the caller. Cohere is the default now — free
+    # and, unlike Mistral, actually dependable. Both still selectable.
+    provider: str = "cohere"
+    model: str = "command-a-03-2025"
     user_key: Optional[str] = None
     embedding_model: str = "minilm"  # "minilm" | "jina"
     session_id: str = ""

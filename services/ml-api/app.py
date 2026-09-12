@@ -14,7 +14,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi import _rate_limit_exceeded_handler
 
-from security.origin_policy import get_cors_kwargs
+from security.origin_policy import get_cors_kwargs, enforce_origin
 from security.rate_limit import limiter
 from security.body_size import enforce_body_size
 
@@ -22,6 +22,7 @@ from routers import shap as _shap_router
 from routers import pipeline as _pipeline_router
 from routers import training as _training_router
 from routers import drift as _drift_router
+from routers import eda as _eda
 from routers.core import inference as inference_router
 from routers.core import automl as automl_router
 from routers.core import monitoring as monitoring_router
@@ -73,16 +74,23 @@ from routers.siem_triage import router as siem_triage_router
 from routers.tls_headers_check import router as tls_headers_router
 from routers.attack_surface_check import router as attack_surface_router
 from routers.yara_scan import router as yara_scan_router
+from routers.security_status import router as security_status_router
 
 from routers.core.shared import (
     _detect_gpu, MODELS, _fetch_hf_models, _load,
     HERE,
 )
 from routers.core.monitoring import _req_log, _SKIP_PATHS
+from security.log_redact import install as _install_log_redaction
 
 # uvicorn only configures its own loggers — without this every logger.info()
 # in routers/ is silently dropped and never shows up in HF Space logs.
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+
+# Gemini's key travels in the URL, and httpx logs whole URLs. The filter
+# attaches to the handlers basicConfig just created, so the call belongs here
+# rather than at import time — before any router can log a request.
+_install_log_redaction()
 
 
 @asynccontextmanager
@@ -110,6 +118,15 @@ app = FastAPI(title="ML API", lifespan=_lifespan)
 # every one of this backend's ~50 public routers). Now an explicit
 # allowlist + Vercel-preview regex; see security/origin_policy.py.
 app.add_middleware(CORSMiddleware, **get_cors_kwargs())
+
+# Hard block, not just CORS headers: Hugging Face Spaces' own proxy
+# injects its own permissive CORS policy in front of this app, so
+# CORSMiddleware's headers alone are NOT actually enforced on the live
+# Space (confirmed live — a disallowed-origin request still got CORS
+# headers back). enforce_origin instead outright rejects (403) a
+# disallowed Origin before any router runs, which the proxy can't
+# override since it isn't a header negotiation.
+app.add_middleware(BaseHTTPMiddleware, dispatch=enforce_origin)
 
 # Rate limiting (security/rate_limit.py) — was ZERO rate limiting on any
 # route before this. default_limits on the Limiter gives every route a
@@ -204,6 +221,8 @@ app.include_router(_shap_router.router)
 app.include_router(_pipeline_router.router)
 app.include_router(_training_router.router)
 app.include_router(_drift_router.router)
+app.include_router(_eda.router, tags=["eda"])
+app.include_router(_eda.suggest_router, tags=["eda"])
 app.include_router(_pb_router)
 app.include_router(rag_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_ingest_router, prefix="/rag", tags=["rag"])
@@ -251,6 +270,7 @@ app.include_router(siem_triage_router, tags=["siem-triage"])
 app.include_router(tls_headers_router, tags=["tls-headers"])
 app.include_router(attack_surface_router, tags=["attack-surface"])
 app.include_router(yara_scan_router, tags=["yara-scan"])
+app.include_router(security_status_router, tags=["security-status"])
 
 
 if __name__ == "__main__":

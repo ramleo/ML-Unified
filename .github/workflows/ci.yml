@@ -12,6 +12,18 @@ env:
 jobs:
   secret-scan:
     runs-on: ubuntu-latest
+    # On a pull request, gitleaks lists that PR's commits so it scans only what
+    # the PR adds. Listing them reads pull-request data, which this repo's
+    # default token scope (contents, metadata and packages, all read) does not
+    # cover — so every PR failed with "Resource not accessible by integration"
+    # while main passed, because main has no PR to list.
+    #
+    # ml-portfolio was fixed for this on 2026-09-12 and this repo was not, so
+    # its Dependabot PRs kept failing after the other repo's were unblocked.
+    # Same bug, same fix, two workflow files.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,6 +32,22 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Posting findings as PR comments would need pull-requests: WRITE,
+          # and GitHub hands Dependabot-triggered runs a read-only token
+          # whatever the workflow asks for — so comments would reintroduce the
+          # same 403 on exactly the PRs this fixes. The job passing or failing
+          # is the signal that matters; the finding is in the log.
+          GITLEAKS_ENABLE_COMMENTS: false
+
+  # The 400-line limit used to be a rule someone had to remember, which meant
+  # it was skipped exactly when following it was inconvenient. Now it fails the
+  # build. See scripts/check-file-length.sh for what the baseline does.
+  file-length:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check file lengths
+        run: ./scripts/check-file-length.sh
 
   test:
     runs-on: ubuntu-latest
@@ -37,6 +65,24 @@ jobs:
             services/ml-vision/requirements.txt
             requirements-dev.txt
 
+      # The runner ships ~25GB of toolchains this job never touches, and the
+      # ml-api install needs every byte of it.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
+
+      # Nothing pins torch, so pip resolves the default PyPI build — which
+      # drags in the whole CUDA runtime (nvidia-*, triton, cuda-toolkit) on a
+      # runner that has no GPU and tests that never ask for one. That is what
+      # filled the disk. Installing the CPU wheels first satisfies sam2's
+      # torch>=2.5.1 floor, so the requirements steps below leave torch alone.
+      - name: Install CPU-only PyTorch
+        run: |
+          pip install --no-cache-dir torch torchvision \
+            --index-url https://download.pytorch.org/whl/cpu
+
       - name: Install ml-api base dependencies
         run: pip install -r services/ml-api/requirements-base.txt
 
@@ -45,9 +91,6 @@ jobs:
 
       - name: Install ml-vision dependencies
         run: pip install -r services/ml-vision/requirements.txt
-
-      - name: Install ml-eda dependencies
-        run: pip install -r services/ml-eda/requirements.txt
 
       - name: Install dev tools
         run: pip install -r requirements-dev.txt
@@ -58,17 +101,12 @@ jobs:
       - name: Lint ml-vision
         run: ruff check services/ml-vision/app.py
 
-      - name: Lint ml-eda
-        run: ruff check services/ml-eda/app.py
-
       - name: Test ml-api
         run: pytest services/ml-api/tests/ -v --tb=short
 
       - name: Test ml-vision
         run: pytest services/ml-vision/tests/ -v --tb=short
 
-      - name: Test ml-eda
-        run: pytest services/ml-eda/tests/ -v --tb=short
 
   model-quality:
     runs-on: ubuntu-latest
@@ -89,40 +127,11 @@ jobs:
       - name: Model quality gate
         run: python scripts/check_model_quality.py
 
-  deploy:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    steps:
-      - name: Trigger ml-api deploy
-        run: |
-          curl -s -o /dev/null -w "%{http_code}" \
-            "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" | grep -q "^2" \
-            && echo "ml-api deploy triggered." \
-            || (echo "ml-api deploy hook failed." && exit 1)
-
-      - name: Trigger ml-vision deploy
-        env:
-          VISION_HOOK: ${{ secrets.RENDER_VISION_DEPLOY_HOOK_URL }}
-        run: |
-          if [ -z "$VISION_HOOK" ]; then
-            echo "RENDER_VISION_DEPLOY_HOOK_URL not set — skipping ml-vision deploy."
-            exit 0
-          fi
-          curl -s -o /dev/null -w "%{http_code}" \
-            "$VISION_HOOK" | grep -q "^2" \
-            && echo "ml-vision deploy triggered." \
-            || (echo "ml-vision deploy hook failed." && exit 1)
-
-      - name: Trigger ml-eda deploy
-        env:
-          EDA_HOOK: ${{ secrets.RENDER_EDA_DEPLOY_HOOK_URL }}
-        run: |
-          if [ -z "$EDA_HOOK" ]; then
-            echo "RENDER_EDA_DEPLOY_HOOK_URL not set — skipping ml-eda deploy."
-            exit 0
-          fi
-          curl -s -o /dev/null -w "%{http_code}" \
-            "$EDA_HOOK" | grep -q "^2" \
-            && echo "ml-eda deploy triggered." \
-            || (echo "ml-eda deploy hook failed." && exit 1)
+  # There was a deploy job here that curled three Render deploy hooks. The
+  # ml-api service behind the first one no longer exists — the host does not
+  # answer at all — so it failed every push to main while deploying nothing.
+  # ml-api now lives on the HF Space (wram1708/ml-unified) and is deployed by
+  # uploading the changed files with a write token, deliberately by hand: see
+  # rule 4 in CLAUDE.md. Rule 5 is why it stays by hand — each upload costs a
+  # 2-5 minute rebuild serving 500s, so changes are batched and deployed once,
+  # which a job firing on every push cannot do.

@@ -80,7 +80,8 @@ def _get_estimator(algo: str, task_type: str):
         return lgb.LGBMClassifier(n_estimators=100, verbosity=-1, random_state=42) if is_clf else lgb.LGBMRegressor(n_estimators=100, verbosity=-1, random_state=42)
     elif algo == "CatBoost":
         import catboost as cb
-        return cb.CatBoostClassifier(iterations=100, verbose=0, random_state=42) if is_clf else cb.CatBoostRegressor(iterations=100, verbose=0, random_state=42)
+        kw = dict(iterations=100, verbose=0, random_state=42, allow_writing_files=False)
+        return cb.CatBoostClassifier(**kw) if is_clf else cb.CatBoostRegressor(**kw)
     else:
         raise ValueError(f"Unknown algorithm: {algo}")
 
@@ -177,7 +178,7 @@ def _run_automl(df: pd.DataFrame, target: str, task_type: str, cfg: Optional[Dic
     for algo in models:
         try:
             est = _get_estimator(algo, task_type)
-            pipe = Pipeline([("pre", _build_preprocessor(X)), ("est", est)])
+            pipe = Pipeline([("prep", _build_preprocessor(X)), ("est", est)])
             scores = cross_val_score(pipe, X, y_enc, cv=cv, scoring=scoring)
             sc = float(scores.mean())
             if task_type == "regression":

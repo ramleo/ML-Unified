@@ -18,6 +18,31 @@ def get_baseline(model_id: str, model_entry: dict) -> dict:
     return _baseline_cache[model_id]
 
 
+def _find_preprocessor(pipeline):
+    """The fitted ColumnTransformer, whatever its step happens to be called.
+
+    This was `named_steps.get("prep")`. The built-in models name that step
+    "preprocessor" and the Pipeline Builder named it "pre", so the lookup
+    returned None for every one of them, the baseline came back empty, and
+    _compute quietly substituted (min+max)/2 for the training mean — reporting
+    an invented number as a measurement. Matching on type rather than on a
+    name nobody agreed on is what stops that recurring.
+    """
+    from sklearn.compose import ColumnTransformer
+
+    steps = getattr(pipeline, "named_steps", None)
+    if not steps:
+        return None
+    for name in ("prep", "preprocessor", "pre"):
+        step = steps.get(name)
+        if isinstance(step, ColumnTransformer):
+            return step
+    for step in steps.values():
+        if isinstance(step, ColumnTransformer):
+            return step
+    return None
+
+
 def _extract_pipeline_stats(pipeline, schema: dict) -> dict:
     """Pull mean/std per numeric field from the fitted sklearn pipeline.
 
@@ -25,8 +50,12 @@ def _extract_pipeline_stats(pipeline, schema: dict) -> dict:
     """
     stats: dict = {}
     try:
-        prep = pipeline.named_steps.get("prep")
+        prep = _find_preprocessor(pipeline)
         if prep is None:
+            logger.warning(
+                "no ColumnTransformer found in this pipeline — drift will fall back "
+                "to the declared schema range, which is a guess and not a measurement"
+            )
             return stats
 
         skip = set(schema.get("id_cols", [])) | set(schema.get("ensure_cols", []))

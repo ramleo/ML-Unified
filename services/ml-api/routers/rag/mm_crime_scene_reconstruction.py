@@ -34,6 +34,8 @@ from fastapi import APIRouter, HTTPException
 from PIL import Image
 from pydantic import BaseModel, Field
 
+from security.file_gate import scan_upload_bytes
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -53,6 +55,7 @@ def _decode_image_b64(image_b64: str) -> np.ndarray:
         raise HTTPException(status_code=400, detail="Could not decode this as an image.")
     if len(raw) > _MAX_IMAGE_BYTES:
         raise HTTPException(status_code=400, detail="Image too large (max 8MB).")
+    scan_upload_bytes(raw, path="/rag/mm-crime-scene/reconstruct")
     try:
         img = Image.open(io.BytesIO(raw)).convert("RGB")
     except Exception:

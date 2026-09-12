@@ -19,6 +19,7 @@ from routers.core.automl_preprocess_helpers import (
 from shared.progress import StreamingTask
 from routers.core import automl_fe as _fe_router
 from routers.core import automl_optuna_explain as _optuna_exp_router
+from security.file_gate import scan_upload_bytes
 
 router = APIRouter()
 # Mount /feature-engineer from its own module
@@ -43,6 +44,7 @@ async def automl_preprocess(request: Request):
 
     try:
         csv_bytes = base64.b64decode(csv_b64)
+        scan_upload_bytes(csv_bytes, path="/automl/preprocess")
         df = pd.read_csv(io.BytesIO(csv_bytes))
     except Exception as e:
         raise HTTPException(400, f"Could not parse CSV: {e}")
@@ -264,6 +266,7 @@ async def train_model(
     use_smote = _use_smote
 
     content = await file.read()
+    scan_upload_bytes(content, path="/train")
     try:
         df = pd.read_csv(io.BytesIO(content))
     except Exception as e:

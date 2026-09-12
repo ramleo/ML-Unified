@@ -6,6 +6,8 @@ from __future__ import annotations
 import json
 import logging
 
+from routers.rag.call_log import instrument
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,12 +22,22 @@ OPENAI_COMPAT_BASES = {
 }
 
 
-def stream_groq_openai(provider: str, model: str, key: str, messages: list[dict]):
+def _stream_groq_openai_raw(provider: str, model: str, key: str, messages: list[dict],
+                       max_retries: int | None = None, max_tokens: int | None = None):
+    """`max_retries` overrides the SDK's own retry count (default 2). Pass 0
+    from callers that already pace themselves: a 429 from a per-second limit
+    cannot be outrun by a retry landing 0.4s later, so the SDK's two extra
+    attempts only triple the round trips before the caller learns it failed."""
     import openai
     base_url = OPENAI_COMPAT_BASES.get(provider)  # None => real OpenAI's own API
-    client = openai.OpenAI(api_key=key, **({"base_url": base_url} if base_url else {}))
+    client = openai.OpenAI(
+        api_key=key,
+        **({"base_url": base_url} if base_url else {}),
+        **({"max_retries": max_retries} if max_retries is not None else {}),
+    )
     with client.chat.completions.create(
-        model=model, messages=messages, stream=True
+        model=model, messages=messages, stream=True,
+        **({"max_tokens": max_tokens} if max_tokens is not None else {}),
     ) as stream:
         for chunk in stream:
             delta = chunk.choices[0].delta
@@ -34,7 +46,7 @@ def stream_groq_openai(provider: str, model: str, key: str, messages: list[dict]
                 yield content
 
 
-def stream_claude(model: str, key: str, messages: list[dict], system: str):
+def _stream_claude_raw(model: str, key: str, messages: list[dict], system: str):
     import anthropic
     client = anthropic.Anthropic(api_key=key)
     with client.messages.stream(
@@ -47,7 +59,7 @@ def stream_claude(model: str, key: str, messages: list[dict], system: str):
             yield text
 
 
-def stream_gemini(model: str, key: str, messages: list[dict], system: str):
+def _stream_gemini_raw(model: str, key: str, messages: list[dict], system: str):
     import httpx
 
     url = (
@@ -81,11 +93,22 @@ def stream_gemini(model: str, key: str, messages: list[dict], system: str):
                     except json.JSONDecodeError:
                         continue
     except httpx.HTTPStatusError as exc:
-        logger.error("Gemini HTTP error: %s", exc.response.status_code)
+        # The status alone says almost nothing: a 429 from Google can mean the
+        # per-minute quota, the per-day one, a project with no billing, or an
+        # API that was never enabled, and the body names which. Logging only
+        # the code cost a day of guessing. The body is streamed, so it has to
+        # be read before it can be looked at, and read() on an already-closed
+        # response raises — hence the inner guard.
+        try:
+            exc.response.read()
+            detail = exc.response.text[:400]
+        except Exception:
+            detail = "<body unavailable>"
+        logger.error("Gemini HTTP %s: %s", exc.response.status_code, detail)
         raise
 
 
-def stream_cohere(model: str, key: str, messages: list[dict], system: str):
+def _stream_cohere_raw(model: str, key: str, messages: list[dict], system: str):
     import httpx
 
     formatted = []
@@ -124,11 +147,22 @@ def stream_cohere(model: str, key: str, messages: list[dict], system: str):
                     except json.JSONDecodeError:
                         continue
     except httpx.HTTPStatusError as exc:
-        logger.error("Cohere HTTP error: %s", exc.response.status_code)
+        # Same lesson as the Gemini branch above: a bare status code cost a
+        # day of guessing there. Cohere's 429 body distinguishes the trial
+        # key's per-minute cap from a monthly one, and its 400 names the
+        # retired model — neither is inferable from the number alone. Now
+        # load-bearing: Cohere is the first judge in JUDGE_CANDIDATES.
+        try:
+            exc.response.read()
+            detail = exc.response.text[:400]
+        except Exception:
+            detail = "<body unavailable>"
+        logger.error("Cohere HTTP %s: %s", exc.response.status_code, detail)
         raise
 
 
-def complete(provider: str, model: str, key: str, messages: list[dict], system: str = "") -> str:
+def complete(provider: str, model: str, key: str, messages: list[dict], system: str = "",
+             max_retries: int | None = None) -> str:
     """Non-streaming convenience wrapper — collects a streaming call into one string.
 
     Best-effort: returns "" on any failure rather than raising, since callers
@@ -137,7 +171,7 @@ def complete(provider: str, model: str, key: str, messages: list[dict], system: 
     try:
         if provider in ("groq", "openai", "mistral", "perplexity"):
             full_messages = ([{"role": "system", "content": system}] if system else []) + messages
-            return "".join(stream_groq_openai(provider, model, key, full_messages))
+            return "".join(stream_groq_openai(provider, model, key, full_messages, max_retries))
         elif provider == "claude":
             return "".join(stream_claude(model, key, messages, system))
         elif provider == "gemini":
@@ -147,3 +181,31 @@ def complete(provider: str, model: str, key: str, messages: list[dict], system: 
     except Exception as exc:
         logger.warning("llm.complete() failed for provider=%s: %s", provider, exc)
     return ""
+
+
+# ── Instrumented public names ─────────────────────────────────────────────────
+# LOGGING_SPEC.md §5: "inside routers/rag/llm.py, in complete() and the
+# stream_* functions — the single funnel every provider call passes through.
+# Not at the twelve individual Gemini call sites, which is how half of them end
+# up uninstrumented."
+#
+# The raw generators above are left exactly as they were and wrapped here, so
+# every existing caller keeps importing the same four names and gets recording
+# for free. instrument() re-raises, so failure behaviour is unchanged.
+
+def stream_groq_openai(provider: str, model: str, key: str, messages: list[dict],
+                       max_retries: int | None = None, max_tokens: int | None = None):
+    return instrument(provider, model,
+                      _stream_groq_openai_raw(provider, model, key, messages, max_retries, max_tokens))
+
+
+def stream_claude(model: str, key: str, messages: list[dict], system: str):
+    return instrument("claude", model, _stream_claude_raw(model, key, messages, system))
+
+
+def stream_gemini(model: str, key: str, messages: list[dict], system: str):
+    return instrument("gemini", model, _stream_gemini_raw(model, key, messages, system))
+
+
+def stream_cohere(model: str, key: str, messages: list[dict], system: str):
+    return instrument("cohere", model, _stream_cohere_raw(model, key, messages, system))

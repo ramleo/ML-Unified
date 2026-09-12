@@ -19,11 +19,30 @@ logger = logging.getLogger(__name__)
 
 # Fallback order, tried after the caller's selected provider using each
 # provider's own server-side key.
+# Order set 2026-09-06 after Mistral support confirmed what a day of 429s
+# meant: free Studio access has NO RESERVED CAPACITY. Free requests are
+# served best-effort and rejected whenever paid traffic is using the model,
+# however far under the published RPS/TPM the caller is. So Mistral is not
+# "down" and was never mis-keyed — it is non-deterministic by design, and
+# cannot be first in a cascade whose whole job is to be dependable.
+#
+# Cohere first (free and reliable, verified serving a real query end to end),
+# Mistral second (free, works whenever capacity exists, costs one ~0.5s round
+# trip when it does not — see max_retries=0 in the judge and expansion), and
+# Gemini last because it is the only paid key here.
 FALLBACK_CANDIDATES = [
-    ("mistral", "mistral-small-latest"),  # proven reliable fallback elsewhere in this codebase (vision captioning)
-    ("gemini", "gemini-3.6-flash"),
     ("cohere", "command-a-03-2025"),
+    ("mistral", "mistral-small-latest"),  # free when capacity allows; best-effort, never guaranteed
+    ("gemini", "gemini-3.6-flash"),
 ]
+
+
+# Groq's free tier caps OUTPUT tokens per minute at 1000, and refuses the
+# whole request up front if the expected output exceeds it — asking for the
+# SDK default of 2048 gets a 429 before a single token is generated, which
+# reads as "Groq is down" rather than "ask for less". 900 leaves headroom
+# under the cap; anything longer is not servable on this tier anyway.
+_MAX_TOKENS = {"groq": 900}
 
 
 def classify_error(exc: object) -> str:
@@ -46,7 +65,8 @@ def open_stream(provider: str, model: str, key: str, messages: list[dict], syste
     failure, so a bad/typo'd provider still cascades to a known-good one."""
     if provider in ("groq", "openai", "mistral", "perplexity"):
         full_messages = [{"role": "system", "content": system_prompt}] + messages if system_prompt else messages
-        return stream_groq_openai(provider, model, key, full_messages)
+        return stream_groq_openai(provider, model, key, full_messages,
+                                  max_tokens=_MAX_TOKENS.get(provider))
     if provider == "claude":
         return stream_claude(model, key, messages, system_prompt)
     if provider == "gemini":

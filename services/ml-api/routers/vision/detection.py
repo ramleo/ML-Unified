@@ -15,6 +15,7 @@ from .shared import (
     download_model,
     ort_session,
 )
+from security.file_gate import scan_upload_bytes
 
 router = APIRouter(tags=["vision"])
 
@@ -114,6 +115,7 @@ async def detect_objects(
         raise HTTPException(503, "Vision service is warming up — please try again in ~30 seconds")
 
     content = await file.read()
+    scan_upload_bytes(content, path="/detect-objects")
     task    = StreamingTask()
 
     def work(p):
