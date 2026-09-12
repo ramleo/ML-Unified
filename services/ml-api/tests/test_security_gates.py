@@ -186,3 +186,52 @@ def test_a_broken_rule_set_fails_open_rather_than_breaking_uploads(monkeypatch):
                         lambda: (_ for _ in ()).throw(RuntimeError("rules failed to compile")))
 
     assert file_gate.scan_upload_bytes(b"anything") == []
+
+
+# -- The app's own origin ------------------------------------------------------
+
+def test_the_apps_own_space_origin_is_allowed(monkeypatch):
+    """ml-api serves three legacy static pages at /?mode=... and they POST
+    back to this same host. A same-origin POST still carries an Origin
+    header, so without this the app answered 403 to its own UI — which it
+    did, on every upload on every one of those pages."""
+    monkeypatch.setenv("SPACE_HOST", "wram1708-ml-unified.hf.space")
+    monkeypatch.delenv("SPACE_ID", raising=False)
+
+    assert origin_policy._self_origins() == ["https://wram1708-ml-unified.hf.space"]
+
+
+def test_the_host_is_derived_from_the_space_id_when_the_host_is_absent(monkeypatch):
+    monkeypatch.delenv("SPACE_HOST", raising=False)
+    monkeypatch.setenv("SPACE_ID", "Wram1708/ML-Unified")
+
+    assert origin_policy._self_origins() == ["https://wram1708-ml-unified.hf.space"]
+
+
+def test_a_host_that_already_has_a_scheme_is_not_doubled(monkeypatch):
+    monkeypatch.setenv("SPACE_HOST", "https://wram1708-ml-unified.hf.space")
+
+    assert origin_policy._self_origins() == ["https://wram1708-ml-unified.hf.space"]
+
+
+def test_off_platform_there_is_no_self_origin(monkeypatch):
+    """Locally neither variable is set, and the fixed list is already right.
+    Guessing a host here would add an origin nobody controls."""
+    monkeypatch.delenv("SPACE_HOST", raising=False)
+    monkeypatch.delenv("SPACE_ID", raising=False)
+
+    assert origin_policy._self_origins() == []
+
+
+def test_a_malformed_space_id_is_ignored_rather_than_guessed(monkeypatch):
+    monkeypatch.delenv("SPACE_HOST", raising=False)
+    monkeypatch.setenv("SPACE_ID", "no-slash-here")
+
+    assert origin_policy._self_origins() == []
+
+
+def test_the_self_origin_does_not_open_the_door_to_other_spaces():
+    """The fix adds one exact origin. It must not become "any hf.space",
+    which would let every Space on the platform call this API."""
+    assert not origin_policy.is_allowed_origin("https://someone-else.hf.space")
+    assert not origin_policy.is_allowed_origin("https://wram1708-ml-unified.hf.space.evil.com")

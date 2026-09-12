@@ -33,11 +33,35 @@ from fastapi.responses import JSONResponse
 from security.events import log_security_event
 from security.rate_limit import get_client_ip
 
+def _self_origins() -> list[str]:
+    """This app's own public origin, so it stops rejecting its own pages.
+
+    ml-api serves three legacy static frontends at /?mode=ml, ?mode=vision
+    and ?mode=eda, and those pages POST back to this same host. A same-origin
+    POST still carries an Origin header, so `enforce_origin` was answering
+    403 to the app's own UI — every upload on every one of those pages, for
+    as long as their configured URL has pointed here.
+
+    Read from the platform rather than hardcoded, so this keeps working if
+    the Space is renamed or forked. SPACE_HOST is the direct hostname;
+    SPACE_ID is "owner/name" and the host is derivable from it. Neither is
+    set off-platform, where the list below is already correct.
+    """
+    host = os.environ.get("SPACE_HOST", "").strip().rstrip("/")
+    if host:
+        return [host if host.startswith("http") else f"https://{host}"]
+    space_id = os.environ.get("SPACE_ID", "").strip()
+    if "/" in space_id:
+        owner, name = space_id.split("/", 1)
+        return [f"https://{owner}-{name}.hf.space".lower()]
+    return []
+
+
 _DEFAULT_ORIGINS = [
     "https://ml-portfolio-rho.vercel.app",
     "http://localhost:3000",
     "http://localhost:3300",
-]
+] + _self_origins()
 
 # Comma-separated env override, e.g. "https://example.com,https://foo.com"
 _env_origins = os.environ.get("ALLOWED_ORIGINS", "")
