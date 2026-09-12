@@ -328,3 +328,7 @@ misread
   budget caps, schema validation. Where every bug in this session actually
   lived, and none of them needed a language model to reproduce.
 - Full plan: the **Portfolio Hardening Plan** artifact, published 2026-09-12.
+
+---
+
+**Continues in [Part 282a](Session_2026-09-12_ThePhasesAndTheEDAFoldIn_Part282a.md)** — phases 3 and 4, the ml-eda fold-in, and the spec for tomorrow's Plotly rebuild.
