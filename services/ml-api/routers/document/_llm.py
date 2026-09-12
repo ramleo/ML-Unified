@@ -122,7 +122,12 @@ def _cohere(messages: list[dict], system: str) -> str:
             r = client.post(
                 "https://api.cohere.ai/v2/chat",
                 headers={"Authorization": f"Bearer {key}"},
-                json={"model": "command-r-plus", "messages": fmt, "temperature": 0,
+                # "command-r-plus" is retired — the Space logged a 404 from
+                # v2/chat on every call, so this provider had been silently
+                # dead and the paid Gemini key was serving in its place.
+                # command-a-03-2025 is what the other nine Cohere call sites
+                # in this backend use, verified serving on this Space.
+                json={"model": "command-a-03-2025", "messages": fmt, "temperature": 0,
                       "response_format": {"type": "json_object"}},
             )
             r.raise_for_status()
