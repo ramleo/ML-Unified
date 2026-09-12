@@ -1,6 +1,6 @@
 """LLM provider cascade for document field extraction (text path).
 Zero imports from other ml-api routers — self-contained for microservice extraction.
-Cascade order: Mistral (medium→large) → Gemini → Cohere → Cerebras. Groq
+Cascade order: Cohere → Mistral (medium→large) → Cerebras → Gemini. Groq
 dropped from the automatic cascade (2026-08-24) — no free replacement model
 that actually worked reliably for this app's request pattern was found (see
 routers/rag/query.py's _DEFAULT_PROVIDER comment for the full history).
@@ -260,7 +260,12 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
         + f"Document text:\n{text[:14000]}"
     )
     global last_provider
-    _provider_map = {"groq": _groq, "mistral": _mistral, "gemini": _gemini_text, "cohere": _cohere}
+    # Every provider in _CASCADE_ORDER is selectable here. Cerebras was
+    # missing, which meant the only way it ever ran was as a cascade fallback
+    # after two other providers failed — so a broken Cerebras key could not be
+    # tested directly, and in fact sat unnoticed returning 401.
+    _provider_map = {"groq": _groq, "mistral": _mistral, "gemini": _gemini_text,
+                     "cohere": _cohere, "cerebras": _cerebras}
     fn = _provider_map.get(provider)
     messages = [{"role": "user", "content": prompt}]
     if fn:
@@ -275,8 +280,9 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
             # Groq dropped from the automatic path entirely (2026-08-24, see
             # module docstring) with no equivalent small/fast free model
             # found elsewhere, so this now just tries Mistral directly —
-            # still faster than the full cascade when it succeeds, since
-            # cascade order already puts Mistral first anyway.
+            # still faster than the full cascade when it succeeds. (Cascade
+            # order used to put Mistral first; it is now Cohere first with the
+            # paid key last — see _CASCADE_ORDER.)
             raw = _mistral(messages, system)
             if raw.strip() and _parse_json(raw).get("fields"):
                 last_provider = "mistral · fast"

@@ -255,7 +255,7 @@ async def analyze_document(
     custom_fields: str = Form(default=""),
 ):
     """Analyze a document and stream extracted fields as SSE events.
-    provider: "auto" (cascade) | "groq" | "mistral" | "gemini" | "cohere"
+    provider: "auto" (cascade) | "groq" | "mistral" | "gemini" | "cohere" | "cerebras"
     custom_fields: comma-separated extra field names to extract
     """
     file_bytes = await file.read()
