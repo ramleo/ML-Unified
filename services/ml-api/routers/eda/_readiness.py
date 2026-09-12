@@ -131,11 +131,9 @@ def compute_narrative(overview: dict, columns: list, stats: dict, correlations: 
         if best_pair and abs(best_v) >= 0.5:
             direction = "positively" if best_v > 0 else "negatively"
             corr_note = f" Strongest relationship: '{best_pair[0]}' and '{best_pair[1]}' are {direction} correlated ({best_v:.2f})."
-    target_note = ""
-    for c in columns:
-        if not c["is_numeric"] and 2 <= c["nunique"] <= 5:
-            vc = (lambda df_col: df_col)(None)  # placeholder — narrative only uses already-computed data
-            break
+    # A loop that assigned a placeholder and broke used to sit here, left
+    # over from a target-column note that was never finished. It read as
+    # deliberate and computed nothing.
     quality_label = "excellent" if quality_score >= 80 else "fair" if quality_score >= 60 else "poor"
     n_fail = len([r for r in readiness if r["verdict"] == "fail"])
     n_warn = len([r for r in readiness if r["verdict"] == "warn"])

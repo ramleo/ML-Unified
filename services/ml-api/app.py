@@ -22,6 +22,7 @@ from routers import shap as _shap_router
 from routers import pipeline as _pipeline_router
 from routers import training as _training_router
 from routers import drift as _drift_router
+from routers import eda as _eda
 from routers.core import inference as inference_router
 from routers.core import automl as automl_router
 from routers.core import monitoring as monitoring_router
@@ -220,6 +221,8 @@ app.include_router(_shap_router.router)
 app.include_router(_pipeline_router.router)
 app.include_router(_training_router.router)
 app.include_router(_drift_router.router)
+app.include_router(_eda.router, tags=["eda"])
+app.include_router(_eda.suggest_router, tags=["eda"])
 app.include_router(_pb_router)
 app.include_router(rag_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_ingest_router, prefix="/rag", tags=["rag"])

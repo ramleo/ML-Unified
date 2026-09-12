@@ -12,6 +12,5 @@
 5017 services/ml-api/frontend/index.html
 1328 services/ml-api/frontend/vision.html
 403 services/ml-api/routers/core/automl.py
-408 services/ml-api/routers/eda.py
 410 services/ml-api/routers/pipeline_builder/automl_stage.py
 868 services/ml-vision/app.py

@@ -74,9 +74,6 @@ jobs:
       - name: Install ml-vision dependencies
         run: pip install -r services/ml-vision/requirements.txt
 
-      - name: Install ml-eda dependencies
-        run: pip install -r services/ml-eda/requirements.txt
-
       - name: Install dev tools
         run: pip install -r requirements-dev.txt
 
@@ -86,17 +83,12 @@ jobs:
       - name: Lint ml-vision
         run: ruff check services/ml-vision/app.py
 
-      - name: Lint ml-eda
-        run: ruff check services/ml-eda/app.py
-
       - name: Test ml-api
         run: pytest services/ml-api/tests/ -v --tb=short
 
       - name: Test ml-vision
         run: pytest services/ml-vision/tests/ -v --tb=short
 
-      - name: Test ml-eda
-        run: pytest services/ml-eda/tests/ -v --tb=short
 
   model-quality:
     runs-on: ubuntu-latest
