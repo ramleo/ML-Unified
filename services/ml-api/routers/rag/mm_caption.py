@@ -233,9 +233,21 @@ def numbers_disagree(caption: str, ocr_text: str) -> bool:
     numbers count (2+ digits, a decimal, or a percent sign) so incidental
     single digits (list markers, "a 2-bar chart") don't cause false flags.
     Silent when either side has no significant numbers at all — nothing to
-    compare, not a disagreement."""
+    compare, not a disagreement.
+
+    Only meaningful when both sides describe the SAME crop. Handing it a
+    whole-page caption and a whole-page OCR makes disjointness meaningless:
+    a page holding a percentage chart AND an unrelated cost table shares no
+    numbers between the two while both reads are perfectly correct. The
+    caller decides — see _caption_page(scoped=...) in mm_pdf.py.
+
+    The percent sign is stripped before comparing. It used to be part of the
+    token, so a caption reading "65.8" and an OCR reading "65.8%" — the same
+    value off the same bar — compared as different numbers and flagged a
+    disagreement that did not exist."""
     def sig_numbers(text: str) -> set[str]:
-        return {t for t in _SIG_NUMBER_RE.findall(text) if len(t.rstrip("%")) >= 2 or "." in t}
+        return {t.rstrip("%") for t in _SIG_NUMBER_RE.findall(text)
+                if len(t.rstrip("%")) >= 2 or "." in t}
 
     cap_nums, ocr_nums = sig_numbers(caption), sig_numbers(ocr_text)
     if not cap_nums or not ocr_nums:
