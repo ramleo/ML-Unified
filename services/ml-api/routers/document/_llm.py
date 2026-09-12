@@ -136,8 +136,22 @@ def _cohere(messages: list[dict], system: str) -> str:
 # Read by the router right after extraction to attribute results in the UI.
 last_provider: str = ""
 
-_CASCADE_ORDER = (("mistral", _mistral), ("gemini", _gemini_text),
-                  ("cohere", _cohere), ("cerebras", _cerebras))
+# Gemini is the only PAID key here, so it goes last — this endpoint is public
+# and unauthenticated, and a visitor who never signs in should not be able to
+# spend money by uploading a document.
+#
+# It used to sit second, behind Mistral. Mistral's free tier has no reserved
+# capacity and 429s essentially every request (Part 276 §15), so "second" was
+# in practice FIRST: the paid key served the public endpoint by default while
+# free Cohere sat third and was almost never reached.
+#
+# Order now matches routers/rag/generation.py's FALLBACK_CANDIDATES, which was
+# reasoned through for the same trade-off: Cohere first (free and reliable),
+# Mistral next (free, works whenever capacity exists, costs one ~0.5s round
+# trip when it does not), then Cerebras, and the paid key only once every free
+# option has actually been tried.
+_CASCADE_ORDER = (("cohere", _cohere), ("mistral", _mistral),
+                  ("cerebras", _cerebras), ("gemini", _gemini_text))
 
 
 def _cascade(messages: list[dict], system: str) -> str:
