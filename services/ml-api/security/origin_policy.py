@@ -46,7 +46,15 @@ ALLOWED_ORIGINS = [o.strip() for o in _env_origins.split(",") if o.strip()] or _
 # Vercel preview deployments get a random subdomain per branch/PR
 # (project-git-branch-user.vercel.app) — matched separately from the exact
 # allowlist above rather than trying to enumerate every preview URL.
-ALLOWED_ORIGIN_REGEX = os.environ.get("ALLOWED_ORIGIN_REGEX", r"https://.*\.vercel\.app")
+#
+# The host part is [A-Za-z0-9.-], not `.*`. With `.*` the pattern matched
+# anything ending in ".vercel.app" including slashes, colons and query
+# strings, so "https://evil.com/?next=https://x.vercel.app" was an allowed
+# origin. A browser never puts a path in an Origin header, so this was not
+# reachable from a browser — but this module's whole point is that it
+# refuses rather than negotiating, and a gate should not depend on the
+# caller formatting its header correctly. Found by tests/test_security_gates.py.
+ALLOWED_ORIGIN_REGEX = os.environ.get("ALLOWED_ORIGIN_REGEX", r"https://[A-Za-z0-9.-]+\.vercel\.app")
 _origin_regex = re.compile(ALLOWED_ORIGIN_REGEX)
 
 
