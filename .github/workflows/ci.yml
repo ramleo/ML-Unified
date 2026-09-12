@@ -12,6 +12,18 @@ env:
 jobs:
   secret-scan:
     runs-on: ubuntu-latest
+    # On a pull request, gitleaks lists that PR's commits so it scans only what
+    # the PR adds. Listing them reads pull-request data, which this repo's
+    # default token scope (contents, metadata and packages, all read) does not
+    # cover — so every PR failed with "Resource not accessible by integration"
+    # while main passed, because main has no PR to list.
+    #
+    # ml-portfolio was fixed for this on 2026-09-12 and this repo was not, so
+    # its Dependabot PRs kept failing after the other repo's were unblocked.
+    # Same bug, same fix, two workflow files.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -20,6 +32,12 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Posting findings as PR comments would need pull-requests: WRITE,
+          # and GitHub hands Dependabot-triggered runs a read-only token
+          # whatever the workflow asks for — so comments would reintroduce the
+          # same 403 on exactly the PRs this fixes. The job passing or failing
+          # is the signal that matters; the finding is in the log.
+          GITLEAKS_ENABLE_COMMENTS: false
 
   # The 400-line limit used to be a rule someone had to remember, which meant
   # it was skipped exactly when following it was inconvenient. Now it fails the
