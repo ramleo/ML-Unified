@@ -187,3 +187,9 @@ this one **bills** quietly. Found only because a clip refused to record.
   end: its provider plumbing changed today (Part 279 §11.4).
 - `_generate.py` is 366 lines, over the 350 threshold; the split was skipped by
   explicit instruction and is due next time that file is touched.
+
+---
+
+Continued in **Part 281** — the clip backlog closed, the document tool's
+provider chain repaired, and the frontend's first automated tests:
+`Session_2026-09-12_TheTestsThatFoundSixBrokenPages_Part281.md`
