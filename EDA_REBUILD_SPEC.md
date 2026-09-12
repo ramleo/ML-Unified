@@ -179,7 +179,7 @@ Both formats, from one capture pass.
 - **`minWidth: 0` on every grid item.** A grid item defaults to
   `min-width: auto` and will not shrink below its content, so one wide table
   forces the whole page sideways and the table's own scroller never engages.
-  This exact bug is currently fixed but **unbuilt** — see §10.
+  See §10 for this and one other layout trap.
 - **`data-wt` anchors** on anything a test or demo recording needs to click.
   These are the site's test selectors; there is no separate `data-testid` set.
 - **ConstellationBackground** on every tool page. Already present.
@@ -205,22 +205,21 @@ Both formats, from one capture pass.
 
 ---
 
-## 10. Loose end to pick up first
+## 10. Two layout traps to avoid
 
-`ml-portfolio/src/app/tools/exploratory-data-analysis/` has an **uncommitted,
-unbuilt** fix: `minWidth: 0` added to the section and card styles in
-`EdaOverview.tsx`, `EdaColumns.tsx`, `EdaCharts.tsx` and `EdaActions.tsx`.
-It fixes horizontal page scroll at narrow widths, caused by the columns
-table's 760px minimum. The build was interrupted before it was verified.
+Both were hit while building the current page. The code that fixed them was
+discarded, so these are lessons to apply during the rebuild, not patches to
+pick up.
 
-Also uncommitted in `EdaCharts.tsx`: the correlation heatmap's font fix. The
-SVG had no width, so it stretched to fill its container and scaled roughly
-six times, rendering 10px labels at about 60px. Fixed by pinning `width` and
-`height` to the viewBox. **That file is being deleted in this rebuild**, so
-carry the lesson, not the code: an SVG with a viewBox and no width fills its
-container and scales its text with it.
-
----
+- **A grid item defaults to `min-width: auto`** and will not shrink below its
+  content. The columns table's 760px minimum therefore dragged the whole page
+  sideways at narrow widths, and the table's own `overflow-x` scroller never
+  engaged. Every grid item needs `minWidth: 0`.
+- **An SVG with a viewBox and no width fills its container**, scaling its text
+  along with it. The correlation heatmap's viewBox was about 300 units wide in
+  a 1900px container, so 10px labels rendered near 60px. Pin `width` and
+  `height` to the viewBox and cap with `maxWidth: 100%`. Plotly handles its own
+  sizing, so this applies to any hand-authored SVG that survives the rebuild.
 
 ## 11. Second task for tomorrow
 
