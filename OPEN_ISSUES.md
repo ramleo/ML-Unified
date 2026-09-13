@@ -130,9 +130,19 @@ next requirements change of this size.
 
 ## D. Repository hygiene — gates going public
 
-The user intends to make these repositories public. Full-history gitleaks over
-both is clean: 1004 commits in ML-Unified, 1057 in ml-portfolio, no findings,
-and the indexed chroma text carries no secret-shaped strings either.
+**Both repositories are public as of 2026-09-13.** GitHub reads the licences
+correctly — AGPL-3.0 on ML-Unified, MIT on ml-portfolio — and the §13 source
+offer was checked the only way that counts: fetched with no credentials at
+all. The repository pages, `LICENSE` and `THIRD_PARTY.md` all return 200 to an
+anonymous request, so the navbar pill and the site footer now point at
+something a stranger can actually open.
+
+Checked again at the moment of flipping, because "private" had been doing part
+of the work until then: full-history gitleaks clean on both (1001 and 1066
+commits), no token-shaped strings anywhere in either tracked tree, and the only
+tracked env file is ml-portfolio's `.env.example`, which holds placeholders.
+
+Section D is closed.
 
 **The licence blocker is cleared.** Going public turned out to *fix* the AGPL
 exposure rather than create it: §13 asks a hosted service for exactly one
@@ -159,6 +169,17 @@ against.
 ## E. Carried over — hardening plan and file limits
 
 Open before today and untouched by it.
+
+A side effect of going public worth knowing: **GitHub Actions minutes are no
+longer a constraint.** The free 2,000-minute monthly cap applies to private
+repositories only; public ones are unlimited. On 2026-09-13 the account hit 90%
+of that cap, about 839 minutes of it spent in that single day across 109 runs —
+mostly the 28 Dependabot merges, each of which runs CI twice, on the pull
+request and again on the merge. Two details made it add up faster than the
+run times suggest: every job is billed rounded **up** to a whole minute, so an
+8-second `file-length` job costs one, and parallel jobs are billed separately,
+so a 4-minute run can cost 11. None of that matters now, but it is the reason
+CI was briefly worth rationing.
 
 | # | S | Item | Detail |
 |---|---|---|---|
@@ -192,10 +213,9 @@ Both found by the user on 2026-09-13, from the live site.
    against two datasets plus 66 passing e2e tests, four of them new.
 3. ~~A1, A4~~ done. **Section A is closed.** Every item found by the parity
    audit and by the user's screenshots is fixed and verified live.
-4. ~~All of section D~~ done. **Nothing now blocks making the repositories
-   public**: both are licensed, the AGPL obligation is met and linked from the
-   running app, no gitignored junk is tracked, the way it got there is
-   understood, and full history is scanned by CI on every push in both repos.
+4. ~~All of section D~~ done, **and both repositories are now public**. The
+   AGPL exposure is resolved rather than deferred: private-and-hosted was the
+   non-compliant state, public-under-AGPL is the compliant one.
 5. ~~F1~~ done and verified live; ~~F2~~ done bar its handbook chapter, which
    is E6. **Nothing in A, B, C, D or F is open except B2.**
 6. ~~B1, C1~~ done. Sections B and C are closed apart from B2.
