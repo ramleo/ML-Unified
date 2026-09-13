@@ -21,7 +21,7 @@ against the legacy page.
 
 | # | S | Item | Detail |
 |---|---|---|---|
-| A1 | ☐ | **No card thumbnail** | `public/thumbs/` holds 50 images and EDA is the 51st tool. Never added to `scripts/thumbnails.manifest.json`, so `ToolCard` falls back to a blank cover. Fix is `scripts/thumbnails.py add exploratory-data-analysis "<query>"`, which needs `PEXELS_API_KEY`. |
+| A1 | ☑ | **No card thumbnail** | Done 2026-09-13 — layered sandstone, Pexels 20015727, in ml-portfolio `2ae31d2`. Chosen by hand after the picker's contrast score twice ranked an unusable photo first; see that commit for the two selector weaknesses worth fixing later. |
 | A2 | ☑ | **Statistics section missing entirely** | Done 2026-09-13 — `EdaStatistics.tsx`. Outliers (IQR) ranked bars, signed Skewness bars around a centre line, and the 9-column detail table. Nav entry added. |
 | A3 | ☑ | **Columns missing-% is a table, not a chart** | Done 2026-09-13 — `EdaColumns.tsx` rewritten as the labelled bar list: num/cat badge, name, bar, percentage, with dtype, missing count and cardinality beneath. The old table's numbers now live in the statistics panel. |
 | A4 | ☐ | **Report is light even in dark theme** | `edaReportCapture.ts` hard-codes `#ffffff` paper and `#1e293b` ink for both PDF and HTML. That was a deliberate choice — a paper artefact — and the user disagrees. Needs to follow the site theme, or offer the choice at download. |
@@ -121,8 +121,9 @@ Open before today and untouched by it.
    a readiness regression that no spec checklist would have caught.
 2. ~~A2, A3, A7, A8, A9, A10 as one batch.~~ Done 2026-09-13. Verified live
    against two datasets plus 66 passing e2e tests, four of them new.
-3. **A1 and A4 remain** — the thumbnail needs `PEXELS_API_KEY`; the report
-   theme is a one-file change once its behaviour is decided.
+3. ~~A1~~ done. **A4 remains** — the report theme is a one-file change once
+   its behaviour is decided: follow the site theme, or stay light with a
+   choice at download.
 4. **D1** whenever the public plan firms up — it gates D3, D6 and the flip
    itself, and everything else in D is cheap once it is decided.
 5. B1, B2, C1 and section E are independent and can wait.
