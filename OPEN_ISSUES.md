@@ -138,14 +138,19 @@ and the indexed chroma text carries no secret-shaped strings either.
 exposure rather than create it: §13 asks a hosted service for exactly one
 thing, that its network users can obtain the source, and a public AGPL-3.0
 repository with a link from the running application is that. Private and
-hosted was the non-compliant state. Three items remain, all mechanical.
+hosted was the non-compliant state.
+
+**D3 and D4 closed with it.** One item remains, D5. Note what D3 did *not* do:
+the blobs are still in history, so the repository is still ~135 MB and a clone
+still pulls all of it. Only a rewrite changes that, which is D6, decided
+against.
 
 | # | S | Item | Detail |
 |---|---|---|---|
 | D1 | ☑ | **No LICENSE, and AGPL-3.0 weights committed** | Done 2026-09-13. ML-Unified is now AGPL-3.0 (verbatim FSF text, sha256 `0d96a4ff…`), ml-portfolio MIT. Bigger than the item said: it is **three** Ultralytics-architecture models, not two — `signature-detector.onnx` is a YOLO11s fine-tune, and the Apache-2.0/MIT claims on it and on the PPE model are each a fine-tuner's statement about their own contribution, which cannot grant more than the base weights allow. Full reasoning and per-model provenance in `THIRD_PARTY.md`. |
 | D2 | ☑ | **`signature-detector.onnx` provenance untraced** | Not untraced — it was written down when the model was adopted and nobody looked. `mm_signatures.py` names it: Mels22/Signature-Detection-Verification, a YOLO11s fine-tune on SignverOD, Apache-2.0, public and ungated. Now in `THIRD_PARTY.md` where it can be found. |
-| D3 | ☐ | **Gitignored runtime junk is tracked on main** | `services/ml-api/data/chroma_db/chroma.sqlite3` (46.8 MB), its index binaries (~3.5 MB), `catboost_info/`, `models/ci-test-*.pkl`, `schemas/ci-test-*.json`, and three root `test_*` files. All match `.gitignore:26-28` and are tracked anyway. `git rm --cached` is a safe one-commit fix; purging history is a force-push and a separate decision. |
-| D4 | ☐ | **Unexplained: how the junk got committed** | Every one of those files entered main via `ff5f4c2`, the squash merge of Dependabot PR #22 (httpx). A dependency bump cannot add gitignored binaries, so something upstream of it did, and until that is understood it recurs. |
+| D3 | ☑ | **Gitignored runtime junk is tracked on main** | Done 2026-09-13. 21 files untracked with `git rm --cached`, ~50 MB, nothing removed from disk. Checked first rather than assumed safe: the Space carries none of them, and with all 21 moved aside the full CI set still passed — ml-api 385, ml-vision 22, model quality 4/4 — and none regenerated. The three root `test_*` files were the exception to the item's description: they were tracked but never ignored, so they are now in `.gitignore` as well, or a repeat of D4 picks them straight back up. |
+| D4 | ☑ | **Unexplained: how the junk got committed** | Answered 2026-09-13, and Dependabot did nothing wrong. PR #22's branch held **two** commits: dependabot's httpx bump, and `fdaf6ce5` — a hand-made commit dated 2026-08-30 whose message describes handbook work that lives in *ml-portfolio*. It carries `services/ml-sql/requirements.txt` alongside the junk, so the branch was checked out locally at the time. A `git add -A` run from the wrong directory swept up everything untracked in this repository and committed it against the other repository's message, onto the Dependabot branch. The squash merge two weeks later folded it into main under dependabot's name, which is the only reason it looked impossible. Same incident as the `never git add -A` rule. No other branch carries `fdaf6ce5`. |
 | D5 | ☐ | **CI gitleaks scans PR diffs only** | `.github/workflows/ci.yml` runs gitleaks over a pull request's own commits. History has never been scanned by CI — today's clean result came from a local run. Add a full-history job so "clean" stays provable rather than a one-off. |
 | D6 | ☑ | **History rewrite: worth it only bundled with D1** | Decided against, 2026-09-13. D1 kept the weights and moved the licence instead, so the ~103 MB saving this depended on does not exist. What remains is chroma alone: 26% off a 135 MB repo, bought with a force-push on shared main. Not worth it. Reopen only if the weights ever leave. |
 
@@ -175,9 +180,8 @@ Open before today and untouched by it.
    against two datasets plus 66 passing e2e tests, four of them new.
 3. ~~A1, A4~~ done. **Section A is closed.** Every item found by the parity
    audit and by the user's screenshots is fixed and verified live.
-4. ~~D1~~ done, and it closed D2 and D6 with it. **D3, D4 and D5 are what is
-   left before the repositories can be flipped** — none is a decision, and
-   D4 is the one that matters, because until it is understood the junk D3
-   removes comes back.
+4. ~~D1, D2, D3, D4, D6~~ done. **D5 is the last item in section D** — CI has
+   still never scanned full history. Everything else that gated going public
+   is closed.
 5. ~~B1, C1~~ done. Sections B and C are closed apart from B2.
 6. B2 and section E are independent and can wait.
