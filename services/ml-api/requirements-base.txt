@@ -23,7 +23,11 @@ timm>=1.0.0  # ResNet backbone for microsoft/table-transformer-detection (mm_tab
 # left unpinned by facenet-pytorch so they resolve to satisfy sam2 instead.
 langgraph>=0.2.0
 langchain-core>=0.3.0
-spacy>=3.7.0,<3.8.0
+spacy>=3.8.0,<3.9.0  # 3.7.x caps thinc below 8.3, and every thinc 8.2.x pins
+# numpy<2 — its compiled numpy_ops extension is built against the numpy 1 C ABI and
+# raises "numpy.dtype size changed" on import under numpy 2. 3.8 requires thinc>=8.3.12,
+# which is built against numpy 2. Found by a Space build failure, not by CI: CI never
+# imported spacy, so it stayed green while main could not deploy. See tests/test_native_abi.py.
 dnspython>=2.6.0  # SPF/DMARC/DKIM DNS TXT lookups (email_auth_check.py)
 certifi>=2024.0.0  # explicit CA bundle for real TLS chain verification (tls_headers_check.py)
 sam2>=1.1.0  # video object tracking (mm_rotoscope.py); Apache 2.0, ungated
