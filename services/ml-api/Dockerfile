@@ -28,6 +28,14 @@ RUN pip install --no-cache-dir --no-deps "groundingdino-py==0.4.0" "supervision=
 # actual runtime deps (numpy, Pillow, requests, tqdm) are already satisfied by
 # requirements-base.txt/requirements.txt; only torch/torchvision are left to
 # resolve freely so they satisfy sam2 instead.
+#
+# It also declares numpy<2.0.0, which this image knowingly violates since the
+# move to numpy 2.4.6, so pip prints it among its resolver warnings. That bound
+# is metadata rather than a binary one: facenet-pytorch is pure Python over
+# torch and links nothing against numpy's C API. Checked rather than assumed —
+# InceptionResnetV1 imports, instantiates and runs a forward pass to a 512-dim
+# embedding under numpy 2.4.6. mm_face_cloak.py also catches a load failure and
+# disables the feature, so the worst case is a missing tool, not a broken app.
 RUN pip install --no-cache-dir --no-deps "facenet-pytorch==2.6.0"
 
 # Layer 2: lightweight / frequently-changing packages — only this layer rebuilds when adding new tools

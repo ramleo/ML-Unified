@@ -94,7 +94,28 @@ green after every batch. Two remain, both for stated reasons.
 
 | # | S | Item | Detail |
 |---|---|---|---|
-| C1 | ☐ | **Space and repo disagree on three major versions** | **Now three versions apart, not one.** main declares pandas 3.0.5, numpy 2.4.6 and opencv-python-headless 5.x; the Space runs pandas 2.2.2, numpy 1.26.4 and opencv 4.x. Nothing is broken — the code runs on both — but the next Space rebuild changes three major versions at once, unannounced. Better done deliberately, as one upload and one verification, than as a surprise. Requires an HF upload of both requirements files. |
+| C1 | ☑ | **Space and repo disagree on three major versions** | Done 2026-09-13 — Space rebuilt on numpy 2.4.6, pandas 3.0.5, opencv 5.0.0.93, spacy 3.8.16, thinc 8.3.13, fastapi 0.141.1, confirmed from the build log rather than inferred. First attempt failed and took the backend down for a few minutes: spacy 3.7.5's thinc is compiled against the numpy 1 ABI. Rolled back, fixed in `1d7ebbe`, redeployed. Verified live: predictions byte-identical to before, EDA works including the five-row case, RAG healthy. facenet-pytorch's numpy<2 bound is knowingly violated and was checked by running it — see the Dockerfile. |
+
+### What C1 cost, and what it bought
+
+The first deploy failed and the backend was down for roughly four minutes.
+The cause was a dependency that installs cleanly and only fails on import, so
+nothing before the deploy could see it — CI had been green for hours while
+main was un-deployable.
+
+That is the exact gap C1 existed to close, and it closed it in the worst way
+round. Two things came out of it worth keeping:
+
+* `services/ml-api/tests/test_native_abi.py` imports every dependency with a
+  compiled extension, because an import is the only thing that exercises a
+  binary interface. It would have caught this before the deploy.
+* Rolling back is cheap and should be the reflex. Re-uploading the previous
+  requirements restored service in about four minutes, and having saved those
+  files *before* uploading is what made that a decision rather than a scramble.
+
+Still not covered: no Docker on the development machine, so the Space's image
+cannot be built locally. The next requirements change of this size should go
+to a duplicate Space first.
 
 ---
 
@@ -141,6 +162,5 @@ Open before today and untouched by it.
    audit and by the user's screenshots is fixed and verified live.
 4. **D1** whenever the public plan firms up — it gates D3, D6 and the flip
    itself, and everything else in D is cheap once it is decided.
-5. ~~B1~~ done. **C1 is now the one to watch**: the Space is three major versions
-   behind what main declares, and a rebuild would apply all three at once.
+5. ~~B1, C1~~ done. Sections B and C are closed apart from B2.
 6. B2 and section E are independent and can wait.
