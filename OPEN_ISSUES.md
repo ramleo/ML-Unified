@@ -151,7 +151,7 @@ against.
 | D2 | ☑ | **`signature-detector.onnx` provenance untraced** | Not untraced — it was written down when the model was adopted and nobody looked. `mm_signatures.py` names it: Mels22/Signature-Detection-Verification, a YOLO11s fine-tune on SignverOD, Apache-2.0, public and ungated. Now in `THIRD_PARTY.md` where it can be found. |
 | D3 | ☑ | **Gitignored runtime junk is tracked on main** | Done 2026-09-13. 21 files untracked with `git rm --cached`, ~50 MB, nothing removed from disk. Checked first rather than assumed safe: the Space carries none of them, and with all 21 moved aside the full CI set still passed — ml-api 385, ml-vision 22, model quality 4/4 — and none regenerated. The three root `test_*` files were the exception to the item's description: they were tracked but never ignored, so they are now in `.gitignore` as well, or a repeat of D4 picks them straight back up. |
 | D4 | ☑ | **Unexplained: how the junk got committed** | Answered 2026-09-13, and Dependabot did nothing wrong. PR #22's branch held **two** commits: dependabot's httpx bump, and `fdaf6ce5` — a hand-made commit dated 2026-08-30 whose message describes handbook work that lives in *ml-portfolio*. It carries `services/ml-sql/requirements.txt` alongside the junk, so the branch was checked out locally at the time. A `git add -A` run from the wrong directory swept up everything untracked in this repository and committed it against the other repository's message, onto the Dependabot branch. The squash merge two weeks later folded it into main under dependabot's name, which is the only reason it looked impossible. Same incident as the `never git add -A` rule. No other branch carries `fdaf6ce5`. |
-| D5 | ☐ | **CI gitleaks scans PR diffs only** | `.github/workflows/ci.yml` runs gitleaks over a pull request's own commits. History has never been scanned by CI — today's clean result came from a local run. Add a full-history job so "clean" stays provable rather than a one-off. |
+| D5 | ☑ | **CI gitleaks scans PR diffs only** | Done 2026-09-13. A `secret-scan-history` job in **both** repositories runs `gitleaks git` over every commit on each push and pull request — 997 commits in about a second here, 1063 in about three there, so no reason to put it on a schedule. Proved it can fail rather than trusting a green tick: in a throwaway repo, a github-PAT-shaped token committed and then deleted is caught by the history scan (exit 1) and missed by a working-tree scan (exit 0). Also worth recording — the first attempt at that proof planted AWS's own documented example key, which gitleaks allowlists, so it "passed" and demonstrated nothing. |
 | D6 | ☑ | **History rewrite: worth it only bundled with D1** | Decided against, 2026-09-13. D1 kept the weights and moved the licence instead, so the ~103 MB saving this depended on does not exist. What remains is chroma alone: 26% off a 135 MB repo, bought with a force-push on shared main. Not worth it. Reopen only if the weights ever leave. |
 
 ---
@@ -173,6 +173,17 @@ Open before today and untouched by it.
 
 ---
 
+## F. Assistant scope, and the EDA guide
+
+Both found by the user on 2026-09-13, from the live site.
+
+| # | S | Item | Detail |
+|---|---|---|---|
+| F1 | ☐ | **The tool assistants answer anything** | Asked "what is mastercard?" inside the EDA assistant and got a full essay on payment networks. It is not a jailbreak — nothing was bypassed, because there is no rule to bypass. `citations.py:build_system_prompt()` composes the prompt from the page's `tool_context`, which only *describes* the tool ("Tool: Exploratory Data Analysis", the column list, the stats), plus retrieval and formatting instructions. Not one line tells the model to decline anything. The single scope switch that exists, `restrict_to_uploads`, is a per-request flag set only by Multimodal RAG; every other page leaves it off. So when retrieval returns nothing relevant, the model answers from its own training, exactly as instructed. **Applies to all 47 tool pages using `ToolsAIChat`, not just EDA** — the 36 with `guide:` are no safer, since a guide is more context, not a boundary. Fix is a refusal rule in the system prompt plus a test per mode that asks something off-topic and fails if it gets an answer. |
+| F2 | ☐ | **EDA tool has no user guide** | 36 of the 47 tool pages pass a `guide:` blob to `ToolsAIChat`; exploratory-data-analysis is one of the 11 that do not — it passes only `summary: buildContext(result)`. So the rebuilt page has thirteen panels and no written explanation of what any of them mean or how to read them. Needs both: the in-assistant guide the other tools have, and a handbook chapter (see E6, where the handbook covers 25 of 50). |
+
+---
+
 ## Suggested order
 
 1. ~~A6 first.~~ Done — and it was worth doing: it found A7–A10, including
@@ -181,8 +192,11 @@ Open before today and untouched by it.
    against two datasets plus 66 passing e2e tests, four of them new.
 3. ~~A1, A4~~ done. **Section A is closed.** Every item found by the parity
    audit and by the user's screenshots is fixed and verified live.
-4. ~~D1, D2, D3, D4, D6~~ done. **D5 is the last item in section D** — CI has
-   still never scanned full history. Everything else that gated going public
-   is closed.
-5. ~~B1, C1~~ done. Sections B and C are closed apart from B2.
-6. B2 and section E are independent and can wait.
+4. ~~All of section D~~ done. **Nothing now blocks making the repositories
+   public**: both are licensed, the AGPL obligation is met and linked from the
+   running app, no gitignored junk is tracked, the way it got there is
+   understood, and full history is scanned by CI on every push in both repos.
+5. **F1 next.** It is the only open item a stranger can trip over on their own
+   — every tool's assistant will answer any question put to it.
+6. ~~B1, C1~~ done. Sections B and C are closed apart from B2.
+7. B2 and section E are independent and can wait.

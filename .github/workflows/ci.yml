@@ -39,6 +39,44 @@ jobs:
           # is the signal that matters; the finding is in the log.
           GITLEAKS_ENABLE_COMMENTS: false
 
+  # D5: every commit ever made, not only the ones a pull request adds.
+  #
+  # `secret-scan` above hands gitleaks the PR's own commits, which answers
+  # "does this change introduce a secret". Useful, and not the question that
+  # matters before a repository goes public: a key committed in March and
+  # deleted in April is invisible to it and perfectly visible to anyone who
+  # clones. Until now the only full-history evidence was a local run somebody
+  # did by hand once, which stops being true the moment the next commit lands.
+  #
+  # Demonstrated rather than assumed. In a throwaway repository, a
+  # github-PAT-shaped token committed and then deleted is caught by
+  # `gitleaks git` (exit 1, "leaks found: 1") and missed entirely by a
+  # working-tree scan (exit 0, "no leaks found").
+  #
+  # The whole history is 997 commits and takes about a second, so there is no
+  # argument for running this on a schedule instead of every time.
+  #
+  # Pinned by version and run as a binary rather than through the action,
+  # because the action's job is the PR-scoped scan the other job already does.
+  secret-scan-history:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.0
+        run: |
+          curl -sSfL -o /tmp/gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          /tmp/gitleaks version
+      - name: Scan every commit in the history
+        run: /tmp/gitleaks git --no-banner --redact --exit-code 1 .
+
   # The 400-line limit used to be a rule someone had to remember, which meant
   # it was skipped exactly when following it was inconvenient. Now it fails the
   # build. See scripts/check-file-length.sh for what the baseline does.
