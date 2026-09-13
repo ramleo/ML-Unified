@@ -24,7 +24,7 @@ against the legacy page.
 | A1 | ☑ | **No card thumbnail** | Done 2026-09-13 — layered sandstone, Pexels 20015727, in ml-portfolio `2ae31d2`. Chosen by hand after the picker's contrast score twice ranked an unusable photo first; see that commit for the two selector weaknesses worth fixing later. |
 | A2 | ☑ | **Statistics section missing entirely** | Done 2026-09-13 — `EdaStatistics.tsx`. Outliers (IQR) ranked bars, signed Skewness bars around a centre line, and the 9-column detail table. Nav entry added. |
 | A3 | ☑ | **Columns missing-% is a table, not a chart** | Done 2026-09-13 — `EdaColumns.tsx` rewritten as the labelled bar list: num/cat badge, name, bar, percentage, with dtype, missing count and cardinality beneath. The old table's numbers now live in the statistics panel. |
-| A4 | ☑ | **Report is light even in dark theme** | Done 2026-09-13 — a Theme control at download, light by default, in ml-portfolio `575bd7f`. One shared palette drives the HTML, the rasterised charts and the PagedJS pass. Dark files carry `_dark` in the name, and the panel states that browsers omit background colours from a print job unless the reader ticks Background graphics. |
+| A4 | ☑ | **Report is light even in dark theme** | Done 2026-09-13 in ml-portfolio `575bd7f`, then fixed properly in `4904319`. The first attempt printed near-black text on the dark panels: print-color-adjust was declared in the sheet PagedJS rewrites and never reached the page. Found only after rendering a real PDF — the on-screen paginated preview measured correct, because the damage happens in Chrome's print rasteriser, not the cascade. |
 | A5 | ☐ | **Section nav has no Statistics entry** | Follows from A2. `EdaSectionNav.tsx` lists 14 anchors; legacy lists Statistics between Columns and Distributions. |
 | A6 | ☑ | **Legacy-vs-rebuild parity audit** | Done 2026-09-13 against `services/ml-api/frontend/eda.html`, panel by panel. Result in the table below. Found A7–A10 on top of A1–A5. |
 | A7 | ☑ | **ML readiness reasons are hidden in a tooltip** | Done 2026-09-13 — `EdaReadiness.tsx`. Card grid, reason as body text, Ready/Review/Fix label, inline SVG verdict icons. e2e asserts the reason is rendered content, not a tooltip. |
@@ -59,6 +59,22 @@ Legacy renders 15 panels and 12 nav tabs. Read from `eda.html` lines 840–1180.
 Nothing else in the legacy page is unaccounted for. Six panels are at parity,
 five are better in the rebuild, two are additions, and five defects are logged
 above.
+
+### A note on how section A was verified
+
+Two defects in this section shipped as "verified" and were caught by the user
+instead: the missing Statistics panel (A2), and a dark PDF whose text was
+illegible (A4). Both share a cause worth stating rather than filing away.
+
+Each was checked against a proxy for the deliverable. A2 was checked against
+the build spec I had written, not against the page it was reproducing. A4 was
+checked against the on-screen paginated preview, not against a printed PDF —
+and `getComputedStyle` reported the correct colours there, because Chrome's
+print rasteriser does the damage downstream of the cascade.
+
+The rule that follows: check the artefact the reader receives. Render the PDF,
+open the downloaded file, compare against the page being replaced. Every one
+of these took minutes once actually done.
 
 ---
 
