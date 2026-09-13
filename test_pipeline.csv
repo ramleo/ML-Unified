@@ -1,0 +1,16 @@
+age,income,education,experience,gender,promoted
+25,45000,Bachelor,2,Male,0
+32,62000,Master,7,Female,1
+28,51000,Bachelor,4,Male,0
+45,88000,PhD,18,Female,1
+38,75000,Master,12,Male,1
+22,38000,Bachelor,1,Female,0
+55,95000,PhD,25,Male,1
+29,53000,Master,5,Female,0
+41,80000,Master,15,Male,1
+35,69000,Bachelor,10,Female,1
+27,47000,Bachelor,3,Male,0
+48,91000,PhD,20,Female,1
+33,64000,Master,8,Male,0
+39,77000,Master,13,Female,1
+26,44000,Bachelor,2,Male,0
