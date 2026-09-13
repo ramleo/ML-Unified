@@ -3,7 +3,7 @@ import json
 import numpy as np
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
-from app import app
+from vision_app import app
 
 client = TestClient(app)
 
@@ -118,7 +118,7 @@ def test_classify_image_inference():
     fake_labels = ["background"] + [f"class_{i}" for i in range(999)]
     fake_labels[207] = "golden retriever"
 
-    import app as app_module
+    import vision_app as app_module
     with patch.object(app_module, "_img_cache",  {"session": mock_session}), \
          patch.object(app_module, "_img_active", ["mobilenetv2"]), \
          patch.object(app_module, "_IMAGENET_LABELS", fake_labels):
@@ -150,7 +150,7 @@ def test_classify_image_low_confidence():
     mock_session.get_inputs.return_value = [MagicMock(name="input")]
     fake_labels = [f"class_{i}" for i in range(1000)]
 
-    import app as app_module
+    import vision_app as app_module
     with patch.object(app_module, "_img_cache",  {"session": mock_session}), \
          patch.object(app_module, "_img_active", ["mobilenetv2"]), \
          patch.object(app_module, "_IMAGENET_LABELS", fake_labels):
@@ -249,7 +249,7 @@ def test_detect_objects_inference():
     mock_session = MagicMock()
     mock_session.run.return_value = [fake_boxes, fake_scores, fake_indices]
 
-    import app as app_module
+    import vision_app as app_module
     fake_slot = {"model_type": "det", "model_id": "tiny_yolov3", "session": mock_session}
     with patch.object(app_module, "_large_vision_cache", fake_slot), \
          patch("os.path.exists", lambda p: True):
@@ -283,7 +283,7 @@ def test_detect_objects_confidence_filter():
     mock_session = MagicMock()
     mock_session.run.return_value = [fake_boxes, fake_scores, fake_indices]
 
-    import app as app_module
+    import vision_app as app_module
     fake_slot = {"model_type": "det", "model_id": "tiny_yolov3", "session": mock_session}
     with patch.object(app_module, "_large_vision_cache", fake_slot), \
          patch("os.path.exists", lambda p: True):
@@ -347,7 +347,7 @@ def test_segment_image_bad_model():
 
 def test_segment_image_segformer_inference():
     """SegFormer-B0 path: mocks ONNX session + model-on-disk check."""
-    import app as app_module
+    import vision_app as app_module
 
     # logits shape: (1, 150, 128, 128) — make class 2 (sky) dominant
     fake_logits = np.full((1, 150, 128, 128), -10.0, dtype=np.float32)

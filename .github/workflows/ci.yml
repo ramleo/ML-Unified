@@ -99,7 +99,7 @@ jobs:
         run: ruff check services/ml-api/app.py
 
       - name: Lint ml-vision
-        run: ruff check services/ml-vision/app.py
+        run: ruff check services/ml-vision/vision_app.py
 
       - name: Test ml-api
         run: pytest services/ml-api/tests/ -v --tb=short

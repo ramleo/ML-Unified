@@ -2,7 +2,7 @@
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from shared.progress import StreamingTask
+from vision_shared.progress import StreamingTask
 from typing import Any, Dict
 import collections
 import io

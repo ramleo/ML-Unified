@@ -1,7 +1,7 @@
 """SSE progress streaming with tqdm integration.
 
 Usage in a FastAPI endpoint:
-    from shared.progress import StreamingTask
+    from vision_shared.progress import StreamingTask
     from fastapi.responses import StreamingResponse
 
     @app.post("/some-endpoint")

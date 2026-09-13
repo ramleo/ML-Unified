@@ -168,7 +168,8 @@ Open before today and untouched by it.
 | E4 | ☐ | ml-sql's two untested provider paths | No coverage |
 | E5 | ☐ | `mm_pdf.py` (373) and `_generate.py` (366) | Both approaching the 400-line gate; split before adding to either |
 | E6 | ☐ | Handbook clips at 25 of 50 | Half the tools missing from the published handbook |
-| E7 | ☐ | Stale file-length baseline entry | `check-file-length.sh` reports `automl_stage.py: now 336 lines — remove its baseline entry` |
+| E7 | ☑ | Stale file-length baseline entry | Done 2026-09-13. `automl_stage.py` had shrunk to 336 lines with its pin still at 410, so every gate run printed a NOTE nobody acted on. Entry deleted; the normal 400-line limit applies to it again. |
+| E8 | ☑ | ml-api and ml-vision shared the module names `app` and `shared` | Fixed 2026-09-13. Both kept their FastAPI app in `app.py` and both had a `shared/` namespace package with a **different** `progress.py` (126 lines against 104), so in one interpreter the suite collected second imported the other service's code. Seven ml-vision tests failed that way and the four hundred that passed alongside them proved nothing. ml-vision's modules are now `vision_app` and `vision_shared`; ml-api, which is the deployed one, was not touched. Cheap because ml-vision is not deployed anywhere — no Space exists and the live backend has no `ML_VISION_URL`. Root `conftest.py` now compares each collected service's real top-level names and refuses only on an actual clash, naming it, so the next one fails in a sentence. Verified: 385 + 22 separately, 407 together in both orders, guard fires on a planted `security.py` and passes once removed, ruff clean, and the Dockerfile's exact file set imports `vision_app:app` on its own. |
 
 ---
 
