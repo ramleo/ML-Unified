@@ -24,7 +24,7 @@ against the legacy page.
 | A1 | ☑ | **No card thumbnail** | Done 2026-09-13 — layered sandstone, Pexels 20015727, in ml-portfolio `2ae31d2`. Chosen by hand after the picker's contrast score twice ranked an unusable photo first; see that commit for the two selector weaknesses worth fixing later. |
 | A2 | ☑ | **Statistics section missing entirely** | Done 2026-09-13 — `EdaStatistics.tsx`. Outliers (IQR) ranked bars, signed Skewness bars around a centre line, and the 9-column detail table. Nav entry added. |
 | A3 | ☑ | **Columns missing-% is a table, not a chart** | Done 2026-09-13 — `EdaColumns.tsx` rewritten as the labelled bar list: num/cat badge, name, bar, percentage, with dtype, missing count and cardinality beneath. The old table's numbers now live in the statistics panel. |
-| A4 | ☐ | **Report is light even in dark theme** | `edaReportCapture.ts` hard-codes `#ffffff` paper and `#1e293b` ink for both PDF and HTML. That was a deliberate choice — a paper artefact — and the user disagrees. Needs to follow the site theme, or offer the choice at download. |
+| A4 | ☑ | **Report is light even in dark theme** | Done 2026-09-13 — a Theme control at download, light by default, in ml-portfolio `575bd7f`. One shared palette drives the HTML, the rasterised charts and the PagedJS pass. Dark files carry `_dark` in the name, and the panel states that browsers omit background colours from a print job unless the reader ticks Background graphics. |
 | A5 | ☐ | **Section nav has no Statistics entry** | Follows from A2. `EdaSectionNav.tsx` lists 14 anchors; legacy lists Statistics between Columns and Distributions. |
 | A6 | ☑ | **Legacy-vs-rebuild parity audit** | Done 2026-09-13 against `services/ml-api/frontend/eda.html`, panel by panel. Result in the table below. Found A7–A10 on top of A1–A5. |
 | A7 | ☑ | **ML readiness reasons are hidden in a tooltip** | Done 2026-09-13 — `EdaReadiness.tsx`. Card grid, reason as body text, Ready/Review/Fix label, inline SVG verdict icons. e2e asserts the reason is rendered content, not a tooltip. |
@@ -121,9 +121,8 @@ Open before today and untouched by it.
    a readiness regression that no spec checklist would have caught.
 2. ~~A2, A3, A7, A8, A9, A10 as one batch.~~ Done 2026-09-13. Verified live
    against two datasets plus 66 passing e2e tests, four of them new.
-3. ~~A1~~ done. **A4 remains** — the report theme is a one-file change once
-   its behaviour is decided: follow the site theme, or stay light with a
-   choice at download.
+3. ~~A1, A4~~ done. **Section A is closed.** Every item found by the parity
+   audit and by the user's screenshots is fixed and verified live.
 4. **D1** whenever the public plan firms up — it gates D3, D6 and the flip
    itself, and everything else in D is cheap once it is decided.
 5. B1, B2, C1 and section E are independent and can wait.
