@@ -85,7 +85,7 @@ green after every batch. Two remain, both for stated reasons.
 
 | # | S | Item | Detail |
 |---|---|---|---|
-| B1 | ☐ | **ML-Unified #6 — opencv-python-headless 5.0** | Not an API break: opencv 5 requires numpy ≥ 2 and `services/ml-api/requirements.txt:18` pins `numpy==1.26.4`, so pip cannot resolve and install fails before any test runs. Unblocking means moving ml-api to numpy 2, which touches every pickle, model and sklearn path in the service. |
+| B1 | ☑ | **ML-Unified #6 — opencv-python-headless 5.0** | Done 2026-09-13 — `554b531` lifted ml-api to numpy 2.4.6, then #6 merged as `d7748c9`. The blocker was only the pin: opencv 5.0.0.93 declares numpy>=2. Nothing in the codebase used an API opencv 5 removed — all 73 cv2 symbols checked against 5.0.0, and the one apparent miss was prose in a docstring. All 12 pickles load and predict correctly under numpy 2. Full suite green on the PR and on main. |
 | B2 | ☐ | **ml-portfolio #5 — next 16.3.4** | Every CI check passes. Only the Vercel preview deployment fails, twice. `npm install && npm run build` on that exact branch succeeds locally and other previews plus production deploy fine, so it is specific to this PR but platform-side. No Vercel log access from here, so the cause is **not** established. |
 
 ---
@@ -94,7 +94,7 @@ green after every batch. Two remain, both for stated reasons.
 
 | # | S | Item | Detail |
 |---|---|---|---|
-| C1 | ☐ | **Space runs pandas 2.2.2, main declares 3.0.5** | PR #4 merged the bump; only the three changed `.py` files were uploaded to the Space, not `requirements.txt`. Not broken — `coerce_numeric` works on both 2.x and 3.x — but the repo and the running service disagree, and the next Space rebuild will silently change pandas major version. Deliberate upload, or revert the pin, but not left unstated. |
+| C1 | ☐ | **Space and repo disagree on three major versions** | **Now three versions apart, not one.** main declares pandas 3.0.5, numpy 2.4.6 and opencv-python-headless 5.x; the Space runs pandas 2.2.2, numpy 1.26.4 and opencv 4.x. Nothing is broken — the code runs on both — but the next Space rebuild changes three major versions at once, unannounced. Better done deliberately, as one upload and one verification, than as a surprise. Requires an HF upload of both requirements files. |
 
 ---
 
@@ -141,4 +141,6 @@ Open before today and untouched by it.
    audit and by the user's screenshots is fixed and verified live.
 4. **D1** whenever the public plan firms up — it gates D3, D6 and the flip
    itself, and everything else in D is cheap once it is decided.
-5. B1, B2, C1 and section E are independent and can wait.
+5. ~~B1~~ done. **C1 is now the one to watch**: the Space is three major versions
+   behind what main declares, and a rebuild would apply all three at once.
+6. B2 and section E are independent and can wait.
