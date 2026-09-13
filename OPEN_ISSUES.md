@@ -113,9 +113,18 @@ round. Two things came out of it worth keeping:
   requirements restored service in about four minutes, and having saved those
   files *before* uploading is what made that a decision rather than a scramble.
 
-Still not covered: no Docker on the development machine, so the Space's image
-cannot be built locally. The next requirements change of this size should go
-to a duplicate Space first.
+Still not covered, corrected: I reported that the development machine had no
+Docker. It has. `docker` is at /usr/local/bin/docker and Docker Desktop is
+installed — the daemon was simply not running, and the check I used
+(`docker version`, which queries the server) fails the same way for both, so
+I read "stopped" as "absent" and wrote it down as fact.
+
+So a local build of the Space's own image is available and is the strongest
+pre-deploy check there is: same `python:3.11-slim` base, same
+`pip install -r requirements-base.txt && python -m spacy download` step that
+failed. Start Docker Desktop first. The first build pulls torch and CUDA
+wheels, several GB, and is layer-cached afterwards. Worth doing before the
+next requirements change of this size.
 
 ---
 
