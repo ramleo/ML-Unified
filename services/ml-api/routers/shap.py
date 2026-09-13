@@ -8,6 +8,7 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from sklearn.base import is_classifier
 from shared.progress import StreamingTask
+from routers.core.shared import coerce_numeric
 
 router = APIRouter(prefix="/shap", tags=["shap"])
 
@@ -31,7 +32,7 @@ def _prep_df(data: dict, schema: dict) -> pd.DataFrame:
         df["psd_day_of_week"] = None if pd.isnull(psd) else int(psd.dayofweek)
         df = df.drop(columns=[date_field], errors="ignore")
 
-    df = df.apply(pd.to_numeric, errors='ignore')
+    df = coerce_numeric(df)
     return df
 
 

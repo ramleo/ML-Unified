@@ -19,6 +19,30 @@ FRONTEND   = os.path.join(HERE, "frontend", "index.html")
 
 MODELS: Dict[str, Any] = {}
 
+
+def coerce_numeric(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert every column that is wholly numeric, leave the rest alone.
+
+    This was `df.apply(pd.to_numeric, errors="ignore")`. That option was
+    deprecated in pandas 2.2 and removed in 3.0, where it now raises
+    ValueError("invalid error value specified") — so the Dependabot bump to
+    pandas 3 turned seven prediction tests red, and would have turned every
+    /predict and /shap call into a 500 in production.
+
+    `errors="coerce"` is NOT the replacement: it would turn a text column into
+    a column of NaN rather than leaving it as text, silently destroying every
+    categorical feature on the way into the pipeline. The behaviour being
+    restored is all-or-nothing per column, which is what a try/except around
+    the raising form gives.
+    """
+    for col in df.columns:
+        try:
+            df[col] = pd.to_numeric(df[col])
+        except (ValueError, TypeError):
+            pass
+    return df
+
+
 _BUILTIN_IDS: frozenset = frozenset({"titanic", "iris", "diabetes", "insurance"})
 
 ACCENT_PALETTE = [

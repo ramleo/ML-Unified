@@ -5,7 +5,7 @@ import os
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 
-from routers.core.shared import MODELS, ACCENT_PALETTE
+from routers.core.shared import MODELS, ACCENT_PALETTE, coerce_numeric
 from routers.core.automl_explain import _llm_explanation, _rule_explanation
 from routers import drift as _drift_router
 
@@ -40,7 +40,7 @@ async def predict(model_id: str, request: Request):
         df["psd_day_of_week"] = None if pd.isnull(psd) else int(psd.dayofweek)
         df = df.drop(columns=[date_field], errors="ignore")
 
-    df = df.apply(pd.to_numeric, errors='ignore')
+    df = coerce_numeric(df)
 
     pipeline = m["pipeline"]
     le       = m["le"]
