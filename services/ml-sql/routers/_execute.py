@@ -349,20 +349,11 @@ async def execute_mssql(conn_str: str, sql: str) -> QueryResult:
 
 async def execute_duckdb(db_path: str, sql: str) -> QueryResult:
     import asyncio
-    from pathlib import Path as _Path
 
-    ext = _Path(db_path).suffix.lower()
+    from ._duckdb_conn import open_duckdb
 
     def _exec():
-        import duckdb
-        if ext == ".duckdb":
-            con = duckdb.connect(db_path, read_only=True)
-        else:
-            con = duckdb.connect()
-            if ext == ".parquet":
-                con.execute(f"CREATE VIEW data AS SELECT * FROM read_parquet('{db_path}')")
-            elif ext == ".csv":
-                con.execute(f"CREATE VIEW data AS SELECT * FROM read_csv_auto('{db_path}')")
+        con = open_duckdb(db_path)  # file access locked off — see _duckdb_conn
         rel = con.execute(_inject_limit(sql, _ROW_LIMIT))
         cols = [d[0] for d in rel.description]
         rows = [list(r) for r in rel.fetchall()]

@@ -138,20 +138,11 @@ async def load_mysql_schema(conn_str: str) -> DBSchema:
 
 async def load_duckdb_schema(db_path: str) -> DBSchema:
     import asyncio
-    from pathlib import Path as _Path
+
+    from ._duckdb_conn import open_duckdb
 
     def _load() -> DBSchema:
-        import duckdb
-        ext = _Path(db_path).suffix.lower()
-        if ext == ".duckdb":
-            con = duckdb.connect(db_path, read_only=True)
-        else:
-            con = duckdb.connect()
-            if ext == ".parquet":
-                con.execute(f"CREATE VIEW data AS SELECT * FROM read_parquet('{db_path}')")
-            elif ext == ".csv":
-                con.execute(f"CREATE VIEW data AS SELECT * FROM read_csv_auto('{db_path}')")
-
+        con = open_duckdb(db_path)
         table_names = [r[0] for r in con.execute("SHOW TABLES").fetchall()]
         tables: dict[str, TableSchema] = {}
         for tname in table_names:
