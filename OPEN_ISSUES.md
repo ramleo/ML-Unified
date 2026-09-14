@@ -183,7 +183,7 @@ CI was briefly worth rationing.
 
 | # | S | Item | Detail |
 |---|---|---|---|
-| E1 | ☐ | Vercel WAF edge rate limiting | Hardening plan Gap 1. Scope is narrower than it sounds: browser calls to the ML backend go straight to the HF Space, so a Vercel rule only covers ml-portfolio's `/api/*`. The routes that matter are the three LLM routes (`chat`, `ai-tools`, `ai-explain`) and `contact` (sends email) — none has a rate limit. Firewall rules are set in the Vercel dashboard, not code; check what Hobby allows before writing the rule. |
+| E1 | ☑ | Vercel WAF edge rate limiting | Done 2026-09-14. Scope was narrower than it sounded: browser calls to the ML backend go straight to the HF Space, so a Vercel rule only covers ml-portfolio's `/api/*`. Hobby allows **one** rate-limit rule, so it is one rule, `api-rate-limit`, set in the dashboard: Request Path *is any of* `/api/chat`, `/api/ai-tools`, `/api/ai-explain`, `/api/contact`; fixed window 60s, 20 requests, key IP, 429. Every caller sends one request per click, so real users do not approach it. Verified live: 25 no-cost requests (empty `messages`, refused before any LLM call) gave 400 ×20 then 429 ×5; `/api/news` unaffected. Because `contact` shares that loose limit, it also requires a Turnstile token now, checked before anything else (ml-portfolio `2790333`); email HTML is escaped too. Tested with Cloudflare's always-pass/always-fail secrets, live empty request returns 403, and the user sent a real message that arrived. |
 | E2 | ☐ | OWASP LLM Top 10 2026 audit | Hardening plan Gap 2 |
 | E3 | ☐ | Provider-failure alerting outside the document path | Hardening plan Gap 3, remainder |
 | E4 | ☐ | ml-sql's two untested provider paths | No coverage |
