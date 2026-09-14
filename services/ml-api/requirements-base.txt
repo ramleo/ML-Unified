@@ -2,6 +2,7 @@ scikit-learn==1.8.0
 pandas==3.0.5
 numpy==2.4.6
 joblib==1.5.3
+skops==0.14.0    # safe model (de)serialization for /shap/custom/upload + export (E18)
 xgboost==2.1.1
 lightgbm==4.6.0
 catboost==1.2.10

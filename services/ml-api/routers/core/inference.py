@@ -195,8 +195,13 @@ async def explain_automl(request: Request):
 
 @router.get("/models/{model_id}/export")
 def export_model(model_id: str):
-    """Download the trained sklearn pipeline as a .pkl file."""
-    import joblib
+    """Download the trained sklearn pipeline as a .skops file.
+
+    skops, not joblib/pickle: the same file is re-uploaded to /shap/custom/upload,
+    and a pickle there is remote code execution (E18). skops stores the model as
+    data with no embedded code, so the round-trip is safe both ways.
+    """
+    import skops.io as sio
     from fastapi.responses import StreamingResponse
 
     if model_id not in MODELS:
@@ -206,11 +211,10 @@ def export_model(model_id: str):
     if pipeline is None:
         raise HTTPException(status_code=404, detail="No pipeline stored for this model")
 
-    buf = io.BytesIO()
-    joblib.dump(pipeline, buf)
+    buf = io.BytesIO(sio.dumps(pipeline))
     buf.seek(0)
 
-    filename = f"{model_id}_pipeline.pkl"
+    filename = f"{model_id}_pipeline.skops"
     return StreamingResponse(
         buf,
         media_type="application/octet-stream",

@@ -1,7 +1,6 @@
 import io
 import traceback
 
-import joblib
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
@@ -9,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from sklearn.base import is_classifier
 from shared.progress import StreamingTask
 from routers.core.shared import coerce_numeric
+from routers.core.skops_safe import UnsafeModelFile, load_model
 
 router = APIRouter(prefix="/shap", tags=["shap"])
 
@@ -237,12 +237,12 @@ async def compute_shap_custom(
     data_file:  UploadFile = File(...),
 ):
     """
-    Compute SHAP for a user-uploaded sklearn Pipeline (.pkl) and a single-row CSV.
+    Compute SHAP for a user-uploaded sklearn Pipeline (.skops) and a single-row CSV.
     """
     try:
-        pipeline = joblib.load(io.BytesIO(await model_file.read()))
-    except Exception as exc:
-        raise HTTPException(400, f"Could not load model file: {exc}")
+        pipeline = load_model(await model_file.read())
+    except UnsafeModelFile as exc:
+        raise HTTPException(400, str(exc))
 
     try:
         df = pd.read_csv(io.BytesIO(await data_file.read()))
