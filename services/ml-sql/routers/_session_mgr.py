@@ -22,22 +22,11 @@ _UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 # in-memory session store: db_ref → {type, path|conn_str, schema, created_at}
 _sessions: dict[str, dict] = {}
 
-# Global rate limiter — sliding window of query timestamps
-_recent_queries: list[float] = []
-_RATE_LIMIT = 30  # max queries per 60 seconds globally
+# Rate limiting moved to routers/_guard.py (per IP, E16).
 
 
 def get_sessions() -> dict[str, dict]:
     return _sessions
-
-
-def check_rate_limit() -> bool:
-    now = time.time()
-    _recent_queries[:] = [t for t in _recent_queries if t > now - 60.0]
-    if len(_recent_queries) >= _RATE_LIMIT:
-        return False
-    _recent_queries.append(now)
-    return True
 
 
 def save_session_index() -> None:

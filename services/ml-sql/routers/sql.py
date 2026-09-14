@@ -28,7 +28,7 @@ from ._schema import (
 from ._schema_mssql import load_mssql_schema
 from ._session_mgr import (
     CHINOOK_PATH, _UPLOAD_DIR, _sessions,
-    check_rate_limit, save_session_index, exec_session, preload_chinook,
+    save_session_index, exec_session, preload_chinook,
 )
 
 router = APIRouter()
@@ -198,11 +198,8 @@ async def query_sql(req: QueryRequest):
 
 
 async def _run_pipeline(req: QueryRequest) -> AsyncGenerator[str, None]:
-    if not check_rate_limit():
-        yield _sse({"type": "error", "text": "Rate limit reached. Please wait a moment and try again."})
-        yield _sse({"type": "done"})
-        return
-
+    # Rate limits live in routers/_guard.py, per IP. The global counter that
+    # stood here let a single caller lock every visitor out.
     await preload_chinook()
     session = _sessions.get(req.db_ref)
     if not session:
