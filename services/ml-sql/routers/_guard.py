@@ -22,6 +22,7 @@ instance, and a restart resetting the counters is an accepted gap.
 from __future__ import annotations
 
 import datetime
+import ipaddress
 import logging
 import os
 import re
@@ -33,6 +34,36 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
+
+# ── 0. IP blocklist (E17) ─────────────────────────────────────────────────────
+# BLOCKED_IPS: comma-separated single IPs and/or CIDR ranges, honoured by both
+# backends. Editing it restarts the Space (~2 min); a block is not instant.
+
+
+def _parse_blocked(raw: str) -> list:
+    nets = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            nets.append(ipaddress.ip_network(part, strict=False))
+        except ValueError:
+            logger.warning("BLOCKED_IPS: ignoring invalid entry %r", part)
+    return nets
+
+
+_BLOCKED = _parse_blocked(os.environ.get("BLOCKED_IPS", ""))
+
+
+def _is_blocked(ip: str) -> bool:
+    if not _BLOCKED:
+        return False
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return any(addr in net for net in _BLOCKED)
 
 # ── 1. Origin ────────────────────────────────────────────────────────────────
 
@@ -112,6 +143,10 @@ def _over_daily_cap() -> bool:
 async def guard(request: Request, call_next):
     path = request.url.path
     ip = client_ip(request)
+
+    if _is_blocked(ip):  # E17 — refused before any other check
+        logger.warning("blocked IP: %s %s", ip, path)
+        return JSONResponse({"error": "Forbidden."}, status_code=403)
 
     origin = request.headers.get("origin")
     if origin and not is_allowed_origin(origin):

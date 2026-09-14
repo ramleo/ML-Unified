@@ -17,6 +17,7 @@ from slowapi import _rate_limit_exceeded_handler
 from security.origin_policy import get_cors_kwargs, enforce_origin
 from security.rate_limit import limiter
 from security.body_size import enforce_body_size
+from security.ip_block import enforce_ip_block
 
 from routers import shap as _shap_router
 from routers import pipeline as _pipeline_router
@@ -139,6 +140,11 @@ app.add_middleware(SlowAPIMiddleware)
 # Global request-body size cap (security/body_size.py) — defense-in-depth
 # beneath the handful of routers that already cap uploads individually.
 app.add_middleware(BaseHTTPMiddleware, dispatch=enforce_body_size)
+
+# IP blocklist (security/ip_block.py) — added last so it runs FIRST: a blocked
+# address is refused before any other middleware or router does work. Empty
+# unless the BLOCKED_IPS Space variable is set (E17).
+app.add_middleware(BaseHTTPMiddleware, dispatch=enforce_ip_block)
 
 app.mount("/static", StaticFiles(directory=os.path.join(HERE, "frontend")), name="static")
 
