@@ -171,3 +171,38 @@ was reading as separate steps: **ask before commit, always push after.** So
 **"commit" from the user means commit + push** — one word, the push is not a
 decision point. Updated `feedback_always_push_github.md` to say exactly that, so
 it stops being a question.
+
+---
+
+## A repo-root tidy, done by judgment not by rote
+
+The day ended on housekeeping that was really a lesson in *not* following an
+instruction literally. Three requests in sequence: move the root PNGs into
+`images/`, move the loose `.md` files "to their appropriate folders," and then
+"check remaining files in root and decide what to do about them."
+
+- **PNGs** — 38 untracked screenshots moved into the existing `images/`
+  (already gitignored via `*.png`). No collisions, nothing committed.
+- **`.md` files** — the trap was "move them all." Several `.md` files *belong*
+  at root: `CLAUDE.md` (Claude Code reads it there), `README.md` (GitHub),
+  `THIRD_PARTY.md` (attribution beside the license). Moving those would break
+  tooling, not tidy anything. So the split was: keep those three at root; make
+  `docs/` for the loose specs (`OPEN_ISSUES`, `LOGGING_SPEC`, `EDA_REBUILD_SPEC`,
+  `RAG_Implementation_Roadmap`, `WEBSITE_GUIDELINES`); `E2E_Test_Documentation`
+  → `tests/`. Checked first that the many references to these docs were prose /
+  code-comment mentions by name, not path reads — so nothing broke. Three
+  **memory** files pointed at the old paths and were updated to `docs/`. Commit
+  `91b927b` (git recorded all as 100% renames).
+- **"decide what to do"** — the remaining root files were all correctly placed
+  config (`conftest.py`, `pytest.ini`, `render.yaml`, `docker-compose.yml`, …)
+  or gitignored local/OS files. The only real clutter was four *untracked*
+  scratch files, one a live-API probe reading `test_invoice.pdf` by relative
+  path. `testpaths = tests/e2e` meant nothing outside e2e is auto-collected, so
+  they went to a new `tests/manual/` (probe kept next to its fixture). Then, on
+  request, `tests/manual/` was gitignored (the old root-anchored scratch entries
+  were now stale) and the stray root `conversation.md` was renamed and tracked
+  as `Conversation_unified_log_part49.md`. Commit `6cf1f6c`.
+
+Nothing was deleted — the June-old `test_clusters.csv` looked stale but deletion
+stays the user's call. The through-line: "move all the X files" is a request to
+tidy, not a request to move files that are already where they belong.
