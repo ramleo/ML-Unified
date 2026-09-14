@@ -12,6 +12,7 @@ from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
+from ._conn_guard import UnsafeTarget, check_connect_target
 from ._explain import (
     _sse, build_explain_prompt, stream_explanation,
 )
@@ -97,6 +98,10 @@ class ConnectRequest(BaseModel):
 
 @router.post("/sql/connect")
 async def connect_db(req: ConnectRequest):
+    try:
+        await check_connect_target(req.conn_str, req.db_type)
+    except UnsafeTarget as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
     try:
         if req.db_type == "mysql":
             schema = await load_mysql_schema(req.conn_str)
