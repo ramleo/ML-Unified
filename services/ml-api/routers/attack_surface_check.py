@@ -90,7 +90,12 @@ def _check_directory_listing(host: str) -> list[str]:
 
 def _check_cms_fingerprint(host: str) -> dict | None:
     try:
-        resp = httpx.get(f"https://{host}", timeout=_CONNECT_TIMEOUT, follow_redirects=True)
+        # follow_redirects=False (E20): the host was checked public by
+        # resolve_public_ip, but a redirect could bounce us to an internal
+        # address that check never saw. The generator meta tag lives on the
+        # landing page, so a redirect is not needed to find it — matches the
+        # other two checks here, which already refuse to follow redirects.
+        resp = httpx.get(f"https://{host}", timeout=_CONNECT_TIMEOUT, follow_redirects=False)
         match = _GENERATOR_META.search(resp.text)
         if match:
             return {"generator": match.group(1)}
