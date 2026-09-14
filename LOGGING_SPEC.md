@@ -67,7 +67,7 @@ The visitor lands, from a search engine, a link, or directly.
 
 | Action | Event | meta |
 |---|---|---|
-| Loads any page | `page_view` ✅ exists | `device`, `returning`, plus **`utm_source`, `utm_medium`, `utm_campaign`, `lang`, `viewport`** |
+| Loads any page | `page_view` ✅ exists | `device`, `returning`, `tz` (browser time zone — rough region when Vercel gives no country; added 2026-09-14), plus **`utm_source`, `utm_medium`, `utm_campaign`, `lang`, `viewport`** |
 | First page of the session | **`session_start`** | `landing_path`, `referrer_host`, `device`, `lang` |
 
 *Why `session_start` separately:* today "first visit" is inferred from a
