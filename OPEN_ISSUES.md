@@ -81,12 +81,12 @@ of these took minutes once actually done.
 ## B. Dependency upgrades
 
 26 of 28 Dependabot pull requests merged today across both repositories, main
-green after every batch. Two remain, both for stated reasons.
+green after every batch. The last two, B1 and B2, are now merged too.
 
 | # | S | Item | Detail |
 |---|---|---|---|
 | B1 | ☑ | **ML-Unified #6 — opencv-python-headless 5.0** | Done 2026-09-13 — `554b531` lifted ml-api to numpy 2.4.6, then #6 merged as `d7748c9`. The blocker was only the pin: opencv 5.0.0.93 declares numpy>=2. Nothing in the codebase used an API opencv 5 removed — all 73 cv2 symbols checked against 5.0.0, and the one apparent miss was prose in a docstring. All 12 pickles load and predict correctly under numpy 2. Full suite green on the PR and on main. |
-| B2 | ☐ | **ml-portfolio #5 — next 16.3.4** | Every CI check passes. Only the Vercel preview deployment fails, twice. `npm install && npm run build` on that exact branch succeeds locally and other previews plus production deploy fine, so it is specific to this PR but platform-side. No Vercel log access from here, so the cause is **not** established. |
+| B2 | ☑ | **ml-portfolio #5 — next 16.3.4** | Merged 2026-09-14 as `73f0fe9`, live. Cause: on Next 16.3.x, `output: "standalone"` plus a build adapter (Vercel always injects one) crashes after the build with ENOENT `.next/next-server.js.nft.json`. Reproduced locally with a no-op `NEXT_ADAPTER_PATH`. Fix `b3c3029`: standalone only when `VERCEL` is unset, so the Dockerfile still gets it. |
 
 ---
 
@@ -217,6 +217,6 @@ Both found by the user on 2026-09-13, from the live site.
    AGPL exposure is resolved rather than deferred: private-and-hosted was the
    non-compliant state, public-under-AGPL is the compliant one.
 5. ~~F1~~ done and verified live; ~~F2~~ done bar its handbook chapter, which
-   is E6. **Nothing in A, B, C, D or F is open except B2.**
-6. ~~B1, C1~~ done. Sections B and C are closed apart from B2.
-7. B2 and section E are independent and can wait.
+   is E6. **Nothing in A, B, C, D or F is open.**
+6. ~~B1, B2, C1~~ done. **Sections B and C are closed.**
+7. Only section E remains.
