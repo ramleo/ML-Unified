@@ -152,6 +152,20 @@ async def explain_automl(request: Request):
     custom_base_url = (body.get("custom_base_url") or "").strip()
     custom_model    = (body.get("custom_model") or "").strip()
 
+    # A caller-chosen URL is only allowed to a public https host (E19). Without
+    # this the Space would open a connection to any address the caller names —
+    # its own loopback, the private network, cloud metadata. Only the caller's
+    # own key is ever sent there (never a server key), so this is about the
+    # outbound request, not a key leak.
+    if custom_base_url:
+        from urllib.parse import urlparse
+        from routers.security_shared import normalize_host, resolve_public_ip
+        if urlparse(custom_base_url).scheme != "https":
+            raise HTTPException(400, "custom_base_url must start with https://")
+        host = normalize_host(custom_base_url)
+        if not host or resolve_public_ip(host) is None:
+            raise HTTPException(400, "custom_base_url must be a public host.")
+
     if not user_key:
         _server_keys = {
             "gemini-2.5": os.environ.get("GEMINI_API_KEY", ""),
