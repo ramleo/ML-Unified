@@ -183,7 +183,7 @@ CI was briefly worth rationing.
 
 | # | S | Item | Detail |
 |---|---|---|---|
-| E1 | ☐ | Vercel WAF edge rate limiting | Hardening plan Gap 1 |
+| E1 | ☐ | Vercel WAF edge rate limiting | Hardening plan Gap 1. Scope is narrower than it sounds: browser calls to the ML backend go straight to the HF Space, so a Vercel rule only covers ml-portfolio's `/api/*`. The routes that matter are the three LLM routes (`chat`, `ai-tools`, `ai-explain`) and `contact` (sends email) — none has a rate limit. Firewall rules are set in the Vercel dashboard, not code; check what Hobby allows before writing the rule. |
 | E2 | ☐ | OWASP LLM Top 10 2026 audit | Hardening plan Gap 2 |
 | E3 | ☐ | Provider-failure alerting outside the document path | Hardening plan Gap 3, remainder |
 | E4 | ☐ | ml-sql's two untested provider paths | No coverage |
@@ -191,6 +191,7 @@ CI was briefly worth rationing.
 | E6 | ☐ | Handbook clips at 25 of 50 | Half the tools missing from the published handbook |
 | E7 | ☑ | Stale file-length baseline entry | Done 2026-09-13. `automl_stage.py` had shrunk to 336 lines with its pin still at 410, so every gate run printed a NOTE nobody acted on. Entry deleted; the normal 400-line limit applies to it again. |
 | E8 | ☑ | ml-api and ml-vision shared the module names `app` and `shared` | Fixed 2026-09-13. Both kept their FastAPI app in `app.py` and both had a `shared/` namespace package with a **different** `progress.py` (126 lines against 104), so in one interpreter the suite collected second imported the other service's code. Seven ml-vision tests failed that way and the four hundred that passed alongside them proved nothing. ml-vision's modules are now `vision_app` and `vision_shared`; ml-api, which is the deployed one, was not touched. Cheap because ml-vision is not deployed anywhere — no Space exists and the live backend has no `ML_VISION_URL`. Root `conftest.py` now compares each collected service's real top-level names and refuses only on an actual clash, naming it, so the next one fails in a sentence. Verified: 385 + 22 separately, 407 together in both orders, guard fires on a planted `security.py` and passes once removed, ruff clean, and the Dockerfile's exact file set imports `vision_app:app` on its own. |
+| E9 | ◐ | `/api/ai-tools` sent server API keys to a caller-supplied URL | Found 2026-09-14 while scoping E1; fixed in ml-portfolio `dc2bf19`, live. The route took `baseUrl` from the request and, with no `userKey`, fell back to the server's env key for the named provider, then sent it as a Bearer token to that URL — one `curl` could take any key configured in Vercel. Public since the repo went public on 2026-09-13. Proven locally: a listener received a planted server key from the old route and nothing from the fixed one; live route now returns 401. A custom URL now needs the caller's own key and `https`. The backend's equivalent (`automl_explain` `custom`) was checked and is safe — `custom` never gets a server key. Gemini key rotated by the user 2026-09-14. **Remaining (user): rotate every other LLM key set in Vercel** (Groq, Cohere and any others there) — whether one was taken cannot be seen from here. |
 
 ---
 
@@ -219,4 +220,4 @@ Both found by the user on 2026-09-13, from the live site.
 5. ~~F1~~ done and verified live; ~~F2~~ done bar its handbook chapter, which
    is E6. **Nothing in A, B, C, D or F is open.**
 6. ~~B1, B2, C1~~ done. **Sections B and C are closed.**
-7. Only section E remains.
+7. Only section E remains. **E9 first: rotate the remaining Vercel LLM keys (Gemini done).**
