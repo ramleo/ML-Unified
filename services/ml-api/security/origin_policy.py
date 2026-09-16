@@ -96,6 +96,19 @@ def is_allowed_origin(origin: str) -> bool:
     return origin in ALLOWED_ORIGINS or bool(_origin_regex.fullmatch(origin))
 
 
+def origin_present_and_allowed(request: Request) -> bool:
+    """Stricter than `enforce_origin`: the request MUST carry an allowlisted
+    Origin. `enforce_origin` lets a no-Origin request (curl, server-to-server)
+    through by design; a destructive route (E21) should not, because a real
+    browser always sends Origin on a cross-site or same-origin DELETE. This
+    refuses the accidental/naive `curl -X DELETE` — it does NOT stop a curl that
+    forges the Origin header (only Turnstile/auth would), which is an accepted
+    residual for a route whose worst case is deleting a regenerable model.
+    """
+    origin = request.headers.get("origin")
+    return bool(origin) and is_allowed_origin(origin)
+
+
 async def enforce_origin(request: Request, call_next):
     origin = request.headers.get("origin")
     if origin and not is_allowed_origin(origin):

@@ -8,7 +8,7 @@ import time
 from typing import Dict
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.compose import ColumnTransformer
@@ -22,6 +22,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from routers.core.shared import (
     MODELS, _BUILTIN_IDS, SCHEMA_DIR, MODEL_DIR, _delete_model_from_hf,
 )
+from security.origin_policy import origin_present_and_allowed
 from shared.progress import StreamingTask
 
 logger = logging.getLogger(__name__)
@@ -111,7 +112,15 @@ def get_schema(model_id: str):
 
 
 @router.delete("/models/{model_id}")
-def delete_model(model_id: str):
+def delete_model(model_id: str, request: Request):
+    # E21: this route permanently deletes a model (disk + HF store). enforce_origin
+    # already 403s a disallowed Origin, but lets a no-Origin request through by
+    # design — so a plain `curl -X DELETE` deleted models. A real browser always
+    # sends Origin on a DELETE, so require an allowlisted one here. Not a full
+    # guard (a curl can forge Origin); accepted, since the worst case is deleting
+    # a model that regenerates on the next train. See origin_present_and_allowed.
+    if not origin_present_and_allowed(request):
+        raise HTTPException(403, "This action must be performed from the app.")
     if model_id in _BUILTIN_IDS:
         raise HTTPException(400, "Cannot delete a built-in demo model.")
     if model_id not in MODELS:
