@@ -146,6 +146,38 @@ jobs:
         run: pytest services/ml-vision/tests/ -v --tb=short
 
 
+  # ml-sql was not in CI (OPEN_ISSUES E4). Its two security guards — the DuckDB
+  # file-access lock (E10) and the /sql/connect public-host check (E14) — were
+  # proven once by hand and had nothing watching them. Its own job because its
+  # dependencies are light (no torch/CUDA), so it needs none of the `test`
+  # job's disk-freeing dance.
+  test-ml-sql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            services/ml-sql/requirements.txt
+            requirements-dev.txt
+
+      - name: Install ml-sql dependencies
+        run: pip install -r services/ml-sql/requirements.txt
+
+      - name: Install dev tools
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint ml-sql
+        run: ruff check services/ml-sql/app.py
+
+      - name: Test ml-sql
+        run: pytest services/ml-sql/tests/ -v --tb=short
+
+
   model-quality:
     runs-on: ubuntu-latest
     continue-on-error: true
