@@ -98,8 +98,50 @@ The LLM-side sweep (E10–E20) closed most of this. Standing web guardrails:
 ## Gaps worth acting on (priority order)
 
 1. **Key rotation** (owner: user) — E9 Vercel keys + all keys on both Spaces (E10 exposed them).
-2. **WCAG 2.2 + Core Web Vitals audit of the tool pages** — never formally done; now enforceable.
-3. **Promote ad-hoc guard proofs (E10 / E14 / E18) into a permanent unit + integration suite.**
+2. **WCAG 2.2 + Core Web Vitals audit of the tool pages** — in progress (see status below).
+3. ~~Promote ad-hoc guard proofs (E10 / E14 / E18) into a permanent suite~~ — **done 2026-09-16**
+   (E4 closed: `services/ml-sql/tests/` + `test_skops_safe.py`, ml-sql now in CI; ML-Unified `2192ccc`).
+
+---
+
+## Implementation status
+
+**Done 2026-09-16** (this pass through the guidelines):
+- **SEO §D** — `app/robots.ts` → `/robots.txt`, `app/sitemap.ts` → `/sitemap.xml` (58 URLs, tool
+  slugs auto-read at build). ml-portfolio `e830ce3`.
+- **A11y §B — reduced motion** (WCAG 2.3.3) — global CSS `@media (prefers-reduced-motion: reduce)`
+  block + `ConstellationBackground` draws a static frame (no rAF, no cursor-repel) when set. `e830ce3`.
+- **A11y §B — focus visible** (WCAG 2.4.7/2.4.11) — site-wide `:focus-visible` ring floor. `e830ce3`.
+- **A11y §B — main landmark** (WCAG 1.3.1/2.4.1) — `role="main"` on all 53 tool pages'
+  content wrapper (41 via the shared `relative z-10` wrapper, 12 hand-placed). ml-portfolio `618ee08`.
+- (Related, same window: E3 provider-auth-failure alerting `078d076`; E21 delete-origin guard.)
+
+## Remaining plan — scheduled 2026-09-17
+
+Measurement-driven; run the audits first so the fix effort is sized by real findings, not guessed.
+
+1. **Touch targets** (WCAG 2.5.8, ≥24×24px) — *finish the approved scope.*
+   - Audit: Playwright, measure every interactive element's rect on representative pages
+     (home, text-to-sql, automl, one vision tool); list everything under 24px.
+   - Fix shared first (high leverage): `ToolsAIChat` controls (close/settings/toggle buttons are
+     ~14–20px) — bump via `min-height`/padding without breaking the compact chat header. Then the
+     tool-specific small toggles (e.g. text-to-sql "Schema/Glossary/Templates/Saved").
+   - Re-measure live to confirm.
+2. **Contrast** (WCAG 1.4.3) — inject axe-core via Playwright on **both** themes across representative
+   pages; fix failing token pairs in `styles/01-tokens.css` (suspect: `--text3` on `--bg-glass`);
+   re-run to confirm 4.5:1 body / 3:1 large+UI.
+3. **Core Web Vitals** (§A) — Lighthouse on home + 3 heavy pages (a WebGL tool like depth-parallax /
+   pose-vj, plus automl); record LCP/INP/CLS/TTFB; fix by finding (image dims, defer non-critical JS,
+   keep canvas heroes off the LCP path).
+4. **`next/image` migration** (§A, CLS) — 28 files use raw `<img>`. Per file: convert to `next/image`
+   with explicit width/height (or `fill` + sized parent). Care: data-URI / canvas / dynamic srcs may
+   need `unoptimized` or stay `<img>` with a noted reason; set `next.config` image domains if any are
+   remote. Verify each page has no layout shift or break. (Largest item — do after the cheap audits.)
+5. **Heading structure** (WCAG 1.3.1) — several tool pages render section titles as styled `<div>`s
+   and carry only one `<h1>`. Convert section titles to `<h2>`/`<h3>`, highest-traffic tools first.
+
+Suggested order: **1 → 2 → 3 → 5 → 4** (touch targets finishes today's scope; contrast + CWV are
+cheap to run and size the rest; `next/image` is the big one, last). Key rotation stays the user's.
 
 ---
 
