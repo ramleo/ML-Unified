@@ -33,8 +33,18 @@ router = APIRouter(prefix="/siem-triage")
 _MAX_GROUPS = 20
 _MAX_EXAMPLE_LEN = 500
 
-_JUDGE_PROVIDER = "mistral"
-_JUDGE_MODEL = "mistral-small-latest"
+# Judge cascade, tried in order. Mistral alone was the whole judge until
+# 2026-09-17, when the Space log showed it returning 429 on every attempt
+# (free-tier capacity contention — best-effort with no reserved capacity).
+# The endpoint still answered 200 with a null body, so every alert group
+# rendered "Judge unavailable" for real users while the grouping worked.
+# Same fix as routers/prompt_injection_check.py: cohere leads because it is
+# free and reliable, mistral stays as the second opinion. Gemini is
+# deliberately absent — it is the only paid key, and this endpoint is public.
+_JUDGE_CANDIDATES = [
+    ("cohere", "command-a-03-2025"),
+    ("mistral", "mistral-small-latest"),
+]
 
 _JUDGE_SYSTEM = (
     "You are a SOC analyst assistant. You are shown a list of already-"
@@ -95,9 +105,6 @@ def _parse_judge_response(raw: str, expected_count: int) -> list[TriageVerdict] 
 
 
 def run_triage(groups: list[AlertGroupIn]) -> list[TriageVerdict] | None:
-    key = _resolve_key(_JUDGE_PROVIDER, None)
-    if not key:
-        return None
     payload = [
         {
             "template": g.template,
@@ -107,12 +114,26 @@ def run_triage(groups: list[AlertGroupIn]) -> list[TriageVerdict] | None:
         }
         for g in groups
     ]
-    raw = complete(
-        _JUDGE_PROVIDER, _JUDGE_MODEL, key,
-        [{"role": "user", "content": json.dumps(payload)}],
-        system=_JUDGE_SYSTEM,
-    )
-    return _parse_judge_response(raw, len(groups))
+    for provider, model in _JUDGE_CANDIDATES:
+        key = _resolve_key(provider, None)
+        if not key:
+            continue
+        try:
+            raw = complete(
+                provider, model, key,
+                [{"role": "user", "content": json.dumps(payload)}],
+                system=_JUDGE_SYSTEM,
+            )
+        except Exception as exc:
+            logger.warning("siem-triage judge: %s failed: %s", provider, exc)
+            continue
+        verdicts = _parse_judge_response(raw, len(groups))
+        if verdicts is not None:
+            return verdicts
+        logger.warning("siem-triage judge: %s returned unparseable output", provider)
+    logger.error("siem-triage judge: every candidate failed (%s)",
+                 ", ".join(p for p, _ in _JUDGE_CANDIDATES))
+    return None
 
 
 @router.post("/judge", response_model=list[TriageVerdict] | None)

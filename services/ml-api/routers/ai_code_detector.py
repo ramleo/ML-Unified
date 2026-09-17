@@ -32,8 +32,17 @@ router = APIRouter(prefix="/ai-code-detect")
 
 _MAX_CODE_LEN = 20_000
 
-_JUDGE_PROVIDER = "mistral"
-_JUDGE_MODEL = "mistral-small-latest"
+# Judge cascade, tried in order. Mistral alone was the whole judge until
+# 2026-09-17, when the Space log showed it 429ing every call (free-tier
+# capacity contention). The endpoint answered 200 with a null body, so the
+# "Independent LLM opinion" panel read "unavailable" for real users while
+# the client-side stylometry still ran. Same fix as prompt_injection_check
+# and siem_triage: cohere first (free, reliable), mistral second. Gemini is
+# absent on purpose — the only paid key, on a public endpoint.
+_JUDGE_CANDIDATES = [
+    ("cohere", "command-a-03-2025"),
+    ("mistral", "mistral-small-latest"),
+]
 
 _JUDGE_SYSTEM = (
     "You are shown a code snippet. There is no reliable, published way to "
@@ -83,12 +92,23 @@ def _parse_judge_response(raw: str) -> AiCodeJudgeVerdict | None:
 
 
 def run_judge(code: str) -> AiCodeJudgeVerdict | None:
-    key = _resolve_key(_JUDGE_PROVIDER, None)
-    if not key:
-        return None
-    raw = complete(_JUDGE_PROVIDER, _JUDGE_MODEL, key,
-                   [{"role": "user", "content": code}], system=_JUDGE_SYSTEM)
-    return _parse_judge_response(raw)
+    for provider, model in _JUDGE_CANDIDATES:
+        key = _resolve_key(provider, None)
+        if not key:
+            continue
+        try:
+            raw = complete(provider, model, key,
+                           [{"role": "user", "content": code}], system=_JUDGE_SYSTEM)
+        except Exception as exc:
+            logger.warning("ai-code judge: %s failed: %s", provider, exc)
+            continue
+        verdict = _parse_judge_response(raw)
+        if verdict is not None:
+            return verdict
+        logger.warning("ai-code judge: %s returned unparseable output", provider)
+    logger.error("ai-code judge: every candidate failed (%s)",
+                 ", ".join(p for p, _ in _JUDGE_CANDIDATES))
+    return None
 
 
 @router.post("/judge", response_model=AiCodeJudgeVerdict | None)
