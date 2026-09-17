@@ -98,8 +98,9 @@ The LLM-side sweep (E10–E20) closed most of this. Standing web guardrails:
 ## Gaps worth acting on (priority order)
 
 1. **Key rotation** (owner: user) — E9 Vercel keys + all keys on both Spaces (E10 exposed them).
-2. **WCAG 2.2 + Core Web Vitals audit of the tool pages** — touch targets, contrast **and Core Web
-   Vitals done 2026-09-17** (`a8090b1`, `f3a6426`; home 66→100); headings + `next/image` remain.
+2. **WCAG 2.2 + Core Web Vitals audit of the tool pages** — touch targets, contrast, Core Web Vitals
+   **and heading structure done 2026-09-17** (`a8090b1`, `f3a6426`, `0b0dc1c`; home 66→100); only the
+   `next/image` migration remains.
 3. ~~Promote ad-hoc guard proofs (E10 / E14 / E18) into a permanent suite~~ — **done 2026-09-16**
    (E4 closed: `services/ml-sql/tests/` + `test_skops_safe.py`, ml-sql now in CI; ML-Unified `2192ccc`).
 
@@ -144,19 +145,27 @@ axe-core + rect measurement:
 - **Result (3-run median, live): perf 66→100, LCP 4.2s→1.6s, TBT 860ms→10ms, CLS ~0.** The planned
   option of taking framer-motion off the hero proved unnecessary — LCP is already green.
 
-## Remaining plan — scheduled next
+**Done 2026-09-17 — Heading structure** (WCAG 1.3.1; ml-portfolio `0b0dc1c`). Audit of all 53 tool
+pages: every page already had an `<h1>` + `<main>` landmark; the real violations were narrow —
+- **drift** had **no `<h1>`** (title was a `<span>`, page started at h2) → title now `<h1>`.
+- **8 pages skipped h1→h3** (no h2): their Runner section titles were `<h3>` → changed to `<h2>`
+  (ai-code-detector, asl-fingerspelling, astrophotography, email-auth-checker,
+  extension-permission-analyzer, prompt-injection-playground, text-prompted-video-tracking,
+  crime-scene-reconstruction). All 9 now h1→h2; axe heading-order/page-has-heading-one/empty-heading
+  clean.
+- **Not done (deliberate):** converting *every* panel's `<div>` section title into a heading across
+  all tools — mostly post-interaction result panels, ~40-page judgment pass axe can't verify, and
+  every page already has h1 + landmark, so low value vs. regression risk. Do per-tool as touched.
 
-Measurement-driven; run the audits first so the fix effort is sized by real findings, not guessed.
+## Remaining plan — scheduled next
 
 4. **`next/image` migration** (§A, CLS) — 28 files use raw `<img>`. Per file: convert to `next/image`
    with explicit width/height (or `fill` + sized parent). Care: data-URI / canvas / dynamic srcs may
    need `unoptimized` or stay `<img>` with a noted reason; set `next.config` image domains if any are
-   remote. Verify each page has no layout shift or break. (Largest item — do after the cheap audits.)
-5. **Heading structure** (WCAG 1.3.1) — several tool pages render section titles as styled `<div>`s
-   and carry only one `<h1>`. Convert section titles to `<h2>`/`<h3>`, highest-traffic tools first.
+   remote. Verify each page has no layout shift or break. (Largest item — do last.)
 
-Suggested order: **5 → 4** (headings next; `next/image` is the big one, last). Items 1–3 + the
-back-nav done 2026-09-17 (see above). Key rotation stays the user's.
+This is the last guidelines item. Also outstanding: the dead-code `/simplify` pass from the back-nav
+work (unused `handleBack`/imports on ~48 pages). Key rotation stays the user's.
 
 ---
 
