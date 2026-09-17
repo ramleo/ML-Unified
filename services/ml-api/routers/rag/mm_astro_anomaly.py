@@ -156,7 +156,11 @@ def _detect_streaks(diff: np.ndarray) -> list[Streak]:
         return []
 
     candidates = []
-    for (x1, y1, x2, y2) in lines[:, 0, :]:
+    # HoughLinesP returns (N, 1, 4) on OpenCV 4 but (N, 4) on OpenCV 5 (this
+    # Space runs opencv-python-headless>=5). reshape handles both; the old
+    # lines[:, 0, :] crashed with an IndexError on 5 whenever any line was
+    # found — i.e. exactly when there was an anomaly to report.
+    for (x1, y1, x2, y2) in lines.reshape(-1, 4):
         pos_sum, neg_sum = _sample_side_sums(diff, float(x1), float(y1), float(x2), float(y2), _DIPOLE_BAND_PX)
         major = max(pos_sum, neg_sum)
         minor = min(pos_sum, neg_sum)
