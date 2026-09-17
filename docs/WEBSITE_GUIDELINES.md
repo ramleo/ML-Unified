@@ -98,9 +98,9 @@ The LLM-side sweep (E10–E20) closed most of this. Standing web guardrails:
 ## Gaps worth acting on (priority order)
 
 1. **Key rotation** (owner: user) — E9 Vercel keys + all keys on both Spaces (E10 exposed them).
-2. **WCAG 2.2 + Core Web Vitals audit of the tool pages** — touch targets, contrast, Core Web Vitals
-   **and heading structure done 2026-09-17** (`a8090b1`, `f3a6426`, `0b0dc1c`; home 66→100); only the
-   `next/image` migration remains.
+2. **WCAG 2.2 + Core Web Vitals audit of the tool pages** — **complete 2026-09-17** (`a8090b1`,
+   `f3a6426`, `0b0dc1c`; home 66→100). Touch targets, contrast, CWV, heading structure all done;
+   `next/image` migration closed as not-needed (audit — images are dynamic or already optimized).
 3. ~~Promote ad-hoc guard proofs (E10 / E14 / E18) into a permanent suite~~ — **done 2026-09-16**
    (E4 closed: `services/ml-sql/tests/` + `test_skops_safe.py`, ml-sql now in CI; ML-Unified `2192ccc`).
 
@@ -157,15 +157,23 @@ pages: every page already had an `<h1>` + `<main>` landmark; the real violations
   all tools — mostly post-interaction result panels, ~40-page judgment pass axe can't verify, and
   every page already has h1 + landmark, so low value vs. regression risk. Do per-tool as touched.
 
-## Remaining plan — scheduled next
+**Closed 2026-09-17 — `next/image` migration: not needed (verified by audit, no code change).**
+Audited all 65 `<img>` tags across 37 files. They split into two buckets, both already correct as
+plain `<img>`:
+- **Dynamic runtime images (the vast majority)** — user-upload previews (blob/object URLs), base64
+  data URIs from API results, canvas `new Image()` loaders. `next/image` can't optimize these (it
+  passes data/blob URIs straight through) and they have no fixed dimensions. (The `.ts` hits are HTML
+  report strings + canvas loaders, not JSX.)
+- **The one static image** — `ToolCard`'s `/thumbs/*.webp` (rendered ~51× on home) — is already
+  optimized to `next/image`'s standard: `loading="lazy"`, `decoding="async"`, explicit
+  `width/height` (no CLS), already `.webp`, decorative with an `onError` fallback. Converting it would
+  add Vercel image-optimization requests for a decorative aria-hidden thumbnail — negative trade.
 
-4. **`next/image` migration** (§A, CLS) — 28 files use raw `<img>`. Per file: convert to `next/image`
-   with explicit width/height (or `fill` + sized parent). Care: data-URI / canvas / dynamic srcs may
-   need `unoptimized` or stay `<img>` with a noted reason; set `next.config` image domains if any are
-   remote. Verify each page has no layout shift or break. (Largest item — do last.)
+The plan assumed 28 migratable images; the evidence shows they're un-optimizable (dynamic) or already
+optimized. CWV work already put home at 100 / CLS ~0 without it. **Guidelines plan is now complete.**
 
-This is the last guidelines item. Also outstanding: the dead-code `/simplify` pass from the back-nav
-work (unused `handleBack`/imports on ~48 pages). Key rotation stays the user's.
+Still outstanding (outside the guidelines): the dead-code `/simplify` pass from the back-nav work
+(unused `handleBack`/imports on ~48 pages). Key rotation stays the user's.
 
 ---
 
