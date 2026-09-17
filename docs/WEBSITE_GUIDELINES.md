@@ -98,8 +98,8 @@ The LLM-side sweep (E10–E20) closed most of this. Standing web guardrails:
 ## Gaps worth acting on (priority order)
 
 1. **Key rotation** (owner: user) — E9 Vercel keys + all keys on both Spaces (E10 exposed them).
-2. **WCAG 2.2 + Core Web Vitals audit of the tool pages** — touch targets + contrast **done
-   2026-09-17** (ml-portfolio `a8090b1`); Core Web Vitals + headings + `next/image` remain (see plan).
+2. **WCAG 2.2 + Core Web Vitals audit of the tool pages** — touch targets, contrast **and Core Web
+   Vitals done 2026-09-17** (`a8090b1`, `f3a6426`; home 66→100); headings + `next/image` remain.
 3. ~~Promote ad-hoc guard proofs (E10 / E14 / E18) into a permanent suite~~ — **done 2026-09-16**
    (E4 closed: `services/ml-sql/tests/` + `test_skops_safe.py`, ml-sql now in CI; ML-Unified `2192ccc`).
 
@@ -128,16 +128,26 @@ axe-core + rect measurement:
   `--text3` retuned (dark `#64748b`→`#7e8ca4`, light `#94a3b8`→`#4d5a6d`); new `--link` token
   (=`accent-from`, every palette stop ≥4.5:1) for inline links, `--accent` kept for buttons. The
   light-theme failures turned out to be text sitting over the **constellation lines**, so the
-  light-mode constellation was quietened (particles .55→.30, lines .22→.11) — a visible but tasteful
-  change; **eyeball the light theme live and tune the line alpha up if it reads too faint.**
+  light-mode constellation was quietened, then re-strengthened after review (dots .30→.50 ×1.4 size,
+  lines .11→.15) — clearly visible and still 0 violations across 16 animated samples both themes.
+- **Two-button back nav** (ml-portfolio `6bd64b0`) — every tool page now has Home (→ `/`) **and** its
+  area link via a shared `<ToolBackNav>` (was a single area button). Fixed pipeline-cinema's "Home"
+  (went to ML Pipeline, not `/`), the mis-keyed feature-engineering/feature-selection (fell back to a
+  lone "Home"), and kept rag-analytics' parent link. Verified: SSR sweep, all pages ≥2 correct links.
+
+**Done 2026-09-17 — Core Web Vitals** (ml-portfolio `f3a6426`), Lighthouse mobile on live Vercel:
+- Tool pages were already 98–100 (LCP ~2.3s, TBT 0) — no work needed.
+- **Home was the outlier** (perf 66, LCP 4.2s, TBT 860ms). Root cause: LCP is a *text* element
+  render-delayed by main-thread JS — every home section is a framer-motion client component hydrating
+  at once. Fix: defer the chatbot + the three below-fold sections (architecture/pipeline/news) via
+  `dynamic ssr:false` client wrappers, keeping the hero + tool grid server-rendered.
+- **Result (3-run median, live): perf 66→100, LCP 4.2s→1.6s, TBT 860ms→10ms, CLS ~0.** The planned
+  option of taking framer-motion off the hero proved unnecessary — LCP is already green.
 
 ## Remaining plan — scheduled next
 
 Measurement-driven; run the audits first so the fix effort is sized by real findings, not guessed.
 
-3. **Core Web Vitals** (§A) — Lighthouse on home + 3 heavy pages (a WebGL tool like depth-parallax /
-   pose-vj, plus automl); record LCP/INP/CLS/TTFB; fix by finding (image dims, defer non-critical JS,
-   keep canvas heroes off the LCP path).
 4. **`next/image` migration** (§A, CLS) — 28 files use raw `<img>`. Per file: convert to `next/image`
    with explicit width/height (or `fill` + sized parent). Care: data-URI / canvas / dynamic srcs may
    need `unoptimized` or stay `<img>` with a noted reason; set `next.config` image domains if any are
@@ -145,8 +155,8 @@ Measurement-driven; run the audits first so the fix effort is sized by real find
 5. **Heading structure** (WCAG 1.3.1) — several tool pages render section titles as styled `<div>`s
    and carry only one `<h1>`. Convert section titles to `<h2>`/`<h3>`, highest-traffic tools first.
 
-Suggested order: **3 → 5 → 4** (CWV is cheap to run and sizes the rest; headings next; `next/image`
-is the big one, last). Items 1–2 done 2026-09-17 (see above). Key rotation stays the user's.
+Suggested order: **5 → 4** (headings next; `next/image` is the big one, last). Items 1–3 + the
+back-nav done 2026-09-17 (see above). Key rotation stays the user's.
 
 ---
 
