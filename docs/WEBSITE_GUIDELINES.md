@@ -98,7 +98,8 @@ The LLM-side sweep (E10–E20) closed most of this. Standing web guardrails:
 ## Gaps worth acting on (priority order)
 
 1. **Key rotation** (owner: user) — E9 Vercel keys + all keys on both Spaces (E10 exposed them).
-2. **WCAG 2.2 + Core Web Vitals audit of the tool pages** — in progress (see status below).
+2. **WCAG 2.2 + Core Web Vitals audit of the tool pages** — touch targets + contrast **done
+   2026-09-17** (ml-portfolio `a8090b1`); Core Web Vitals + headings + `next/image` remain (see plan).
 3. ~~Promote ad-hoc guard proofs (E10 / E14 / E18) into a permanent suite~~ — **done 2026-09-16**
    (E4 closed: `services/ml-sql/tests/` + `test_skops_safe.py`, ml-sql now in CI; ML-Unified `2192ccc`).
 
@@ -116,20 +117,24 @@ The LLM-side sweep (E10–E20) closed most of this. Standing web guardrails:
   content wrapper (41 via the shared `relative z-10` wrapper, 12 hand-placed). ml-portfolio `618ee08`.
 - (Related, same window: E3 provider-auth-failure alerting `078d076`; E21 delete-origin guard.)
 
-## Remaining plan — scheduled 2026-09-17
+**Done 2026-09-17** (ml-portfolio `a8090b1`) — verified live against the production build with
+axe-core + rect measurement:
+- **Touch targets** (WCAG 2.5.8) — every real control now ≥24px: the back button on all 53 tool
+  pages (→28px), plus home "See more" / search input / `.cap-clear`, `AutoMLFooter`,
+  `pipeline-builder` / `pipeline-cinema`, `FSPageHeader`. The audit corrected the plan's guesses:
+  the `ToolsAIChat` controls weren't the hotspot (didn't mount on landing states), and the footer
+  nav links (20px) already **pass** via the spacing exception (29px centre-to-centre ≥ 24).
+- **Contrast** (WCAG 1.4.3) — axe color-contrast now **0 violations on both themes** (was 25/25).
+  `--text3` retuned (dark `#64748b`→`#7e8ca4`, light `#94a3b8`→`#4d5a6d`); new `--link` token
+  (=`accent-from`, every palette stop ≥4.5:1) for inline links, `--accent` kept for buttons. The
+  light-theme failures turned out to be text sitting over the **constellation lines**, so the
+  light-mode constellation was quietened (particles .55→.30, lines .22→.11) — a visible but tasteful
+  change; **eyeball the light theme live and tune the line alpha up if it reads too faint.**
+
+## Remaining plan — scheduled next
 
 Measurement-driven; run the audits first so the fix effort is sized by real findings, not guessed.
 
-1. **Touch targets** (WCAG 2.5.8, ≥24×24px) — *finish the approved scope.*
-   - Audit: Playwright, measure every interactive element's rect on representative pages
-     (home, text-to-sql, automl, one vision tool); list everything under 24px.
-   - Fix shared first (high leverage): `ToolsAIChat` controls (close/settings/toggle buttons are
-     ~14–20px) — bump via `min-height`/padding without breaking the compact chat header. Then the
-     tool-specific small toggles (e.g. text-to-sql "Schema/Glossary/Templates/Saved").
-   - Re-measure live to confirm.
-2. **Contrast** (WCAG 1.4.3) — inject axe-core via Playwright on **both** themes across representative
-   pages; fix failing token pairs in `styles/01-tokens.css` (suspect: `--text3` on `--bg-glass`);
-   re-run to confirm 4.5:1 body / 3:1 large+UI.
 3. **Core Web Vitals** (§A) — Lighthouse on home + 3 heavy pages (a WebGL tool like depth-parallax /
    pose-vj, plus automl); record LCP/INP/CLS/TTFB; fix by finding (image dims, defer non-critical JS,
    keep canvas heroes off the LCP path).
@@ -140,8 +145,8 @@ Measurement-driven; run the audits first so the fix effort is sized by real find
 5. **Heading structure** (WCAG 1.3.1) — several tool pages render section titles as styled `<div>`s
    and carry only one `<h1>`. Convert section titles to `<h2>`/`<h3>`, highest-traffic tools first.
 
-Suggested order: **1 → 2 → 3 → 5 → 4** (touch targets finishes today's scope; contrast + CWV are
-cheap to run and size the rest; `next/image` is the big one, last). Key rotation stays the user's.
+Suggested order: **3 → 5 → 4** (CWV is cheap to run and sizes the rest; headings next; `next/image`
+is the big one, last). Items 1–2 done 2026-09-17 (see above). Key rotation stays the user's.
 
 ---
 
