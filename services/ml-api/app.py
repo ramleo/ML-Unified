@@ -75,6 +75,7 @@ from routers.siem_triage import router as siem_triage_router
 from routers.tls_headers_check import router as tls_headers_router
 from routers.attack_surface_check import router as attack_surface_router
 from routers.yara_scan import router as yara_scan_router
+from routers.anomaly_detection import router as anomaly_detection_router
 from routers.security_status import router as security_status_router
 
 from routers.core.shared import (
@@ -276,6 +277,7 @@ app.include_router(siem_triage_router, tags=["siem-triage"])
 app.include_router(tls_headers_router, tags=["tls-headers"])
 app.include_router(attack_surface_router, tags=["attack-surface"])
 app.include_router(yara_scan_router, tags=["yara-scan"])
+app.include_router(anomaly_detection_router, tags=["anomaly-detection"])
 app.include_router(security_status_router, tags=["security-status"])
 
 
