@@ -131,20 +131,34 @@ Executing against a user URL is where the risk lives. Required controls:
 If verified-ownership is too heavy for v1, ship Mode 2 **against the project's
 own site only** and label it as such — still a real demo, zero risk.
 
-### Phased build
-- **Phase 1 (MVP):** Mode 1, generation only (no execution). Pure LLM → code.
-  Frontend tool + one free-LLM endpoint. Lowest risk, fully free.
-- **Phase 2:** Mode 1 execution against the project's own site (bounded HF /
-  Actions runner).
-- **Phase 3:** Mode 2 crawl → propose → confirm → run, **own-site or
-  verified-domain only** first, general URLs only if the SSRF/ownership story
-  is airtight.
+### Decisions (locked 2026-09-18)
+1. **Target:** start with the **project's own site only**; add other sites
+   later, behind ownership verification / allow-list (Phase 4).
+2. **Output language:** **Playwright TypeScript** — matches the site's language,
+   Playwright's best-supported language, and Node/Playwright is already set up
+   here. (Python only if tests ever move next to the FastAPI backend.)
+3. **Flow:** **generate the tests first, then ask "Run these?" — run only on an
+   explicit yes**, against the own site, bounded.
 
-### Open decisions for the user
-1. Mode 2 target policy: own-site-only, verified-ownership, or allow-list?
-2. Output language: Playwright **TypeScript**, **Python**, or both?
-3. Is generation-only (Phase 1) enough for the portfolio, or is live execution
-   required to be impressive?
+Build starts **2026-09-19**.
+
+### Phased build
+- **Phase 1 (MVP):** Mode 1 — user types plain-English steps → free-LLM →
+  runnable **Playwright TypeScript**, shown with a copy button. Generation only,
+  no execution. Frontend tool + one free-LLM endpoint. Lowest risk, fully free.
+- **Phase 2:** after generating, show a **"Run these?"** prompt; on yes, execute
+  the script **against the project's own site only** (bounded HF / GitHub
+  Actions runner) and show pass/fail.
+- **Phase 3:** Mode 2 — give the own-site URL → crawl (bounded) → propose test
+  cases → user confirms → generate + run, still **own-site only**.
+- **Phase 4:** allow other sites, gated by ownership verification / allow-list
+  and the full SSRF controls above.
+
+### First-day (2026-09-19) scope
+Phase 1 only: the tool page + a "describe your test" box + a free-LLM endpoint
+that returns a Playwright TS script + copy button. No execution yet. Confirm it
+generates sensible tests for a couple of the site's own pages, then move to the
+"Run?" prompt in Phase 2.
 
 ### Note
 This is QA / test-automation, **not** a cybersecurity tool — it would live as
