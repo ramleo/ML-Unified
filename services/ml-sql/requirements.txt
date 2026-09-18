@@ -8,5 +8,5 @@ sqlparse>=0.5.0
 python-multipart
 rank-bm25>=0.2.2
 asyncmy>=0.2.14
-pymssql>=2.2.0
+pymssql>=2.4.1
 duckdb>=1.1.0
