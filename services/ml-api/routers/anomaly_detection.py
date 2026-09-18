@@ -17,7 +17,9 @@ The features are ordinary request metadata a real WAF would have:
   0 req_per_min    requests in the last minute from this event's IP
   1 payload_bytes  request body size
   2 hour           hour of day, 0..23 (off-hours bursts look odd)
-  3 path_entropy   Shannon entropy of the request path (fuzzing/scanning is high)
+  3 path_randomness share of the path that looks like a random token, i.e. the
+                    fraction of digit characters (a fuzzer/scanner hitting random
+                    hex-ish paths scores high, an app's own named routes score 0)
   4 error_rate     fraction of 4xx/5xx responses from this IP in the window
 
 IsolationForest gives a verdict and a continuous score, but NOT a cheap
@@ -35,7 +37,7 @@ from sklearn.ensemble import IsolationForest
 
 router = APIRouter()
 
-FEATURE_NAMES = ["req_per_min", "payload_bytes", "hour", "path_entropy", "error_rate"]
+FEATURE_NAMES = ["req_per_min", "payload_bytes", "hour", "path_randomness", "error_rate"]
 _N_FEATURES = len(FEATURE_NAMES)
 
 # Guardrails — this is a demo detector, not a firehose ingester. These bounds
