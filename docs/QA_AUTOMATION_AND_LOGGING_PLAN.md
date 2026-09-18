@@ -153,12 +153,133 @@ Build starts **2026-09-19**.
   cases → user confirms → generate + run, still **own-site only**.
 - **Phase 4:** allow other sites, gated by ownership verification / allow-list
   and the full SSRF controls above.
+- **Phase 5:** **root-cause failure grouping + bulk fix** (see the section
+  below). Needs Phase 2 execution in place first, because grouping operates on
+  real run results.
 
 ### First-day (2026-09-19) scope
 Phase 1 only: the tool page + a "describe your test" box + a free-LLM endpoint
 that returns a Playwright TS script + copy button. No execution yet. Confirm it
 generates sensible tests for a couple of the site's own pages, then move to the
 "Run?" prompt in Phase 2.
+
+### Feature: root-cause failure grouping + bulk fix (Phase 5)
+Requested 2026-09-19. This is a real testRigor feature: when many tests fail,
+testRigor **groups all the cases affected by the same underlying issue and lets
+you fix them in place all at once**, instead of showing N separate red failures
+for one broken thing. We should do the same.
+
+**The problem it solves.** One broken thing (a renamed button, a moved route, a
+changed label) makes every test that touches it fail. A flat list of 12 red
+tests hides that it's really *one* defect in 12 places — you fix it 12 times, or
+miss some.
+
+**What we build.**
+1. **Group failures by root cause, don't list them flat.** After a run, cluster
+   the failures by a deterministic *failure signature* — the failing
+   locator/selector, the step text, the error kind (element-not-found vs
+   assertion-mismatch vs navigation/HTTP error), and the target URL. Failures
+   with the same signature are one **issue**. An LLM pass then writes a one-line
+   plain-English cause ("the 'Sign up' button was renamed to 'Get started'").
+2. **Show one issue, list every place it hit.** The UI shows **"1 issue,
+   affecting 12 tests"** with the 12 locations expandable underneath — not 12
+   top-level failures. (This is exactly the screenshot the user described.)
+3. **Fix all in one click.** Because we own the generated Playwright TS, a fix is
+   a concrete edit — usually a corrected selector or step. Apply the proposed
+   fix to **all** affected locations at once (a scoped find/replace across the
+   generated suite, or, better, tests referencing a **shared locator/helper
+   module** so one edit heals all of them — the "self-healing" idea, done
+   honestly and visibly). Show a diff, then re-run the affected subset to
+   confirm the group goes green.
+4. **Or fix them one by one.** Same proposed fix, but each location has its own
+   Accept / Skip / Edit, so a partial or per-case correction is possible when
+   the group isn't truly uniform.
+
+**Honest limits (state these in the tool).**
+- Grouping is reliable for the **common case** — one selector/route/label broke
+  and many tests share that exact signature. It will **not** perfectly cluster
+  coincidentally-similar-but-unrelated failures; the plain-English cause is an
+  LLM suggestion to confirm, not a proven diagnosis.
+- "Fix" here means **updating the generated test** (selector/step/assertion) to
+  match reality — it does **not** fix the application. If the app genuinely
+  broke, the right action is a bug report, and the UI must not let a one-click
+  test edit paper over a real regression. So each group offers **"update the
+  tests"** *and* **"this looks like a real bug"** as distinct choices.
+- A one-click bulk edit is only safe because we run against our **own** generated
+  suite and re-run to verify; never apply blind edits without the confirming
+  re-run.
+
+### testRigor feature audit — what is feasible for us
+Reviewed testRigor's public **Features** page + docs on 2026-09-19. The app
+itself (`app.testrigor.com`) is behind a login and could **not** be inspected
+directly — this audit is from their public feature list, not the running app.
+Every listed capability is mapped to our constraints: **free**, **Playwright
+TypeScript**, **own-site-first**, bounded HF / GitHub-Actions execution, no
+device farm.
+
+**Feasible — build these (roughly in priority order):**
+- Plain-English → Playwright TS test generation via a free LLM. [Phase 1]
+- Generate tests from a pasted documented test case, or from a prompt. [Phase 1]
+- Crawl an own-site URL → propose test cases → confirm → run. [Phase 3]
+- **Record-and-playback** as a third input mode (from Katalon's "object spy"):
+  click through the own site, Playwright's built-in `codegen` records the
+  actions into a script, then an LLM pass rewrites brittle selectors into
+  resilient role / text / accessible-name locators.
+- **Import API tests from an OpenAPI / Swagger spec or a Postman collection**
+  (from Katalon) → generated Playwright API-request tests, no infra needed.
+- Root-cause failure grouping + one-click / one-by-one bulk fix. [Phase 5]
+- Screenshots, video, and trace of every run — native Playwright. [Phase 2]
+- **Reusable Rules** → emitted as reusable helper / Page-Object functions.
+- **Stored values / variables** + predefined vars (e.g. today's date) → fixtures.
+- Conditional steps + loops ("until") → generated control flow.
+- **Data-driven testing** from a user CSV → Playwright parametrized tests.
+- **Visual / screenshot comparison** → Playwright `toHaveScreenshot` snapshots.
+- **Accessibility testing** → `@axe-core/playwright` (open-source).
+- **API testing / validation** → Playwright request context against own endpoints.
+- Retries for flaky tests + scheduling → Playwright retries + GH Actions cron.
+- Interactions: tables, forms, multi-tab, iFrame, Shadow DOM, cookies /
+  localStorage / session, geolocation, JS execution, file upload — all native.
+- Unique test-data generation (format / regex) → a small generator helper.
+- HTML report + our own results view. [Phase 2]
+- Sitemap-crawl → screenshot PDF of the own site (Playwright screenshots → PDF).
+- CI/CD via **GitHub Actions** (already used in this project).
+
+**Partially feasible — bounded / honest version only:**
+- **Self-healing:** not Vision-AI at their scale. We can re-locate a broken
+  element by role / text / accessible-name and **propose** a fix (visible,
+  confirmed), tied into the Phase 5 grouping. Honest assistance, not magic.
+- **Parallel execution:** yes, but limited by one free runner — not "full
+  regression in under 15 minutes" across a fleet.
+- File validation (PDF / Word / Excel), OCR (Tesseract.js), audio / video
+  checks: possible but heavy — add later, per need, own-site only.
+- Load testing: only a small bounded burst, not real load.
+- Production monitoring: scheduled own-site runs + free Slack / email posting;
+  no PagerDuty-grade alerting or SLAs.
+- App-level **TOTP** 2FA for our own site via a TOTP library — but **not**
+  SMS / phone 2FA.
+- Import from TestRail / Jira / Zephyr: doable via their APIs *if* the user has
+  an account + key; otherwise just paste the test case in.
+
+**Not feasible — needs infra / scale / paid services we don't have:**
+- 3,000+ browser / device / OS combinations via LambdaTest / BrowserStack /
+  SauceLabs (paid device farm). We get local Chromium / Firefox / WebKit only.
+- Native **mobile** (iOS / Android) and native **Windows desktop** testing
+  (device / desktop farms).
+- **Mainframe** testing; Chrome-extension testing (niche).
+- **Email deliverability / rendering**, **SMS & phone-call** flows via Twilio
+  (paid communications infrastructure).
+- Compliance certifications (SOC 2, HIPAA, ISO 27001, 21 CFR Part 11,
+  GDPR / CCPA controls) — these are organisation / product certifications, not a
+  feature we build.
+- testRigor's own **Claude Code MCP / Skills** integration — that's their
+  product hook, not something we reproduce.
+
+**Net:** the core testRigor value — plain-English authoring, generation, stable
+selectors, screenshots / video, reusable rules, data-driven runs, visual + a11y
+checks, retries / scheduling, and root-cause grouping with bulk fix — is all
+feasible on our free stack **for our own site**. What we cannot match is the
+breadth of platforms (mobile / desktop / mainframe), the paid device-farm scale,
+and the communications / compliance surface.
 
 ### Note
 This is QA / test-automation, **not** a cybersecurity tool — it would live as
@@ -169,3 +290,9 @@ its own tool, separate from the security suite.
 - Playwright: https://playwright.dev
 - Open-source AI test generation (2026): https://getautonoma.com/blog/open-source-ai-test-generation-tools-2026
 - SSRF-safe headless fetching: https://modpagespeed.com/blog/air-gapped-headless-fetch-ssrf-pinning/
+- testRigor — grouping affected cases + fixing them at once: https://testrigor.com/blog/lessons-to-learn-from-your-failing-test-suites/
+- testRigor — root cause analysis: https://testrigor.com/blog/root-cause-analysis-explained/
+- testRigor — Features (public list, audited 2026-09-19): https://testrigor.com/features/
+- testRigor — Documentation: https://testrigor.com/docs/
+- Katalon Studio — Features (audited 2026-09-19): https://katalon.com/web-testing-dg
+- Playwright codegen (record-and-playback): https://playwright.dev/docs/codegen
