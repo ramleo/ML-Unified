@@ -56,6 +56,20 @@ class DiscoverStatus(BaseModel):
     detail: str | None = None
 
 
+class HealGroupRequest(BaseModel):
+    correlation_ids: list[str] = Field(default_factory=list)
+
+
+class HealGroup(BaseModel):
+    signature: str
+    cause: str
+    correlation_ids: list[str] = []
+
+
+class HealGroupResponse(BaseModel):
+    groups: list[HealGroup] = []
+
+
 class RunStep(BaseModel):
     title: str
     category: str | None = None
