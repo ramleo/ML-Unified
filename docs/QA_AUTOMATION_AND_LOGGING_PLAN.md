@@ -143,9 +143,14 @@ own site only** and label it as such — still a real demo, zero risk.
 Build starts **2026-09-19**.
 
 ### Phased build
-- **Phase 1 (MVP):** Mode 1 — user types plain-English steps → free-LLM →
-  runnable **Playwright TypeScript**, shown with a copy button. Generation only,
-  no execution. Frontend tool + one free-LLM endpoint. Lowest risk, fully free.
+- **Phase 1 (MVP): SHIPPED 2026-09-19.** Mode 1 — user types plain-English steps
+  → free-LLM → runnable **Playwright TypeScript**, shown with a copy button.
+  Generation only, no execution. Backend `POST /qa-test-author/generate`
+  (cohere→mistral free cascade, budget-capped, rate-limited; ML-Unified
+  `8af0689`, HF-uploaded + verified serving). Frontend `/tools/qa-test-author`
+  in a new **Developer Tools** area (ml-portfolio `b50b080`). Verified
+  end-to-end on the live site: the production UI generates valid Playwright TS
+  with resilient role/text/testId locators and real assertions.
 - **Phase 2:** after generating, show a **"Run these?"** prompt; on yes, execute
   the script **against the project's own site only** (bounded HF / GitHub
   Actions runner) and show pass/fail.
