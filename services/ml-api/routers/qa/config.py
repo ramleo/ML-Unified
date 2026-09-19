@@ -52,3 +52,12 @@ MAX_SCREENSHOT_BYTES = 3_000_000
 RUN_FEATURE = "qa-run"
 RUN_BUDGET_POOL = "qa_run"
 RUN_DAILY_CAP_ENV = "QA_RUN_DAILY_CAP"
+
+# --- Heal stage: LLM re-resolves a failed locator from the page snapshot ---
+HEAL_FEATURE = "qa-heal"
+HEAL_BUDGET_POOL = "qa_heal"
+HEAL_DAILY_CAP_ENV = "QA_HEAL_DAILY_CAP"
+# Cap the ARIA snapshot sent to the LLM (keeps the prompt within context limits).
+MAX_SNAPSHOT_CHARS = 12000
+# Cap the error message included in the heal prompt.
+MAX_ERROR_CHARS = 2000

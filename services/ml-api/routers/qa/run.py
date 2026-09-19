@@ -18,7 +18,8 @@ from fastapi import APIRouter, HTTPException, Request, Response
 
 from routers.qa import config, github_runner
 from routers.qa.deps import record_call, limiter, LLM_LIMIT
-from routers.qa.models import RunRequest, RunAccepted, RunStatus
+from routers.qa.heal import heal_test
+from routers.qa.models import RunRequest, RunAccepted, RunStatus, HealRequest, HealResponse
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,35 @@ def execute(request: Request, req: RunRequest):
         logger.error("qa/run: dispatch failed: %s", exc)
         raise HTTPException(status_code=502, detail="Could not start the test run.")
     return RunAccepted(correlation_id=correlation_id, status="queued")
+
+
+@router.post("/heal", response_model=HealResponse)
+@limiter.limit(LLM_LIMIT)
+def heal(request: Request, req: HealRequest):
+    """Re-resolve the failed locator(s) from the page snapshot and return a
+    corrected test. The frontend re-runs it via /execute."""
+    record_call(config.HEAL_FEATURE, pool=config.HEAL_BUDGET_POOL, daily_cap_env=config.HEAL_DAILY_CAP_ENV)
+    try:
+        run = github_runner.find_run(req.correlation_id)
+    except Exception as exc:
+        logger.error("qa/heal: run lookup failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Could not read the run.")
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    ctx = None
+    try:
+        ctx = github_runner.fetch_failure_context(run.get("id"))
+    except Exception as exc:
+        logger.warning("qa/heal: failure context fetch failed: %s", exc)
+    if not ctx or not (ctx.get("snapshot") or ctx.get("error")):
+        return HealResponse(healed_code="", provider=None,
+                            detail="No failure context was available to heal from.")
+    result = heal_test(req.code, ctx.get("error", ""), ctx.get("snapshot", ""))
+    if not result:
+        return HealResponse(healed_code="", provider=None,
+                            detail="The model could not produce a corrected test.")
+    code, provider = result
+    return HealResponse(healed_code=code, provider=provider)
 
 
 @router.get("/status/{correlation_id}", response_model=RunStatus)

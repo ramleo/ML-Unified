@@ -201,3 +201,50 @@ def fetch_artifact_file(run_id: int, kind: str) -> tuple[bytes, str, bool] | Non
     if not member:
         return None
     return zf.read(member), ctype, inline
+
+
+def _first_error(data: dict) -> str:
+    def walk(suite: dict) -> str:
+        for spec in suite.get("specs", []):
+            for test in spec.get("tests", []):
+                for res in test.get("results", []):
+                    msg = (res.get("error") or {}).get("message")
+                    if msg:
+                        return msg
+        for child in suite.get("suites", []):
+            r = walk(child)
+            if r:
+                return r
+        return ""
+
+    for suite in data.get("suites", []):
+        r = walk(suite)
+        if r:
+            return r
+    return ""
+
+
+def fetch_failure_context(run_id: int) -> dict | None:
+    """Pull the failure error message and the ARIA page snapshot
+    (error-context.md) from the run's artifacts, for self-healing."""
+    zip_bytes = _download_artifact_zip(run_id)
+    if not zip_bytes:
+        return None
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
+    except Exception:
+        return None
+    error, snapshot = "", ""
+    rj = next((n for n in zf.namelist() if n.endswith("results.json")), None)
+    if rj:
+        try:
+            error = _first_error(json.loads(zf.read(rj)))
+        except Exception:
+            pass
+    ctx = next((n for n in zf.namelist() if n.endswith("error-context.md")), None)
+    if ctx:
+        try:
+            snapshot = zf.read(ctx).decode("utf-8", "replace")
+        except Exception:
+            snapshot = ""
+    return {"error": error, "snapshot": snapshot}

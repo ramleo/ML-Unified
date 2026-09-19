@@ -27,6 +27,17 @@ class RunAccepted(BaseModel):
     status: str  # always "queued"
 
 
+class HealRequest(BaseModel):
+    correlation_id: str = Field(..., min_length=1, max_length=64)
+    code: str = Field(..., min_length=1, max_length=config.MAX_RUN_CODE)
+
+
+class HealResponse(BaseModel):
+    healed_code: str
+    provider: str | None = None
+    detail: str | None = None
+
+
 class RunStep(BaseModel):
     title: str
     category: str | None = None
