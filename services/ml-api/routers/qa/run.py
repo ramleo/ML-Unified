@@ -69,18 +69,31 @@ def status(correlation_id: str):
     if gh_status != "completed":
         return RunStatus(status=gh_status, run_url=run_url)
 
+    # The workflow always ends "success" (a failing TEST must not fail the run,
+    # or GitHub emails the owner on every failing user test). So pass/fail is
+    # read from results.json, not from the run conclusion. A missing results.json
+    # means the run never produced results — a real execution/infra error.
     conclusion = run.get("conclusion")
-    result = RunStatus(
-        status="completed",
-        passed=(conclusion == "success"),
-        conclusion=conclusion,
-        run_url=run_url,
-    )
+    result = RunStatus(status="completed", conclusion=conclusion, run_url=run_url)
     try:
         art = github_runner.fetch_artifacts(run.get("id"))
-        if art:
-            result.summary = art.get("summary")
-            result.screenshot_base64 = art.get("screenshotBase64")
     except Exception as exc:
         logger.warning("qa/run: artifact fetch failed: %s", exc)
+        art = None
+
+    summary = art.get("summary") if art else None
+    if not summary:
+        result.status = "error"
+        result.detail = "The run produced no results (execution error)."
+        return result
+
+    ran = (summary.get("expected", 0) + summary.get("unexpected", 0) + summary.get("flaky", 0)) > 0
+    if not ran:
+        result.status = "error"
+        result.detail = "No tests ran — check the test defines a test()."
+        return result
+
+    result.passed = summary.get("unexpected", 0) == 0
+    result.summary = summary
+    result.screenshot_base64 = art.get("screenshotBase64")
     return result
