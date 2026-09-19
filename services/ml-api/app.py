@@ -77,6 +77,7 @@ from routers.attack_surface_check import router as attack_surface_router
 from routers.yara_scan import router as yara_scan_router
 from routers.anomaly_detection import router as anomaly_detection_router
 from routers.intrusion_detection import router as intrusion_detection_router
+from routers.qa_test_author import router as qa_test_author_router
 from routers.security_status import router as security_status_router
 
 from routers.core.shared import (
@@ -280,6 +281,7 @@ app.include_router(attack_surface_router, tags=["attack-surface"])
 app.include_router(yara_scan_router, tags=["yara-scan"])
 app.include_router(anomaly_detection_router, tags=["anomaly-detection"])
 app.include_router(intrusion_detection_router, tags=["intrusion-detection"])
+app.include_router(qa_test_author_router, tags=["qa-test-author"])
 app.include_router(security_status_router, tags=["security-status"])
 
 
