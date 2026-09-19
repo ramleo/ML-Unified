@@ -142,31 +142,54 @@ own site only** and label it as such — still a real demo, zero risk.
 
 Build starts **2026-09-19**.
 
-### Phased build
-- **Phase 1 (MVP): SHIPPED 2026-09-19.** Mode 1 — user types plain-English steps
-  → free-LLM → runnable **Playwright TypeScript**, shown with a copy button.
-  Generation only, no execution. Backend `POST /qa-test-author/generate`
-  (cohere→mistral free cascade, budget-capped, rate-limited; ML-Unified
-  `8af0689`, HF-uploaded + verified serving). Frontend `/tools/qa-test-author`
-  in a new **Developer Tools** area (ml-portfolio `b50b080`). Verified
-  end-to-end on the live site: the production UI generates valid Playwright TS
-  with resilient role/text/testId locators and real assertions.
-- **Phase 2:** after generating, show a **"Run these?"** prompt; on yes, execute
-  the script **against the project's own site only** (bounded HF / GitHub
-  Actions runner) and show pass/fail.
-- **Phase 3:** Mode 2 — give the own-site URL → crawl (bounded) → propose test
-  cases → user confirms → generate + run, still **own-site only**.
-- **Phase 4:** allow other sites, gated by ownership verification / allow-list
-  and the full SSRF controls above.
-- **Phase 5:** **root-cause failure grouping + bulk fix** (see the section
-  below). Needs Phase 2 execution in place first, because grouping operates on
+### Restructure (2026-09-19): a platform, not a tool card
+The first Phase-1 attempt shipped as a single `/tools/qa-test-author` card in a
+new "Developer Tools" area. That was the wrong tier: the user's direction was to
+treat QA automation as **its own world** ("a website in itself"), the way
+testRigor and Katalon each build a whole product around it. The site already
+separates **full platforms** (homepage "Deployed Platforms", `registry.json`)
+from single-purpose tool cards, so QA became the **fourth platform** —
+**Testwright**, a native `/qa` world — and the tool card + Developer Tools area
+were folded in and removed.
+
+- **Name:** Testwright. **Signature colour:** teal→cyan (`#14b8a6`/`#22d3ee`).
+- **World:** `/qa` landing (hero + four-stage lifecycle + honest scope) with an
+  in-world sub-nav on every `/qa/*` page. Surfaced as a native platform card
+  (a `registry.json` entry with `internal:true`; `ProjectCard` renders "Enter"
+  → internal route instead of "Launch App").
+- **Four stages** (one workspace, hand off Author→Run→Discover→Heal), which the
+  phases below now build:
+
+### Phased build (as Testwright stages)
+- **Phase 1 — Author (`/qa/author`): SHIPPED 2026-09-19.** Plain-English steps →
+  free-LLM → runnable **Playwright TypeScript**, copy button. Generation only,
+  no execution. Backend `POST /qa/author/generate` (cohere→mistral free cascade,
+  budget-capped, rate-limited). Verified end-to-end live: the production UI
+  generates valid Playwright TS with resilient role/text/testId locators and
+  real assertions. Commits: ML-Unified `5e07563` (routers/qa package, HF-
+  deployed + verified), ml-portfolio `98be844` (the /qa world). Superseded the
+  first-attempt commits `8af0689` / `b50b080`.
+- **Phase 2 — Run (`/qa/run`):** after generating, a **"Run these?"** prompt; on
+  yes, execute **against the project's own site only** (bounded HF / GitHub
+  Actions runner), show pass/fail + screenshots / video / trace.
+- **Phase 3 — Discover (`/qa/discover`):** give the own-site URL → crawl
+  (bounded) → propose test cases → user confirms → generate + run, own-site only.
+- **Phase 4 — other sites:** gated by ownership verification / allow-list and the
+  full SSRF controls above.
+- **Phase 5 — Heal (`/qa/heal`):** **root-cause failure grouping + bulk fix**
+  (see the section below). Needs Phase 2 execution first — grouping operates on
   real run results.
 
-### First-day (2026-09-19) scope
-Phase 1 only: the tool page + a "describe your test" box + a free-LLM endpoint
-that returns a Playwright TS script + copy button. No execution yet. Confirm it
-generates sensible tests for a couple of the site's own pages, then move to the
-"Run?" prompt in Phase 2.
+### Microservice-ready architecture (hard requirement)
+Extraction into a standalone `qa-api` must be hassle-free, so there is **one
+coupling seam on each side**:
+- **Backend:** `services/ml-api/routers/qa/` is a self-contained package; every
+  route reaches shared infra (LLM `complete`, key resolution, budget, limiter)
+  ONLY through `routers/qa/deps.py`. Unified `/qa/*` prefix. Extract = copy the
+  folder + reimplement `deps.py`. `config.py` holds tunables.
+- **Frontend:** all QA calls go through `src/app/qa/lib/qaClient.ts` against a
+  single `QA_API` base (`NEXT_PUBLIC_QA_API_URL ?? ML_UNIFIED_API`). Repoint the
+  world at the microservice with one env var, no code change.
 
 ### Feature: root-cause failure grouping + bulk fix (Phase 5)
 Requested 2026-09-19. This is a real testRigor feature: when many tests fail,
@@ -287,8 +310,8 @@ breadth of platforms (mobile / desktop / mainframe), the paid device-farm scale,
 and the communications / compliance surface.
 
 ### Note
-This is QA / test-automation, **not** a cybersecurity tool — it would live as
-its own tool, separate from the security suite.
+This is QA / test-automation, **not** a cybersecurity tool — it lives as its own
+platform (**Testwright**, `/qa`), separate from the security suite.
 
 ### References
 - Stagehand (Playwright + AI, OSS): https://github.com/browserbase/stagehand
