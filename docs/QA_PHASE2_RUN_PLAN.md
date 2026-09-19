@@ -19,7 +19,87 @@ not just a green screenshot.
 
 ---
 
-## Why a dedicated runner Space
+## REVISION 2026-09-19 — execution moves to GitHub Actions (still free, still isolated)
+
+The dedicated-Space plan below is **superseded.** Creating a new HF **Docker**
+Space now returns **402 Payment Required** — HF requires a PRO subscription to
+host Gradio/Docker Spaces on free CPU-basic. The user is cost-bound to **$0**, so
+we do not pay.
+
+Co-locating the browser inside the existing (already-running) ML-Unified Space
+was rejected: Playwright's test runner is Node, so it would mean adding
+Node + Chromium into the Python Space that serves all 50 tools + the SQL
+platform — bloating the image, slowing every backend deploy, and putting a
+browser inside the shared production container. That defeats the foolproof goal.
+
+**Decision (user, 2026-09-19): execute tests in GitHub Actions.** Public-repo
+Actions minutes are free and unlimited, runs are fully isolated on GitHub's
+runners (zero risk to our site), and Playwright-on-Actions is a first-class,
+cached, battle-tested path. Trade-off: execution is **async** (dispatch → poll),
+covered by a "queued → running → results" UI. The scaffold in
+`services/ml-qa-runner/` (Express + Dockerfile) is **parked**, not deleted — its
+bounded Playwright config and known-good/known-bad fixtures are reused by the
+Actions workflow; the Space path can be revived if we ever hold PRO.
+
+The **local proof still stands and is not wasted**: the runner logic (pass/fail
+detection, screenshot capture, SSRF allowlist, input validation) was verified
+end-to-end locally at $0. Only the *host* changed.
+
+### Execution via GitHub Actions — architecture
+
+```
+browser → qaClient → /qa/run/* (main Space proxy, holds GH token)
+        → GitHub API workflow_dispatch (test code as input, unique correlation_id)
+        → isolated Actions runner: setup-node → install Playwright+Chromium
+          → run the test under our bounded config → upload results.json + artifacts
+        → proxy polls run status, matches by run-name, downloads the artifact zip
+        → returns pass/fail + summary + screenshot/trace/video to the UI
+```
+
+- **Where the workflow lives:** a dedicated **public** GitHub repo `ml-qa-runner`
+  (free unlimited minutes; keeps third-party test runs out of the main repos' CI;
+  reinforces the "isolated runner" story). Creating it is a free but outward
+  action — confirm before creating, same as the Space.
+- **The seam is unchanged:** the main Space still exposes `/qa/run/*` in
+  `routers/qa/` (a small `github_runner.py` in that package, reached via
+  `deps.py` for limiter/budget). Frontend still uses only `qaClient.ts` → the GH
+  token never reaches the browser. Swapping execution backends later = swap this
+  one module.
+- **Correlation:** the proxy passes a `correlation_id`; the workflow sets
+  `run-name: qa <correlation_id>` so the proxy can find the run reliably by name
+  (workflow_dispatch returns no run id).
+- **Results come back trustworthy, not via a callback:** the proxy reads run
+  status and downloads the artifact zip through GitHub's authenticated API, so
+  results can't be spoofed by an open callback endpoint.
+- **Token:** a fine-grained GitHub PAT scoped to `actions:read/write` on that one
+  repo, stored as an HF Space secret `GH_QA_TOKEN`. Never logged or echoed. The
+  user-submitted test step gets **no** repo secrets in its environment.
+
+### Revised sub-phases (supersede the Space sub-phases below)
+
+- **2a — DONE (local proof).** Runner logic verified locally at $0: known-good →
+  passed, known-bad → failed + screenshot, disallowed baseUrl → 403, empty →
+  400. Committed `f916883` (scaffold, now parked for the Space path).
+- **2b — GitHub Actions execution end-to-end (no UI yet).** Create the public
+  `ml-qa-runner` repo + the `qa-run.yml` workflow; add `/qa/run/execute` +
+  `/qa/run/status/{id}` proxy on the main Space; store `GH_QA_TOKEN`. Acceptance:
+  dispatch the known-good and known-bad tests via the proxy and get correct
+  pass/fail + a failure screenshot back — verified by curl, not UI.
+- **2c — `/qa/run` UI + full artifacts.** Real runner page: carry a test from
+  Author, run it, show queued → running → results with screenshot, playable
+  video, and a downloadable trace + step timeline.
+- **2d — Self-healing locators.** On a locator failure, the proxy asks the LLM
+  (via `deps.py`, cohere→mistral) to re-resolve the element from the page's
+  accessibility snapshot captured by the workflow; re-dispatch with the healed
+  locator; report "healed: old → new".
+
+The safety envelope and testing plan below still apply in full (allowlist,
+timeouts, caps, cleanup; known-good + known-bad + heal-proof fixtures). The
+sections from here down describe the original Space design, kept for the record.
+
+---
+
+## Why a dedicated runner Space (superseded — see REVISION above)
 
 Running a real browser is heavy and occasionally hostile (a hung page, a memory
 spike, an infinite redirect). The ML-Unified Space hosts *every* tool on the
