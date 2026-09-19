@@ -1,7 +1,7 @@
 """
 Testwright (QA Automation) — Discover stage.
 
-Point at an own-site URL: an "explore" run on the isolated runner renders the
+Point at any public URL: an "explore" run on the isolated runner renders the
 page and dumps its ARIA snapshot; the LLM then proposes candidate test cases
 from that snapshot. Reuses the qa-run workflow (the explore spec writes
 aria.txt, which the workflow uploads).
@@ -11,7 +11,6 @@ import json
 import logging
 import re
 import uuid
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -19,19 +18,11 @@ from routers.qa import config, github_runner
 from routers.qa.deps import complete, resolve_key, record_call, limiter, LLM_LIMIT
 from routers.qa.prompts import DISCOVER_SYSTEM
 from routers.qa.models import DiscoverStart, DiscoverStatus, RunAccepted
+from routers.qa.urlcheck import validate_target_url
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/discover")
-
-
-def _assert_allowed(url: str) -> None:
-    host = (urlparse(url.strip()).hostname or "").lower()
-    if host not in config.RUN_ALLOWED_HOSTS:
-        raise HTTPException(
-            status_code=403,
-            detail=f'URL host "{host}" is not allowed. Discover runs against our own site only.',
-        )
 
 
 def build_explore_spec(url: str) -> str:
@@ -102,7 +93,7 @@ def _parse_proposals(text: str) -> list[dict]:
 @limiter.limit(LLM_LIMIT)
 def start(request: Request, req: DiscoverStart):
     """Dispatch an explore run that renders the URL and captures its snapshot."""
-    _assert_allowed(req.url)
+    validate_target_url(req.url, required=True)
     record_call(config.DISCOVER_FEATURE, pool=config.DISCOVER_BUDGET_POOL,
                 daily_cap_env=config.DISCOVER_DAILY_CAP_ENV)
     correlation_id = uuid.uuid4().hex

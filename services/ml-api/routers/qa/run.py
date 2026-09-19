@@ -12,7 +12,6 @@ this Space.
 
 import logging
 import uuid
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
@@ -20,29 +19,17 @@ from routers.qa import config, github_runner
 from routers.qa.deps import record_call, limiter, LLM_LIMIT
 from routers.qa.heal import heal_test
 from routers.qa.models import RunRequest, RunAccepted, RunStatus, HealRequest, HealResponse
+from routers.qa.urlcheck import validate_target_url
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/run")
 
 
-def _assert_allowed(base_url: str) -> None:
-    """Own-site allowlist (SSRF guard). base_url is optional; when given, its
-    host must be on the allowlist."""
-    if not base_url.strip():
-        return
-    host = (urlparse(base_url.strip()).hostname or "").lower()
-    if host not in config.RUN_ALLOWED_HOSTS:
-        raise HTTPException(
-            status_code=403,
-            detail=f'Base URL host "{host}" is not allowed. Testwright runs against our own site only.',
-        )
-
-
 @router.post("/execute", response_model=RunAccepted)
 @limiter.limit(LLM_LIMIT)
 def execute(request: Request, req: RunRequest):
-    _assert_allowed(req.base_url)
+    validate_target_url(req.base_url)
     record_call(config.RUN_FEATURE, pool=config.RUN_BUDGET_POOL, daily_cap_env=config.RUN_DAILY_CAP_ENV)
     correlation_id = uuid.uuid4().hex
     try:

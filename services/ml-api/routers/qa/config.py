@@ -35,12 +35,8 @@ RUN_WORKFLOW_FILE = "qa-run.yml"
 RUN_REF = "main"
 RUN_TOKEN_ENV = "GH_QA_TOKEN"
 
-# Own-site allowlist for the target base URL (SSRF guard); comma-separated env.
-RUN_ALLOWED_HOSTS = [
-    h.strip()
-    for h in os.environ.get("QA_RUN_ALLOWED_HOSTS", "ml-portfolio-rho.vercel.app").split(",")
-    if h.strip()
-]
+# Target URLs are validated in urlcheck.py (any public http(s) URL; private /
+# internal addresses blocked). Abuse is bounded by the per-stage budget caps.
 
 # workflow_dispatch inputs are capped (~64KB total) — stay well under.
 MAX_RUN_CODE = 60000
