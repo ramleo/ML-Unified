@@ -38,6 +38,24 @@ class HealResponse(BaseModel):
     detail: str | None = None
 
 
+class DiscoverStart(BaseModel):
+    url: str = Field(..., min_length=1, max_length=config.MAX_BASE_URL)
+
+
+class Proposal(BaseModel):
+    title: str
+    steps: str
+
+
+class DiscoverStatus(BaseModel):
+    # pending | queued | in_progress | completed | error
+    status: str
+    correlation_id: str | None = None
+    proposals: list[Proposal] = []
+    run_url: str | None = None
+    detail: str | None = None
+
+
 class RunStep(BaseModel):
     title: str
     category: str | None = None

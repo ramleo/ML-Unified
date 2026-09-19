@@ -61,3 +61,9 @@ HEAL_DAILY_CAP_ENV = "QA_HEAL_DAILY_CAP"
 MAX_SNAPSHOT_CHARS = 12000
 # Cap the error message included in the heal prompt.
 MAX_ERROR_CHARS = 2000
+
+# --- Discover stage: crawl a URL, propose test cases from the page snapshot ---
+DISCOVER_FEATURE = "qa-discover"
+DISCOVER_BUDGET_POOL = "qa_discover"
+DISCOVER_DAILY_CAP_ENV = "QA_DISCOVER_DAILY_CAP"
+MAX_PROPOSALS = 6

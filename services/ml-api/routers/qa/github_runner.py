@@ -224,6 +224,25 @@ def _first_error(data: dict) -> str:
     return ""
 
 
+def fetch_text_artifact(run_id: int, suffix: str) -> str | None:
+    """Read a text file (by filename suffix) out of the run's artifact zip —
+    used by Discover to read the explore snapshot (aria.txt)."""
+    zip_bytes = _download_artifact_zip(run_id)
+    if not zip_bytes:
+        return None
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
+    except Exception:
+        return None
+    member = next((n for n in zf.namelist() if n.endswith(suffix)), None)
+    if not member:
+        return None
+    try:
+        return zf.read(member).decode("utf-8", "replace")
+    except Exception:
+        return None
+
+
 def fetch_failure_context(run_id: int) -> dict | None:
     """Pull the failure error message and the ARIA page snapshot
     (error-context.md) from the run's artifacts, for self-healing."""
