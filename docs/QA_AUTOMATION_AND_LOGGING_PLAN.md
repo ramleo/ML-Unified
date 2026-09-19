@@ -3,7 +3,22 @@
 Two independent pieces of work, planned here before building. Part A is small
 and mechanical. Part B is a new tool with real design and safety decisions.
 
-Status: **plan only — not yet built.** Written 2026-09-18.
+Status: **Part B SHIPPED as the Testwright platform (2026-09-19).** Written 2026-09-18.
+
+> **UPDATE.** Part B far outgrew "a tool": it is now **Testwright**, a native
+> platform world at `/qa` with four live stages — **Author** (plain English →
+> Playwright TS), **Run** (execute on GitHub-Actions CI: pass/fail, video, trace,
+> step timeline), **Discover** (propose test cases from a page snapshot) and
+> **Heal** (suite-level root-cause grouping + bulk self-heal) — plus per-run
+> self-healing and saved tests / run history. It runs against any public site.
+> Detail: [QA_PHASE2_RUN_PLAN.md](QA_PHASE2_RUN_PLAN.md) and the Part 293–294
+> session logs.
+>
+> **Part A (run-logging) is effectively covered for Testwright**: every stage page
+> calls `useToolTracking` and all backend calls go through `qaClient` →
+> `trackedFetch` (`run_start`/`run_success`/`run_error`). The broader
+> `LOGGING_SPEC.md` vocabulary (upload / config_change / result_view) is still the
+> separate deferred item.
 
 ---
 

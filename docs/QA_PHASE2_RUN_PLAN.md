@@ -5,13 +5,21 @@ Phase 1 (**Author** — plain English → runnable Playwright TS) is live. Phase
 closes the loop: actually **run** the generated test, prove it with real
 artifacts, and **self-heal** broken locators.
 
-Status: **plan only — not yet built.** Written 2026-09-19.
+Status: **SHIPPED — all four stages live (2026-09-19).** Written 2026-09-19.
 
-Two decisions are locked (user, 2026-09-19):
-1. **Execution environment: a dedicated, isolated runner Space** (`ml-qa-runner`),
-   separate from the shared ML-Unified Space.
-2. **Scope: the full Phase 2** — Run + full artifacts (screenshot/video/trace) +
-   AI self-healing locators.
+> **UPDATE — DONE.** Phase 2 (Run + artifacts + self-heal), Phase 3 (Discover) and
+> Phase 5 (suite-level Heal) are all live, plus saved tests + run history.
+> Execution runs on **GitHub Actions** (a new HF Docker Space now needs PRO — see
+> the REVISION section). Tests run against **any public site** (own-site allowlist
+> removed; private/internal blocked). Full build narrative + commits:
+> [Conversations/Session_2026-09-19_Phase2ToFourStagesLive_Part294.md](../Conversations/Session_2026-09-19_Phase2ToFourStagesLive_Part294.md).
+> Remaining backlog (agreed order): flakiness detection, assertion suggestions,
+> visual regression, third-party ownership gating, record-and-playback.
+
+Original locked decisions (2026-09-19): a dedicated isolated runner Space + full
+Phase 2 scope. The Space decision was superseded by the 402/PRO wall (GitHub
+Actions instead); the scope was delivered in full and extended through Discover
+and Heal.
 
 The north star: this is a recruiter-facing highlight. It must **work properly,
 be foolproof, and be tested properly** — pass *and* fail both provably detected,
