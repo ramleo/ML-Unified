@@ -14,8 +14,9 @@ router = APIRouter(prefix="/qa")
 def _mount() -> None:
     # Imported inside the function so `import routers.qa.config` (used by
     # models.py at import time) resolves before the sub-routers load.
-    from routers.qa import author
+    from routers.qa import author, run
     router.include_router(author.router)
+    router.include_router(run.router)
 
 
 _mount()
