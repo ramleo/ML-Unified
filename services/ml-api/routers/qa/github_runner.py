@@ -117,39 +117,28 @@ def fetch_artifacts(run_id: int) -> dict | None:
     return _parse_zip(zip_bytes)
 
 
-# Playwright JSON-reporter step categories worth showing as a timeline.
-_TIMELINE_CATS = {"pw:api", "expect", "test.step"}
 _MAX_STEPS = 60
 
 
-def _collect_steps(steps: list, out: list) -> None:
-    for st in steps or []:
-        if len(out) >= _MAX_STEPS:
-            return
-        if st.get("category") in _TIMELINE_CATS:
-            out.append({
-                "title": (st.get("title") or "")[:200],
-                "category": st.get("category"),
-                "duration": st.get("duration", 0),
-                "ok": "error" not in st,
-            })
-        _collect_steps(st.get("steps", []), out)
-
-
-def _steps_from_results(data: dict) -> list:
-    steps: list = []
-
-    def walk(suite: dict) -> None:
-        for spec in suite.get("specs", []):
-            for test in spec.get("tests", []):
-                for res in test.get("results", []):
-                    _collect_steps(res.get("steps", []), steps)
-        for child in suite.get("suites", []):
-            walk(child)
-
-    for suite in data.get("suites", []):
-        walk(suite)
-    return steps[:_MAX_STEPS]
+def _read_steps(zf: "zipfile.ZipFile") -> list:
+    """The step timeline, written by our custom reporter into steps.json (the
+    built-in JSON reporter omits steps)."""
+    name = next((n for n in zf.namelist() if n.endswith("steps.json")), None)
+    if not name:
+        return []
+    try:
+        raw = json.loads(zf.read(name))
+    except Exception:
+        return []
+    out = []
+    for st in raw[:_MAX_STEPS]:
+        out.append({
+            "title": (st.get("title") or "")[:200],
+            "category": st.get("category"),
+            "duration": st.get("duration", 0),
+            "ok": bool(st.get("ok", True)),
+        })
+    return out
 
 
 def _parse_zip(zip_bytes: bytes) -> dict:
@@ -174,10 +163,10 @@ def _parse_zip(zip_bytes: bytes) -> dict:
                     "flaky": stats.get("flaky", 0),
                     "skipped": stats.get("skipped", 0),
                 }
-                out["steps"] = _steps_from_results(data)
             except Exception:
                 pass
             break
+    out["steps"] = _read_steps(zf)
     for name in names:
         if name.endswith(".png"):
             data = zf.read(name)
