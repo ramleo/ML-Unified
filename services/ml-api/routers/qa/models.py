@@ -27,6 +27,13 @@ class RunAccepted(BaseModel):
     status: str  # always "queued"
 
 
+class RunStep(BaseModel):
+    title: str
+    category: str | None = None
+    duration: float | int | None = None
+    ok: bool = True
+
+
 class RunStatus(BaseModel):
     # pending (not materialised yet) | queued | in_progress | completed | error
     status: str
@@ -34,5 +41,9 @@ class RunStatus(BaseModel):
     conclusion: str | None = None
     summary: dict | None = None
     screenshot_base64: str | None = None
+    steps: list[RunStep] = []
+    has_video: bool = False
+    has_trace: bool = False
+    correlation_id: str | None = None
     run_url: str | None = None
     detail: str | None = None

@@ -14,7 +14,7 @@ import logging
 import uuid
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 
 from routers.qa import config, github_runner
 from routers.qa.deps import record_call, limiter, LLM_LIMIT
@@ -96,4 +96,35 @@ def status(correlation_id: str):
     result.passed = summary.get("unexpected", 0) == 0
     result.summary = summary
     result.screenshot_base64 = art.get("screenshotBase64")
+    result.steps = art.get("steps", []) or []
+    result.has_video = bool(art.get("has_video"))
+    result.has_trace = bool(art.get("has_trace"))
+    result.correlation_id = correlation_id
     return result
+
+
+@router.get("/artifact/{correlation_id}/{kind}")
+def artifact(correlation_id: str, kind: str):
+    """Stream one heavy artifact (video or trace) for a completed run through the
+    Space, so the GitHub token stays server-side and the browser never sees it."""
+    if kind not in github_runner.ARTIFACT_KINDS:
+        raise HTTPException(status_code=404, detail="Unknown artifact kind.")
+    try:
+        run = github_runner.find_run(correlation_id)
+    except Exception as exc:
+        logger.error("qa/run: artifact run lookup failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Could not read the run.")
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found.")
+    try:
+        found = github_runner.fetch_artifact_file(run.get("id"), kind)
+    except Exception as exc:
+        logger.warning("qa/run: artifact fetch failed: %s", exc)
+        found = None
+    if not found:
+        raise HTTPException(status_code=404, detail="Artifact not available.")
+    data, ctype, inline = found
+    disp = "inline" if inline else "attachment"
+    filename = "video.webm" if kind == "video" else "trace.zip"
+    return Response(content=data, media_type=ctype,
+                    headers={"Content-Disposition": f'{disp}; filename="{filename}"'})

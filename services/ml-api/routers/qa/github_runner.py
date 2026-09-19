@@ -95,9 +95,8 @@ def _download_zip(archive_url: str) -> bytes | None:
     return None
 
 
-def fetch_artifacts(run_id: int) -> dict | None:
-    """Download the run's artifact zip and pull out the results summary and the
-    first (failure) screenshot as base64."""
+def _download_artifact_zip(run_id: int) -> bytes | None:
+    """List the run's artifacts and download the qa-artifacts zip."""
     url = f"{_runs_base()}/actions/runs/{run_id}/artifacts"
     with httpx.Client(timeout=20) as client:
         r = client.get(url, headers=_headers())
@@ -106,36 +105,110 @@ def fetch_artifacts(run_id: int) -> dict | None:
     if not arts:
         return None
     art = next((a for a in arts if a.get("name") == "qa-artifacts"), arts[0])
-    zip_bytes = _download_zip(art["archive_download_url"])
+    return _download_zip(art["archive_download_url"])
+
+
+def fetch_artifacts(run_id: int) -> dict | None:
+    """Download the run's artifact zip and pull out the summary, step timeline,
+    failure screenshot, and which heavy artifacts (video/trace) exist."""
+    zip_bytes = _download_artifact_zip(run_id)
     if not zip_bytes:
         return None
     return _parse_zip(zip_bytes)
 
 
+# Playwright JSON-reporter step categories worth showing as a timeline.
+_TIMELINE_CATS = {"pw:api", "expect", "test.step"}
+_MAX_STEPS = 60
+
+
+def _collect_steps(steps: list, out: list) -> None:
+    for st in steps or []:
+        if len(out) >= _MAX_STEPS:
+            return
+        if st.get("category") in _TIMELINE_CATS:
+            out.append({
+                "title": (st.get("title") or "")[:200],
+                "category": st.get("category"),
+                "duration": st.get("duration", 0),
+                "ok": "error" not in st,
+            })
+        _collect_steps(st.get("steps", []), out)
+
+
+def _steps_from_results(data: dict) -> list:
+    steps: list = []
+
+    def walk(suite: dict) -> None:
+        for spec in suite.get("specs", []):
+            for test in spec.get("tests", []):
+                for res in test.get("results", []):
+                    _collect_steps(res.get("steps", []), steps)
+        for child in suite.get("suites", []):
+            walk(child)
+
+    for suite in data.get("suites", []):
+        walk(suite)
+    return steps[:_MAX_STEPS]
+
+
 def _parse_zip(zip_bytes: bytes) -> dict:
-    out: dict = {"summary": None, "screenshotBase64": None}
+    out: dict = {"summary": None, "screenshotBase64": None, "steps": [],
+                 "has_video": False, "has_trace": False}
     try:
         zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
     except Exception as exc:
         logger.warning("qa/run: bad artifact zip: %s", exc)
         return out
-    for name in zf.namelist():
+    names = zf.namelist()
+    out["has_video"] = any(n.endswith(".webm") for n in names)
+    out["has_trace"] = any(n.endswith("trace.zip") for n in names)
+    for name in names:
         if name.endswith("results.json"):
             try:
-                stats = json.loads(zf.read(name)).get("stats", {})
+                data = json.loads(zf.read(name))
+                stats = data.get("stats", {})
                 out["summary"] = {
                     "expected": stats.get("expected", 0),
                     "unexpected": stats.get("unexpected", 0),
                     "flaky": stats.get("flaky", 0),
                     "skipped": stats.get("skipped", 0),
                 }
+                out["steps"] = _steps_from_results(data)
             except Exception:
                 pass
             break
-    for name in zf.namelist():
+    for name in names:
         if name.endswith(".png"):
             data = zf.read(name)
             if len(data) <= config.MAX_SCREENSHOT_BYTES:
                 out["screenshotBase64"] = base64.b64encode(data).decode()
             break
     return out
+
+
+# kind -> (filename suffix, content type, inline?)
+ARTIFACT_KINDS = {
+    "video": (".webm", "video/webm", True),
+    "trace": ("trace.zip", "application/zip", False),
+}
+
+
+def fetch_artifact_file(run_id: int, kind: str) -> tuple[bytes, str, bool] | None:
+    """Extract one heavy artifact (video or trace) from the run's zip.
+    Returns (bytes, content_type, inline) or None."""
+    spec = ARTIFACT_KINDS.get(kind)
+    if not spec:
+        return None
+    suffix, ctype, inline = spec
+    zip_bytes = _download_artifact_zip(run_id)
+    if not zip_bytes:
+        return None
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
+    except Exception:
+        return None
+    member = next((n for n in zf.namelist() if n.endswith(suffix)), None)
+    if not member:
+        return None
+    return zf.read(member), ctype, inline
