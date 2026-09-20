@@ -311,7 +311,22 @@ h1, h2,
 }
 
 /* ── Portfolio-style top nav links + world sub-nav (AIRaML site chrome) ── */
-.nav-wordmark { font-family: var(--font-display); font-weight: 800; font-size: 1.2rem; letter-spacing: -0.03em; }
+/* The AIRaML brand (logo mark + wordmark) uses the FIXED portfolio brand
+   gradient (indigo→sky→emerald), independent of the per-mode accent, so the
+   brand reads identically on ml/eda/vision. Light theme darkens the stops for
+   contrast — same values the portfolio uses. */
+:root { --brand-grad: linear-gradient(135deg, #818cf8, #38bdf8, #34d399); }
+[data-theme="light"] { --brand-grad: linear-gradient(135deg, #4f46e5, #0369a1, #047857); }
+.nav-logo-mark {
+  background: var(--brand-grad);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  font-weight: 800; font-size: 0.82rem; color: #fff; letter-spacing: -0.02em;
+}
+.nav-wordmark {
+  font-family: var(--font-display); font-weight: 800; font-size: 1.2rem; letter-spacing: -0.03em;
+  background: var(--brand-grad); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+}
 .nav-links { display: flex; align-items: center; gap: 0.15rem; margin-left: auto; }
 .nav-links a {
   font-size: 0.82rem; font-weight: 500; color: var(--text2); text-decoration: none;
