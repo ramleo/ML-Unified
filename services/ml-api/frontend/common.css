@@ -33,17 +33,18 @@
 /* ── Light theme ── */
 [data-theme="light"] {
   color-scheme: light;
-  --bg:          #dce4f0;
-  --bg-card:     #eef2f8;
-  --bg-glass:    rgba(238,242,248,0.82);
-  --bg-section:  rgba(220,228,240,0.70);
-  --bg-nav:      rgba(220,228,240,0.88);
-  --bg-input:    #e4eaf4;
+  /* Aligned to the AIRaML portfolio light palette (matches the landing worlds). */
+  --bg:          #f0f4f8;
+  --bg-card:     #ffffff;
+  --bg-glass:    rgba(255,255,255,0.82);
+  --bg-section:  rgba(240,244,248,0.72);
+  --bg-nav:      rgba(240,244,248,0.92);
+  --bg-input:    #ffffff;
   --text:        #0f172a;
-  --text2:       #3d5070;
-  --text3:       #7a90b0;
-  --border:      rgba(99,102,241,0.12);
-  --border2:     rgba(99,102,241,0.20);
+  --text2:       #475569;
+  --text3:       #4d5a6d;
+  --border:      rgba(0,0,0,0.07);
+  --border2:     rgba(0,0,0,0.12);
   --shadow:      0 2px 12px rgba(30,50,100,0.08), 0 1px 3px rgba(30,50,100,0.06);
   --shadow-lg:   0 6px 28px rgba(30,50,100,0.12), 0 2px 8px rgba(30,50,100,0.07);
   --accent:      #6366f1;
@@ -196,6 +197,30 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+/* ── Display typography (Archivo) — matches the AIRaML landing-world headings.
+   Body text stays Geist; the prominent titles/metrics get the display face. ── */
+:root { --font-display: 'Archivo', 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+h1, h2,
+.nav-title,
+.model-title,
+.metric-val,
+.result-reg-value,
+.result-cluster-value,
+.train-result-metric,
+.aml-hero-name,
+.aml-hero-score-val,
+.eda-section-title {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+/* ── Per-mode accent — each app (ml/eda/vision) inherits its landing-world
+   gradient. Set on <body data-mode> so it overrides the theme accent in every
+   theme. ── */
+[data-mode="ml"]     { --accent: #e879f9; --accent-from: #e879f9; --accent-via: #d244e9; --accent-to: #a855f7; }
+[data-mode="eda"]    { --accent: #34d399; --accent-from: #34d399; --accent-via: #14b8a6; --accent-to: #06b6d4; }
+[data-mode="vision"] { --accent: #a78bfa; --accent-from: #a78bfa; --accent-via: #818cf8; --accent-to: #38bdf8; }
 
 /* ── Gradient top bar ── */
 .gradient-top-bar { display: none; }
