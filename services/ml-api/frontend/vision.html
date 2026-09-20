@@ -25,7 +25,7 @@
 
 <!-- Navbar -->
 <nav class="nav">
-  <a class="nav-logo" href="#">
+  <a class="nav-logo" href="https://ml-portfolio-rho.vercel.app/" onclick="this.href='https://ml-portfolio-rho.vercel.app/?theme='+document.documentElement.getAttribute('data-theme')" title="AIRaML — portfolio home">
     <div class="nav-logo-mark">
       <svg viewBox="0 0 32 32" width="20" height="20" fill="none">
         <circle cx="16" cy="16" r="3.2" fill="white" opacity="0.95"/>
@@ -47,24 +47,16 @@
         <line x1="16" y1="16" x2="10" y2="10" stroke="white" stroke-width="0.7" opacity="0.28"/>
       </svg>
     </div>
-    <div>
-      <div class="nav-title" id="nav-title-el">ML Vision</div>
-      <div class="nav-sub" id="nav-sub-el">Computer Vision Platform</div>
-    </div>
+    <span class="nav-wordmark gradient-text">AIRaML</span>
   </a>
-  <a href="https://ml-portfolio-rho.vercel.app/"
-     onclick="this.href='https://ml-portfolio-rho.vercel.app/?theme='+document.documentElement.getAttribute('data-theme')"
-     style="font-size:0.75rem;color:var(--text3);text-decoration:none;display:flex;align-items:center;
-            gap:0.3rem;padding:0.3rem 0.65rem;border:1px solid var(--border2);border-radius:9999px;
-            transition:color 0.15s,border-color 0.15s;white-space:nowrap"
-     onmouseover="this.style.color='var(--text)';this.style.borderColor='var(--text3)'"
-     onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border2)'"
-     title="Back to portfolio">
-    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M8 1H2v10h8V5L8 1z"/><path d="M8 1v4h4"/>
-    </svg>
-    Home
-  </a>
+  <div class="nav-links">
+    <a href="https://ml-portfolio-rho.vercel.app/#capabilities">Tools</a>
+    <a href="https://ml-portfolio-rho.vercel.app/#projects">Platforms</a>
+    <a href="https://ml-portfolio-rho.vercel.app/#architecture">How it works</a>
+    <a href="https://ml-portfolio-rho.vercel.app/handbook">Handbook</a>
+    <a href="https://ml-portfolio-rho.vercel.app/docs">Docs</a>
+    <a href="https://ml-portfolio-rho.vercel.app/about">About</a>
+  </div>
   <div class="theme-picker-wrap" id="themePickerWrap">
     <button class="theme-picker-btn" onclick="toggleThemePicker()" id="themePickerBtn" title="Change theme">
       <span class="theme-picker-swatch" id="themePickerSwatch"></span>
@@ -81,6 +73,15 @@
     </div>
   </div>
 </nav>
+
+<div class="world-subnav">
+  <div class="world-subnav-inner">
+    <span class="world-wordmark"><span class="world-wordmark-mark"></span><span id="nav-title-el">ML Vision</span></span>
+    <a class="world-subnav-link" href="https://ml-portfolio-rho.vercel.app/vision">Overview
+      <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10L10 2M10 2H5M10 2v5"/></svg>
+    </a>
+  </div>
+</div>
 
 <!-- Layout -->
 <div class="layout">
