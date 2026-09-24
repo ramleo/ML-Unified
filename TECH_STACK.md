@@ -21,6 +21,9 @@ covers the need today and what we'd add if the project ever needed to scale.
 | Backend | FastAPI (Python) on Hugging Face Spaces |
 | SQL DB | Supabase (PostgreSQL) |
 | Vector DB | ChromaDB + BM25 (hybrid retrieval) |
+| LLM | Cohere (default), + Claude / OpenAI / Gemini / Groq / Mistral / Perplexity |
+| Agentic | LangGraph (soft dependency, degrades gracefully) |
+| Testing | pytest (backend) · Vitest + Playwright (frontend) |
 | CI/CD | GitHub Actions |
 | Cloud | Vercel + Hugging Face + Supabase (all managed PaaS) |
 
@@ -141,6 +144,61 @@ data.** Everything else hangs off that.
 - **Images:** **CLIP** (`openai/clip-vit-base-patch32`) — used for image embeddings
   in multimodal RAG and tools like style/face cloaking and photo search.
 
+### 14. LLM
+- **Default provider:** **Cohere** (free tier) for the site's chat (`/api/chat`
+  falls back to `provider = 'cohere'`).
+- **Full provider set:** Anthropic (Claude), OpenAI, Google Gemini, Groq, Mistral,
+  Cohere, Perplexity — selectable per feature.
+- **Backend RAG** streams via Groq / Claude / Gemini / Cohere
+  (`stream_groq_openai`, `stream_claude`, `stream_gemini`, `stream_cohere`).
+- **AutoML wizard** offers Gemini 2.5 / Anthropic / OpenAI (GPT-4o Mini) / Groq.
+- **Policy:** Gemini is **paid and never a silent default**; no unilateral
+  provider/model swaps — provider is explicit per call.
+
+### 15. Agentic framework
+- **LangGraph** — an agentic RAG loop (`StateGraph`) behind `POST /rag/agent`
+  (SSE streaming), in `routers/rag/agent.py` + `agent_nodes.py`.
+- **Soft dependency:** if `langgraph` isn't installed, the endpoint **degrades
+  gracefully** to direct retrieval (`_LANGGRAPH_OK` guard) — it is not pinned in
+  `requirements.txt`.
+- **Related patterns:** CRAG (corrective RAG, `crag.py`), a query router
+  (`query_router.py`), and graph retrieval (`graph_retrieve.py`). The QA /
+  Testwright platform runs its own Author/Run/Discover/Heal stage loop separate
+  from LangGraph.
+
+### 16. Storage
+- **No dedicated object storage** — there is no S3 or Supabase Storage bucket for
+  user files.
+- **What covers it today:**
+  - Files are processed **in-memory** or on the Space's **ephemeral disk**;
+    model weights are cached on disk (`vision_cache/`).
+  - Browser-side exports (CSV / GIF / PDF) are built client-side via
+    `Blob` + `URL.createObjectURL` and downloaded — nothing is persisted server-side.
+- **Caveat:** HF Space disk does not survive restart/rebuild, so anything written
+  there is temporary by design.
+
+### 17. Testing
+- **Backend:** **pytest** (+ `pytest-playwright`); config in `pytest.ini` /
+  `conftest.py`. Two tiers — deterministic shell gets **hard assertions per push**
+  (CI), model output gets **scored property assertions nightly**
+  (`nightly-evals.yml`).
+- **Frontend:** **Vitest** (unit) + **Playwright** (`@playwright/test`, end-to-end
+  UI checks).
+- **Runs via** GitHub Actions on every push, plus the nightly eval workflow.
+
+### 18. Blue-green deployment
+- **Not used as a named blue/green setup** — but the effect is covered where it
+  matters:
+  - **Vercel** deploys are **atomic and immutable** — each push builds a new
+    immutable deployment and the production alias is flipped to it, giving
+    zero-downtime releases and **instant rollback** (promote a previous
+    deployment). This is Vercel's model, not classic blue/green, but delivers the
+    same safety for the site.
+  - **Hugging Face Space** rebuilds **in place** — during the 2-5 min rebuild the
+    Space serves proxy 500s (brief unavailability). There is no second
+    environment to cut over to; this is why backend deploys are **batched and
+    verified once** rather than shipped one at a time.
+
 ---
 
 ## External services (not infra, but part of the picture)
@@ -163,6 +221,8 @@ data.** Everything else hangs off that.
 | Secret manager | No Vault/Doppler | Vercel + HF env vars | Doppler / Vault (rotation, audit, one source) |
 | IaC | No Terraform/Pulumi | Docker + render.yaml | Terraform (reproducible infra) |
 | Observability | No APM | Supabase logs + /health | Sentry (errors) + Grafana/Prometheus (metrics) |
+| Storage | No object store | In-memory + ephemeral disk + client-side blobs | S3 / Supabase Storage (durable user files) |
+| Blue-green | No named blue/green | Vercel atomic immutable deploys | Second HF Space + alias cutover for the backend |
 
 None of these block a portfolio/demo project. They are the first things to
 introduce only if AIRaML ever grows real, sustained traffic or paying users.
