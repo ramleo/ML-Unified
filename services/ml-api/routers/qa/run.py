@@ -29,7 +29,7 @@ router = APIRouter(prefix="/run")
 @router.post("/execute", response_model=RunAccepted)
 @limiter.limit(LLM_LIMIT)
 def execute(request: Request, req: RunRequest):
-    validate_target_url(req.base_url)
+    validate_target_url(req.base_url, authorized=req.authorized)
     record_call(config.RUN_FEATURE, pool=config.RUN_BUDGET_POOL, daily_cap_env=config.RUN_DAILY_CAP_ENV)
     correlation_id = uuid.uuid4().hex
     try:

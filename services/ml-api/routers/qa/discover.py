@@ -93,7 +93,7 @@ def _parse_proposals(text: str) -> list[dict]:
 @limiter.limit(LLM_LIMIT)
 def start(request: Request, req: DiscoverStart):
     """Dispatch an explore run that renders the URL and captures its snapshot."""
-    validate_target_url(req.url, required=True)
+    validate_target_url(req.url, required=True, authorized=req.authorized)
     record_call(config.DISCOVER_FEATURE, pool=config.DISCOVER_BUDGET_POOL,
                 daily_cap_env=config.DISCOVER_DAILY_CAP_ENV)
     correlation_id = uuid.uuid4().hex

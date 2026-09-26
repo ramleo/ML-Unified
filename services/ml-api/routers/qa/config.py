@@ -33,6 +33,20 @@ ASSERT_DAILY_CAP_ENV = "QA_ASSERTIONS_DAILY_CAP"
 # Cap the test code accepted for analysis (same ceiling as a run's code).
 MAX_ASSERT_SUGGESTIONS = 6
 
+# First-party targets that run without an ownership confirmation. Any other host
+# is treated as third-party and requires the caller to confirm authorization
+# (enforced in urlcheck.validate_target_url).
+FIRST_PARTY_HOSTS = {
+    "ml-portfolio-rho.vercel.app",
+    "wram1708-ml-unified.hf.space",
+}
+
+
+def is_first_party(host: str) -> bool:
+    h = (host or "").lower().lstrip(".")
+    return any(h == d or h.endswith("." + d) for d in FIRST_PARTY_HOSTS)
+
+
 # --- Run stage: GitHub Actions execution backend ---
 # Tests execute in the isolated public `ramleo/ml-qa-runner` repo, never in this
 # Space. The token is read from the RUN_TOKEN_ENV secret at call time.

@@ -12,11 +12,14 @@ from urllib.parse import urlparse
 
 from fastapi import HTTPException
 
+from routers.qa import config
+
 _BLOCKED_HOSTNAMES = {"localhost", "ip6-localhost", "ip6-loopback"}
 
 
-def validate_target_url(url: str, *, required: bool = False) -> None:
-    """Raise HTTPException(400) if the URL is not a usable public http(s) URL.
+def validate_target_url(url: str, *, required: bool = False, authorized: bool = False) -> None:
+    """Raise HTTPException if the URL is not a usable public http(s) URL, or if it
+    is a third-party host the caller has not confirmed authorization for.
     An empty URL is allowed unless `required` (Run's base_url is optional)."""
     u = (url or "").strip()
     if not u:
@@ -31,6 +34,13 @@ def validate_target_url(url: str, *, required: bool = False) -> None:
     host = (parsed.hostname or "").lower()
     if not host or host in _BLOCKED_HOSTNAMES:
         raise HTTPException(status_code=400, detail="That URL host is not allowed.")
+
+    # Ownership gate: third-party hosts require an explicit authorization confirmation.
+    if not config.is_first_party(host) and not authorized:
+        raise HTTPException(
+            status_code=403,
+            detail="This is a third-party site. Confirm you own it or are authorized to test it.",
+        )
 
     try:
         ip = ipaddress.ip_address(host)

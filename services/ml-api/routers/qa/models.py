@@ -37,6 +37,8 @@ class RunRequest(BaseModel):
     test_name: str = Field("", max_length=config.MAX_NAME)
     # >1 repeats the test back-to-back in one run to detect flakiness.
     runs: int = Field(1, ge=1, le=config.MAX_RUN_REPEATS)
+    # Caller confirms ownership/authorization for a third-party target host.
+    authorized: bool = False
 
 
 class RunAccepted(BaseModel):
@@ -57,6 +59,8 @@ class HealResponse(BaseModel):
 
 class DiscoverStart(BaseModel):
     url: str = Field(..., min_length=1, max_length=config.MAX_BASE_URL)
+    # Caller confirms ownership/authorization for a third-party target host.
+    authorized: bool = False
 
 
 class Proposal(BaseModel):
