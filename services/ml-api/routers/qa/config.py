@@ -40,6 +40,9 @@ RUN_TOKEN_ENV = "GH_QA_TOKEN"
 
 # workflow_dispatch inputs are capped (~64KB total) — stay well under.
 MAX_RUN_CODE = 60000
+# Flakiness check: max times a single dispatch repeats the test (--repeat-each).
+# Bounds GitHub-runner minutes and the 15-min job timeout in qa-run.yml.
+MAX_RUN_REPEATS = 10
 # Cap the inline screenshot returned to the UI.
 MAX_SCREENSHOT_BYTES = 3_000_000
 

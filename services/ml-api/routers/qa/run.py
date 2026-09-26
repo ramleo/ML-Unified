@@ -33,7 +33,8 @@ def execute(request: Request, req: RunRequest):
     record_call(config.RUN_FEATURE, pool=config.RUN_BUDGET_POOL, daily_cap_env=config.RUN_DAILY_CAP_ENV)
     correlation_id = uuid.uuid4().hex
     try:
-        github_runner.dispatch(req.code, req.base_url, req.test_name, correlation_id)
+        github_runner.dispatch(req.code, req.base_url, req.test_name, correlation_id,
+                               runs=req.runs)
     except Exception as exc:
         logger.error("qa/run: dispatch failed: %s", exc)
         raise HTTPException(status_code=502, detail="Could not start the test run.")
@@ -112,6 +113,20 @@ def status(correlation_id: str):
 
     result.passed = summary.get("unexpected", 0) == 0
     result.summary = summary
+
+    # Flakiness: with --repeat-each the stats sum across repeats, so
+    # expected = passing repeats and unexpected = failing repeats. A mix of the
+    # two means the test is flaky. Only surfaced when it actually ran >1 time.
+    passed_runs = summary.get("expected", 0)
+    failed_runs = summary.get("unexpected", 0)
+    total_runs = passed_runs + failed_runs
+    if total_runs > 1:
+        result.runs = total_runs
+        result.passed_runs = passed_runs
+        result.failed_runs = failed_runs
+        result.pass_rate = round(passed_runs / total_runs, 3)
+        result.flaky = passed_runs > 0 and failed_runs > 0
+
     result.screenshot_base64 = art.get("screenshotBase64")
     result.steps = art.get("steps", []) or []
     result.has_video = bool(art.get("has_video"))

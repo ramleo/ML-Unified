@@ -42,7 +42,8 @@ def _runs_base() -> str:
     return f"{GH_API}/repos/{config.RUN_OWNER}/{config.RUN_REPO}"
 
 
-def dispatch(code: str, base_url: str, test_name: str, correlation_id: str) -> None:
+def dispatch(code: str, base_url: str, test_name: str, correlation_id: str,
+             runs: int = 1) -> None:
     """Fire the workflow. GitHub returns 204 and NO run id, so the run is found
     afterwards by its correlation id (embedded in run-name)."""
     url = f"{_runs_base()}/actions/workflows/{config.RUN_WORKFLOW_FILE}/dispatches"
@@ -53,6 +54,8 @@ def dispatch(code: str, base_url: str, test_name: str, correlation_id: str) -> N
             "base_url": base_url or "",
             "test_name": test_name or "",
             "correlation_id": correlation_id,
+            # workflow_dispatch inputs are strings; the workflow re-validates.
+            "repeat_each": str(runs),
         },
     }
     with httpx.Client(timeout=20) as client:

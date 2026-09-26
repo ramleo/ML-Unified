@@ -20,6 +20,8 @@ class RunRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=config.MAX_RUN_CODE)
     base_url: str = Field("", max_length=config.MAX_BASE_URL)
     test_name: str = Field("", max_length=config.MAX_NAME)
+    # >1 repeats the test back-to-back in one run to detect flakiness.
+    runs: int = Field(1, ge=1, le=config.MAX_RUN_REPEATS)
 
 
 class RunAccepted(BaseModel):
@@ -90,3 +92,10 @@ class RunStatus(BaseModel):
     correlation_id: str | None = None
     run_url: str | None = None
     detail: str | None = None
+    # Flakiness fields — populated when the test ran more than once. `flaky` is
+    # true when the repeats disagreed (some passed, some failed).
+    runs: int | None = None
+    passed_runs: int | None = None
+    failed_runs: int | None = None
+    pass_rate: float | None = None
+    flaky: bool | None = None
