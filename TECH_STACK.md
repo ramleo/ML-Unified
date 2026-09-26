@@ -281,6 +281,57 @@ at the prefix and joined at runtime** so scanners don't false-flag it. This does
 
 ---
 
+## Evals & guardrails
+
+### Evals (yes — a real golden-set harness, not just tests)
+- **`services/ml-api/evals/`** — `run.py` (runner), `goldens.py` (~13 golden
+  documents with expected outcomes), `_score.py` (scoring), plus `_check.py`,
+  `_pdf.py`, `_client.py`. This is **Phase 4** of the testing plan: it covers the
+  part a **model decides**, not fixed code output.
+- **Runs nightly** via `.github/workflows/nightly-evals.yml` — wakes the Space,
+  runs the golden set against the **live deployment**, and scores the answers.
+- **RAG evaluators:** `routers/rag/evaluate.py` + `evaluate_mm.py` (multimodal).
+- **Two-tier model:** deterministic code → hard assertions per push (CI); model
+  output → scored assertions nightly.
+
+### Guardrails (yes — layered)
+**Request / infra guardrails** — the `services/ml-api/security/` package, wired as
+middleware in `app.py`:
+
+| File | Guards against |
+|---|---|
+| `rate_limit.py` | Abuse — slowapi, default + per-route limits (SlowAPIMiddleware) |
+| `origin_policy.py` | Cross-origin abuse — CORS allowlist + origin enforcement |
+| `body_size.py` | Oversized-payload DoS — request body cap |
+| `ip_block.py` | Known-bad IPs — blocklist |
+| `budget.py` + `rag/_image_gen_budget.py` | Runaway spend on paid APIs (LLM / image-gen) |
+| `file_gate.py` | Malicious / oversized uploads |
+| `log_redact.py` | Secrets / PII leaking into logs |
+
+**LLM-output / content guardrails** (in the RAG pipeline):
+- `rag/pii.py` — PII detection.
+- `rag/groundedness.py` — hallucination guard (answers checked against sources).
+- `rag/contradictions.py` (+ judge) — contradiction detection.
+- `routers/prompt_injection_check.py` — prompt-injection detection.
+- Plus **Cloudflare Turnstile** (frontend bot gate) and **Pydantic** validation on
+  every request body.
+
+### Security response headers (verified 2026-09-26)
+- **Frontend (Vercel / Next.js):** sets 6 headers in `next.config.ts` — HSTS,
+  `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, Referrer-Policy,
+  Permissions-Policy, and a Content-Security-Policy.
+- **API (ml-api on HF):** sends **none** of these on its responses (confirmed via a
+  live `curl -I` — no code sets them). Low impact for JSON endpoints, but the Space
+  also serves the HTML apps at `/`, so adding at least `X-Frame-Options` / CSP there
+  would close a minor clickjacking gap. **Not yet done.**
+
+### Honest gaps
+- **No general content-moderation / toxicity filter** on LLM output beyond
+  groundedness + PII.
+- **API security headers** not set (see above).
+
+---
+
 ## Summary of the gaps (deliberate, and fine for a portfolio)
 
 | Category | Gap | Covered today by | Add later if scaling |
@@ -292,6 +343,8 @@ at the prefix and joined at runtime** so scanners don't false-flag it. This does
 | Observability | No APM | Supabase logs + /health | Sentry (errors) + Grafana/Prometheus (metrics) |
 | Storage | No object store | In-memory + ephemeral disk + client-side blobs | S3 / Supabase Storage (durable user files) |
 | Blue-green | No named blue/green | Vercel atomic immutable deploys | Second HF Space + alias cutover for the backend |
+| Content moderation | No toxicity filter on LLM output | Groundedness + PII checks | A moderation pass on generated text |
+| API security headers | Not set on ml-api responses | Frontend sets all 6 | Add X-Frame-Options / CSP to the Space (serves HTML) |
 
 None of these block a portfolio/demo project. They are the first things to
 introduce only if AIRaML ever grows real, sustained traffic or paying users.
