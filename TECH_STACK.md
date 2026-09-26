@@ -212,6 +212,37 @@ data.** Everything else hangs off that.
 
 ---
 
+## Accessing the API docs (auto-generated)
+
+FastAPI auto-generates interactive API docs from the code. None of the three
+services disable them (`docs_url` is left at its default), so every service exposes:
+
+- `/docs` — **Swagger UI**, interactive: expand an endpoint, click **"Try it out"**,
+  and fire a real request from the browser.
+- `/redoc` — **ReDoc**, a cleaner read-only view of the same spec.
+- `/openapi.json` — the raw **OpenAPI** spec (machine-readable).
+
+**The port only appears locally.** `<url>:<port>/docs` is how you reach a server on
+your own machine; once deployed to a real domain the port is implied (443 for HTTPS)
+and drops out of the URL — you use **domain + `/docs`**.
+
+**Live (main backend, verified 200):**
+- https://wram1708-ml-unified.hf.space/docs
+- https://wram1708-ml-unified.hf.space/redoc
+- https://wram1708-ml-unified.hf.space/openapi.json
+
+**Local:**
+```bash
+cd services/ml-api
+uvicorn app:app --reload --port 8000
+# then open http://localhost:8000/docs
+```
+
+The other services (`ml-sql`, `ml-vision`) each have their own `/docs` at their own
+URL/port — they are separate FastAPI apps.
+
+---
+
 ## Summary of the gaps (deliberate, and fine for a portfolio)
 
 | Category | Gap | Covered today by | Add later if scaling |
