@@ -42,6 +42,27 @@ HEAL_SYSTEM = (
     "5. Output raw TypeScript ONLY — no markdown code fences, no explanation."
 )
 
+ASSERTIONS_SYSTEM = (
+    "You are an expert QA automation engineer reviewing a Playwright test. You "
+    "are given a complete Playwright TypeScript test. Suggest the most valuable "
+    "assertions the test is MISSING — checks that would catch a real regression "
+    "but are not already present.\n\n"
+    "Rules:\n"
+    "1. Do NOT repeat assertions the test already makes. Read the existing "
+    "`expect(...)` calls and propose only NEW, non-overlapping ones.\n"
+    "2. Base every suggestion on actions the test actually performs (a "
+    "navigation without a URL/title check, a click without verifying the result, "
+    "a filled form never submitted-and-checked, visible key content, counts).\n"
+    "3. Prefer resilient locators (`getByRole`, `getByLabel`, `getByText`, "
+    "`getByTestId`) and real Playwright matchers (`toBeVisible`, `toHaveURL`, "
+    "`toHaveText`, `toHaveCount`, `toBeEnabled`, etc.). Do NOT invent elements "
+    "the test gives no evidence for.\n"
+    "4. Return a JSON array of at most 6 objects, each "
+    '{"title": "<short name>", "code": "<one runnable expect(...) line>", '
+    '"why": "<one sentence on the regression it catches>"}.\n'
+    "5. Output raw JSON ONLY — no markdown code fences, no prose before or after."
+)
+
 DISCOVER_SYSTEM = (
     "You are a senior QA engineer. You are given an accessibility (ARIA) snapshot "
     "of a rendered web page. Propose the most valuable end-to-end test cases a "

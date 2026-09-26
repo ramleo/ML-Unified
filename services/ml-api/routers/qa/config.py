@@ -26,6 +26,13 @@ FEATURE = "qa-test-author"
 BUDGET_POOL = "qa_test_author"
 DAILY_CAP_ENV = "QA_TEST_AUTHOR_DAILY_CAP"
 
+# Assertion suggestions (Author aid) — its own pool so it can't drain authoring.
+ASSERT_FEATURE = "qa-assertions"
+ASSERT_BUDGET_POOL = "qa_assertions"
+ASSERT_DAILY_CAP_ENV = "QA_ASSERTIONS_DAILY_CAP"
+# Cap the test code accepted for analysis (same ceiling as a run's code).
+MAX_ASSERT_SUGGESTIONS = 6
+
 # --- Run stage: GitHub Actions execution backend ---
 # Tests execute in the isolated public `ramleo/ml-qa-runner` repo, never in this
 # Space. The token is read from the RUN_TOKEN_ENV secret at call time.

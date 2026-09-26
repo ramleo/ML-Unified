@@ -16,6 +16,21 @@ class GenerateResponse(BaseModel):
     provider: str | None = None
 
 
+class AssertRequest(BaseModel):
+    code: str = Field(..., min_length=1, max_length=config.MAX_RUN_CODE)
+
+
+class AssertSuggestion(BaseModel):
+    title: str
+    code: str
+    why: str
+
+
+class AssertResponse(BaseModel):
+    suggestions: list[AssertSuggestion] = []
+    provider: str | None = None
+
+
 class RunRequest(BaseModel):
     code: str = Field(..., min_length=1, max_length=config.MAX_RUN_CODE)
     base_url: str = Field("", max_length=config.MAX_BASE_URL)

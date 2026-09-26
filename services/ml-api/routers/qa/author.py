@@ -5,6 +5,7 @@ POST /qa/author/generate — plain-English test steps -> a runnable Playwright
 TypeScript test with resilient locators. Generation ONLY, no execution.
 """
 
+import json
 import logging
 import re
 
@@ -12,8 +13,11 @@ from fastapi import APIRouter, Request
 
 from routers.qa import config
 from routers.qa.deps import complete, resolve_key, record_call, limiter, LLM_LIMIT
-from routers.qa.models import GenerateRequest, GenerateResponse
-from routers.qa.prompts import AUTHOR_SYSTEM
+from routers.qa.models import (
+    GenerateRequest, GenerateResponse,
+    AssertRequest, AssertResponse, AssertSuggestion,
+)
+from routers.qa.prompts import AUTHOR_SYSTEM, ASSERTIONS_SYSTEM
 
 logger = logging.getLogger(__name__)
 
@@ -76,3 +80,62 @@ def generate(request: Request, req: GenerateRequest):
         return GenerateResponse(code="", provider=None)
     code, provider = result
     return GenerateResponse(code=code, provider=provider)
+
+
+def _parse_suggestions(raw: str) -> list[AssertSuggestion]:
+    """Pull a JSON array of {title, code, why} out of a model reply, tolerating a
+    stray code fence. Returns [] on anything malformed."""
+    text = _strip_fences(raw)
+    try:
+        data = json.loads(text)
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+    out: list[AssertSuggestion] = []
+    for item in data[: config.MAX_ASSERT_SUGGESTIONS]:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("code", "")).strip()
+        if not code:
+            continue
+        out.append(AssertSuggestion(
+            title=str(item.get("title", "Assertion")).strip()[:120],
+            code=code[:400],
+            why=str(item.get("why", "")).strip()[:300],
+        ))
+    return out
+
+
+def suggest_assertions(code: str) -> tuple[list[AssertSuggestion], str] | None:
+    user_msg = f"Playwright test to review:\n{code.strip()}"
+    for provider, model in config.GEN_CANDIDATES:
+        key = resolve_key(provider)
+        if not key:
+            continue
+        try:
+            raw = complete(
+                provider, model, key,
+                [{"role": "user", "content": user_msg}],
+                system=ASSERTIONS_SYSTEM,
+            )
+        except Exception as exc:
+            logger.warning("qa/assertions: %s failed: %s", provider, exc)
+            continue
+        suggestions = _parse_suggestions(raw)
+        if suggestions:
+            return suggestions, provider
+        logger.warning("qa/assertions: %s returned no usable suggestions", provider)
+    return None
+
+
+@router.post("/assertions", response_model=AssertResponse)
+@limiter.limit(LLM_LIMIT)
+def assertions(request: Request, req: AssertRequest):
+    record_call(config.ASSERT_FEATURE, pool=config.ASSERT_BUDGET_POOL,
+                daily_cap_env=config.ASSERT_DAILY_CAP_ENV)
+    result = suggest_assertions(req.code)
+    if result is None:
+        return AssertResponse(suggestions=[], provider=None)
+    suggestions, provider = result
+    return AssertResponse(suggestions=suggestions, provider=provider)
