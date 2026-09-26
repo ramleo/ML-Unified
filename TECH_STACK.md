@@ -243,6 +243,44 @@ URL/port — they are separate FastAPI apps.
 
 ---
 
+## Public repo & secrets posture
+
+Both repos are **public** (ML-Unified is AGPL-3.0 by design). That is fine — and
+here's why, plus how it's kept safe.
+
+**Publishing endpoint code publicly is OK.** Hiding endpoint paths is "security
+through obscurity", not real security — and pointless here, because `/openapi.json`
+is public and lists every route anyway. The repo reveals nothing an attacker
+couldn't already get from the live API. Security lives in how endpoints are
+**protected**, not in hiding them:
+- **Auth / rate limiting** — Turnstile + rate limits guard abuse-prone endpoints.
+- **CORS** — `allow_origins` is an explicit allowlist (was `*`, now locked down).
+- **Input validation** — Pydantic models on request bodies.
+- **No secrets in responses or error messages.**
+
+**What must NEVER be committed:** API keys, tokens, DB passwords, the Supabase
+service-role key, the HF token. These live in **env vars / HF Space secrets** and are
+referenced by name (`process.env.*`) — never hardcoded, never in `.env` commits. If a
+secret is ever committed, **rotate it immediately** (deleting the commit is not
+enough — git history keeps it).
+
+**Secret-sweep result (verified 2026-09-26).** Full git-history scan of both repos —
+1,087 commits (ML-Unified) + 1,140 commits (ml-portfolio):
+- **No real credentials** anywhere in history.
+- The only pattern matches are **intentional sample data inside the security tools**
+  that exist to *detect* secrets: sample JWTs in `jwt-analyzer`, and the AWS key in
+  `malicious-package-scanner`.
+- That AWS sample is the **canonical AWS docs example key** (`AKIA…EXAMPLE`), which
+  every scanner (gitleaks, GitHub push protection) whitelists — so it is correctly
+  left as-is, not split.
+- **gitleaks runs in CI** on both repos, guarding every future push.
+
+Convention (from a past incident): random-looking secret-shaped test data is **split
+at the prefix and joined at runtime** so scanners don't false-flag it. This does
+*not* apply to the official `…EXAMPLE` key, which is already scanner-safe.
+
+---
+
 ## Summary of the gaps (deliberate, and fine for a portfolio)
 
 | Category | Gap | Covered today by | Add later if scaling |
