@@ -284,8 +284,10 @@ at the prefix and joined at runtime** so scanners don't false-flag it. This does
 ## Evals & guardrails
 
 ### Evals (yes — a real golden-set harness, not just tests)
-- **`services/ml-api/evals/`** — `run.py` (runner), `goldens.py` (~13 golden
-  documents with expected outcomes), `_score.py` (scoring), plus `_check.py`,
+- **`services/ml-api/evals/`** — `run.py` (runner), `goldens.py` (6 golden
+  documents with expected outcomes — one per distinct document type + failure mode:
+  consistent invoice, invoice with a bad total, receipt, bank statement, purchase
+  order, resume), `_score.py` (scoring), plus `_check.py`,
   `_pdf.py`, `_client.py`. This is **Phase 4** of the testing plan: it covers the
   part a **model decides**, not fixed code output.
 - **Runs nightly** via `.github/workflows/nightly-evals.yml` — wakes the Space,
