@@ -19,13 +19,16 @@ security/body_size.py so a real recording fits.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 import re
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import APIRouter, File, Request, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from security.rate_limit import limiter, LLM_LIMIT
@@ -116,7 +119,9 @@ def _parse(raw: str) -> dict | None:
     return {"summary": str(d.get("summary", "")).strip(), "decisions": decisions, "action_items": items}
 
 
-def analyze_meeting(raw: bytes, filename: str) -> dict:
+def _transcribe(raw: bytes, filename: str) -> list[dict]:
+    """Bytes -> speaker-labelled segments (transcribe_video runs Whisper +
+    diarization). The long, blocking step; run in an executor from the stream."""
     suffix = os.path.splitext(filename)[1] or ".mp3"
     tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
     tmp.write(raw)
@@ -128,31 +133,34 @@ def analyze_meeting(raw: bytes, filename: str) -> dict:
             os.unlink(tmp.name)
         except OSError:
             pass
+    return segments
 
-    if not segments:
-        return {"ok": False, "error": "Could not transcribe any speech from this file."}
 
+def _talk_time(segments: list[dict]) -> list[dict]:
     talk: dict[str, float] = {}
     for s in segments:
         spk = s.get("speaker") or "Unknown"
         talk[spk] = talk.get(spk, 0.0) + max(0.0, float(s.get("end", 0)) - float(s.get("start", 0)))
-    speakers = sorted(
+    return sorted(
         [{"label": k, "talk_seconds": round(v, 1)} for k, v in talk.items()],
         key=lambda x: -x["talk_seconds"],
     )
 
-    topics = [{"title": c.get("label", ""), "timestamp": int(c.get("time", 0))}
-              for c in generate_chapters(segments)]
+
+def analyze_meeting(raw: bytes, filename: str) -> dict:
+    segments = _transcribe(raw, filename)
+    if not segments:
+        return {"ok": False, "error": "Could not transcribe any speech from this file."}
     transcript = _speaker_transcript(segments)
     extraction = _extract(transcript)
-
     return {
         "ok": True,
         "summary": extraction["summary"],
         "decisions": extraction["decisions"],
         "action_items": extraction["action_items"],
-        "topics": topics,
-        "speakers": speakers,
+        "topics": [{"title": c.get("label", ""), "timestamp": int(c.get("time", 0))}
+                   for c in generate_chapters(segments)],
+        "speakers": _talk_time(segments),
         "transcript": transcript,
         "duration_seconds": int(segments[-1].get("end", 0)),
     }
@@ -165,6 +173,77 @@ async def meeting_endpoint(request: Request, file: UploadFile = File(...)):
     scan_upload_bytes(raw, path="/rag/mm-meeting")
     check_and_record_call("mm-meeting", pool="mm_meeting", daily_cap_env="MM_MEETING_DAILY_CAP")
     return analyze_meeting(raw, file.filename or "meeting")
+
+
+# ── Streaming variant: SSE progress for long meetings ──
+# Emits a step event per phase so the client shows live progress, and — crucially
+# for a long clip — keeps producing bytes so the transcription phase doesn't sit
+# idle long enough to trip the proxy's timeout. The one long blocking step
+# (transcription) runs in an executor while the generator emits heartbeats until
+# it finishes. Same result payload as the sync endpoint, in the final "done" event.
+_executor = ThreadPoolExecutor(max_workers=2)
+_HEARTBEAT_S = 10
+
+
+def _sse(data: dict) -> str:
+    return f"data: {json.dumps(data)}\n\n"
+
+
+async def _meeting_stream(raw: bytes, filename: str):
+    loop = asyncio.get_event_loop()
+    yield _sse({"step": "transcribe", "status": "running"})
+    fut = loop.run_in_executor(_executor, _transcribe, raw, filename)
+    while not fut.done():
+        try:
+            await asyncio.wait_for(asyncio.shield(fut), timeout=_HEARTBEAT_S)
+        except asyncio.TimeoutError:
+            yield _sse({"step": "transcribe", "status": "running", "heartbeat": True})
+    try:
+        segments = fut.result()
+    except Exception as exc:
+        logger.warning("mm-meeting stream: transcription failed: %s", exc)
+        yield _sse({"error": "Transcription failed — try a shorter or cleaner clip."})
+        return
+    if not segments:
+        yield _sse({"error": "Could not transcribe any speech from this file."})
+        return
+    yield _sse({"step": "transcribe", "status": "done"})
+
+    speakers = _talk_time(segments)
+    transcript = _speaker_transcript(segments)
+
+    yield _sse({"step": "agenda", "status": "running"})
+    topics = await loop.run_in_executor(
+        _executor,
+        lambda: [{"title": c.get("label", ""), "timestamp": int(c.get("time", 0))}
+                 for c in generate_chapters(segments)],
+    )
+    yield _sse({"step": "agenda", "status": "done"})
+
+    yield _sse({"step": "extract", "status": "running"})
+    extraction = await loop.run_in_executor(_executor, _extract, transcript)
+    yield _sse({"step": "extract", "status": "done"})
+
+    yield _sse({"step": "done", "result": {
+        "ok": True,
+        "summary": extraction["summary"],
+        "decisions": extraction["decisions"],
+        "action_items": extraction["action_items"],
+        "topics": topics,
+        "speakers": speakers,
+        "transcript": transcript,
+        "duration_seconds": int(segments[-1].get("end", 0)),
+    }})
+
+
+@router.post("/mm-meeting/stream")
+@limiter.limit(LLM_LIMIT)
+async def meeting_stream_endpoint(request: Request, file: UploadFile = File(...)):
+    raw = await file.read()
+    scan_upload_bytes(raw, path="/rag/mm-meeting/stream")
+    check_and_record_call("mm-meeting", pool="mm_meeting", daily_cap_env="MM_MEETING_DAILY_CAP")
+    return StreamingResponse(_meeting_stream(raw, file.filename or "meeting"),
+                             media_type="text/event-stream")
 
 
 # ── Transcript Q&A ──

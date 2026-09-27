@@ -25,8 +25,10 @@ MAX_BODY_BYTES = int(os.environ.get("MAX_REQUEST_BODY_BYTES", str(10 * 1024 * 10
 # the tight 10MB default holds for every other route. Only routes that genuinely
 # accept a large media upload are listed here — a meeting recording is far bigger
 # than the documents/images the rest of the API takes.
+_MEETING_CAP = int(os.environ.get("MEETING_MAX_BODY_BYTES", str(50 * 1024 * 1024)))  # 50MB
 _ROUTE_CAPS = {
-    "/rag/mm-meeting": int(os.environ.get("MEETING_MAX_BODY_BYTES", str(50 * 1024 * 1024))),  # 50MB
+    "/rag/mm-meeting": _MEETING_CAP,
+    "/rag/mm-meeting/stream": _MEETING_CAP,
 }
 
 
