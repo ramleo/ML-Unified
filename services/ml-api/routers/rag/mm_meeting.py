@@ -26,6 +26,7 @@ import re
 import tempfile
 
 from fastapi import APIRouter, File, Request, UploadFile
+from pydantic import BaseModel
 
 from security.rate_limit import limiter, LLM_LIMIT
 from security.budget import check_and_record_call
@@ -164,3 +165,46 @@ async def meeting_endpoint(request: Request, file: UploadFile = File(...)):
     scan_upload_bytes(raw, path="/rag/mm-meeting")
     check_and_record_call("mm-meeting", pool="mm_meeting", daily_cap_env="MM_MEETING_DAILY_CAP")
     return analyze_meeting(raw, file.filename or "meeting")
+
+
+# ── Transcript Q&A ──
+# The client already holds the transcript from /mm-meeting, so it posts that back
+# with a question rather than re-transcribing. Answered strictly from the
+# transcript, with its own budget pool so questions don't drain the analyse cap.
+_QA_SYSTEM = (
+    "You answer a question about a meeting using ONLY the transcript provided. "
+    "If the answer is not in the transcript, say you couldn't find it in the "
+    "meeting — do not guess. Be concise (1-3 sentences) and never invent a name, "
+    "date, number or commitment that is not in the transcript."
+)
+_MAX_QA_TRANSCRIPT = 14000
+_MAX_QUESTION = 400
+
+
+class MeetingAskRequest(BaseModel):
+    transcript: str
+    question: str
+
+
+@router.post("/mm-meeting/ask")
+@limiter.limit(LLM_LIMIT)
+def meeting_ask(request: Request, req: MeetingAskRequest):
+    check_and_record_call("mm-meeting-ask", pool="mm_meeting_qa", daily_cap_env="MM_MEETING_QA_DAILY_CAP")
+    question = (req.question or "").strip()[:_MAX_QUESTION]
+    transcript = (req.transcript or "").strip()[:_MAX_QA_TRANSCRIPT]
+    if not question or not transcript:
+        return {"ok": False, "error": "Both a question and a transcript are required."}
+    content = f"TRANSCRIPT:\n{transcript}\n\nQUESTION: {question}"
+    for provider, model in _CANDIDATES:
+        key = _resolve_key(provider, None)
+        if not key:
+            continue
+        try:
+            raw = complete(provider, model, key,
+                           [{"role": "user", "content": content}], system=_QA_SYSTEM)
+        except Exception as exc:
+            logger.warning("mm-meeting ask: %s failed: %s", provider, exc)
+            continue
+        if raw and raw.strip():
+            return {"ok": True, "answer": raw.strip()}
+    return {"ok": False, "error": "Couldn't get an answer just now — try again in a moment."}
