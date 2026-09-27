@@ -21,12 +21,21 @@ from security.events import log_security_event
 
 MAX_BODY_BYTES = int(os.environ.get("MAX_REQUEST_BODY_BYTES", str(10 * 1024 * 1024)))  # 10MB
 
+# Per-route caps that override the global default, kept deliberately narrow so
+# the tight 10MB default holds for every other route. Only routes that genuinely
+# accept a large media upload are listed here — a meeting recording is far bigger
+# than the documents/images the rest of the API takes.
+_ROUTE_CAPS = {
+    "/rag/mm-meeting": int(os.environ.get("MEETING_MAX_BODY_BYTES", str(50 * 1024 * 1024))),  # 50MB
+}
+
 
 async def enforce_body_size(request: Request, call_next):
+    cap = _ROUTE_CAPS.get(request.url.path, MAX_BODY_BYTES)
     content_length = request.headers.get("content-length")
     if content_length is not None:
         try:
-            if int(content_length) > MAX_BODY_BYTES:
+            if int(content_length) > cap:
                 log_security_event(
                     "oversized_request", request.url.path, request.client.host if request.client else "?",
                     detail=f"content-length={content_length}",

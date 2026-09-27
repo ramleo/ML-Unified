@@ -39,6 +39,7 @@ from routers.rag.mm_deblur import router as rag_mm_deblur_router
 from routers.rag.mm_steganography import router as rag_mm_steganography_router
 from routers.rag.mm_moire import router as rag_mm_moire_router
 from routers.rag.mm_descreen import router as rag_mm_descreen_router
+from routers.rag.mm_meeting import router as rag_mm_meeting_router
 from routers.rag.mm_text_to_image import router as rag_mm_text_to_image_router
 from routers.rag.mm_watermark import router as rag_mm_watermark_router
 from routers.rag.mm_plant_growth import router as rag_mm_plant_growth_router
@@ -245,6 +246,7 @@ app.include_router(rag_mm_deblur_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_steganography_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_moire_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_descreen_router, prefix="/rag", tags=["rag"])
+app.include_router(rag_mm_meeting_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_text_to_image_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_watermark_router, prefix="/rag", tags=["rag"])
 app.include_router(rag_mm_plant_growth_router, prefix="/rag", tags=["rag"])
