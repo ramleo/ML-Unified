@@ -391,10 +391,10 @@ store content at all, and the two pre-existing `events` naming conventions.
 Full grep of `ml-portfolio/src`. Corrected audit + remaining steps:
 [LOGGING_COVERAGE.md](LOGGING_COVERAGE.md).
 
-**Steps 1–3 DONE (2026-09-28):** run events for the 11 client-side tools that had
-none (`trackToolRun`; the "16" over-counted — see COVERAGE), `guide_open` via a
-`useGuideOpenTracking` hook in all 44 modals, and `tool_card_click` from the shared
-`ToolCard`. Live tools debounce; `password-audit` content-free; no privacy change.
+**Steps 1–4 DONE (2026-09-28):** run events for the 11 client-side tools (`trackToolRun`;
+the "16" over-counted — see COVERAGE), `guide_open` (hook in all 44 modals),
+`tool_card_click` (shared `ToolCard`), `citation_click` (shared `RagSourceCard`). Live
+tools debounce; `password-audit` content-free; no privacy change. `result_expand` has
+no distinct call site (citations are the only expandable result) — not forced.
 
-**Next:** `result_expand`/`citation_click` → `sample_load`/`paste_input`/`run_retry`
-→ `scroll_depth` (privacy §7; facts only §6).
+**Next:** `sample_load`/`paste_input`/`run_retry` → `scroll_depth` (privacy §7; facts only §6).

@@ -86,15 +86,12 @@ Design choices:
 
 ---
 
-## 3. Still pending — dead vocabulary (6 names)
+## 3. Still pending — dead vocabulary (4 names)
 
 Defined in `logEvents.ts`, zero call sites: `scroll_depth`, `sample_load`,
-`paste_input`, `run_retry`, `result_expand`, `citation_click`.
-(`guide_open` wired in step 2, `tool_card_click` in step 3 — see below.)
-
-Most are cheap:
-- `result_expand` / `citation_click` → only where expandable rows/citations exist
-  (multimodal-rag, reconciliation, document-intelligence).
+`paste_input`, `run_retry`. (`guide_open` wired in step 2, `tool_card_click` in
+step 3, `citation_click` in step 4 — see below. `result_expand` has no distinct
+interaction to attach to — see step 4.)
 
 ## 3b. Step 2 DONE — `guide_open` (2026-09-28)
 
@@ -119,21 +116,31 @@ with `{ tool, source, opens }` — `source` derived from the path (`home` / `cat
 results are a separate component and get their own `search_result_click` later;
 platform cards (`ProjectCard`) are a separate tier, not wired.
 
+## 3d. Step 4 DONE — `citation_click` (`result_expand` N/A) (2026-09-28)
+
+`RagSourceCard.tsx` is the shared citation card (multimodal-rag only; the other
+"citation" tools don't use it). Its click toggles the card open and selects it —
+one choke point. Emits `citation_click` **on open only** (not collapse) with
+`{ tool: "multimodal-rag", index, kind }` (chunk type) — never the cited text (§6).
+`result_expand` was checked and **not wired**: reconciliation has no expandable
+rows, document-intelligence's only toggle is its export dropdown, and the citation
+card is already covered by `citation_click`. No interaction left to attach it to, so
+it isn't forced.
+
 ## 4. Remaining plan (cheapest, highest-value first)
 
 Each step ships with the privacy page update (§7) **if it introduces a new data
 category**, carries enumerated facts only (§6), and uses the production write-gate.
 
-4. `result_expand`, `citation_click` where they apply.
 5. `sample_load`, `paste_input`, `run_retry`.
 6. `scroll_depth` last — lowest value, noisiest.
 
 ## 5. Privacy-page note
 
-Steps 1–3 needed **no** privacy-page change: no new column, no content —
-`query_run`, `guide_open`, `tool_card_click` and enumerated meta fit what is already
-disclosed under "What is recorded about your visit", and `password-audit` logs a
-content-free run. Steps 4–6 must be re-checked against the page individually.
+Steps 1–4 needed **no** privacy-page change: no new column, no content —
+`query_run`, `guide_open`, `tool_card_click`, `citation_click` and enumerated meta
+fit what is already disclosed under "What is recorded about your visit", and
+`password-audit` logs a content-free run. Steps 5–6 must be re-checked individually.
 
 ## 6. Guardrails (from LOGGING_SPEC.md §6)
 
