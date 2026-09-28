@@ -1,8 +1,8 @@
 # Logging Specification
 
-**Status:** agreed 2026-09-05. **Partially implemented 2026-09-06** — §9 items
-1, 4 and 9 built, plus the `trackedFetch` funnel items 2 and 3 need. One tool
-migrated; 55 not. See §11.
+**Status:** agreed 2026-09-05; plumbing built 2026-09-06; **coverage audited
+2026-09-28 (§12).** Vocabulary and both funnels exist; per-tool wiring is partial
+— 16 tools emit no run event yet. See §11 (what's built) and §12 (audit + plan).
 **Owner:** this file is the single source of truth for what the site logs.
 Change the logging, change this file, and change the privacy page (see §7).
 
@@ -309,20 +309,8 @@ November 2027 — the oldest row is from the day this was built.
 
 ## 9. Implementation order
 
-Nothing here is built yet. Suggested order, cheapest and highest-value
-first:
-
-1. `logEvents.ts` vocabulary file (§4).
-2. Stage 7 — error logging with `error_class`. Smallest change, and the one
-   that would have saved 2026-09-05.
-3. Stage 5 — run outcome with `run_id` and latency.
-4. `llm_calls` table and the Space→Vercel route (§5).
-5. Stage 2 — search, especially zero-result searches.
-6. Stage 4, 6 — upload / export / copy.
-7. Stage 3 — demo engagement.
-8. Stage 1, 8 — session boundaries.
-9. Privacy page update (§7) — **must ship with whichever of the above lands
-   first**, not at the end.
+Items 1–4 and shared-component events are built (§11); remaining per-tool wiring
+and its order are the §12 plan (2026-09-28); the privacy page (§7) ships per batch.
 
 ---
 ## 10. Open questions
@@ -388,13 +376,25 @@ Agreed wording if content is ever stored:
 | Stage 5/7 in a tool | `ReconciliationReport.tsx` | ONE tool only |
 
 **Why `llm.py` was wrapped, not edited per call site:** the four `stream_*`
-functions were renamed `_stream_*_raw` and re-exposed under their original
-names wrapped in `instrument()` — §5's own argument, applied to itself.
+functions were renamed `_stream_*_raw` and re-exposed wrapped in `instrument()`
+— §5's argument applied to itself. The **join key** `run_id` is minted per press,
+sent in the body, carried on a ContextVar; `events.meta->>'run_id'` joins
+`llm_calls.run_id`.
 
-**The join key:** `run_id` is minted client-side per press, sent in the
-request body, and put on a ContextVar so every judge call carries it.
-`events.meta->>'run_id'` joins to `llm_calls.run_id`.
+**Plumbing and shared-component events are built; per-tool wiring is partial**
+— audited in §12. Still open (§10): search queries as a salted hash, whether to
+store content at all, and the two pre-existing `events` naming conventions.
 
-**Everything in this spec is now built.** Remaining, all in §10: search
-queries as a salted hash; whether to store content at all; and the two naming
-conventions already in `events` — pre-existing, and renaming orphans rows.
+---
+## 12. Coverage audit + activation plan (2026-09-28)
+
+Full grep of `ml-portfolio/src`. Plumbing is done; the gap is per-tool wiring.
+The 16-tool list, plain-`fetch` cases, dead-vocabulary names and step-by-step
+plan are in [LOGGING_COVERAGE.md](LOGGING_COVERAGE.md). **61** tool pages · **60**
+open/close · **40** on `trackedFetch` (auto outcome) · **17** manual `query_run` ·
+**16 no run event at all** · **8** dead vocab names.
+
+**Order, cheapest first** (each ships with the privacy page §7; facts only §6):
+close the 16-tool gap with a `trackToolRun()` helper → `guide_open` +
+`tool_card_click` (one shared emit each) → results/setup events → `scroll_depth`
+last. `password-audit` stays content-free (§5b); skip pure visual showcases.
