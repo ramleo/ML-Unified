@@ -3,11 +3,8 @@
 Companion to [LOGGING_SPEC.md](LOGGING_SPEC.md) §12. Detailed findings and the
 step-by-step wiring plan, kept here so the spec stays under its size limit.
 
-**Audited 2026-09-28** by a full grep of `ml-portfolio/src`. Method:
-- run-event coverage = a tool references `trackedFetch` (auto `run_success` /
-  `run_error`) **or** a manual run event (`trackRunStart` / `incrementQueryCount`
-  / `EV.QUERY_RUN`).
-- The gap = tool dirs under `src/app/tools/*` referencing **neither**.
+**Audited 2026-09-28** by a full grep of `ml-portfolio/src`, then corrected while
+implementing step 1 (see the correction note below).
 
 ---
 
@@ -17,98 +14,113 @@ step-by-step wiring plan, kept here so the spec stays under its size limit.
 |---|---|
 | Tool pages (`src/app/tools/*`) | 61 |
 | Wired for `tool_open` / `tool_close` (`useToolTracking`) | 60 |
-| On `trackedFetch` → auto run outcome | 40 |
-| Emit a manual `query_run` | 17 |
-| **Emit no run event at all** | **16** |
+| Cover a run via `trackedFetch` (auto `run_success` / `run_error`) | 40+ |
+| Emit a run event some other way (`query_run` / `run_success` / shared modal) | rest |
+| **Emitted no run event before 2026-09-28** | **11** |
+| Wired in step 1 (2026-09-28) | 11 |
+| Genuine no-run showcases, intentionally skipped | 2 |
 
-The plumbing is complete (events table, `/api/track`, `trackedFetch`,
-`logEvents.ts`, `llm_calls`, `security_log`). The gap is per-tool wiring, plus a
-set of vocabulary names that exist but are never emitted.
+The plumbing was already complete (events table, `/api/track`, `trackedFetch`,
+`logEvents.ts`, `llm_calls`, `security_log`). The gap was per-tool run wiring.
 
----
+### Correction note (the first audit over-counted)
 
-## 2. The 16 tools with no run event
+The first pass looked only for `trackedFetch` / `trackRunStart` /
+`incrementQueryCount` / `EV.QUERY_RUN` **inside `src/app/tools/*`**, and reported
+16 uncovered tools. Two things made that an over-count:
 
-```
-asl-fingerspelling-recognition   automl
-dns-tunneling-detector           extension-permission-analyzer
-feature-engineering              gait-pattern-comparison
-keystroke-biometric-auth-risk    malicious-package-scanner
-movement-form-comparison         password-audit
-periodicity-finder               phishing-email-classifier
-pipeline-cinema                  pose-vj-visuals
-preprocessing                    video-keystroke-inference
-```
+1. **Direct `run_success` emitters were missed.** `feature-engineering` and
+   `preprocessing` emit `EV.RUN_SUCCESS` (and `EV.UPLOAD`) directly — already
+   covered.
+2. **Shared-component coverage was missed.** `automl`'s run goes through
+   `src/components/modals/AutoMLModal.tsx`, which already calls
+   `trackedFetch(..., { tool: "automl" })` — covered, just not in the tool dir.
 
-Notes:
-- **`malicious-package-scanner`, `password-audit`** call the network with a
-  **plain `fetch`**, not `trackedFetch` — so even their outcomes are unlogged.
-  - `password-audit`'s only call is a third-party **HIBP k-anonymity range
-    lookup** (`api.pwnedpasswords.com/range/<prefix>`): it sends a SHA-1 *prefix*,
-    never the password. Keep that design — give it a counts-only `trackToolRun`,
-    do **not** log any input (§5b excludes the password tool from content logging).
-  - `malicious-package-scanner`: migrate its call to `trackedFetch` (one-line) for
-    outcome logging; verify the target before assuming it's our backend.
-- **`pipeline-cinema`, `pose-vj-visuals`** are visual showcases with no real
-  "run" — judge per tool; don't force an event.
-- The rest are genuine client-side tools (FFT, biometric, CV, data-prep) whose
-  analysis runs in the browser and should emit a manual run event.
+Also, **`malicious-package-scanner` makes no network call** — the `fetch(` the
+grep matched was inside a *sample source-code string*, not real code. It is a pure
+client-side tool. So only `password-audit` actually hits the network (HIBP).
+
+Corrected real gap: **11** tools, all wired in step 1.
 
 ---
 
-## 3. Defined but never emitted (dead vocabulary)
+## 2. Step 1 — the 11 tools wired (2026-09-28)
 
-These 8 names exist in `logEvents.ts` but have zero call sites:
+Helper added to `src/hooks/useAnalytics.ts`:
 
-`guide_open`, `tool_card_click`, `scroll_depth`, `sample_load`, `paste_input`,
-`run_retry`, `result_expand`, `citation_click`.
+```ts
+export function trackToolRun(toolId: string, meta: Record<string, unknown> = {}) {
+  incrementQueryCount(toolId);
+  track(EV.QUERY_RUN, { meta: { tool: toolId, ...meta } });
+}
+```
 
-Most are cheap because a single shared component covers every tool:
-- `guide_open` → the shared User-Guide modal (one emit → all 60 tools).
+| Tool | Run moment | `meta` (facts only) |
+|---|---|---|
+| extension-permission-analyzer | `analyze()` button | `risk` (overall level) |
+| periodicity-finder | `onAnalyze()` button | `points` (count) |
+| dns-tunneling-detector | `runLog` / `runHost` (hook) | `mode` (log/host) |
+| gait-pattern-comparison | `analyze()` start | — |
+| movement-form-comparison | `analyze()` start | — |
+| video-keystroke-inference | `analyze()` start | — |
+| keystroke-biometric-auth-risk | scoring in `finalize()` | `band` (risk band) |
+| phishing-email-classifier | live typing, **debounced 1.2s** | `verdict` |
+| malicious-package-scanner | live typing, **debounced 1.2s** | `mode` |
+| password-audit | `checkBreach()` click | **none — content-free** |
+| asl-fingerspelling-recognition | camera session start | — |
+
+Design choices:
+- **Live-as-you-type tools** (phishing, malicious-package-scanner) debounce so one
+  run is counted per settled edit, not one per keystroke.
+- **`password-audit` is content-free by design.** It logs only that a breach check
+  ran — never the password *and never the breach outcome*, which is a fact about
+  what was typed. This keeps the privacy page's "nothing you type there ... no
+  record of it is made anywhere" claim true (§5b/§6).
+- **Real-time webcam tool** (asl) has no discrete run, so one run is logged when the
+  recognition session starts. No camera/biometric data is logged.
+
+### Not wired, and why
+- **Already covered:** `feature-engineering`, `preprocessing` (`run_success`
+  direct), `automl` (`AutoMLModal` `trackedFetch`).
+- **Visual showcases, no real "run":** `pipeline-cinema`, `pose-vj-visuals`.
+
+---
+
+## 3. Still pending — dead vocabulary (8 names)
+
+Defined in `logEvents.ts`, zero call sites: `guide_open`, `tool_card_click`,
+`scroll_depth`, `sample_load`, `paste_input`, `run_retry`, `result_expand`,
+`citation_click`.
+
+Most are cheap — one shared component covers every tool:
+- `guide_open` → the shared User-Guide modal.
 - `tool_card_click` → the shared tool-card component.
-- `result_expand` / `citation_click` → only where expandable rows/citations
-  exist (multimodal-rag, reconciliation, document-intelligence).
+- `result_expand` / `citation_click` → only where expandable rows/citations exist
+  (multimodal-rag, reconciliation, document-intelligence).
 
-Already wired once at the shared-component level (not dead): `search`,
-`search_result_click`, `nav_click`, `session_start`, `session_end`,
-`demo_start` / `demo_complete` / `demo_abandon`, plus `upload`, `result_view`,
-`export`, `copy`, `download`, `config_change` in the tools that have them.
+## 4. Remaining plan (cheapest, highest-value first)
 
----
+Each step ships with the privacy page update (§7) **if it introduces a new data
+category**, carries enumerated facts only (§6), and uses the production write-gate.
 
-## 4. Activation plan (cheapest, highest-value first)
+2. `guide_open` — one emit in the shared User-Guide modal.
+3. `tool_card_click` — one emit in the shared tool-card component.
+4. `result_expand`, `citation_click` where they apply.
+5. `sample_load`, `paste_input`, `run_retry`.
+6. `scroll_depth` last — lowest value, noisiest.
 
-Each step ships with the privacy page update (§7), carries **enumerated facts
-only — never content** (§6), and relies on the existing production write-gate.
+## 5. Privacy-page note for step 1
 
-1. **Close the 16-tool run-event gap.**
-   - Add a shared helper to `src/hooks/useAnalytics.ts`:
-     ```ts
-     export function trackToolRun(toolId: string, meta: Record<string, unknown> = {}) {
-       incrementQueryCount(toolId);
-       track(EV.QUERY_RUN, { meta: { tool: toolId, ...meta } });
-     }
-     ```
-   - Call `trackToolRun("<id>")` at each client-side tool's run moment.
-   - Migrate `malicious-package-scanner` to `trackedFetch`; give `password-audit`
-     a counts-only `trackToolRun` (no input, ever).
-   - Skip `pipeline-cinema` / `pose-vj-visuals` unless a real run is defined.
+Step 1 needed **no** privacy-page change: it adds no new column and no content —
+`query_run` and enumerated meta are already disclosed under "What is recorded about
+your visit", and `password-audit` logs a content-free run. Steps 2–6 must be
+re-checked against the page individually.
 
-2. **`guide_open`** — one emit in the shared User-Guide modal.
-
-3. **`tool_card_click`** — one emit in the shared tool-card component.
-
-4. **Results depth** — `result_expand`, `citation_click` where they apply.
-
-5. **Setup + retries** — `sample_load`, `paste_input`, `run_retry`.
-
-6. **`scroll_depth`** last — lowest value, noisiest.
-
-## 5. Guardrails (from LOGGING_SPEC.md §6)
+## 6. Guardrails (from LOGGING_SPEC.md §6)
 
 - No content in `events` — counts, sizes, enumerated choices only. Search text →
   salted hash, never the string.
 - Fire-and-forget; a logging outage is invisible to the user.
 - One vocabulary file; no string literals to `track()`.
 - `session_id` stays anonymous; no new PII.
-- The password tool stays fully excluded from content logging.
+- The password tool stays content-free — no password, no derived breach outcome.

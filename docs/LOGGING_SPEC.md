@@ -1,8 +1,8 @@
 # Logging Specification
 
-**Status:** agreed 2026-09-05; plumbing built 2026-09-06; **coverage audited
-2026-09-28 (§12).** Vocabulary and both funnels exist; per-tool wiring is partial
-— 16 tools emit no run event yet. See §11 (what's built) and §12 (audit + plan).
+**Status:** agreed 2026-09-05; plumbing built 2026-09-06; audited + **run-event
+wiring completed 2026-09-28 (§12).** Every tool now emits a run event; remaining
+work is the engagement/results vocabulary. See §11 (built) and §12 (audit + plan).
 **Owner:** this file is the single source of truth for what the site logs.
 Change the logging, change this file, and change the privacy page (see §7).
 
@@ -388,13 +388,13 @@ store content at all, and the two pre-existing `events` naming conventions.
 ---
 ## 12. Coverage audit + activation plan (2026-09-28)
 
-Full grep of `ml-portfolio/src`. Plumbing is done; the gap is per-tool wiring.
-The 16-tool list, plain-`fetch` cases, dead-vocabulary names and step-by-step
-plan are in [LOGGING_COVERAGE.md](LOGGING_COVERAGE.md). **61** tool pages · **60**
-open/close · **40** on `trackedFetch` (auto outcome) · **17** manual `query_run` ·
-**16 no run event at all** · **8** dead vocab names.
+Full grep of `ml-portfolio/src`. Corrected audit + remaining steps:
+[LOGGING_COVERAGE.md](LOGGING_COVERAGE.md).
 
-**Order, cheapest first** (each ships with the privacy page §7; facts only §6):
-close the 16-tool gap with a `trackToolRun()` helper → `guide_open` +
-`tool_card_click` (one shared emit each) → results/setup events → `scroll_depth`
-last. `password-audit` stays content-free (§5b); skip pure visual showcases.
+**Step 1 DONE (2026-09-28):** added `trackToolRun()` to `useAnalytics.ts` and wired
+the 11 client-side tools with no run event. (The earlier "16" over-counted —
+`feature-engineering`/`preprocessing` already emit `run_success`; `automl` is covered
+via the shared `AutoMLModal`.) Live tools debounce; `password-audit` content-free (§5b).
+
+**Next** (ship with the privacy page §7; facts only §6): `guide_open` +
+`tool_card_click` (one shared emit each) → results/setup events → `scroll_depth` last.
