@@ -86,14 +86,13 @@ Design choices:
 
 ---
 
-## 3. Still pending — dead vocabulary (7 names)
+## 3. Still pending — dead vocabulary (6 names)
 
-Defined in `logEvents.ts`, zero call sites: `tool_card_click`, `scroll_depth`,
-`sample_load`, `paste_input`, `run_retry`, `result_expand`, `citation_click`.
-(`guide_open` was wired in step 2 — see below.)
+Defined in `logEvents.ts`, zero call sites: `scroll_depth`, `sample_load`,
+`paste_input`, `run_retry`, `result_expand`, `citation_click`.
+(`guide_open` wired in step 2, `tool_card_click` in step 3 — see below.)
 
-Most are cheap — one shared component covers every tool:
-- `tool_card_click` → the shared tool-card component.
+Most are cheap:
 - `result_expand` / `citation_click` → only where expandable rows/citations exist
   (multimodal-rag, reconciliation, document-intelligence).
 
@@ -109,22 +108,32 @@ no content. No privacy change (same category as `tool_open`). The platform-world
 guide modals (`WorldUserGuideModal`, the `/qa` modals) are a separate tier and
 not yet wired — a small optional follow-up.
 
+## 3c. Step 3 DONE — `tool_card_click` (2026-09-28)
+
+`ToolCard.tsx` **is** a genuine shared component (unlike the guide modals), and
+`handleNavigate()` is the single click entry point for every path — card body,
+title button, and the back "Try it"/"Launch" buttons all route through it, and it
+has `cap.id`. So one emit there covers all tool-card grids. Logs `tool_card_click`
+with `{ tool, source, opens }` — `source` derived from the path (`home` / `category`
+/ `other`); `opens` is `here` (internal/modal) or `external`. No content. Search
+results are a separate component and get their own `search_result_click` later;
+platform cards (`ProjectCard`) are a separate tier, not wired.
+
 ## 4. Remaining plan (cheapest, highest-value first)
 
 Each step ships with the privacy page update (§7) **if it introduces a new data
 category**, carries enumerated facts only (§6), and uses the production write-gate.
 
-3. `tool_card_click` — one emit in the shared tool-card component.
 4. `result_expand`, `citation_click` where they apply.
 5. `sample_load`, `paste_input`, `run_retry`.
 6. `scroll_depth` last — lowest value, noisiest.
 
 ## 5. Privacy-page note
 
-Steps 1–2 needed **no** privacy-page change: no new column, no content —
-`query_run`, `guide_open` and enumerated meta fit what is already disclosed under
-"What is recorded about your visit", and `password-audit` logs a content-free run.
-Steps 3–6 must be re-checked against the page individually.
+Steps 1–3 needed **no** privacy-page change: no new column, no content —
+`query_run`, `guide_open`, `tool_card_click` and enumerated meta fit what is already
+disclosed under "What is recorded about your visit", and `password-audit` logs a
+content-free run. Steps 4–6 must be re-checked against the page individually.
 
 ## 6. Guardrails (from LOGGING_SPEC.md §6)
 
