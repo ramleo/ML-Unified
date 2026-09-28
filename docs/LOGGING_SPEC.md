@@ -391,10 +391,10 @@ store content at all, and the two pre-existing `events` naming conventions.
 Full grep of `ml-portfolio/src`. Corrected audit + remaining steps:
 [LOGGING_COVERAGE.md](LOGGING_COVERAGE.md).
 
-**Step 1 DONE (2026-09-28):** added `trackToolRun()` to `useAnalytics.ts` and wired
-the 11 client-side tools with no run event. (The earlier "16" over-counted —
-`feature-engineering`/`preprocessing` already emit `run_success`; `automl` is covered
-via the shared `AutoMLModal`.) Live tools debounce; `password-audit` content-free (§5b).
+**Step 1 DONE (2026-09-28):** `trackToolRun()` added to `useAnalytics.ts`, wired the
+11 client-side tools with no run event (the "16" over-counted: `feature-engineering`/
+`preprocessing` emit `run_success`, `automl` via `AutoMLModal`). Live tools debounce.
 
-**Next** (ship with the privacy page §7; facts only §6): `guide_open` +
-`tool_card_click` (one shared emit each) → results/setup events → `scroll_depth` last.
+**Step 2 DONE (2026-09-28):** `guide_open` via a `useGuideOpenTracking` hook in all 44 per-tool modals; no privacy change.
+
+**Next:** `tool_card_click` → results/setup events → `scroll_depth` (privacy §7; facts only §6).

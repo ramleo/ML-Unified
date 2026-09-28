@@ -86,35 +86,45 @@ Design choices:
 
 ---
 
-## 3. Still pending — dead vocabulary (8 names)
+## 3. Still pending — dead vocabulary (7 names)
 
-Defined in `logEvents.ts`, zero call sites: `guide_open`, `tool_card_click`,
-`scroll_depth`, `sample_load`, `paste_input`, `run_retry`, `result_expand`,
-`citation_click`.
+Defined in `logEvents.ts`, zero call sites: `tool_card_click`, `scroll_depth`,
+`sample_load`, `paste_input`, `run_retry`, `result_expand`, `citation_click`.
+(`guide_open` was wired in step 2 — see below.)
 
 Most are cheap — one shared component covers every tool:
-- `guide_open` → the shared User-Guide modal.
 - `tool_card_click` → the shared tool-card component.
 - `result_expand` / `citation_click` → only where expandable rows/citations exist
   (multimodal-rag, reconciliation, document-intelligence).
+
+## 3b. Step 2 DONE — `guide_open` (2026-09-28)
+
+There is **no** single shared per-tool guide modal — 44 near-identical copies,
+each with only `{ open, onClose }`. So the plan's "one shared emit" wasn't
+possible; instead a `useGuideOpenTracking(toolId, open)` hook was added to
+`useAnalytics.ts` and called once inside each modal with its own tool id
+(43 via the uniform `if (!open) return null;` anchor; `text-to-sql`'s modal
+mounts-when-open so it passes `open={true}`). Emits `guide_open` with `{ tool }`,
+no content. No privacy change (same category as `tool_open`). The platform-world
+guide modals (`WorldUserGuideModal`, the `/qa` modals) are a separate tier and
+not yet wired — a small optional follow-up.
 
 ## 4. Remaining plan (cheapest, highest-value first)
 
 Each step ships with the privacy page update (§7) **if it introduces a new data
 category**, carries enumerated facts only (§6), and uses the production write-gate.
 
-2. `guide_open` — one emit in the shared User-Guide modal.
 3. `tool_card_click` — one emit in the shared tool-card component.
 4. `result_expand`, `citation_click` where they apply.
 5. `sample_load`, `paste_input`, `run_retry`.
 6. `scroll_depth` last — lowest value, noisiest.
 
-## 5. Privacy-page note for step 1
+## 5. Privacy-page note
 
-Step 1 needed **no** privacy-page change: it adds no new column and no content —
-`query_run` and enumerated meta are already disclosed under "What is recorded about
-your visit", and `password-audit` logs a content-free run. Steps 2–6 must be
-re-checked against the page individually.
+Steps 1–2 needed **no** privacy-page change: no new column, no content —
+`query_run`, `guide_open` and enumerated meta fit what is already disclosed under
+"What is recorded about your visit", and `password-audit` logs a content-free run.
+Steps 3–6 must be re-checked against the page individually.
 
 ## 6. Guardrails (from LOGGING_SPEC.md §6)
 
