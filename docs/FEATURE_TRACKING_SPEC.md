@@ -123,11 +123,19 @@ attributes.** New/finer controls then get an explicit `data-ev`.
 **Phase 2 — high-value explicit `data-ev`, prioritized.**
 Add `data-ev` to rich controls not already `data-wt`-tagged. Suggested order by
 value/complexity:
-1. `multimodal-rag` — draw-region, sharpen (image/region), watermark embed/verify,
-   provider switch, detail level (concise/normal/detailed), citation kind filters.
-2. Video/image tools — frame seek, region select, mode tabs.
-3. `exploratory-data-analysis` — section nav, per-column ops, report toggles.
-4. Remaining tools with distinctive controls, in usage order.
+1. `multimodal-rag` — **DONE (c523609, 2026-09-29):** `visual-action` select (one
+   attribute captures all detect/verify/describe actions as the value), draw-region,
+   restricted-zone, sharpen (whole/region/cancel/view), watermark (embed/verify),
+   download/reset-edit, detect-faces, find-similar, provider-settings, answer-length
+   (value = concise/normal/detailed via `data-ev-value`).
+2. Video/image tools — frame seek, region select, mode tabs. *(pending)*
+3. `exploratory-data-analysis` — **section nav DONE (c523609):** `eda-section`
+   (value = section id). Per-column ops / report toggles pending.
+4. Remaining tools with distinctive controls, in usage order. *(pending)*
+
+Enhancement shipped alongside batch 1: the click path reads an optional
+`data-ev-value` so button groups capture the choice while keeping a stable
+control id (still enumerated, never content).
 
 **Phase 3 — read side.**
 A per-tool feature-usage view (top controls, trends). Backend/analytics query
