@@ -1,8 +1,9 @@
 # Feature-Level Tracking Specification
 
-**Status:** proposed 2026-09-29 (not yet built). Extends
+**Status:** **Phases 0–2 built + verified live (2026-09-29).** Extends
 [LOGGING_SPEC.md](LOGGING_SPEC.md) — the journey vocabulary (steps 1–6 +
-gap-closers) is complete; this adds *per-tool, per-control* granularity.
+gap-closers) is complete; this adds *per-tool, per-control* granularity via one
+`feature_use` event. Phase 3 (dashboard) is the only part left.
 **Owner:** this file is the source of truth for feature-level instrumentation.
 
 Companion: [LOGGING_SPEC.md](LOGGING_SPEC.md) (journey events, guardrails §6,
@@ -120,18 +121,27 @@ attributes.** New/finer controls then get an explicit `data-ev`.
 - Listener reads existing `data-wt` → ~232 key controls tracked instantly.
 - Live-verify a handful (a click, a select change, a slider) at the network layer.
 
-**Phase 2 — high-value explicit `data-ev`, prioritized.**
-Add `data-ev` to rich controls not already `data-wt`-tagged. Suggested order by
-value/complexity:
-1. `multimodal-rag` — **DONE (c523609, 2026-09-29):** `visual-action` select (one
-   attribute captures all detect/verify/describe actions as the value), draw-region,
-   restricted-zone, sharpen (whole/region/cancel/view), watermark (embed/verify),
-   download/reset-edit, detect-faces, find-similar, provider-settings, answer-length
-   (value = concise/normal/detailed via `data-ev-value`).
-2. Video/image tools — frame seek, region select, mode tabs. *(pending)*
-3. `exploratory-data-analysis` — **section nav DONE (c523609):** `eda-section`
-   (value = section id). Per-column ops / report toggles pending.
-4. Remaining tools with distinctive controls, in usage order. *(pending)*
+**Phase 2 — high-value explicit `data-ev`. DONE 2026-09-29** (batches 1–4:
+c523609, 9d53acb, f5d2cc5, 2cab8bb). Tagged every tool with a distinctive control
+beyond its (already-tracked) run button:
+1. `multimodal-rag` — `visual-action` select (captures all detect/verify/describe
+   actions as the value), draw-region, restricted-zone, sharpen (whole/region/
+   cancel/view), watermark (embed/verify), download/reset-edit, detect-faces,
+   find-similar, provider-settings, answer-length (value via `data-ev-value`).
+2. `exploratory-data-analysis` — `eda-section` (value = section id).
+3. `text-to-image` — style-option, enhance-prompt, variation-count, edit-sharpen,
+   apply-edit. `meeting-intelligence` — transcript-seek, toggle-transcript.
+4. Media — `text-prompted-video-tracking` (video-playpause, frame-scrub),
+   `face-cloak`/`style-cloak` (cloak-strength slider),
+   `captcha-hardening-lab` (captcha-intensity slider),
+   `face-deanonymization-demo` (protect-retest, gallery-remove),
+   `wildlife-reidentification` (gallery-remove).
+
+**Not tagged, intentionally:** run-and-show tools (scan-descreen, gait/movement
+comparison, keystroke-biometric, intrusion-detection, asl-fingerspelling,
+video-keystroke-inference) — their only control is analyze/run, already tracked by
+`query_run`/`run_success`. Generate/download/upload buttons everywhere are left to
+their existing run/download/upload events to avoid double counting.
 
 Enhancement shipped alongside batch 1: the click path reads an optional
 `data-ev-value` so button groups capture the choice while keeping a stable
