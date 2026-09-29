@@ -147,9 +147,46 @@ Enhancement shipped alongside batch 1: the click path reads an optional
 `data-ev-value` so button groups capture the choice while keeping a stable
 control id (still enumerated, never content).
 
-**Phase 3 — read side.**
-A per-tool feature-usage view (top controls, trends). Backend/analytics query
-only; no new client events.
+**Phase 3 — read side (scoped 2026-09-29; not built).**
+A per-tool feature-usage view built on the **existing** `realtime-analytics`
+dashboard. No new client events — this only reads the `feature_use` rows already
+being written (`meta = {tool, control, action, value}`).
+
+*What already exists (build on, don't duplicate):* the `realtime-analytics` tool is
+a full dashboard (`AnalyticsDashboard` + ~20 components incl. `AnalyticsQueryByTool`,
+`AnalyticsPortfolioTools`, `AnalyticsHeatmap`, `AnalyticsAIPanel`), fed by
+`ml-portfolio/src/app/api/stats/route.ts`, which pages all events in a range and
+aggregates in JS (it already selects the `meta` column, so `feature_use` data is
+already arriving — just not aggregated or shown).
+
+*3.1 Aggregation.* Produce, per range: `feature_use` grouped by `meta.tool` →
+`meta.control` → `meta.action` with counts; a **value breakdown** per enumerated
+control (e.g. `provider-settings` → provider mix, `answer-length` →
+concise/normal/detailed, sliders → quartile distribution); overall and per-tool
+"top controls".
+
+*3.2 Data path — the one real decision (volume).* `feature_use` is the
+**highest-volume** event and `/api/stats` currently fetches every row to JS, which
+will not scale for 30-day ranges. **Recommended:** a dedicated aggregated endpoint
+(or a Supabase SQL function / RPC) doing `GROUP BY meta->>'tool', meta->>'control'`
+server-side, returning counts not raw rows — do NOT widen the all-events fetch.
+(Alternative, faster to ship but doesn't scale: reuse the existing JS-aggregation
+pattern in `/api/stats`.)
+
+*3.3 UI.* One new `AnalyticsFeatureUsage.tsx` in `realtime-analytics`, mirroring
+`AnalyticsQueryByTool`/`AnalyticsPortfolioTools`: a tool filter (reuse
+`AnalyticsToolbar`), a ranked bar list of top controls for the selected tool, an
+action mix (click/change/slider), and value-breakdown mini-charts for enumerated
+controls. Wire into `AnalyticsDashboard`; add the shape to `analyticsTypes.ts`;
+follow the dataviz skill for the charts.
+
+*3.4 Guardrails.* Read-only over already-logged, content-free data → **no privacy
+change, no new events, no new columns.** Access model is whatever `realtime-analytics`
+already uses.
+
+*Effort:* moderate — 1 aggregated endpoint (SQL RPC recommended) + 1 component +
+types. Acceptance: the panel shows top controls per tool and at least one value
+breakdown, over a 30-day range, without a full-table scan in the browser.
 
 ## 8. Privacy
 
