@@ -1,11 +1,12 @@
 """LLM provider cascade for document field extraction (text path).
 Zero imports from other ml-api routers — self-contained for microservice extraction.
-Cascade order: Cohere → Mistral (medium→large) → Gemini. Groq
-dropped from the automatic cascade (2026-08-24) — no free replacement model
-that actually worked reliably for this app's request pattern was found (see
-routers/rag/query.py's _DEFAULT_PROVIDER comment for the full history).
-Still selectable manually via BYOK (provider="groq"), just never tried
-automatically. Vision/OCR lives in _vision.py.
+Cascade order: Cohere → Gemini. Groq dropped from the automatic cascade
+(2026-08-24) and Mistral dropped (2026-09-29) — Mistral 429s on nearly every
+call here (free-tier capacity, no reserved quota) and its large model is 403
+tier-locked, so it was a guaranteed failed round-trip that only delayed the
+working providers (see routers/rag/query.py's _DEFAULT_PROVIDER comment for the
+full history). Both stay selectable manually via BYOK (provider="groq" /
+"mistral"), just never tried automatically. Vision/OCR lives in _vision.py.
 """
 from __future__ import annotations
 
@@ -141,18 +142,17 @@ def _cohere(messages: list[dict], system: str) -> str:
 last_provider: str = ""
 
 # Gemini is the only PAID key here and this endpoint is public, so it goes
-# LAST. It used to sit second behind Mistral, which 429s nearly every request
-# (no reserved free capacity, Part 276 §15) — so second was in practice first,
-# and free Cohere sat third, unreached. Order now matches generation.py's
-# FALLBACK_CANDIDATES: free and reliable, then free and best-effort, then paid.
+# LAST, behind free Cohere. Free Cohere first, paid Gemini last.
 #
-# Cerebras is deliberately absent: its key is valid (the 401 was a stale
-# secret, replaced 2026-09-12) but the account is free and free accounts get
-# 402 payment-required on every call. A provider that cannot succeed is not a
-# fallback, just a wasted round trip in front of the paid key. Still reachable
-# as provider="cerebras" if that account is ever upgraded.
-_CASCADE_ORDER = (("cohere", _cohere), ("mistral", _mistral),
-                  ("gemini", _gemini_text))
+# Mistral and Cerebras are deliberately absent — both are round trips that
+# cannot succeed here, so they only delay the working providers:
+#   • Mistral 429s on nearly every call (free-tier capacity, no reserved quota,
+#     Part 276 §15) and mistral-large is 403 tier-locked (removed 2026-09-29).
+#   • Cerebras is a free account and free accounts get 402 payment-required on
+#     every call (the earlier 401 was a stale secret, replaced 2026-09-12).
+# Both stay reachable as provider="mistral"/"cerebras" (BYOK) if those accounts
+# are ever upgraded.
+_CASCADE_ORDER = (("cohere", _cohere), ("gemini", _gemini_text))
 
 
 def _cascade(messages: list[dict], system: str) -> str:
@@ -268,27 +268,14 @@ def extract_fields_from_text(text: str, doc_type: str, schema_fields: list[dict]
         if raw.strip():
             last_provider = provider
     else:
-        raw = ""
-        if tier == "simple":
-            # Simple doc → fast path, tried before the full cascade below.
-            # Previously used Groq specifically for its free-tier speed;
-            # Groq dropped from the automatic path entirely (2026-08-24, see
-            # module docstring) with no equivalent small/fast free model
-            # found elsewhere, so this now just tries Mistral directly —
-            # still faster than the full cascade when it succeeds. (Cascade
-            # order used to put Mistral first; it is now Cohere first with the
-            # paid key last — see _CASCADE_ORDER.)
-            raw = _mistral(messages, system)
-            if raw.strip() and _parse_json(raw).get("fields"):
-                last_provider = "mistral · fast"
-            else:
-                logger.warning(
-                    "Field extraction: fast-tier model returned empty/invalid JSON, "
-                    "falling back to full cascade"
-                )
-                raw = ""
-        if not raw:
-            raw = _cascade(messages, system)
+        # No separate "simple/fast" tier any more (`tier` kept for signature
+        # compatibility). The only free small model that filled that role was
+        # Mistral, which 429s on nearly every call here and whose large model is
+        # 403 tier-locked — so the fast path was ~4s of guaranteed failure in
+        # front of the cascade on every request, holding the single worker and
+        # 502-ing concurrent uploads. Removed 2026-09-29; all docs now use the
+        # Cohere-first cascade directly (fast and reliable).
+        raw = _cascade(messages, system)
     data = _parse_json(raw)
     return _normalize_fields(data.get("fields", []), field_meta)
 

@@ -1,5 +1,6 @@
 """Vision + OCR extraction for scanned/image documents.
-Vision cascade: Mistral medium → Gemini 2.0 Flash. Groq dropped entirely
+Vision cascade: Gemini 3.6 Flash only (Mistral removed from the auto path
+2026-09-29 — 429s on nearly every call, never saved a paid Gemini call). Groq dropped entirely
 (2026-08-24, see routers/rag/query.py's _DEFAULT_PROVIDER comment).
 OCR-first path: mistral-ocr-latest converts pages to markdown so scanned
 docs can use the same text cascade as digital PDFs.
@@ -168,7 +169,13 @@ def _vision_cascade_raw(b64: str, prompt: str) -> str:
     # qwen/qwen3.6-27b model was the confirmed source of EC-007's
     # collage-hallucination bug (see mm_caption.py's looks_like_fabricated_
     # collage), so removed outright rather than left unused.
-    for name, fn in (("mistral", _mistral_vision_raw), ("gemini", _gemini_vision_raw)):
+    # Mistral vision removed from the auto path 2026-09-29: it 429s on nearly
+    # every call here (free-tier capacity), so it never actually saved a paid
+    # Gemini call — Gemini already handled ~100% of vision — it only added a
+    # failed round-trip that held the single worker and 502-ed concurrent
+    # requests. Gemini vision only now. (_mistral_vision_raw kept for reference /
+    # if a reserved-capacity Mistral key is ever added.)
+    for name, fn in (("gemini", _gemini_vision_raw),):
         raw = fn(b64, prompt)
         if raw.strip():
             _llm_state.last_provider = f"{name} vision"
