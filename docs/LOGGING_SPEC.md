@@ -136,11 +136,12 @@ to the backend's own record of the same work (§5).
 | Exports | **`export`** | `format` (csv / json / png / pdf) |
 | Copies output | **`copy`** | `what`, `chars` |
 | Downloads a produced file | **`download`** | `ext`, `size_bytes` |
+| Rates an answer | **`feedback`** ✅ 2026-09-29 | `tool`, `rating` (up/down) |
 
 ### Stage 7 — Failure
 
-`error` exists but has one call site, so in practice failures are invisible.
-Every catch block that a user can see the effect of should emit:
+`error` is now emitted **globally** (2026-09-29): uncaught JS + unhandled rejections,
+content-free (class+source only, never message/stack). A user-visible catch can enrich:
 
 | Field | Meaning |
 |---|---|
@@ -388,13 +389,12 @@ store content at all, and the two pre-existing `events` naming conventions.
 ---
 ## 12. Coverage audit + activation plan (done 2026-09-29)
 
-Corrected audit + per-step detail: [LOGGING_COVERAGE.md](LOGGING_COVERAGE.md).
+Per-tool tables + full detail: [LOGGING_COVERAGE.md](LOGGING_COVERAGE.md).
 
-**Steps 1–4 (2026-09-28, verified live):** run events for 11 client tools (`trackToolRun`;
-"16" over-counted), `guide_open` (44 modals), `tool_card_click` (`ToolCard`),
-`citation_click` (`RagSourceCard`). `password-audit` content-free; `result_expand` N/A.
-
-**Steps 5–6 (2026-09-29):** `sample_load` (7 sample buttons), `paste_input` (global
-`/tools/*` listener — length bucket, never text; password excluded §5b), `run_retry`
-(central — run after that tool's error), `scroll_depth` (global, 25/50/75/100). **All
-vocabulary emitted;** no privacy change (§7 covers event type + enumerated meta).
+**All client-side wiring done (2026-09-28/29):** steps 1–6 + gap-closers (`error` global
+uncaught/rejection handler; `feedback` RAG thumbs up/down — new event; platform tier
+`guide_open` in `WorldUserGuideModal`/`AuthorUserGuideModal` + `tool_card_click` in
+`ProjectCard`). **All 31 event types emitted except `result_expand` (N/A).** Content-free
+throughout (§6); no privacy change (§7 covers event type + enumerated meta; `error` logs
+no message/stack). Steps 1–4 and the step-5/6 subset verified live; audit gotcha (the
+"16" over-count) + per-step notes in COVERAGE.

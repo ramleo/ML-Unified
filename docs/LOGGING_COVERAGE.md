@@ -88,10 +88,11 @@ Design choices:
 
 ## 3. Vocabulary status — all emitted (as of 2026-09-29)
 
-No dead vocabulary remains. `guide_open` (step 2), `tool_card_click` (step 3),
-`citation_click` (step 4), and `sample_load`/`paste_input`/`run_retry`/`scroll_depth`
-(steps 5–6) are all wired — see below. `result_expand` has no distinct interaction
-to attach to and is intentionally not forced (see step 4).
+31 event types defined; **30 emitted, 1 intentionally not** (`result_expand` — no
+distinct interaction; citations are covered by `citation_click`). `guide_open` (step 2),
+`tool_card_click` (step 3), `citation_click` (step 4), `sample_load`/`paste_input`/
+`run_retry`/`scroll_depth` (steps 5–6), and the gap-closers `error`/`feedback` + platform
+tier (§3f) are all wired — see below.
 
 ## 3b. Step 2 DONE — `guide_open` (2026-09-28)
 
@@ -147,6 +148,32 @@ unavoidable. All content-free (§6); tsc-clean; steps 1–4 verified live before
   wiring. `run_retry` isn't a run event, so no recursion.
 - **`scroll_depth`** — **one global** hook (`useScrollDepth()` in `AnalyticsTracker`),
   re-armed per navigation, fires `{ depth }` once at each 25/50/75/100% threshold.
+
+## 3f. Gap-closers DONE — error / feedback / platform tier (2026-09-29)
+
+After a coverage review, three genuine gaps were closed (the site logs the whole journey,
+not just tool runs):
+
+- **`error`** — the generic stage-7 event had **0 call sites**, so a page that threw
+  during render or a rejected promise vanished silently (only `run_error` was covered).
+  Now `useErrorTracking()` (in `AnalyticsTracker`) adds global `window` `error` +
+  `unhandledrejection` listeners → `error { source, name }`. **Content-free by design —
+  class name + source only, NEVER the message or stack** (those can hold user content or
+  secrets). Error storms coalesced to 1/sec.
+- **`feedback`** — NEW event. The RAG "Good/Bad answer" thumbs existed but only set local
+  state; the signal was thrown away. `trackFeedback(tool, rating)` wired in
+  `multimodal-rag/ChatPanel.tsx` → `feedback { tool, rating: up|down }`. No answer text,
+  no reason — just the rating. This is the answer-*quality* signal (arguably the most
+  valuable of the three).
+- **Platform tier** — the native "worlds" (Testwright/`/qa`, EDA, ML, Vision landings)
+  were unlogged. `guide_open` now fires from the shared `WorldUserGuideModal` (covers 8
+  pages, id `world-<title-slug>`) and `AuthorUserGuideModal` (`world-qa-author`);
+  `tool_card_click { tool, source: "platform", opens }` now fires from `ProjectCard`
+  (both the internal "Enter" and external "Launch App" paths).
+
+No privacy-page change: all content-free, enumerated meta, no new PII — the page already
+discloses event type + fixed choices, and `error` carries no message. Not per-tool
+feature-level (every bespoke control) — that remains a larger, separately-scoped project.
 
 ## 4. Remaining plan — none
 
