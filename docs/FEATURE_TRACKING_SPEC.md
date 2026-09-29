@@ -1,9 +1,11 @@
 # Feature-Level Tracking Specification
 
-**Status:** **Phases 0–2 built + verified live (2026-09-29).** Extends
+**Status:** **Phases 0–3 built (2026-09-29); 0–2 verified live.** Extends
 [LOGGING_SPEC.md](LOGGING_SPEC.md) — the journey vocabulary (steps 1–6 +
 gap-closers) is complete; this adds *per-tool, per-control* granularity via one
-`feature_use` event. Phase 3 (dashboard) is the only part left.
+`feature_use` event. Phase 3 (dashboard) is built and shipped but needs its Supabase
+RPC applied once — run `ml-portfolio/supabase/feature_usage.sql` in the SQL editor;
+until then the panel shows a setup hint.
 **Owner:** this file is the source of truth for feature-level instrumentation.
 
 Companion: [LOGGING_SPEC.md](LOGGING_SPEC.md) (journey events, guardrails §6,
@@ -147,7 +149,12 @@ Enhancement shipped alongside batch 1: the click path reads an optional
 `data-ev-value` so button groups capture the choice while keeping a stable
 control id (still enumerated, never content).
 
-**Phase 3 — read side (scoped 2026-09-29; not built).**
+**Phase 3 — read side — BUILT 2026-09-29 (9a0a333), pending RPC install.**
+Delivered exactly as scoped below: `supabase/feature_usage.sql` (the RPC),
+`/api/feature-usage` (calls it; `{needs_setup}` until installed), and
+`AnalyticsFeatureUsage.tsx` in `realtime-analytics` (per-tool ranked control bars +
+value chips + tool selector), wired into `AnalyticsDashboard`. **Remaining action:
+run the SQL in the Supabase editor once**, then data appears. Original scope:
 A per-tool feature-usage view built on the **existing** `realtime-analytics`
 dashboard. No new client events — this only reads the `feature_use` rows already
 being written (`meta = {tool, control, action, value}`).
