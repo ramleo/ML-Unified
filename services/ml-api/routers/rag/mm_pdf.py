@@ -21,7 +21,7 @@ _OCR_TEXT_CAP = 2000  # chars; dedicated OCR reads exact text (e.g. every date
                       # would otherwise summarize away
 
 MAX_PAGES = 8
-_RENDER_ZOOM = 2.0          # fitz zoom factor (~144 DPI, since PDF base is 72 DPI) —
+_RENDER_ZOOM = 2.0          # pymupdf zoom factor (~144 DPI, since PDF base is 72 DPI) —
                             # higher than Document Intelligence's 1.2x preview renders
                             # since this feeds the vision cascade, not just a thumbnail
 _MIN_VISUAL_AREA_RATIO = 0.02  # a raster image must cover ≥2% of the page area
@@ -41,8 +41,8 @@ _MIN_VISUAL_AREA_RATIO = 0.02  # a raster image must cover ≥2% of the page are
 
 def _render_page(page, zoom: float = _RENDER_ZOOM) -> str:
     import base64
-    import fitz
-    mat = fitz.Matrix(zoom, zoom)
+    import pymupdf
+    mat = pymupdf.Matrix(zoom, zoom)
     pix = page.get_pixmap(matrix=mat)
     return base64.b64encode(pix.tobytes("png")).decode()
 
@@ -175,8 +175,8 @@ def _visual_regions(page, max_regions: int = _MAX_REGIONS_PER_PAGE) -> list:
             has_big = any(r.width * r.height / page_area >= _MIN_VISUAL_AREA_RATIO for r in cluster)
             if not has_big and len(cluster) < _MIN_CLUSTER_SIZE:
                 continue
-            import fitz
-            candidates.append(fitz.Rect(
+            import pymupdf
+            candidates.append(pymupdf.Rect(
                 min(r.x0 for r in cluster), min(r.y0 for r in cluster),
                 max(r.x1 for r in cluster), max(r.y1 for r in cluster),
             ))
@@ -197,8 +197,8 @@ def _visual_regions(page, max_regions: int = _MAX_REGIONS_PER_PAGE) -> list:
 
 def _crop_region_b64(page, rect, zoom: float = _RENDER_ZOOM) -> str:
     import base64
-    import fitz
-    mat = fitz.Matrix(zoom, zoom)
+    import pymupdf
+    mat = pymupdf.Matrix(zoom, zoom)
     pix = page.get_pixmap(matrix=mat, clip=rect)
     return base64.b64encode(pix.tobytes("png")).decode()
 
@@ -250,8 +250,8 @@ def _caption_page(b64: str, scoped: bool = False) -> tuple[str, bool, tuple[str,
 
 def prepare_pdf(file_bytes: bytes):
     """Open the PDF. Returns (doc, n_pages)."""
-    import fitz
-    doc = fitz.open(stream=file_bytes, filetype="pdf")
+    import pymupdf
+    doc = pymupdf.open(stream=file_bytes, filetype="pdf")
     n_pages = min(MAX_PAGES, len(doc))
     return doc, n_pages
 

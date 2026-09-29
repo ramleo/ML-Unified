@@ -116,12 +116,12 @@ def _extract_docx(file_bytes: bytes) -> dict[str, Any]:
 
 def _extract_pdf(file_bytes: bytes) -> dict[str, Any]:
     try:
-        import fitz  # pymupdf
+        import pymupdf
     except ImportError:
         logger.error("pymupdf not installed — cannot extract PDF")
         return {"text": "", "page_images": [], "processing_mode": "error", "pages": 0}
 
-    doc = fitz.open(stream=file_bytes, filetype="pdf")
+    doc = pymupdf.open(stream=file_bytes, filetype="pdf")
     pages = len(doc)
     page_images = _render_pages(doc)
 
@@ -136,7 +136,7 @@ def _extract_pdf(file_bytes: bytes) -> dict[str, Any]:
     # 1. Try pymupdf4llm for high-quality markdown
     try:
         import pymupdf4llm
-        doc2 = fitz.open(stream=file_bytes, filetype="pdf")
+        doc2 = pymupdf.open(stream=file_bytes, filetype="pdf")
         md = pymupdf4llm.to_markdown(doc2)
         doc2.close()
         if len(md.strip()) > _TEXT_THRESHOLD:
@@ -172,11 +172,11 @@ def _extract_image(file_bytes: bytes) -> dict[str, Any]:
 
 
 def _render_pages(doc, max_pages: int = 5) -> list[str]:
-    """Render first N pages of an open fitz.Document to base64 PNG strings."""
+    """Render first N pages of an open pymupdf.Document to base64 PNG strings."""
     images: list[str] = []
     try:
-        import fitz
-        mat = fitz.Matrix(1.2, 1.2)
+        import pymupdf
+        mat = pymupdf.Matrix(1.2, 1.2)
         for i in range(min(max_pages, len(doc))):
             try:
                 pix = doc[i].get_pixmap(matrix=mat)
@@ -193,8 +193,8 @@ def extract_tables_markdown(file_bytes: bytes, max_pages: int = 5) -> str:
     """Extract tables from a PDF as markdown using pymupdf find_tables().
     Returns empty string if no tables found or extraction fails."""
     try:
-        import fitz
-        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        import pymupdf
+        doc = pymupdf.open(stream=file_bytes, filetype="pdf")
         parts: list[str] = []
         for page_num in range(min(max_pages, len(doc))):
             page = doc[page_num]
@@ -311,8 +311,8 @@ def search_bbox_in_doc(file_bytes: bytes, value: str,
     is_array, tier4, scalar_candidates = build_bbox_candidates(val)
 
     try:
-        import fitz
-        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        import pymupdf
+        doc = pymupdf.open(stream=file_bytes, filetype="pdf")
         try:
             n = min(max_pages, len(doc))
 
