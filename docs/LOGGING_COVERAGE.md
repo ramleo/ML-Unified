@@ -86,12 +86,12 @@ Design choices:
 
 ---
 
-## 3. Still pending — dead vocabulary (4 names)
+## 3. Vocabulary status — all emitted (as of 2026-09-29)
 
-Defined in `logEvents.ts`, zero call sites: `scroll_depth`, `sample_load`,
-`paste_input`, `run_retry`. (`guide_open` wired in step 2, `tool_card_click` in
-step 3, `citation_click` in step 4 — see below. `result_expand` has no distinct
-interaction to attach to — see step 4.)
+No dead vocabulary remains. `guide_open` (step 2), `tool_card_click` (step 3),
+`citation_click` (step 4), and `sample_load`/`paste_input`/`run_retry`/`scroll_depth`
+(steps 5–6) are all wired — see below. `result_expand` has no distinct interaction
+to attach to and is intentionally not forced (see step 4).
 
 ## 3b. Step 2 DONE — `guide_open` (2026-09-28)
 
@@ -127,20 +127,41 @@ rows, document-intelligence's only toggle is its export dropdown, and the citati
 card is already covered by `citation_click`. No interaction left to attach it to, so
 it isn't forced.
 
-## 4. Remaining plan (cheapest, highest-value first)
+## 3e. Steps 5–6 DONE — sample_load / paste_input / run_retry / scroll_depth (2026-09-29)
 
-Each step ships with the privacy page update (§7) **if it introduces a new data
-category**, carries enumerated facts only (§6), and uses the production write-gate.
+Wiring approach: **global/central** where possible (user's call), per-tool only where
+unavoidable. All content-free (§6); tsc-clean; steps 1–4 verified live beforehand.
 
-5. `sample_load`, `paste_input`, `run_retry`.
-6. `scroll_depth` last — lowest value, noisiest.
+- **`sample_load`** — per-tool (each "load/try a sample" button is bespoke). Helper
+  `trackSampleLoad(toolId, meta?)` added to `useAnalytics.ts`, called in **7 tools**:
+  `exploratory-data-analysis`, `extension-permission-analyzer`, `periodicity-finder`,
+  `email-auth-checker`, `jwt-analyzer` (×2 — `{variant: weak|strong}`), `secret-scanner`,
+  `exploit-payload-detector`. Emits `{ tool, ...variant }` — never the sample's content.
+- **`paste_input`** — **one global** `paste` listener (`usePasteInput()` in
+  `AnalyticsTracker`), scoped to `/tools/*`, tool read from the path. Emits
+  `{ tool, len_bucket }` (empty/<100/<1k/<10k/>=10k) — **never the pasted text**.
+  `password-audit` excluded entirely (§5b).
+- **`run_retry`** — **derived centrally** in `track()`: a run event (`query_run` /
+  `run_success` / `run_error`) for a tool whose previous run outcome was an error emits
+  `run_retry { tool }`. Covers both `trackedFetch` and `trackToolRun` with zero per-tool
+  wiring. `run_retry` isn't a run event, so no recursion.
+- **`scroll_depth`** — **one global** hook (`useScrollDepth()` in `AnalyticsTracker`),
+  re-armed per navigation, fires `{ depth }` once at each 25/50/75/100% threshold.
+
+## 4. Remaining plan — none
+
+All planned vocabulary is emitted (steps 1–6 done; steps 1–4 verified live). Optional
+follow-ups only: platform-world guide modals (`WorldUserGuideModal`, `/qa`) for
+`guide_open`, and `ProjectCard` for `tool_card_click` — both a separate tier.
 
 ## 5. Privacy-page note
 
-Steps 1–4 needed **no** privacy-page change: no new column, no content —
-`query_run`, `guide_open`, `tool_card_click`, `citation_click` and enumerated meta
-fit what is already disclosed under "What is recorded about your visit", and
-`password-audit` logs a content-free run. Steps 5–6 must be re-checked individually.
+**No** privacy-page change was needed for any step 1–6: no new column, no content, no
+new PII. The page already discloses "event type + counts, sizes, durations and fixed
+choices," and explicitly "Where the length of something is useful, the length is recorded
+and the text is not" — which covers `paste_input`'s length bucket. `scroll_depth`,
+`sample_load` and `run_retry` are event-type + enumerated meta, already in scope.
+`password-audit` stays content-free (and is excluded from `paste_input`).
 
 ## 6. Guardrails (from LOGGING_SPEC.md §6)
 

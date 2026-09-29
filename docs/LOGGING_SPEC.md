@@ -1,8 +1,8 @@
 # Logging Specification
 
-**Status:** agreed 2026-09-05; plumbing built 2026-09-06; audited + **run-event
-wiring completed 2026-09-28 (§12).** Every tool now emits a run event; remaining
-work is the engagement/results vocabulary. See §11 (built) and §12 (audit + plan).
+**Status:** agreed 2026-09-05; plumbing built 2026-09-06; **all client-side wiring
+complete — every vocabulary event now emitted (steps 1–6 done, 1–4 verified live;
+2026-09-28/29, §12).** See §11 (built) and §12 (audit + plan).
 **Owner:** this file is the single source of truth for what the site logs.
 Change the logging, change this file, and change the privacy page (see §7).
 
@@ -386,15 +386,15 @@ sent in the body, carried on a ContextVar; `events.meta->>'run_id'` joins
 store content at all, and the two pre-existing `events` naming conventions.
 
 ---
-## 12. Coverage audit + activation plan (2026-09-28)
+## 12. Coverage audit + activation plan (done 2026-09-29)
 
-Full grep of `ml-portfolio/src`. Corrected audit + remaining steps:
-[LOGGING_COVERAGE.md](LOGGING_COVERAGE.md).
+Corrected audit + per-step detail: [LOGGING_COVERAGE.md](LOGGING_COVERAGE.md).
 
-**Steps 1–4 DONE (2026-09-28):** run events for the 11 client-side tools (`trackToolRun`;
-the "16" over-counted — see COVERAGE), `guide_open` (hook in all 44 modals),
-`tool_card_click` (shared `ToolCard`), `citation_click` (shared `RagSourceCard`). Live
-tools debounce; `password-audit` content-free; no privacy change. `result_expand` has
-no distinct call site (citations are the only expandable result) — not forced.
+**Steps 1–4 (2026-09-28, verified live):** run events for 11 client tools (`trackToolRun`;
+"16" over-counted), `guide_open` (44 modals), `tool_card_click` (`ToolCard`),
+`citation_click` (`RagSourceCard`). `password-audit` content-free; `result_expand` N/A.
 
-**Next:** `sample_load`/`paste_input`/`run_retry` → `scroll_depth` (privacy §7; facts only §6).
+**Steps 5–6 (2026-09-29):** `sample_load` (7 sample buttons), `paste_input` (global
+`/tools/*` listener — length bucket, never text; password excluded §5b), `run_retry`
+(central — run after that tool's error), `scroll_depth` (global, 25/50/75/100). **All
+vocabulary emitted;** no privacy change (§7 covers event type + enumerated meta).
