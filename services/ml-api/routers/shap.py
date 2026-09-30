@@ -4,6 +4,8 @@ import traceback
 import numpy as np
 import pandas as pd
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+
+from security.file_gate import gate_or_raise
 from fastapi.responses import StreamingResponse
 from sklearn.base import is_classifier
 from shared.progress import StreamingTask
@@ -239,13 +241,17 @@ async def compute_shap_custom(
     """
     Compute SHAP for a user-uploaded sklearn Pipeline (.skops) and a single-row CSV.
     """
+    model_bytes = await model_file.read()
+    gate_or_raise(model_bytes, path="/shap/model")
     try:
-        pipeline = load_model(await model_file.read())
+        pipeline = load_model(model_bytes)
     except UnsafeModelFile as exc:
         raise HTTPException(400, str(exc))
 
+    data_bytes = await data_file.read()
+    gate_or_raise(data_bytes, path="/shap/data")
     try:
-        df = pd.read_csv(io.BytesIO(await data_file.read()))
+        df = pd.read_csv(io.BytesIO(data_bytes))
         if df.empty:
             raise HTTPException(400, "CSV has no data rows")
         df = df.head(1)

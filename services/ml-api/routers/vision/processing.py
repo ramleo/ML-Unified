@@ -5,7 +5,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from .shared import _MAX_IMG_DIM
-from security.file_gate import scan_upload_bytes
+from security.file_gate import gate_or_raise
 
 router = APIRouter(tags=["vision"])
 
@@ -46,7 +46,7 @@ async def process_image(
         raise HTTPException(400, f"Unknown operation '{operation}'. Choose from: {list(_IMG_OPERATIONS)}")
 
     content = await file.read()
-    scan_upload_bytes(content, path="/process-image")
+    gate_or_raise(content, path="/process-image")
     try:
         from PIL import Image as PILImage, ImageFilter, ImageEnhance, ImageOps  # noqa: PLC0415
         import base64                                                             # noqa: PLC0415

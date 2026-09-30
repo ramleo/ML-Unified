@@ -10,6 +10,8 @@ from typing import AsyncGenerator
 _executor = ThreadPoolExecutor(max_workers=2)
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+
+from security.file_gate import gate_or_raise
 from fastapi.responses import StreamingResponse
 
 from ._schema import DOC_TYPES
@@ -259,6 +261,7 @@ async def analyze_document(
     custom_fields: comma-separated extra field names to extract
     """
     file_bytes = await file.read()
+    gate_or_raise(file_bytes, path="/document/analyze")
     if len(file_bytes) > MAX_FILE_BYTES:
         raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
     if not file_bytes:

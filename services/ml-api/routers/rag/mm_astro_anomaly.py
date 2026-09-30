@@ -35,7 +35,7 @@ import numpy as np
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from PIL import Image
 
-from security.file_gate import scan_upload_bytes
+from security.file_gate import gate_or_raise
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -315,5 +315,5 @@ def run_astro_anomaly_detect(file_bytes_list: list[bytes]) -> dict:
 async def astro_anomaly_detect(images: list[UploadFile] = File(...)):
     file_bytes_list = [await f.read() for f in images]
     for fb in file_bytes_list:
-        scan_upload_bytes(fb, path="/rag/mm-astro-anomaly/detect")
+        gate_or_raise(fb, path="/rag/mm-astro-anomaly/detect")
     return run_astro_anomaly_detect(file_bytes_list)

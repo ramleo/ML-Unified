@@ -5,6 +5,8 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
+from security.file_gate import gate_or_raise
+
 from .shared import VISION_CACHE_DIR, download_model, ort_session
 
 router = APIRouter(tags=["vision"])
@@ -126,6 +128,7 @@ async def classify_image(
     size    = cfg["input_size"]
 
     content = await file.read()
+    gate_or_raise(content, path="/classify-image")
     try:
         from PIL import Image as PILImage  # noqa: PLC0415
         import numpy as np                 # noqa: PLC0415

@@ -21,7 +21,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from security.file_gate import scan_upload_bytes
+from security.file_gate import gate_or_raise
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ def inpaint_region(body: InpaintRequest):
         from PIL import Image, ImageDraw
 
         raw = base64.b64decode(body.image)
-        scan_upload_bytes(raw, path="/rag/mm-inpaint")
+        gate_or_raise(raw, path="/rag/mm-inpaint")
         img = Image.open(io.BytesIO(raw)).convert("RGB")
         w, h = img.size
         if w == 0 or h == 0 or len(body.bbox) != 4:

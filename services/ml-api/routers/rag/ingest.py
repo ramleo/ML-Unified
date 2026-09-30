@@ -9,6 +9,8 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
+
+from security.file_gate import gate_or_raise
 from fastapi.responses import JSONResponse
 
 from routers.rag.text import tokenize
@@ -268,6 +270,7 @@ async def ingest_document(file: UploadFile = File(...)) -> JSONResponse:
         )
 
     data = await file.read()
+    gate_or_raise(data, path="/rag/ingest")
 
     if ext == ".pdf":
         try:

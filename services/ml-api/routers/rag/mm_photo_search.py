@@ -41,7 +41,7 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from security.file_gate import scan_upload_bytes
+from security.file_gate import gate_or_raise
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -112,7 +112,7 @@ def _decode_and_embed(photos: list[PhotoItem], path: str = "/rag/mm-photo-search
             if len(raw) > _MAX_IMAGE_BYTES:
                 skipped += 1
                 continue
-            scan_upload_bytes(raw, path=path)
+            gate_or_raise(raw, path=path)
             img = Image.open(io.BytesIO(raw)).convert("RGB")
             images.append(img)
             filenames.append(p.filename)
@@ -144,7 +144,7 @@ def search_photos(
     if query_image:
         try:
             raw = base64.b64decode(query_image, validate=True)
-            scan_upload_bytes(raw, path="/rag/mm-photo-search/search")
+            gate_or_raise(raw, path="/rag/mm-photo-search/search")
             ref_img = Image.open(io.BytesIO(raw)).convert("RGB")
         except Exception:
             raise HTTPException(status_code=400, detail="Could not decode the reference image.")

@@ -9,6 +9,8 @@ from typing import Dict
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
+
+from security.file_gate import gate_or_raise
 from fastapi.responses import StreamingResponse
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.compose import ColumnTransformer
@@ -176,6 +178,7 @@ async def run_unsupervised(
     n_dims:      int        = Form(2),
 ):
     content = await file.read()
+    gate_or_raise(content, path="/monitoring-upload")
     try:
         df = pd.read_csv(io.BytesIO(content))
     except Exception as e:

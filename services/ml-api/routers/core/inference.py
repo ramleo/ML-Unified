@@ -5,6 +5,8 @@ import os
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 
+from security.file_gate import gate_or_raise
+
 from routers.core.shared import MODELS, ACCENT_PALETTE, coerce_numeric
 from routers.core.automl_explain import _llm_explanation, _rule_explanation
 from routers import drift as _drift_router
@@ -92,6 +94,7 @@ async def predict(model_id: str, request: Request):
 @router.post("/analyze")
 async def analyze_csv(file: UploadFile = File(...)):
     content = await file.read()
+    gate_or_raise(content, path="/analyze-csv")
     try:
         df = pd.read_csv(io.BytesIO(content))
     except Exception as e:

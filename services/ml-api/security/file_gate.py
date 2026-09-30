@@ -24,6 +24,8 @@ identical, so no router that calls it needs to change.
 """
 from __future__ import annotations
 
+from fastapi import HTTPException
+
 from routers.yara_scan import ADVISORY_RULES, _get_builtin_rules, _run_match
 from security.events import log_security_event
 
@@ -58,3 +60,20 @@ def blocking_matches(matches: list[dict]) -> list[dict]:
     blocks should ask this function, not test `matches` for truthiness.
     """
     return [m for m in matches if m["rule"] not in ADVISORY_RULES]
+
+
+def gate_or_raise(data: bytes, path: str = "", client_ip: str = "") -> None:
+    """The blocking gate: scan `data` and REJECT it with HTTP 400 if it matches a
+    real-threat rule (EICAR, embedded PE, a webshell). Advisory-only matches
+    (entropy and other broad heuristics) are logged by `scan_upload_bytes` but
+    never block, so legitimate PDFs/images/CSVs/audio/video are unaffected — this
+    is `blocking_matches`' guarantee. Call this at every upload boundary that
+    should PREVENT a malicious file, not merely record it. The one exception is a
+    tool whose whole purpose is to analyse a possibly-malicious sample (e.g. the
+    malware-in-image detector) — that keeps calling `scan_upload_bytes` directly.
+
+    The rejection message is deliberately generic (no matched-rule names) so it
+    can't be used to tune a payload past the scanner.
+    """
+    if blocking_matches(scan_upload_bytes(data, path=path, client_ip=client_ip)):
+        raise HTTPException(status_code=400, detail="File rejected: it failed a malware safety scan.")

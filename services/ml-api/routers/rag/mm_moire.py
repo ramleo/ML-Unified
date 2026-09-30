@@ -46,7 +46,7 @@ from PIL import Image, ImageDraw
 from pydantic import BaseModel
 from scipy.ndimage import median_filter, rotate
 
-from security.file_gate import scan_upload_bytes
+from security.file_gate import gate_or_raise
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -174,7 +174,7 @@ def extract_moire_spectrum_visualization(b64: str, max_dim: int = 500) -> str:
     exact frequency the Radon sweep responded to — illustrative, not a
     precise attribution."""
     raw = base64.b64decode(b64)
-    scan_upload_bytes(raw, path="/rag/mm-moire/visualize")
+    gate_or_raise(raw, path="/rag/mm-moire/visualize")
     img = Image.open(io.BytesIO(raw)).convert("L")
     w, h = img.size
     scale = min(1.0, max_dim / max(w, h))

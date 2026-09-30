@@ -48,7 +48,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 from routers.rag.mm_objects import detect_objects
-from security.file_gate import scan_upload_bytes
+from security.file_gate import gate_or_raise
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +135,7 @@ def check_liveness(b64: str) -> dict:
     image with nothing to check."""
     try:
         raw = base64.b64decode(b64)
-        scan_upload_bytes(raw, path="/rag/mm-liveness")
+        gate_or_raise(raw, path="/rag/mm-liveness")
         pil_img = Image.open(io.BytesIO(raw)).convert("RGB")
     except Exception as exc:
         logger.warning("Liveness check: could not decode image: %s", exc)

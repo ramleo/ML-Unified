@@ -33,7 +33,7 @@ from pydantic import BaseModel
 
 from security.rate_limit import limiter, LLM_LIMIT
 from security.budget import check_and_record_call
-from security.file_gate import scan_upload_bytes
+from security.file_gate import gate_or_raise
 from routers.rag.llm import complete
 from routers.rag.query_helpers import _resolve_key
 from routers.rag.mm_video import generate_chapters, transcribe_video
@@ -170,7 +170,7 @@ def analyze_meeting(raw: bytes, filename: str) -> dict:
 @limiter.limit(LLM_LIMIT)
 async def meeting_endpoint(request: Request, file: UploadFile = File(...)):
     raw = await file.read()
-    scan_upload_bytes(raw, path="/rag/mm-meeting")
+    gate_or_raise(raw, path="/rag/mm-meeting")
     check_and_record_call("mm-meeting", pool="mm_meeting", daily_cap_env="MM_MEETING_DAILY_CAP")
     return analyze_meeting(raw, file.filename or "meeting")
 
@@ -240,7 +240,7 @@ async def _meeting_stream(raw: bytes, filename: str):
 @limiter.limit(LLM_LIMIT)
 async def meeting_stream_endpoint(request: Request, file: UploadFile = File(...)):
     raw = await file.read()
-    scan_upload_bytes(raw, path="/rag/mm-meeting/stream")
+    gate_or_raise(raw, path="/rag/mm-meeting/stream")
     check_and_record_call("mm-meeting", pool="mm_meeting", daily_cap_env="MM_MEETING_DAILY_CAP")
     return StreamingResponse(_meeting_stream(raw, file.filename or "meeting"),
                              media_type="text/event-stream")

@@ -13,6 +13,8 @@ import io
 import pandas as pd
 from fastapi import APIRouter, Form, UploadFile, File
 
+from security.file_gate import gate_or_raise
+
 from ._utils import _to_native, json_safe
 from ._stats import compute_stats, compute_distributions, compute_correlations
 from ._readiness import (
@@ -35,6 +37,7 @@ MAX_CSV_BYTES = 10 * 1024 * 1024
 async def exploratory_analysis(file: UploadFile = File(...)):
     from fastapi import HTTPException
     content = await file.read()
+    gate_or_raise(content, path="/eda")
     if len(content) > MAX_CSV_BYTES:
         raise HTTPException(400, "File too large (max 10 MB)")
     if not content:
@@ -124,6 +127,7 @@ async def exploratory_analysis(file: UploadFile = File(...)):
 async def clean_dataset(file: UploadFile = File(...), config: str = Form(...)):
     from fastapi import HTTPException
     content  = await file.read()
+    gate_or_raise(content, path="/eda/clean")
     if len(content) > MAX_CSV_BYTES:
         raise HTTPException(400, "File too large (max 10 MB)")
     if not content:

@@ -32,7 +32,7 @@ from PIL import Image, ImageDraw
 from pydantic import BaseModel
 from scipy.ndimage import median_filter
 
-from security.file_gate import scan_upload_bytes
+from security.file_gate import gate_or_raise
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -175,5 +175,5 @@ class DescreenRequest(BaseModel):
 @router.post("/mm-descreen")
 def descreen_endpoint(body: DescreenRequest):
     raw = base64.b64decode(body.image)
-    scan_upload_bytes(raw, path="/rag/mm-descreen")
+    gate_or_raise(raw, path="/rag/mm-descreen")
     return descreen(raw)

@@ -6,6 +6,8 @@ from typing import Optional
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, File
+
+from security.file_gate import gate_or_raise
 from fastapi.responses import StreamingResponse
 
 import hashlib
@@ -54,6 +56,7 @@ async def upload_drift(
         raise HTTPException(404, "Model not found")
 
     content = await file.read()
+    gate_or_raise(content, path="/drift")
     try:
         df = pd.read_csv(io.BytesIO(content))
     except Exception as e:

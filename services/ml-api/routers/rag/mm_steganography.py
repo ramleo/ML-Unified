@@ -64,7 +64,7 @@ from fastapi import APIRouter
 from PIL import Image
 from pydantic import BaseModel
 
-from security.file_gate import scan_upload_bytes
+from security.file_gate import gate_or_raise
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -274,7 +274,7 @@ def extract_lsb_visualization(b64: str, max_dim: int = 500) -> str:
     from tampered. Downsized to `max_dim` on the long side since precision
     doesn't matter for an illustration and this keeps the response small."""
     raw = base64.b64decode(b64)
-    scan_upload_bytes(raw, path="/rag/mm-steganography/visualize")
+    gate_or_raise(raw, path="/rag/mm-steganography/visualize")
     img = Image.open(io.BytesIO(raw)).convert("RGB")
     w, h = img.size
     scale = min(1.0, max_dim / max(w, h))

@@ -29,7 +29,7 @@ from fastapi import APIRouter, HTTPException
 from PIL import Image
 from pydantic import BaseModel
 
-from security.file_gate import scan_upload_bytes
+from security.file_gate import gate_or_raise
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ def estimate_depth(b64: str) -> dict:
     only needs to be internally consistent for the parallax effect."""
     try:
         raw = base64.b64decode(b64)
-        scan_upload_bytes(raw, path="/rag/mm-depth")
+        gate_or_raise(raw, path="/rag/mm-depth")
         img = Image.open(io.BytesIO(raw)).convert("RGB")
     except Exception as exc:
         logger.warning("Depth: could not decode image: %s", exc)
