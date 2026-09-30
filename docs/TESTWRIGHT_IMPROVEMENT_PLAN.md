@@ -66,14 +66,21 @@ Space or the user's browser.
 
 | Option | How | Saves | Trade-off | Verdict |
 |---|---|---|---|---|
-| **A. Official Playwright container** | job `container: mcr.microsoft.com/playwright:v1.55.0-jammy`; delete the `npm i`/`playwright install` steps (browsers+deps preinstalled) | ~90–120s/run | first pull larger, but layer-cached on GH runners; pin image to the PW version | **Recommended** |
+| **A. Official Playwright container** | job `container: mcr.microsoft.com/playwright:v1.55.0-jammy`; drop `playwright install` + setup-node (browsers/deps/node in image) | **MEASURED modest** (see note) | GH-hosted runners are ephemeral & DON'T persist Docker layers → the ~2GB image is re-pulled each run, ~offsetting the browser-install it removes | **Shipped 2026-09-30** |
 | B. Cache browsers + npm | `actions/cache` on `~/.cache/ms-playwright` keyed by PW version + `setup-node cache:'npm'`; still run `playwright install-deps` (cache holds binaries, not OS libs) | ~30–60s/run on hit | cache-miss falls back to full install; needs a committed lockfile | Good fallback / combine |
 | C. Commit `package.json`+lockfile to runner repo, `npm ci` | replaces on-the-fly `npm i` | ~10–20s + enables npm cache | must bump lockfile when PW version changes | Do alongside A or B |
 | D. Self-hosted / warm runner (or long-lived container pool) | pre-provisioned runner keeps browsers+deps hot | ~ all setup → runs in seconds | infra + security to run/maintain; the app is public | Later, if speed critical |
 | E. Reduce work | `--with-deps` only needs OS libs once (moot under A); already chromium-only, workers:1 | small | none | Included in A |
 
-**Recommendation:** **A (container image)** as the primary fix, **C** committed with it,
-**B** optionally for the non-container path. Expected: ~68s → ~10–20s for a trivial test.
+**MEASURED (2026-09-30, container shipped `ml-qa-runner` 5ee9264):** trivial test went
+~68s → **~50–56s** (two live runs: 55.8s, 50.1s; test itself ~0.9–1.1s). A real but
+**modest** win — the earlier "~10–20s" estimate was wrong: GitHub-hosted runners are
+ephemeral and re-pull the ~2GB image every run, so it replaces the browser download
+rather than eliminating the setup floor. **To actually reach seconds you need D (a warm
+/ self-hosted runner that persists the image + browsers)** — that is now the real
+speed lever, not the container. Option B (browser cache) is comparable, not better,
+because the OS-dep install remains. Net: container kept (modest gain, cleaner, no
+regression), but **speed is essentially download-bound on GitHub-hosted runners**.
 
 ### P2 — Stop / cancel a run
 
@@ -122,11 +129,14 @@ Two distinct numbers, show both, labelled:
 
 ## 5. Phased rollout
 
-- **P0 (quick wins, low risk):** P1-A (+C) container workflow in `ml-qa-runner`; P3
-  execution-time display. Biggest felt improvement, contained.
-- **P1:** P2 cancel endpoint + Stop button.
-- **P2:** P4 self-heal grounding + confirm-before-rerun; P5 progress/timeout polish.
-- **P3 (optional, infra):** D warm/self-hosted runner.
+- **P0 — SHIPPED 2026-09-30:** container workflow (`ml-qa-runner` 5ee9264, modest
+  ~68→~50-56s), execution-time display (ml-portfolio 3bb1be3), and P2 cancel+Stop
+  (ML-Unified 970d8f3 + ml-portfolio 3bb1be3). All verified live; no regression
+  (sample test still passes, Stop button appears, `test/total` shown).
+- **NEXT (real speed lever): D — warm / self-hosted runner.** Evidence shows GitHub-
+  hosted runs are download-bound (~50s floor); only a runner that persists the image +
+  browsers gets to seconds. This is now the top open item for speed.
+- **Later:** P4 self-heal grounding + confirm-before-rerun; P5 progress/timeout polish.
 
 ## 6. Risks & mitigations
 
