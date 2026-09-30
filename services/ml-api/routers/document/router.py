@@ -13,6 +13,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from security.file_gate import gate_or_raise
 from security.prompt_gate import scan_text_for_injection
+from security.decompression import zip_bomb_check
 from fastapi.responses import StreamingResponse
 
 from ._schema import DOC_TYPES
@@ -273,6 +274,8 @@ async def analyze_document(
         raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Empty file")
+    # A .docx is a ZIP — reject a decompression bomb before it is parsed (no-op on PDFs).
+    zip_bomb_check(file_bytes, path="/document/analyze")
 
     return StreamingResponse(
         _stream(file_bytes, file.filename or "document", doc_type, provider, custom_fields),

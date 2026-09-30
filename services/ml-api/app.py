@@ -5,6 +5,16 @@ import os
 import time
 from contextlib import asynccontextmanager
 
+# Decompression-bomb hardening — MUST run before the routers below import cv2/PIL.
+# A small upload can decode to a gigantic pixel array and OOM the memory-limited
+# Space; the byte-size cap (security/body_size.py) only sees the compressed size,
+# so it cannot catch this. Cap the pixel count centrally so every PIL and OpenCV
+# image path is protected at once. A legitimate photo is byte-capped well before
+# this; only a bomb (tiny bytes, huge pixels) trips it.
+os.environ.setdefault("OPENCV_IO_MAX_IMAGE_PIXELS", str(64_000_000))  # ~64 MP
+from PIL import Image as _PILImage
+_PILImage.MAX_IMAGE_PIXELS = 64_000_000  # PIL raises DecompressionBombError at 2x this
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, FileResponse

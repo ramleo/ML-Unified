@@ -26,9 +26,14 @@ MAX_BODY_BYTES = int(os.environ.get("MAX_REQUEST_BODY_BYTES", str(10 * 1024 * 10
 # accept a large media upload are listed here — a meeting recording is far bigger
 # than the documents/images the rest of the API takes.
 _MEETING_CAP = int(os.environ.get("MEETING_MAX_BODY_BYTES", str(50 * 1024 * 1024)))  # 50MB
+# Multimodal RAG ingest accepts video/audio and enforces its own 20MB limit
+# (mm_ingest.MAX_FILE_BYTES); without an entry here the 10MB global default would
+# shadow it and reject 10–20MB media before that check ever runs.
+_MM_INGEST_CAP = int(os.environ.get("MM_INGEST_MAX_BODY_BYTES", str(20 * 1024 * 1024)))  # 20MB
 _ROUTE_CAPS = {
     "/rag/mm-meeting": _MEETING_CAP,
     "/rag/mm-meeting/stream": _MEETING_CAP,
+    "/rag/mm-ingest": _MM_INGEST_CAP,
 }
 
 
