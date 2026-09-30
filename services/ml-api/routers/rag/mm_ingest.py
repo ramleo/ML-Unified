@@ -18,6 +18,7 @@ from typing import AsyncGenerator
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from security.file_gate import blocking_matches, scan_upload_bytes
+from security.prompt_gate import scan_text_for_injection
 from fastapi.responses import StreamingResponse
 
 from routers.rag.ingest import index_chunks
@@ -279,6 +280,15 @@ async def _stream(file_bytes: bytes, filename: str, embedding_mode: str,
 
     from routers.rag.analytics import record_upload
     record_upload(file_type)
+
+    # Indirect prompt-injection flag over the assembled chunk text (flag + log,
+    # never block; content is indexed and treated as data).
+    _pi_text = " ".join(c.get("text", "") for c in chunks if isinstance(c, dict))
+    if transcript_text:
+        _pi_text += " " + transcript_text
+    _pi_warn = scan_text_for_injection(_pi_text, path="/rag/mm-ingest")
+    if _pi_warn:
+        yield _sse({"step": "security_notice", "status": "warning", **_pi_warn})
 
     yield _sse({"step": "embed", "status": "running"})
     uploaded = save_scope != "shared"

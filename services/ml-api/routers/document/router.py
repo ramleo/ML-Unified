@@ -12,6 +12,7 @@ _executor = ThreadPoolExecutor(max_workers=2)
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from security.file_gate import gate_or_raise
+from security.prompt_gate import scan_text_for_injection
 from fastapi.responses import StreamingResponse
 
 from ._schema import DOC_TYPES
@@ -93,6 +94,12 @@ async def _stream(file_bytes: bytes, filename: str, doc_type_hint: str,
             text = ocr_md
 
     yield _sse({"step": "extract", "status": "done"})
+
+    # Indirect prompt-injection flag on the extracted text (flag + log, never
+    # block — the doc is still analysed; its text is treated as data).
+    _pi_warn = scan_text_for_injection(text, path="/document/analyze")
+    if _pi_warn:
+        yield _sse({"step": "security_notice", "status": "warning", **_pi_warn})
 
     # ── Step 2: Classify ──────────────────────────────────────────────────────
     yield _sse({"step": "classify", "label": "Identifying document type", "status": "running"})

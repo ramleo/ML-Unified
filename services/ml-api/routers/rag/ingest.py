@@ -11,6 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, UploadFile, File
 
 from security.file_gate import gate_or_raise
+from security.prompt_gate import scan_text_for_injection
 from fastapi.responses import JSONResponse
 
 from routers.rag.text import tokenize
@@ -303,7 +304,11 @@ async def ingest_document(file: UploadFile = File(...)) -> JSONResponse:
     chunks = chunk_document(text, source=tagged_source)
     index_chunks(chunks, state, uploaded=True, session_id=session_id)
 
-    return JSONResponse({"status": "ok", "chunks_added": len(chunks), "source": tagged_source, "session_id": session_id})
+    payload = {"status": "ok", "chunks_added": len(chunks), "source": tagged_source, "session_id": session_id}
+    warn = scan_text_for_injection(text, path="/rag/ingest")
+    if warn:
+        payload["security_warning"] = warn
+    return JSONResponse(payload)
 
 
 # ── Manage uploaded documents ───────────────────────────────────────────────────
