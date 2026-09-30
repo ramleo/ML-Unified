@@ -88,7 +88,7 @@ from routers.core.shared import (
 )
 from routers.core.monitoring import _req_log, _SKIP_PATHS
 from security.log_redact import install as _install_log_redaction
-from security.error_reporting import init_error_reporting
+from security.error_reporting import init_error_reporting, error_capture_dispatch
 
 # uvicorn only configures its own loggers — without this every logger.info()
 # in routers/ is silently dropped and never shows up in HF Space logs.
@@ -126,6 +126,13 @@ async def _lifespan(app: FastAPI):
 
 
 app = FastAPI(title="ML API", lifespan=_lifespan)
+
+# DIY error capture (security/error_reporting.py) — added FIRST so it is the
+# INNERMOST middleware, wrapping the routers most closely: it catches an
+# unhandled router exception, best-effort reports it to the durable /api/error
+# store, then re-raises so Sentry (if active) and the default 500 still apply.
+# Only genuine 500s reach it; HTTPException/validation errors are handled upstream.
+app.add_middleware(BaseHTTPMiddleware, dispatch=error_capture_dispatch)
 
 # Was allow_origins=["*"] — a real, confirmed gap (any origin could call
 # every one of this backend's ~50 public routers). Now an explicit

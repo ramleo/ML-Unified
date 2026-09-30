@@ -21,6 +21,59 @@ call sites never change.
 from __future__ import annotations
 
 import os
+import time
+import traceback
+
+# The DIY error store lives on the frontend (Vercel) which already holds the
+# Supabase service-role key — the backend posts errors there rather than putting
+# DB credentials on the public HF Space. Defaults to the prod site; override with
+# SITE_URL. See ml-portfolio/docs or docs/ERROR_TRACKING.md.
+_SITE_URL = os.environ.get("SITE_URL", "https://ml-portfolio-rho.vercel.app").rstrip("/")
+_last_store_send = 0.0
+
+
+async def _post_error_to_store(kind: str, message: str, route: str, stack: str) -> None:
+    """Best-effort POST of one unhandled backend exception to the site's
+    /api/error store. Never raises, 2s timeout, coalesced to ~1/s so an error
+    storm can't hammer the endpoint or slow the 500 response."""
+    global _last_store_send
+    now = time.time()
+    if now - _last_store_send < 1.0:
+        return
+    _last_store_send = now
+    try:
+        import httpx
+        payload = {
+            "source": "backend",
+            "kind": kind,
+            "message": (message or "")[:1000],
+            "route": route,
+            "stack": (stack or "")[:6000],
+        }
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            await client.post(f"{_SITE_URL}/api/error", json=payload)
+    except Exception:
+        pass
+
+
+async def error_capture_dispatch(request, call_next):
+    """Middleware: report an unhandled exception to the DIY store, then re-raise
+    so Sentry (if active) and Starlette's default 500 handling still apply. Only
+    genuine unhandled 500s reach here — HTTPException / validation errors are
+    handled by FastAPI upstream and never hit this."""
+    try:
+        return await call_next(request)
+    except Exception as exc:
+        try:
+            await _post_error_to_store(
+                kind=type(exc).__name__,
+                message=str(exc),
+                route=getattr(getattr(request, "url", None), "path", ""),
+                stack=traceback.format_exc(),
+            )
+        except Exception:
+            pass
+        raise
 
 
 def _scrub(event, _hint):
