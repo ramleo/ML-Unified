@@ -46,6 +46,12 @@ class RunAccepted(BaseModel):
     status: str  # always "queued"
 
 
+class CancelResponse(BaseModel):
+    # cancelling (GitHub accepted the cancel) | already_done | not_found
+    status: str
+    detail: str | None = None
+
+
 class HealRequest(BaseModel):
     correlation_id: str = Field(..., min_length=1, max_length=64)
     code: str = Field(..., min_length=1, max_length=config.MAX_RUN_CODE)

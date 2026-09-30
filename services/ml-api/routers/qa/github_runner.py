@@ -63,6 +63,20 @@ def dispatch(code: str, base_url: str, test_name: str, correlation_id: str,
         r.raise_for_status()
 
 
+def cancel_run(run_id: int) -> bool:
+    """Cancel an in-flight workflow run via the GitHub API. Returns True when the
+    cancel is accepted (202) or the run is already finished (409 — nothing to
+    stop). Unlike stopping the client poll, this actually frees the runner and
+    stops it consuming Actions minutes."""
+    url = f"{_runs_base()}/actions/runs/{run_id}/cancel"
+    with httpx.Client(timeout=20) as client:
+        r = client.post(url, headers=_headers())
+        if r.status_code in (202, 409):
+            return True
+        r.raise_for_status()
+        return True
+
+
 def find_run(correlation_id: str) -> dict | None:
     """Locate the dispatched run by its correlation id (carried in the run name /
     display title). Returns the raw run object or None if not materialised yet."""

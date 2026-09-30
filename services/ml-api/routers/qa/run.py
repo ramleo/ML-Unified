@@ -18,7 +18,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from routers.qa import config, github_runner
 from routers.qa.deps import record_call, limiter, LLM_LIMIT
 from routers.qa.heal import heal_test
-from routers.qa.models import RunRequest, RunAccepted, RunStatus, HealRequest, HealResponse
+from routers.qa.models import RunRequest, RunAccepted, RunStatus, HealRequest, HealResponse, CancelResponse
 from routers.qa.urlcheck import validate_target_url
 
 logger = logging.getLogger(__name__)
@@ -68,6 +68,29 @@ def heal(request: Request, req: HealRequest):
                             detail="The model could not produce a corrected test.")
     code, provider = result
     return HealResponse(healed_code=code, provider=provider)
+
+
+@router.post("/cancel/{correlation_id}", response_model=CancelResponse)
+def cancel(correlation_id: str):
+    """Stop an in-flight run. Actually cancels the GitHub Actions job (frees the
+    runner), unlike the client merely stopping its poll."""
+    try:
+        run = github_runner.find_run(correlation_id)
+    except Exception as exc:
+        logger.error("qa/run: cancel lookup failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Could not read the run.")
+    if not run:
+        # Dispatched but not materialised yet — nothing to cancel server-side;
+        # the client stops polling on its end.
+        return CancelResponse(status="not_found", detail="Run has not started yet.")
+    if run.get("status") == "completed":
+        return CancelResponse(status="already_done")
+    try:
+        github_runner.cancel_run(run.get("id"))
+    except Exception as exc:
+        logger.warning("qa/run: cancel failed: %s", exc)
+        raise HTTPException(status_code=502, detail="Could not cancel the run.")
+    return CancelResponse(status="cancelling")
 
 
 @router.get("/status/{correlation_id}", response_model=RunStatus)
