@@ -88,6 +88,7 @@ from routers.core.shared import (
 )
 from routers.core.monitoring import _req_log, _SKIP_PATHS
 from security.log_redact import install as _install_log_redaction
+from security.error_reporting import init_error_reporting
 
 # uvicorn only configures its own loggers — without this every logger.info()
 # in routers/ is silently dropped and never shows up in HF Space logs.
@@ -97,6 +98,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname
 # attaches to the handlers basicConfig just created, so the call belongs here
 # rather than at import time — before any router can log a request.
 _install_log_redaction()
+
+# Durable error reporting (security/error_reporting.py) — no-op unless SENTRY_DSN
+# is set. Init BEFORE app creation so Sentry's FastAPI/Starlette integrations
+# auto-attach and catch every unhandled route exception (there was no global
+# handler before; errors only reached the Space's ephemeral stdout buffer).
+init_error_reporting()
 
 
 @asynccontextmanager

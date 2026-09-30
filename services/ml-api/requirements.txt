@@ -26,3 +26,4 @@ lightgbm==4.6.0
 catboost==1.2.10
 shap==0.47.2
 opencv-python-headless>=5.0.0.93
+sentry-sdk[fastapi]>=2.0.0  # durable error reporting; dormant unless SENTRY_DSN is set (security/error_reporting.py)
