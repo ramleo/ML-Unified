@@ -8,6 +8,7 @@ TypeScript test with resilient locators. Generation ONLY, no execution.
 import json
 import logging
 import re
+from collections import Counter
 
 from fastapi import APIRouter, Request
 
@@ -42,46 +43,62 @@ def _looks_like_test(code: str) -> bool:
 
 
 # Accessible names in the page context: ARIA-snapshot role lines (e.g. `link "X"`)
-# and the link map's left-hand side (`X -> /href`).
+# carry one entry PER element (so nav+footer duplicates are counted), plus the
+# link map's left-hand side (`X -> /href`).
 _CTX_ROLE_NAME = re.compile(
     r'(?:link|button|heading|tab|menuitem|checkbox|option|textbox|searchbox|radio)'
     r'\s+"([^"\n]{1,120})"'
 )
-# A getByRole name object with ONLY a name (no `exact`, no other option).
-_NAME_ONLY = re.compile(r"\{\s*name:\s*(['\"])(.*?)\1\s*\}")
+# A full getByRole call whose options object has ONLY a name (no `exact`/extra),
+# so we can either add `exact: true` inside it or append `.first()` after it.
+_GETBYROLE_NAME = re.compile(
+    r"getByRole\(\s*(['\"])(\w+)\1\s*,\s*\{\s*name:\s*(['\"])(.*?)\3\s*\}\s*\)"
+)
 
 
-def _page_names(page_context: str) -> list[str]:
-    names = set(m.group(1) for m in _CTX_ROLE_NAME.finditer(page_context))
+def _page_name_counts(page_context: str) -> Counter:
+    """How many page elements carry each accessible name (lower-cased). The ARIA
+    snapshot lists every element, so true duplicates (nav + footer) are counted;
+    link-map names not role-tagged are added once."""
+    counts: Counter = Counter()
+    for m in _CTX_ROLE_NAME.finditer(page_context):
+        counts[m.group(1).lower()] += 1
     for line in page_context.splitlines():
         if " -> " in line:
-            nm = line.split(" -> ", 1)[0].strip()
-            if nm:
-                names.add(nm)
-    return [n.lower() for n in names]
+            nm = line.split(" -> ", 1)[0].strip().lower()
+            if nm and nm not in counts:
+                counts[nm] += 1
+    return counts
 
 
 def _disambiguate_locators(code: str, page_context: str) -> str:
-    """Playwright's `name` match is a case-insensitive SUBSTRING, so a short name
-    can match several elements and fail strict mode. Grounded in the real page
-    names, add `exact: true` ONLY where a name provably matches >1 element by
-    substring yet equals exactly one — never touching an already-unique locator."""
-    names = _page_names(page_context)
-    if not names:
+    """Playwright strict mode needs a locator to match exactly one element. A
+    name-only `getByRole` can match several: by case-insensitive SUBSTRING (e.g.
+    'Tools' is inside 'Browse the tools') or because the SAME name repeats (a nav
+    link also in the footer). Grounded in the real page, fix both — `exact: true`
+    when a unique name is being over-matched by substring, `.first()` when the
+    name genuinely repeats. Already-unique locators are left untouched."""
+    counts = _page_name_counts(page_context)
+    if not counts:
         return code
+    items = list(counts.items())
 
     def repl(m: "re.Match") -> str:
-        x = m.group(2).lower()
+        x = m.group(4).lower()
         if not x:
             return m.group(0)
-        contains = sum(1 for n in names if x in n)
-        equals = sum(1 for n in names if x == n)
+        equals = sum(c for n, c in items if n == x)
+        contains = sum(c for n, c in items if x in n)
+        if equals >= 2:
+            # Same name on >1 element — exact can't disambiguate; take the first.
+            return m.group(0) + ".first()"
         if contains >= 2 and equals == 1:
-            q = m.group(1)
-            return "{ name: " + q + m.group(2) + q + ", exact: true }"
+            # Unique name over-matched by substring — pin it exact.
+            q, nq = m.group(1), m.group(3)
+            return f"getByRole({q}{m.group(2)}{q}, {{ name: {nq}{m.group(4)}{nq}, exact: true }})"
         return m.group(0)
 
-    return _NAME_ONLY.sub(repl, code)
+    return _GETBYROLE_NAME.sub(repl, code)
 
 
 def generate_test(instructions: str, base_url: str, test_name: str,
