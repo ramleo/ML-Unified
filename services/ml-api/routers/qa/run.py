@@ -155,6 +155,10 @@ def status(correlation_id: str):
     result.has_video = bool(art.get("has_video"))
     result.has_trace = bool(art.get("has_trace"))
     result.correlation_id = correlation_id
+    # Surface the failure reason (Playwright's error for the first failing test)
+    # so the UI can show WHY it failed, not just that it did.
+    if result.passed is False:
+        result.error_message = art.get("error") or None
     return result
 
 

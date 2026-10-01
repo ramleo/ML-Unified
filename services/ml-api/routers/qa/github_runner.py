@@ -16,6 +16,7 @@ import io
 import json
 import logging
 import os
+import re
 import zipfile
 
 import httpx
@@ -158,9 +159,19 @@ def _read_steps(zf: "zipfile.ZipFile") -> list:
     return out
 
 
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def _clean_error(msg: str) -> str:
+    """Strip ANSI colour codes and clip a Playwright error message for display."""
+    if not msg:
+        return ""
+    return _ANSI_RE.sub("", msg).strip()[: config.MAX_ERROR_CHARS]
+
+
 def _parse_zip(zip_bytes: bytes) -> dict:
     out: dict = {"summary": None, "screenshotBase64": None, "steps": [],
-                 "has_video": False, "has_trace": False}
+                 "has_video": False, "has_trace": False, "error": ""}
     try:
         zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
     except Exception as exc:
@@ -180,6 +191,7 @@ def _parse_zip(zip_bytes: bytes) -> dict:
                     "flaky": stats.get("flaky", 0),
                     "skipped": stats.get("skipped", 0),
                 }
+                out["error"] = _clean_error(_first_error(data))
             except Exception:
                 pass
             break

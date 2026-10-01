@@ -122,6 +122,9 @@ class RunStatus(BaseModel):
     correlation_id: str | None = None
     run_url: str | None = None
     detail: str | None = None
+    # The failure reason (Playwright error of the first failing test), shown in
+    # the UI so a failed run explains itself. Only set when the test failed.
+    error_message: str | None = None
     # Flakiness fields — populated when the test ran more than once. `flaky` is
     # true when the repeats disagreed (some passed, some failed).
     runs: int | None = None
