@@ -108,6 +108,17 @@ proposals are still there"** banner on Run with a **← Back to Discover** butto
 **Verified live:** Discover → 6 proposals → Generate → Send to Run → banner + back
 button present, code carried → Back to Discover → 6 proposals restored, no re-run.
 
+## 10. Send multiple Discover drafts to Run at once (`618c9e7`)
+Before: you could **Generate selected (N)** to get N drafts, but each had its own
+**Send to Run** and Run executes one file per run — no way to run several at once.
+**Built:** after generating ≥2 drafts, a **"Send all N to Run →"** button merges
+them into ONE runnable file and hands it off. `mergeTests()` keeps a single
+`import { test, expect }` and a single `const BASE_URL`, then appends every file's
+`describe`/`test` blocks (naive concatenation would redeclare the import/BASE_URL
+and fail to compile). Verified the merge locally: 2 drafts → 1 import, 1 BASE_URL,
+both describes. Frontend-only (DiscoverRunner.tsx), reuses the Discover→Run handoff
+(so the "← Back to Discover" banner still shows).
+
 ## Key decisions
 - **Grounding must reach code-gen, not just proposals** — the snapshot that picks
   WHAT to test must also be fed to the step that WRITES the test.
@@ -132,7 +143,7 @@ button present, code carried → Back to Discover → 6 proposals restored, no r
 ## Commits
 | Repo | Commits |
 |---|---|
-| ml-portfolio | `2911264` (P4b) · `860e427` (guide) · `ca75d45` (Discover ctx) · `28e46be` (why-failed UI) · `92455e6` (edit-guide note) · `82b648d` (Discover persist) · `4be6961` (back-to-Discover) |
+| ml-portfolio | `2911264` (P4b) · `860e427` (guide) · `ca75d45` (Discover ctx) · `28e46be` (why-failed UI) · `92455e6` (edit-guide note) · `82b648d` (Discover persist) · `4be6961` (back-to-Discover) · `618c9e7` (send-all-to-Run) |
 | ML-Unified (backend, HF-uploaded) | `30c1d62` (grounding) · `f4869d4` (failure reason) · `4364cc4` (flaky gate + substring rule) · `e9eab55` (exact:true) · `a694015` (.first() dupes) |
 | ML-Unified (docs) | `7a4fbe1` (plan refresh) · `39c3d62` (learn-from-edits plan) |
 
@@ -143,6 +154,8 @@ button present, code carried → Back to Discover → 6 proposals restored, no r
   duplicates → `.first()`); self-heal is the backstop.
 - **Run** shows total/passed/failed + the real failure reason; multi-test suites are
   no longer mislabelled flaky.
-- Open: Q1 "send multiple selected proposals to Run at once"; "learn from my edits"
-  (scoped, parked). Related: [[project_testwright_qa_platform]],
+- **Send multiple Discover drafts to Run at once — DONE** (`618c9e7`): "Send all N
+  to Run" merges drafts into one suite.
+- Open: "learn from my edits" (scoped in `docs/QA_LEARN_FROM_EDITS_PLAN.md`,
+  parked). Related: [[project_testwright_qa_platform]],
   [[project_testwright_run_perf]].
