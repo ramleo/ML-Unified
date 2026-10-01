@@ -1,6 +1,9 @@
 # Testwright (QA platform) — Improvement Plan
 
-**Status:** proposed (2026-09-30). No code changed yet — this is the plan.
+**Status:** mostly shipped (updated 2026-10-01). P0 (container, exec-time, Stop/cancel),
+P4 (self-heal grounding + confirm-before-rerun) and P5 (progress polish) are **done and
+verified live** — see §5. Only open item: D, a warm/self-hosted runner for seconds-fast
+runs (recommended skip for a free public portfolio).
 **Scope:** the **Run** stage (execute a Playwright test on isolated CI) and its
 self-heal. Author/Discover/Visual are out of scope except where they share the
 runner. **Owner doc** for the work below.
@@ -133,10 +136,21 @@ Two distinct numbers, show both, labelled:
   ~68→~50-56s), execution-time display (ml-portfolio 3bb1be3), and P2 cancel+Stop
   (ML-Unified 970d8f3 + ml-portfolio 3bb1be3). All verified live; no regression
   (sample test still passes, Stop button appears, `test/total` shown).
+- **P4 self-heal grounding — SHIPPED 2026-09-30** (ML-Unified `21fc8c6`, HF-uploaded):
+  HEAL_SYSTEM now requires every locator string be copied verbatim from the ARIA snapshot
+  and prefers `getByRole('searchbox'/'textbox',{name})` over guessed placeholders. Verified
+  end-to-end: the §2 failing case heals to a grounded `getByRole('searchbox',…)` and passes.
+- **P4b confirm-before-rerun — SHIPPED 2026-10-01** (ml-portfolio `2911264`): heal no longer
+  auto-fires a 2nd ~50s CI cycle — it stages the fix into the editor and shows the diff with
+  **Re-run healed test** / **Discard**. Verified live on the deployed bundle: Suggest a fix →
+  grounded heal, **no auto-run**, Re-run/Discard gate; Discard reverts the code, 0 CI spent.
+- **P5 progress/timeout polish — SHIPPED 2026-09-30** (ml-portfolio `acf5d04`): live elapsed
+  timer, phase caption, "~40–60s first-run setup" note, Open-on-GitHub during the run, honest
+  timeout message.
 - **NEXT (real speed lever): D — warm / self-hosted runner.** Evidence shows GitHub-
   hosted runs are download-bound (~50s floor); only a runner that persists the image +
-  browsers gets to seconds. This is now the top open item for speed.
-- **Later:** P4 self-heal grounding + confirm-before-rerun; P5 progress/timeout polish.
+  browsers gets to seconds. This is the only open item for speed — **recommended skip**
+  (infra + security cost for a free public portfolio).
 
 ## 6. Risks & mitigations
 
