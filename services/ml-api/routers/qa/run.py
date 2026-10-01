@@ -137,13 +137,17 @@ def status(correlation_id: str):
     result.passed = summary.get("unexpected", 0) == 0
     result.summary = summary
 
-    # Flakiness: with --repeat-each the stats sum across repeats, so
-    # expected = passing repeats and unexpected = failing repeats. A mix of the
-    # two means the test is flaky. Only surfaced when it actually ran >1 time.
+    # Flakiness: with --repeat-each the stats sum across repeats of ONE test, so
+    # expected = passing repeats and unexpected = failing repeats, and a mix means
+    # the test is flaky. This only holds for a SINGLE test — a multi-test file
+    # also sums expected/unexpected across different tests, which is a normal
+    # pass/fail suite, NOT flakiness. Gate on the distinct-test count so a suite
+    # with some passing and some failing tests is never mislabelled "flaky".
     passed_runs = summary.get("expected", 0)
     failed_runs = summary.get("unexpected", 0)
     total_runs = passed_runs + failed_runs
-    if total_runs > 1:
+    num_tests = art.get("num_tests") or 0
+    if total_runs > 1 and num_tests == 1:
         result.runs = total_runs
         result.passed_runs = passed_runs
         result.failed_runs = failed_runs

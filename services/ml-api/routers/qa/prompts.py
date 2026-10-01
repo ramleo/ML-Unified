@@ -38,7 +38,15 @@ AUTHOR_GROUNDING = (
     "is not in the map, do NOT assert a specific URL — assert a visible "
     "post-condition instead (e.g. a heading or section is visible).\n"
     "10. If an element or destination the scenario needs is absent from the "
-    "context, assert what IS verifiable rather than fabricating a locator or URL."
+    "context, assert what IS verifiable rather than fabricating a locator or URL.\n"
+    "11. Playwright's `name` match is a CASE-INSENSITIVE SUBSTRING by default, so a "
+    "short name can match several elements and fail with a strict-mode violation "
+    "(e.g. 'Tools' also matches 'Browse the tools' and 'Security & Trust 26 "
+    "tools'). Before using `getByRole(role, { name })`, check the context: if that "
+    "name is contained in any OTHER element's name, make the locator resolve to "
+    "exactly one element — add `{ name, exact: true }`, or scope it (e.g. "
+    "`page.getByRole('navigation').getByRole('link', { name })`), or use the full "
+    "unique name. Never leave a locator that matches more than one element."
 )
 
 HEAL_SYSTEM = (

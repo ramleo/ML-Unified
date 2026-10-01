@@ -169,9 +169,28 @@ def _clean_error(msg: str) -> str:
     return _ANSI_RE.sub("", msg).strip()[: config.MAX_ERROR_CHARS]
 
 
+def _count_tests(data: dict) -> int:
+    """Number of DISTINCT test cases in the report (by spec title). `--repeat-each`
+    repeats one spec, so distinct titles stays 1 for a true flakiness run, while a
+    multi-test file yields >1. Lets us tell a repeated single test from a suite."""
+    titles: set[str] = set()
+
+    def walk(suite: dict) -> None:
+        for spec in suite.get("specs", []):
+            t = spec.get("title")
+            if t:
+                titles.add(t)
+        for child in suite.get("suites", []):
+            walk(child)
+
+    for suite in data.get("suites", []):
+        walk(suite)
+    return len(titles)
+
+
 def _parse_zip(zip_bytes: bytes) -> dict:
     out: dict = {"summary": None, "screenshotBase64": None, "steps": [],
-                 "has_video": False, "has_trace": False, "error": ""}
+                 "has_video": False, "has_trace": False, "error": "", "num_tests": 0}
     try:
         zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
     except Exception as exc:
@@ -192,6 +211,7 @@ def _parse_zip(zip_bytes: bytes) -> dict:
                     "skipped": stats.get("skipped", 0),
                 }
                 out["error"] = _clean_error(_first_error(data))
+                out["num_tests"] = _count_tests(data)
             except Exception:
                 pass
             break
