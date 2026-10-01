@@ -41,6 +41,49 @@ def _looks_like_test(code: str) -> bool:
     return "@playwright/test" in code and "test(" in code
 
 
+# Accessible names in the page context: ARIA-snapshot role lines (e.g. `link "X"`)
+# and the link map's left-hand side (`X -> /href`).
+_CTX_ROLE_NAME = re.compile(
+    r'(?:link|button|heading|tab|menuitem|checkbox|option|textbox|searchbox|radio)'
+    r'\s+"([^"\n]{1,120})"'
+)
+# A getByRole name object with ONLY a name (no `exact`, no other option).
+_NAME_ONLY = re.compile(r"\{\s*name:\s*(['\"])(.*?)\1\s*\}")
+
+
+def _page_names(page_context: str) -> list[str]:
+    names = set(m.group(1) for m in _CTX_ROLE_NAME.finditer(page_context))
+    for line in page_context.splitlines():
+        if " -> " in line:
+            nm = line.split(" -> ", 1)[0].strip()
+            if nm:
+                names.add(nm)
+    return [n.lower() for n in names]
+
+
+def _disambiguate_locators(code: str, page_context: str) -> str:
+    """Playwright's `name` match is a case-insensitive SUBSTRING, so a short name
+    can match several elements and fail strict mode. Grounded in the real page
+    names, add `exact: true` ONLY where a name provably matches >1 element by
+    substring yet equals exactly one — never touching an already-unique locator."""
+    names = _page_names(page_context)
+    if not names:
+        return code
+
+    def repl(m: "re.Match") -> str:
+        x = m.group(2).lower()
+        if not x:
+            return m.group(0)
+        contains = sum(1 for n in names if x in n)
+        equals = sum(1 for n in names if x == n)
+        if contains >= 2 and equals == 1:
+            q = m.group(1)
+            return "{ name: " + q + m.group(2) + q + ", exact: true }"
+        return m.group(0)
+
+    return _NAME_ONLY.sub(repl, code)
+
+
 def generate_test(instructions: str, base_url: str, test_name: str,
                   page_context: str = "") -> tuple[str, str] | None:
     user_parts = [f"Scenario to test:\n{instructions.strip()}"]
@@ -77,6 +120,11 @@ def generate_test(instructions: str, base_url: str, test_name: str,
             continue
         code = _strip_fences(raw)
         if _looks_like_test(code):
+            # Deterministic safety net: force `exact: true` on provably-ambiguous
+            # name locators so a grounded test can't fail strict mode on a name
+            # the model forgot to disambiguate.
+            if ctx:
+                code = _disambiguate_locators(code, ctx)
             return code, provider
         logger.warning("qa/author: %s returned non-test output", provider)
     logger.error("qa/author: every candidate failed (%s)",
