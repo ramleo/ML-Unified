@@ -22,6 +22,25 @@ AUTHOR_SYSTEM = (
     "before or after the code."
 )
 
+AUTHOR_GROUNDING = (
+    "\n\nYou are ALSO given REAL PAGE CONTEXT captured live from the page under "
+    "test: an ARIA snapshot plus a map of each link's accessible-name -> href. "
+    "When this context is present you MUST:\n"
+    "7. Build locators ONLY from roles, names, text, labels or placeholders that "
+    "appear in the snapshot — copy each string verbatim; never invent or "
+    "paraphrase one.\n"
+    "8. For any navigation or URL assertion, use the REAL href from the link map, "
+    "e.g. a link listed as 'Handbook -> /handbook' means "
+    "`toHaveURL(BASE_URL + '/handbook')`. NEVER derive a path from a link's "
+    "visible label: a link named 'AI AIRaML' whose href is '/' navigates to '/', "
+    "NOT to '/ai-airaml'.\n"
+    "9. If a link's href is an in-page anchor (contains '#'), or the destination "
+    "is not in the map, do NOT assert a specific URL — assert a visible "
+    "post-condition instead (e.g. a heading or section is visible).\n"
+    "10. If an element or destination the scenario needs is absent from the "
+    "context, assert what IS verifiable rather than fabricating a locator or URL."
+)
+
 HEAL_SYSTEM = (
     "You are an expert QA automation engineer fixing a Playwright test whose "
     "LOCATOR failed. You are given the original test, the failure error, and an "

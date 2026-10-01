@@ -17,7 +17,7 @@ from routers.qa.models import (
     GenerateRequest, GenerateResponse,
     AssertRequest, AssertResponse, AssertSuggestion,
 )
-from routers.qa.prompts import AUTHOR_SYSTEM, ASSERTIONS_SYSTEM
+from routers.qa.prompts import AUTHOR_SYSTEM, AUTHOR_GROUNDING, ASSERTIONS_SYSTEM
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +41,25 @@ def _looks_like_test(code: str) -> bool:
     return "@playwright/test" in code and "test(" in code
 
 
-def generate_test(instructions: str, base_url: str, test_name: str) -> tuple[str, str] | None:
+def generate_test(instructions: str, base_url: str, test_name: str,
+                  page_context: str = "") -> tuple[str, str] | None:
     user_parts = [f"Scenario to test:\n{instructions.strip()}"]
     if base_url.strip():
         user_parts.append(f"\nBase URL of the site under test: {base_url.strip()}")
     if test_name.strip():
         user_parts.append(f"\nUse this as the describe-block title: {test_name.strip()}")
+
+    # When Discover supplies real page context, feed it and switch to the grounded
+    # prompt so locators and URLs come from the page, not from the model's guess.
+    ctx = (page_context or "").strip()[: config.MAX_PAGE_CONTEXT]
+    system = AUTHOR_SYSTEM
+    if ctx:
+        user_parts.append(
+            "\nREAL PAGE CONTEXT (captured live from the page under test) — an "
+            "ARIA snapshot and a link accessible-name -> href map. Ground every "
+            "locator and URL in this; do not use anything absent from it:\n" + ctx
+        )
+        system = AUTHOR_SYSTEM + AUTHOR_GROUNDING
     user_msg = "\n".join(user_parts)
 
     for provider, model in config.GEN_CANDIDATES:
@@ -57,7 +70,7 @@ def generate_test(instructions: str, base_url: str, test_name: str) -> tuple[str
             raw = complete(
                 provider, model, key,
                 [{"role": "user", "content": user_msg}],
-                system=AUTHOR_SYSTEM,
+                system=system,
             )
         except Exception as exc:
             logger.warning("qa/author: %s failed: %s", provider, exc)
@@ -75,7 +88,7 @@ def generate_test(instructions: str, base_url: str, test_name: str) -> tuple[str
 @limiter.limit(LLM_LIMIT)
 def generate(request: Request, req: GenerateRequest):
     record_call(config.FEATURE, pool=config.BUDGET_POOL, daily_cap_env=config.DAILY_CAP_ENV)
-    result = generate_test(req.instructions, req.base_url, req.test_name)
+    result = generate_test(req.instructions, req.base_url, req.test_name, req.page_context)
     if result is None:
         return GenerateResponse(code="", provider=None)
     code, provider = result

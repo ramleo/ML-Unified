@@ -24,10 +24,18 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/discover")
 
+# Delimiter that separates the ARIA snapshot from the link map inside aria.txt.
+# Kept identical on the writer (explore spec) and reader (status) sides.
+LINKS_DELIM = "\n\n===LINKS (accessible name -> href)===\n"
+# Same string escaped for embedding inside a JS single-quoted string literal.
+LINKS_DELIM_JS = LINKS_DELIM.replace("\n", "\\n")
+
 
 def build_explore_spec(url: str) -> str:
     """A Playwright test that navigates the URL and writes the page's ARIA
-    snapshot to aria.txt (uploaded by the workflow)."""
+    snapshot PLUS a link accessible-name -> href map to aria.txt (uploaded by
+    the workflow). The link map lets code generation use real destinations
+    instead of guessing a URL from a link's visible label."""
     safe = url.replace("\\", "\\\\").replace("'", "\\'")
     return (
         "import { test } from '@playwright/test';\n"
@@ -36,7 +44,23 @@ def build_explore_spec(url: str) -> str:
         f"  await page.goto('{safe}', {{ waitUntil: 'domcontentloaded' }});\n"
         "  await page.waitForTimeout(1500);\n"
         "  const snapshot = await page.locator('body').ariaSnapshot();\n"
-        "  fs.writeFileSync('aria.txt', snapshot);\n"
+        f"  const links = await page.$$eval('a[href]', (els, max) => {{\n"
+        "    const seen = new Set(); const out = [];\n"
+        "    for (const a of els) {\n"
+        "      const name = (a.getAttribute('aria-label') || a.textContent || '')"
+        ".replace(/\\s+/g, ' ').trim().slice(0, 80);\n"
+        "      const href = a.getAttribute('href') || '';\n"
+        "      if (!name || !href) continue;\n"
+        "      const k = name + ' -> ' + href;\n"
+        "      if (seen.has(k)) continue;\n"
+        "      seen.add(k); out.push(k);\n"
+        "      if (out.length >= max) break;\n"
+        "    }\n"
+        "    return out;\n"
+        f"  }}, {config.MAX_LINKS});\n"
+        "  const block = links.length"
+        f"    ? '{LINKS_DELIM_JS}' + links.join('\\n') : '';\n"
+        "  fs.writeFileSync('aria.txt', snapshot + block);\n"
         "});\n"
     )
 
@@ -121,17 +145,26 @@ def status(correlation_id: str):
     if gh_status != "completed":
         return DiscoverStatus(status=gh_status, correlation_id=correlation_id, run_url=run_url)
 
-    snapshot = None
+    raw = None
     try:
-        snapshot = github_runner.fetch_text_artifact(run.get("id"), "aria.txt")
+        raw = github_runner.fetch_text_artifact(run.get("id"), "aria.txt")
     except Exception as exc:
         logger.warning("qa/discover: snapshot fetch failed: %s", exc)
-    if not snapshot:
+    if not raw:
         return DiscoverStatus(status="error", correlation_id=correlation_id, run_url=run_url,
                               detail="Could not capture the page. Check the URL is reachable.")
-    proposals = propose_tests(snapshot)
+
+    # aria.txt = ARIA snapshot, optionally followed by the link map.
+    aria_part, _, links_part = raw.partition(LINKS_DELIM)
+    proposals = propose_tests(aria_part)
     if not proposals:
         return DiscoverStatus(status="error", correlation_id=correlation_id, run_url=run_url,
                               detail="No test cases could be proposed from this page.")
+
+    # Page context carried into code generation: the snapshot (so locators are
+    # real) plus the link map (so URL assertions use real hrefs, not guesses).
+    page_context = aria_part[: config.MAX_SNAPSHOT_CHARS]
+    if links_part.strip():
+        page_context += LINKS_DELIM + links_part.strip()[: config.MAX_LINKS_CHARS]
     return DiscoverStatus(status="completed", correlation_id=correlation_id,
-                          run_url=run_url, proposals=proposals)
+                          run_url=run_url, proposals=proposals, page_context=page_context)

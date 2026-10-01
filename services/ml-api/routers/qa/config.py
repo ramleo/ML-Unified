@@ -87,3 +87,10 @@ DISCOVER_FEATURE = "qa-discover"
 DISCOVER_BUDGET_POOL = "qa_discover"
 DISCOVER_DAILY_CAP_ENV = "QA_DISCOVER_DAILY_CAP"
 MAX_PROPOSALS = 6
+# Discover also captures a link accessible-name -> href map so generation can
+# ground URLs in real destinations instead of guessing from a link's label.
+MAX_LINKS = 80          # links captured from the page
+MAX_LINKS_CHARS = 2500  # cap on the links block carried into code generation
+# Page context (ARIA snapshot + link map) passed from Discover into Author so the
+# generated code's locators and URLs are grounded in the real page.
+MAX_PAGE_CONTEXT = 20000

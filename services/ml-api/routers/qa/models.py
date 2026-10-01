@@ -9,6 +9,9 @@ class GenerateRequest(BaseModel):
     instructions: str = Field(..., min_length=1, max_length=config.MAX_INSTRUCTIONS)
     base_url: str = Field("", max_length=config.MAX_BASE_URL)
     test_name: str = Field("", max_length=config.MAX_NAME)
+    # Optional real page context (ARIA snapshot + link map) from Discover, so the
+    # generated locators and URLs are grounded in the actual page, not guessed.
+    page_context: str = Field("", max_length=config.MAX_PAGE_CONTEXT)
 
 
 class GenerateResponse(BaseModel):
@@ -81,6 +84,8 @@ class DiscoverStatus(BaseModel):
     proposals: list[Proposal] = []
     run_url: str | None = None
     detail: str | None = None
+    # Real page context (ARIA snapshot + link map) to ground code generation.
+    page_context: str | None = None
 
 
 class HealGroupRequest(BaseModel):
