@@ -1,4 +1,4 @@
-# Testwright R7 — Shareable run reports (plan)
+# Testwright R7 — Run reports: export, share & dashboard (plan)
 
 **Status:** scoped, not built (2026-10-02). Part of the Phase 2 LATER tier in
 `TESTWRIGHT_IMPROVEMENT_PLAN.md` §9. Build when a run worth sharing with someone
@@ -8,7 +8,9 @@ else is a real need.
 A **permalink to a finished run** that anyone with the link can open — status,
 pass/fail summary, the failure reason, the step timeline, timing, and a link to the
 GitHub run. Turns a result that today lives only in one browser into something you can
-drop into a bug report, a PR, or a message.
+drop into a bug report, a PR, or a message. The same report can also be **downloaded
+as Excel or PDF** (see Export), and many runs can roll up into a **Dashboard** of
+trends (see Dashboard).
 
 ## Why it's wanted
 Right now every run's results live only in the browser's `localStorage` (saved tests +
@@ -67,6 +69,60 @@ from the anon key. Follows the `errors.sql` RLS pattern.
    promise video/trace on a shared link (show them only while the run is recent, or
    omit). Durable video/trace = copy artifacts into our storage = out of scope for v1.
 
+## Export — download as Excel & PDF
+Independent of sharing: a report can be downloaded straight from the browser, from both
+the live result card and a shared report page — no server needed, the data is already
+in the page (`useRun` state, or the fetched share row). No export libs exist in
+`ml-portfolio` today (checked), so this adds one or two.
+
+**Excel (`.xlsx`)** — one workbook:
+- *Summary* sheet: name, status, date, timing (test / total), `run_url`, and the
+  passed / failed / flaky / skipped counts; the failure reason as a labeled cell.
+- *Steps* sheet: a table of step · category · duration(ms) · ok.
+- Library: **ExcelJS** (MIT) — build client-side, download via Blob + anchor.
+  (SheetJS/`xlsx` community is Apache-2.0 and also fine; ExcelJS formats nicer.)
+
+**PDF** — a one-page report: header + status badge, summary, timing, failure reason,
+steps table.
+- Option A *(recommended)*: **jsPDF + jspdf-autotable** (both MIT) → one-click
+  "Download PDF" with a real table.
+- Option B *(zero-dep)*: a print-only view + `window.print()` ("Save as PDF" in the
+  dialog) — no library, but it's print-to-PDF, not a one-click file.
+
+**Decision:** add jsPDF + ExcelJS (one-click files, small, MIT) vs. print-to-PDF +
+ExcelJS only. Recommend the libs for a clean one-click experience.
+
+**Ships independently:** export is pure client-side from the current result, so it does
+**not** need the Supabase/share work — it can land before, or without, the rest of R7.
+Downloads work in the real app (Vercel), unlike the artifact sandbox.
+
+## Dashboard — aggregate view across runs
+A single report (above) is one run; a **dashboard** rolls many runs into the health
+view a team actually watches. (Charts must follow the project's `dataviz` skill —
+inline SVG, no emoji, accessible in light/dark.)
+
+**What it shows:**
+- Headline tiles: total runs, pass rate, failures, avg CI time (over a window).
+- Pass-rate **trend** over time (line).
+- **Top failing tests** by name (bar).
+- **Flakiness** — tests whose repeats disagreed.
+- Recent failures with reasons (table), each linking to its full report / share.
+
+**Data source — two options:**
+- **A. Local (standalone, no server):** aggregate the browser-local run history already
+  kept in `run/storage.ts` (recent runs + saved tests). Frontend-only, ships today, but
+  per-browser (only this device's runs). A solid "my runs" v1.
+- **B. Durable / cross-device (needs persistence):** log runs to a Supabase `qa_runs`
+  table (a superset of the shareable-run row) and aggregate. Historical and
+  multi-device, but depends on the Phase-1 persistence + a retention/privacy policy, and
+  on **deciding whether EVERY run is logged or only saved/shared ones** (content + cost).
+
+**Where it lives:** a Dashboard tab in `/qa`, or folded into the existing analytics
+dashboard — decide at build time.
+
+**Dependency:** a meaningful *historical* dashboard needs Option B. Option A can ship
+standalone from existing local history, like Export.
+
 ## Privacy & abuse
 - **Unlisted link** (random id) = anyone with the link can read it; standard for share
   links. State this on the Share action.
@@ -77,22 +133,33 @@ from the anon key. Follows the `errors.sql` RLS pattern.
   and only persist a run that actually completed.
 
 ## Effort & phases
-- **Phase 1 (v1):** table + migration, `POST /api/qa-run/share`,
+- **Phase 0 (can ship first, standalone):** Export to **Excel + PDF** from the live
+  result card. Pure client-side, no DB. ~S–M (adds ExcelJS [+ jsPDF]).
+- **Phase 1 (v1 sharing):** table + migration, `POST /api/qa-run/share`,
   `GET /api/qa-run/share/[id]`, the `/qa/run/r/[id]` read-only page, Share button.
-  Summary + reason + steps + timing + run_url. ~M, frontend-only.
+  Summary + reason + steps + timing + run_url. ~M, frontend-only. (The share page also
+  offers the Phase-0 Export buttons.)
 - **Phase 2 (optional):** screenshot via Supabase Storage; `expires_at` + cleanup;
   a "my shared runs" list.
+- **Phase 3 (dashboard):** Dashboard-A (local history aggregate) can ship standalone
+  like export; Dashboard-B (durable `qa_runs` + historical trends) builds on Phase-1
+  persistence. Charts per the `dataviz` skill.
 
 ## Non-goals
 - No account system / per-user ownership (links are unlisted).
 - No durable video/trace copy in v1.
-- No backend or HF Space change.
+- No backend or HF Space change for export/share (dashboard Option B adds a Supabase
+  table via a Next.js route, still no ML-API/HF change).
 
 ## Verification
+- Download **Excel** and **PDF** from a passed and a failed run; open each and confirm
+  the summary, timing, failure reason and steps table are correct.
 - Create a share from a passed and a failed run; open the link in a fresh
   browser/incognito → read-only report renders with the right status + reason.
 - Confirm the anon key cannot insert (RLS), only the service-role route can.
 - Confirm local dev does not write to prod (the writes gate).
 - Confirm the privacy page lists what's stored.
+- Dashboard: aggregates match a known set of runs (plant a few passed/failed), charts
+  render in light + dark, and each failure row links to its report.
 
 Related: `TESTWRIGHT_IMPROVEMENT_PLAN.md` §9 (R7), `QA_LEARN_FROM_EDITS_PLAN.md`.
