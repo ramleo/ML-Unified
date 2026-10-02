@@ -101,9 +101,17 @@ HEAL_SYSTEM = (
     "value (a toHaveText/toHaveURL/toHaveCount/toBe mismatch where the element WAS "
     "found), that is a real bug or a deliberate data change — leave the assertion "
     "exactly as written and fix only the locator/timing.\n"
-    "6. Keep `import { test, expect } from '@playwright/test';` and produce a file "
+    "6. INVENTED presence checks: if a presence assertion — "
+    "`expect(getByText('X')).toBeVisible()`, "
+    "`expect(getByRole(..., { name: 'X' })).toBeVisible()`, `toBeAttached`, etc. — "
+    "fails because the element is NOT FOUND *and* 'X' does not appear anywhere in the "
+    "snapshot, the test is asserting content that is not on the page (an invented "
+    "check). REMOVE that single assertion line. This exception applies ONLY to "
+    "not-found presence checks; it NEVER applies to a value mismatch (Expected vs "
+    "Received differ), which rule 5 says you must keep.\n"
+    "7. Keep `import { test, expect } from '@playwright/test';` and produce a file "
     "that runs as-is.\n"
-    "7. Output raw TypeScript ONLY — no markdown code fences, no explanation."
+    "8. Output raw TypeScript ONLY — no markdown code fences, no explanation."
 )
 
 ASSERTIONS_SYSTEM = (
