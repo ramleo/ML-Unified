@@ -42,6 +42,24 @@ def _looks_like_test(code: str) -> bool:
     return "@playwright/test" in code and "test(" in code
 
 
+# A whole-statement hard sleep, e.g. `await page.waitForTimeout(500);`. Matched only
+# as a standalone line, so an inline/embedded use is left alone (conservative).
+_HARD_WAIT_LINE = re.compile(
+    r"^[ \t]*(?:await\s+)?page\.waitForTimeout\s*\([^)]*\)\s*;?[ \t]*(?://.*)?$"
+)
+
+
+def _strip_hard_waits(code: str) -> str:
+    """Remove hard-coded `page.waitForTimeout(...)` sleeps — the #1 cause of flaky
+    tests. Playwright's auto-waiting and web-first assertions make fixed sleeps
+    unnecessary, and a deterministic strip is more reliable than asking the model
+    not to emit them (same lesson as locator disambiguation). Only whole standalone
+    statements are removed; nothing else is touched."""
+    lines = code.split("\n")
+    kept = [ln for ln in lines if not _HARD_WAIT_LINE.match(ln)]
+    return "\n".join(kept)
+
+
 # Accessible names in the page context: ARIA-snapshot role lines (e.g. `link "X"`)
 # carry one entry PER element (so nav+footer duplicates are counted), plus the
 # link map's left-hand side (`X -> /href`).
@@ -137,9 +155,12 @@ def generate_test(instructions: str, base_url: str, test_name: str,
             continue
         code = _strip_fences(raw)
         if _looks_like_test(code):
-            # Deterministic safety net: force `exact: true` on provably-ambiguous
-            # name locators so a grounded test can't fail strict mode on a name
-            # the model forgot to disambiguate.
+            # Deterministic reliability net (more reliable than prompt-nudging):
+            # always drop hard sleeps, and — when we have page context to ground it
+            # in — force `exact: true`/`.first()` on provably-ambiguous name locators
+            # so a grounded test can't fail strict mode on a name the model forgot
+            # to disambiguate.
+            code = _strip_hard_waits(code)
             if ctx:
                 code = _disambiguate_locators(code, ctx)
             return code, provider

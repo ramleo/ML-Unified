@@ -15,7 +15,7 @@ from fastapi import APIRouter, Request
 from routers.qa import config, github_runner
 from routers.qa.deps import complete, resolve_key, limiter, LLM_LIMIT
 from routers.qa.prompts import HEAL_SYSTEM
-from routers.qa.author import _strip_fences, _looks_like_test
+from routers.qa.author import _strip_fences, _looks_like_test, _strip_hard_waits
 from routers.qa.models import HealGroupRequest, HealGroupResponse, HealGroup
 
 logger = logging.getLogger(__name__)
@@ -86,7 +86,8 @@ def heal_test(code: str, error: str, snapshot: str) -> tuple[str, str] | None:
             continue
         fixed = _strip_fences(raw)
         if _looks_like_test(fixed):
-            return fixed, provider
+            # Keep a heal from (re)introducing a flaky hard sleep.
+            return _strip_hard_waits(fixed), provider
         logger.warning("qa/heal: %s returned non-test output", provider)
     logger.error("qa/heal: every candidate failed")
     return None
