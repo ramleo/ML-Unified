@@ -127,6 +127,13 @@ def _href_link_locators(code: str, page_context: str) -> str:
     if not pairs:
         return code
 
+    # How many DISTINCT labels share each href. An href used by >1 link is not a
+    # unique handle (e.g. 'Tools' and 'The Toolkit' both -> '/#capabilities'); there
+    # the accessible name is the distinguisher, so keep the name locator.
+    href_labels: dict[str, set[str]] = {}
+    for l, h in pairs:
+        href_labels.setdefault(h, set()).add(l)
+
     def find_href(x: str) -> str | None:
         x = x.lower().strip()
         for test in (
@@ -136,7 +143,8 @@ def _href_link_locators(code: str, page_context: str) -> str:
         ):
             hrefs = {h for (l, h) in pairs if test(l)}
             if len(hrefs) == 1:
-                return next(iter(hrefs))
+                h = next(iter(hrefs))
+                return h if len(href_labels.get(h, ())) == 1 else None
         return None
 
     def repl(m: "re.Match") -> str:
