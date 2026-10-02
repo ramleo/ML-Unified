@@ -153,7 +153,9 @@ def _href_link_locators(code: str, page_context: str) -> str:
         href = find_href(m.group(4))
         if not href:
             return m.group(0)
-        return "locator('a[href=\"" + href.replace('"', '\\"') + "\"]')"
+        # .first() because the SAME link often appears twice (nav + footer) with the
+        # same href — all matches share one destination, so the first is correct.
+        return "locator('a[href=\"" + href.replace('"', '\\"') + "\"]').first()"
 
     return _GETBYROLE_NAME.sub(repl, code)
 
