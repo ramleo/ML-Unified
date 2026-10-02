@@ -1,12 +1,11 @@
 # Testwright (QA platform) — Improvement Plan
 
-**Status:** mostly shipped (updated 2026-10-01). P0 (container, exec-time, Stop/cancel),
-P4 (self-heal grounding + confirm-before-rerun) and P5 (progress polish) are **done and
-verified live** — see §5. Only open item: D, a warm/self-hosted runner for seconds-fast
-runs (recommended skip for a free public portfolio).
-**Scope:** the **Run** stage (execute a Playwright test on isolated CI) and its
-self-heal. Author/Discover/Visual are out of scope except where they share the
-runner. **Owner doc** for the work below.
+**Status:** Phase 1 (Run stage) mostly shipped (updated 2026-10-01). P0 (container,
+exec-time, Stop/cancel), P4 (self-heal grounding + confirm-before-rerun) and P5 (progress
+polish) are **done and verified live** — see §5. **Phase 2 (platform-wide roadmap) added
+2026-10-02 — see §9** (R1–R10; recommended start: R1 flakiness-proofing).
+**Scope:** §1–§8 cover the **Run** stage and its self-heal. **§9 widens scope to the whole
+platform** (Author/Run/Discover/Heal/Visual). **Owner doc** for the work below.
 
 Companion code: backend `services/ml-api/routers/qa/` (`run.py`, `github_runner.py`,
 `heal.py`, `config.py`); frontend `ml-portfolio/src/app/qa/run/` (`useRun.ts`,
@@ -180,7 +179,91 @@ Two distinct numbers, show both, labelled:
   and recent-runs history still work; **Author → Run** handoff still carries code; the
   other stages (Discover/Heal/Visual) that share the runner still function.
 
-## 8. References
+## 9. Phase 2 roadmap — platform-wide (added 2026-10-02)
+
+**Scope change:** §1–§8 cover only the Run stage. This phase widens scope to the whole
+platform (Author/Run/Discover/Heal/Visual), from a research pass on the 2026 AI-QA
+landscape (Playwright's own Planner/Generator/Healer agents; Octomind/Mabl/QA.tech/
+Checkly; the flakiness + false-positive literature). Sources in §10.
+
+**Guiding principle (evidence-backed).** Studies put AI self-healing at ~23% more false
+positives and ~41% higher first-year tool *abandonment*. The lesson is **transparency and
+trust beat autonomy** — so this roadmap front-loads cheap, deterministic reliability wins
+and makes every "AI does more on its own" feature **opt-in with a human gate**. The
+confirm-before-rerun heal, honest failure reasons and correct flaky labelling already
+shipped (§5, P4b) are exactly this; keep doubling down on traceability.
+
+### Roadmap (prioritized)
+
+| ID | Tier | Item | Why | Effort |
+|---|---|---|---|---|
+| **R1** | NOW | Flakiness-proof generated tests at authoring time: extend the deterministic locator post-process to **forbid `waitForTimeout`** and **require web-first assertions** (`toBeVisible`/`toHaveText`, auto-retry) | Kills the most common flake class before it ships; same deterministic pattern already proven for locators | S (author.py + prompts.py) |
+| **R2** | NOW | Reconsider the **10× flakiness repeat** — cap default menu at 3×, keep higher as deliberate opt-in | 10×~50s = ~8 min CI for thin value now that locators are deterministic | XS (frontend + config) |
+| **R3** | NOW | **Deprioritize the Visual stage** — stop investing, don't delete | Weakest paradigm: browser-local baselines don't survive a device switch; animated/WebGL always reads "changed" | none (a decision) |
+| **R4** | NEXT | **Self-heal beyond locators** (waits/data), matching Playwright's Healer | Current heal is locator-only; the failure snapshot it needs is already fetched | M (extends heal.py) |
+| **R5** | NEXT | **Authenticated testing (`storageState`)** — see §9a | Biggest capability unlock; needs a security decision + runner-workflow change | L |
+| **R6** | NEXT | **Discover one level deep** — follow the link hrefs it already captures, opt-in (not autonomous crawl) | Surfaces far more real cases from the map it already has | M (discover.py) |
+| **R7** | LATER | **Shareable run reports** — permalink to a finished run (status + trace + reason) | A run lives in one browser only today | M (needs storage) |
+| **R8** | LATER | **Scheduled re-runs / monitoring** (tests as uptime checks, Checkly's angle) | Recurring value, but heavy infra | L |
+| **R9** | LATER | **API/request testing** | Off-identity (Testwright is browser E2E) | M |
+| **R10** | LATER | **Warm/self-hosted runner** (= §5 item D) | Only real speed lever, but infra+security cost on a free public portfolio | **skip** |
+
+**Recommended sequence:** R1 → R2/R3 (same pass) → R4 → R5. Deterministic reliability
+wins first (days, high trust payoff), then the big auth build.
+
+### 9a. R5 detail — Authenticated testing (`storageState`)
+
+**Goal:** run a test against pages behind a login — log in once at the start of a run,
+reuse the session for the test body (standard Playwright: a setup step logs in and writes
+`storageState`; the test loads it).
+
+**The crux — credentials vs. a public runner.** `dispatch()` sends the test `code` as a
+`workflow_dispatch` input to the **public** `ramleo/ml-qa-runner` repo
+(`github_runner.py:46`), so inputs and Actions logs are world-readable. Fine for test
+code; a hard **no** for a password or session cookie. Decide the credential model first:
+
+| Path | How creds are handled | Serves | Cost |
+|---|---|---|---|
+| **A. GitHub Secrets + named login** *(recommended)* | Stored as encrypted repo secrets; login step reads `process.env`, never an input | Owner testing own authed apps | Only the owner can set secrets — doesn't generalize to arbitrary users |
+| **B. Private runner repo** | A dedicated **private** auth-runner hides inputs/logs; then pasted creds/`storageState` can transit | Anyone (but owner still sees run records) | Splits infra; private Actions minutes metered (~2000/mo free) |
+| **C. Demo-only, public** | Credential field behind the ownership gate + loud "VISIBLE in public CI logs — throwaway accounts only, never a real password" warning | Public demo users | Honest but limited; never for real passwords |
+
+**Decision: build A now + add C's warning path; defer B unless demand appears.**
+
+**Build steps (path A):**
+1. **models.py** — optional `auth` on `RunRequest`: `login_url` + plain-English
+   `login_steps` + credential-source flag (no raw secrets in the model).
+2. **author.py + new prompt** — a login-setup generator: plain-English login → a Playwright
+   **setup spec** that fills creds from `process.env`, asserts a logged-in signal, saves
+   `storageState` to `playwright/.auth/state.json`.
+3. **`ml-qa-runner` workflow** — conditional **setup project** runs the login spec first;
+   main test gets `storageState`; creds injected via `env:` from repo **secrets**. *(Only
+   change outside the two repos — a separate deploy.)*
+4. **github_runner.dispatch** — pass auth config through; never log it (content-free).
+5. **RunRunner.tsx** (285 lines, no split needed) — a **"Requires login?"** toggle →
+   login URL + steps + the security notice; carry into `/execute`.
+6. **Docs** — user-guide login walkthrough + a security note; this plan entry.
+7. **Verify** — §7 regression checklist (a no-auth run must work unchanged), then an auth
+   run reaching a real logged-in page.
+
+**Honest caveat.** On this deployment (a public portfolio whose own site needs no login),
+path A mainly benefits the owner testing their own authed apps; broad public auth testing
+isn't safe without path B. Weigh R5 against R4 if there's no authed app to test yet.
+
+## 10. References — Phase 2 research
+
+- Playwright AI agents (Planner/Generator/Healer) — https://autify.com/blog/playwright-ai
+- Modern test automation with AI + Playwright — https://www.browserstack.com/guide/modern-test-automation-with-ai-and-playwright
+- Self-healing tools, by mechanism — https://www.shiplight.ai/blog/best-self-healing-test-automation-tools
+- AI testing tools landscape — https://qa.tech/blog/the-13-best-ai-testing-tools-in-2026
+- QA automation tools, ranked by fit — https://bug0.com/blog/best-qa-automation-tools-2026
+- Playwright flaky tests (web-first assertions, no hard waits) — https://www.browserstack.com/guide/playwright-flaky-tests
+- Governance controls for AI-generated test artifacts (false-positive/abandonment data) — https://arxiv.org/pdf/2606.08806
+- Why AI "magic" isn't working — https://www.ranorex.com/blog/test-automation-learning-gap/
+- Playwright authentication / storageState — https://www.checklyhq.com/docs/learn/playwright/authentication/
+- Playwright storageState guide — https://www.browserstack.com/guide/playwright-storage-state
+
+## 11. References — Run stage (Phase 1)
 
 - Playwright on GitHub Actions, fast setup — https://endform.dev/blog/playwright-github-actions
 - Official Playwright Docker image — https://testdino.com/blog/playwright-in-docker
