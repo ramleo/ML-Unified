@@ -1,8 +1,10 @@
 # Testwright R7 — Run reports: export, share & dashboard (plan)
 
 **Status (2026-10-02):** **Phase 0 (Excel/PDF export) SHIPPED** — ml-portfolio
-`98c71fc`, verified. Share links and the dashboard remain scoped (below). Part of the
-Phase 2 tier in `TESTWRIGHT_IMPROVEMENT_PLAN.md` §9.
+`98c71fc`. **Phase 3 Option A (local dashboard) SHIPPED** — `8b7be70`. The remaining
+work is the Supabase-backed layer: **Phase 1 (share links)** and **Phase 3 Option B
+(historical/cross-device dashboard)**, both still scoped below. Part of the Phase 2 tier
+in `TESTWRIGHT_IMPROVEMENT_PLAN.md` §9.
 
 ## What it is
 A **permalink to a finished run** that anyone with the link can open — status,
@@ -147,9 +149,10 @@ standalone from existing local history, like Export.
   offers the Phase-0 Export buttons.)
 - **Phase 2 (optional):** screenshot via Supabase Storage; `expires_at` + cleanup;
   a "my shared runs" list.
-- **Phase 3 (dashboard):** Dashboard-A (local history aggregate) can ship standalone
-  like export; Dashboard-B (durable `qa_runs` + historical trends) builds on Phase-1
-  persistence. Charts per the `dataviz` skill.
+- **Phase 3 (dashboard):** Dashboard-A (local history aggregate) — **✅ SHIPPED
+  `8b7be70`** (`/qa/dashboard`: tiles, outcome strip, top-failing bars, flakiness table;
+  dataviz-compliant). Dashboard-B (durable `qa_runs` + historical trends) builds on
+  Phase-1 persistence — still scoped.
 
 ## Non-goals
 - No account system / per-user ownership (links are unlisted).
