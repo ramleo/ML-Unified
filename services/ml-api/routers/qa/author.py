@@ -74,6 +74,34 @@ _GETBYROLE_NAME = re.compile(
 )
 
 
+_LONG_NAME = 60
+_RE_SPECIAL = re.compile(r"[.*+?^${}()|[\]\\/]")
+
+
+def _shorten_long_names(code: str) -> str:
+    """A `getByRole` whose `name` is a whole sentence (a card's full paragraph text)
+    is brittle and usually resolves to nothing. Replace an over-long exact name with
+    a short `^prefix` regex + `.first()`, which matches the same element far more
+    robustly. Short, normal names are left untouched."""
+    def repl(m: "re.Match") -> str:
+        name = m.group(4)
+        if len(name) <= _LONG_NAME:
+            return m.group(0)
+        prefix = ""
+        for w in name.split():
+            if prefix and len(prefix) + 1 + len(w) > 40:
+                break
+            prefix = w if not prefix else prefix + " " + w
+            if len(prefix.split()) >= 5:
+                break
+        if not prefix:
+            prefix = name[:40]
+        esc = _RE_SPECIAL.sub(lambda x: "\\" + x.group(0), prefix)
+        q, role = m.group(1), m.group(2)
+        return f"getByRole({q}{role}{q}, {{ name: /^{esc}/i }}).first()"
+    return _GETBYROLE_NAME.sub(repl, code)
+
+
 def _page_name_counts(page_context: str) -> Counter:
     """How many page elements carry each accessible name (lower-cased). The ARIA
     snapshot lists every element, so true duplicates (nav + footer) are counted;
@@ -161,6 +189,7 @@ def generate_test(instructions: str, base_url: str, test_name: str,
             # so a grounded test can't fail strict mode on a name the model forgot
             # to disambiguate.
             code = _strip_hard_waits(code)
+            code = _shorten_long_names(code)
             if ctx:
                 code = _disambiguate_locators(code, ctx)
             return code, provider

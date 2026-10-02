@@ -50,7 +50,13 @@ AUTHOR_GROUNDING = (
     "name is contained in any OTHER element's name, make the locator resolve to "
     "exactly one element — add `{ name, exact: true }`, or scope it (e.g. "
     "`page.getByRole('navigation').getByRole('link', { name })`), or use the full "
-    "unique name. Never leave a locator that matches more than one element."
+    "unique name. Never leave a locator that matches more than one element.\n"
+    "12. Keep accessible names SHORT and distinctive — NEVER paste a whole sentence "
+    "or a card's full paragraph as a `name` (that is brittle and usually resolves to "
+    "nothing). If an element's only accessible name is long, match a short leading "
+    "phrase with a regex and take the first, e.g. "
+    "`getByRole('link', { name: /^Security & Trust/i }).first()`, or scope by a "
+    "nearby heading — do not copy the entire text."
 )
 
 HEAL_SYSTEM = (
@@ -76,7 +82,10 @@ HEAL_SYSTEM = (
     "guessed `getByPlaceholder('...')`. If the exact string is not in the "
     "snapshot, do NOT use a name/text/placeholder locator for it — fall back to a "
     "role-only locator or keep the original. Fabricating a plausible-but-absent "
-    "string is the #1 cause of a heal that fails again.\n"
+    "string is the #1 cause of a heal that fails again. Also never use a whole "
+    "sentence as a `name` — if the accessible name is long, match a short leading "
+    "phrase with a regex and take the first, e.g. "
+    "`getByRole('link', { name: /^Security & Trust/i }).first()`.\n"
     "4. TIMING — if the failure is a TIMEOUT waiting for an element to become "
     "visible/enabled/attached, or an action that ran before the page was ready, fix "
     "it with a WEB-FIRST wait: `await expect(locator).toBeVisible()` before "
