@@ -1,9 +1,9 @@
 # Testwright (QA platform) — Improvement Plan
 
-**Status:** Phase 1 (Run stage) mostly shipped (updated 2026-10-01). P0 (container,
-exec-time, Stop/cancel), P4 (self-heal grounding + confirm-before-rerun) and P5 (progress
-polish) are **done and verified live** — see §5. **Phase 2 (platform-wide roadmap) added
-2026-10-02 — see §9** (R1–R10; recommended start: R1 flakiness-proofing).
+**Status:** Phase 1 (Run stage) shipped — P0/P4/P5, see §5. **Phase 2 (platform-wide,
+§9): R1, R2, R4, R6 shipped & verified live and R3 decided (2026-10-02).** Only R5
+(authenticated testing) is open — **deferred: no logged-in app to test yet**; revisit
+when there is one. LATER tier (R7–R10) untouched.
 **Scope:** §1–§8 cover the **Run** stage and its self-heal. **§9 widens scope to the whole
 platform** (Author/Run/Discover/Heal/Visual). **Owner doc** for the work below.
 
@@ -195,23 +195,29 @@ shipped (§5, P4b) are exactly this; keep doubling down on traceability.
 
 ### Roadmap (prioritized)
 
-| ID | Tier | Item | Why | Effort |
-|---|---|---|---|---|
-| **R1** | NOW | Flakiness-proof generated tests at authoring time: extend the deterministic locator post-process to **forbid `waitForTimeout`** and **require web-first assertions** (`toBeVisible`/`toHaveText`, auto-retry) | Kills the most common flake class before it ships; same deterministic pattern already proven for locators | S (author.py + prompts.py) |
-| **R2** | NOW | Reconsider the **10× flakiness repeat** — cap default menu at 3×, keep higher as deliberate opt-in | 10×~50s = ~8 min CI for thin value now that locators are deterministic | XS (frontend + config) |
-| **R3** | NOW | **Deprioritize the Visual stage** — stop investing, don't delete | Weakest paradigm: browser-local baselines don't survive a device switch; animated/WebGL always reads "changed" | none (a decision) |
-| **R4** | NEXT | **Self-heal beyond locators** (waits/data), matching Playwright's Healer | Current heal is locator-only; the failure snapshot it needs is already fetched | M (extends heal.py) |
-| **R5** | NEXT | **Authenticated testing (`storageState`)** — see §9a | Biggest capability unlock; needs a security decision + runner-workflow change | L |
-| **R6** | NEXT | **Discover one level deep** — follow the link hrefs it already captures, opt-in (not autonomous crawl) | Surfaces far more real cases from the map it already has | M (discover.py) |
-| **R7** | LATER | **Shareable run reports** — permalink to a finished run (status + trace + reason) | A run lives in one browser only today | M (needs storage) |
-| **R8** | LATER | **Scheduled re-runs / monitoring** (tests as uptime checks, Checkly's angle) | Recurring value, but heavy infra | L |
-| **R9** | LATER | **API/request testing** | Off-identity (Testwright is browser E2E) | M |
-| **R10** | LATER | **Warm/self-hosted runner** (= §5 item D) | Only real speed lever, but infra+security cost on a free public portfolio | **skip** |
+| ID | Tier | Status | Item | Why | Effort |
+|---|---|---|---|---|---|
+| **R1** | NOW | ✅ shipped+verified `af5e1cb` | Flakiness-proof generated tests at authoring time: deterministic strip of `waitForTimeout` on every generated/healed test + prompt rules **requiring web-first assertions** | Kills the most common flake class before it ships; same deterministic pattern already proven for locators | S (author/heal/prompts.py) |
+| **R2** | NOW | ✅ shipped+verified `ec79ebd`·`8258394` | Cap the flakiness-repeat menu at **3×** (frontend menu + backend `MAX_RUN_REPEATS`) | 10×~50s = ~8 min CI for thin value now that locators are deterministic | XS (frontend + config) |
+| **R3** | NOW | ✅ decided | **Deprioritize the Visual stage** — stop investing, don't delete | Weakest paradigm: browser-local baselines don't survive a device switch; animated/WebGL always reads "changed" | none (a decision) |
+| **R4** | NEXT | ✅ shipped+verified `127a1fc`·`8f5850e` | **Self-heal beyond locators**: broadened to locator **+ timing** (web-first wait, never a sleep); **refuses** to rewrite a failing assertion (`classify_failure`) | Current heal was locator-only; refusing assertion rewrites avoids the false-negative trap the research flagged | M (heal/run/prompts.py) |
+| **R5** | NEXT | ⏸ **deferred — no authed target** | **Authenticated testing (`storageState`)** — see §9a | Biggest capability unlock, but needs a security decision + a real logged-in app to test (none exists yet) | L |
+| **R6** | NEXT | ✅ shipped+verified `6c76886`·`9784203` | **Discover one hop deep** — opt-in: same explore run visits up to 3 same-origin links and appends their snapshots | Surfaces cases across linked pages, not just the entry page; no extra CI cost | M (discover.py) |
+| **R7** | LATER | — | **Shareable run reports** — permalink to a finished run (status + trace + reason) | A run lives in one browser only today | M (needs storage) |
+| **R8** | LATER | — | **Scheduled re-runs / monitoring** (tests as uptime checks, Checkly's angle) | Recurring value, but heavy infra | L |
+| **R9** | LATER | — | **API/request testing** | Off-identity (Testwright is browser E2E) | M |
+| **R10** | LATER | skip | **Warm/self-hosted runner** (= §5 item D) | Only real speed lever, but infra+security cost on a free public portfolio | **skip** |
 
-**Recommended sequence:** R1 → R2/R3 (same pass) → R4 → R5. Deterministic reliability
-wins first (days, high trust payoff), then the big auth build.
+**Done (2026-10-02):** R1 → R2/R3 → R4 → R6, each shipped and verified live on the
+deployed Space (R4 e2e: an assertion-mismatch run heals to an honest refusal; R6 e2e:
+a deep discover visited /handbook, /docs, /about and proposed cases across them).
+**Next when a logged-in app exists:** R5 (pick credential model A/B/C in §9a first).
 
 ### 9a. R5 detail — Authenticated testing (`storageState`)
+
+**Status: deferred (2026-10-02)** — there is no logged-in app to test yet, so this is
+parked until one exists. The design below stands; the first step when revived is to
+pick the credential model (A/B/C).
 
 **Goal:** run a test against pages behind a login — log in once at the start of a run,
 reuse the session for the test body (standard Playwright: a setup step logs in and writes
