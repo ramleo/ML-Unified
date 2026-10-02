@@ -25,6 +25,34 @@ router = APIRouter(prefix="/heal")
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 _LOCATOR_RE = re.compile(r"(getBy\w+\([^\n)]*\)|locator\([^\n)]*\))")
 
+# Value-comparison matchers: a failure here means the element WAS found but its real
+# value differs from the expected one — a real bug or a deliberate data change, not a
+# locator/timing issue. (State matchers like toBeVisible/toBeEnabled are deliberately
+# NOT listed — their timeout is a healable timing/locator problem.)
+_VALUE_MATCHER = re.compile(
+    r"\.(?:toHaveText|toContainText|toHaveValue|toHaveURL|toHaveTitle|toHaveCount"
+    r"|toHaveAttribute|toHaveClass|toHaveJSProperty|toBe|toEqual|toStrictEqual"
+    r"|toMatchObject)\b"
+)
+
+
+def classify_failure(error: str) -> str:
+    """'assertion' when the error is a VALUE mismatch from an expect(...) matcher
+    (element found, real value differs from expected) — self-heal refuses these so
+    it can't launder a real failure into a pass. 'other' for locator/timing failures,
+    which are healable (including a toHaveText whose locator wasn't found at all)."""
+    e = _ANSI.sub("", error or "")
+    if not _VALUE_MATCHER.search(e):
+        return "other"
+    # The element wasn't found / the locator timed out resolving — that's a locator
+    # problem the heal can re-resolve, not a value mismatch.
+    if re.search(r"not found|waiting for locator", e, re.IGNORECASE):
+        return "other"
+    # A concrete value came back and differs from the expected one.
+    if re.search(r"\bReceived\b", e):
+        return "assertion"
+    return "other"
+
 
 def _signature(error: str) -> tuple[str, str]:
     """A stable key + human label for a failure, so tests that broke on the same

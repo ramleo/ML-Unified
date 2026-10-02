@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 
 from routers.qa import config, github_runner
 from routers.qa.deps import record_call, limiter, LLM_LIMIT
-from routers.qa.heal import heal_test
+from routers.qa.heal import heal_test, classify_failure
 from routers.qa.models import RunRequest, RunAccepted, RunStatus, HealRequest, HealResponse, CancelResponse
 from routers.qa.urlcheck import validate_target_url
 
@@ -62,6 +62,19 @@ def heal(request: Request, req: HealRequest):
     if not ctx or not (ctx.get("snapshot") or ctx.get("error")):
         return HealResponse(healed_code="", provider=None,
                             detail="No failure context was available to heal from.")
+    # Honest gate: self-heal fixes locators and timing, not assertions. A value
+    # mismatch (toHaveText/toHaveURL/toHaveCount/... where the element was found) is
+    # usually a real bug or a deliberate test-data change — rewriting the assertion
+    # would hide it. Refuse with an explanation instead of healing it into a pass.
+    if classify_failure(ctx.get("error", "")) == "assertion":
+        return HealResponse(
+            healed_code="", provider=None,
+            detail=("This is an assertion failure — the page returned a different "
+                    "value than the test expected. That's usually a real bug, or a "
+                    "test-data change to make deliberately. Self-heal fixes locators "
+                    "and timing, not assertions (changing it would hide the problem). "
+                    "Check 'Why it failed' and update the expected value yourself if "
+                    "the new one is correct."))
     result = heal_test(req.code, ctx.get("error", ""), ctx.get("snapshot", ""))
     if not result:
         return HealResponse(healed_code="", provider=None,
