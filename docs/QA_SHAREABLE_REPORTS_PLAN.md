@@ -1,8 +1,8 @@
 # Testwright R7 — Run reports: export, share & dashboard (plan)
 
-**Status:** scoped, not built (2026-10-02). Part of the Phase 2 LATER tier in
-`TESTWRIGHT_IMPROVEMENT_PLAN.md` §9. Build when a run worth sharing with someone
-else is a real need.
+**Status (2026-10-02):** **Phase 0 (Excel/PDF export) SHIPPED** — ml-portfolio
+`98c71fc`, verified. Share links and the dashboard remain scoped (below). Part of the
+Phase 2 tier in `TESTWRIGHT_IMPROVEMENT_PLAN.md` §9.
 
 ## What it is
 A **permalink to a finished run** that anyone with the link can open — status,
@@ -96,6 +96,12 @@ ExcelJS only. Recommend the libs for a clean one-click experience.
 **not** need the Supabase/share work — it can land before, or without, the rest of R7.
 Downloads work in the real app (Vercel), unlike the artifact sandbox.
 
+**Shipped (`98c71fc`):** `run/reportExport.ts` (`downloadExcel`/`downloadPdf`, libs
+dynamically imported) + Excel/PDF buttons in `run/ResultView.tsx`. Deps ExcelJS + jsPDF +
+jspdf-autotable (all MIT). Audit note: these add only **moderate** transitive advisories
+(`uuid` via exceljs, `fflate`); the high/critical `npm audit` entries are pre-existing
+toolchain (next/vitest/vite/esbuild), not from this change — no breaking downgrade taken.
+
 ## Dashboard — aggregate view across runs
 A single report (above) is one run; a **dashboard** rolls many runs into the health
 view a team actually watches. (Charts must follow the project's `dataviz` skill —
@@ -133,8 +139,8 @@ standalone from existing local history, like Export.
   and only persist a run that actually completed.
 
 ## Effort & phases
-- **Phase 0 (can ship first, standalone):** Export to **Excel + PDF** from the live
-  result card. Pure client-side, no DB. ~S–M (adds ExcelJS [+ jsPDF]).
+- **Phase 0 — ✅ SHIPPED `98c71fc`:** Export to **Excel + PDF** from the live result
+  card. Pure client-side, no DB. (ExcelJS + jsPDF + jspdf-autotable, dynamically imported.)
 - **Phase 1 (v1 sharing):** table + migration, `POST /api/qa-run/share`,
   `GET /api/qa-run/share/[id]`, the `/qa/run/r/[id]` read-only page, Share button.
   Summary + reason + steps + timing + run_url. ~M, frontend-only. (The share page also
