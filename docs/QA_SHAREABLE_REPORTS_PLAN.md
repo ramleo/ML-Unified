@@ -1,10 +1,24 @@
 # Testwright R7 — Run reports: export, share & dashboard (plan)
 
 **Status (2026-10-02):** **Phase 0 (Excel/PDF export) SHIPPED** — ml-portfolio
-`98c71fc`. **Phase 3 Option A (local dashboard) SHIPPED** — `8b7be70`. The remaining
-work is the Supabase-backed layer: **Phase 1 (share links)** and **Phase 3 Option B
-(historical/cross-device dashboard)**, both still scoped below. Part of the Phase 2 tier
+`98c71fc`. **Phase 3 Option A (local dashboard) SHIPPED** — `8b7be70`. **Phase 1
+(share links) SHIPPED** — see "Phase 1 — shipped" below. The remaining work is **Phase 3
+Option B (historical/cross-device dashboard)**, still scoped. Part of the Phase 2 tier
 in `TESTWRIGHT_IMPROVEMENT_PLAN.md` §9.
+
+### Phase 1 — shipped (frontend-only, no HF/backend)
+- Migration `ml-portfolio/supabase/qa_shared_runs.sql` — table + RLS enabled (service-role
+  access only; anon key cannot read or insert). **Must be run once in the Supabase SQL
+  editor**; until then Share returns `needs_setup`.
+- Routes: `POST /api/qa-run/share` (create — size-capped, `analyticsWritesEnabled` gate,
+  90-day `expires_at`, code stored only on opt-in) and `GET /api/qa-run/share/[id]` (read,
+  honors TTL → 410). Both use the service-role key (same pattern as `/api/error`).
+- Read-only page `/qa/run/r/[id]` reuses `<Result readOnly>`; shows code only if included.
+- `ShareButton` on the live result card: toggle "include the test code" (default off),
+  creates the permalink, copy button. Helper `run/shareReport.ts` (payload + reconstruct).
+- Privacy page updated (shared-report storage + 90-day retention disclosed).
+- Decisions applied: code opt-in default off; screenshot/video/trace omitted from v1;
+  **90-day TTL**.
 
 ## What it is
 A **permalink to a finished run** that anyone with the link can open — status,
