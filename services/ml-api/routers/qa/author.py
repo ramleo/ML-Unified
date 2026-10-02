@@ -102,6 +102,54 @@ def _shorten_long_names(code: str) -> str:
     return _GETBYROLE_NAME.sub(repl, code)
 
 
+def _parse_link_map(page_context: str) -> list[tuple[str, str]]:
+    """The link map lines ('accessible-name -> href') captured by Discover. Returns
+    (label_lower, href) pairs, skipping bare '#' anchors."""
+    pairs: list[tuple[str, str]] = []
+    for line in page_context.splitlines():
+        if line.strip().startswith("==="):  # skip the LINKS delimiter header
+            continue
+        if " -> " in line:
+            label, _, href = line.partition(" -> ")
+            label, href = label.strip().lower(), href.strip()
+            if label and href and href != "#":
+                pairs.append((label, href))
+    return pairs
+
+
+def _href_link_locators(code: str, page_context: str) -> str:
+    """Card/tile links have long, UNSTABLE accessible names (the whole card's text,
+    which even changes with CSS reveal state), so a name match is unreliable and
+    often finds nothing. The href is stable. Rewrite `getByRole('link', { name: X })`
+    to `locator('a[href="<href>"]')` whenever X maps unambiguously to a link in the
+    Discover link map — exact, then prefix, then substring match."""
+    pairs = _parse_link_map(page_context)
+    if not pairs:
+        return code
+
+    def find_href(x: str) -> str | None:
+        x = x.lower().strip()
+        for test in (
+            lambda l: l == x,
+            lambda l: l.startswith(x) or x.startswith(l),
+            lambda l: x in l or l in x,
+        ):
+            hrefs = {h for (l, h) in pairs if test(l)}
+            if len(hrefs) == 1:
+                return next(iter(hrefs))
+        return None
+
+    def repl(m: "re.Match") -> str:
+        if m.group(2).lower() != "link":
+            return m.group(0)
+        href = find_href(m.group(4))
+        if not href:
+            return m.group(0)
+        return "locator('a[href=\"" + href.replace('"', '\\"') + "\"]')"
+
+    return _GETBYROLE_NAME.sub(repl, code)
+
+
 def _page_name_counts(page_context: str) -> Counter:
     """How many page elements carry each accessible name (lower-cased). The ARIA
     snapshot lists every element, so true duplicates (nav + footer) are counted;
@@ -189,6 +237,10 @@ def generate_test(instructions: str, base_url: str, test_name: str,
             # so a grounded test can't fail strict mode on a name the model forgot
             # to disambiguate.
             code = _strip_hard_waits(code)
+            if ctx:
+                # Link-by-href first (stable), while names are still exact; then
+                # shorten any remaining long non-link names; then disambiguate.
+                code = _href_link_locators(code, ctx)
             code = _shorten_long_names(code)
             if ctx:
                 code = _disambiguate_locators(code, ctx)

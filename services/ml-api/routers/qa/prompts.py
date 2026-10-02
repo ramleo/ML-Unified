@@ -56,7 +56,12 @@ AUTHOR_GROUNDING = (
     "nothing). If an element's only accessible name is long, match a short leading "
     "phrase with a regex and take the first, e.g. "
     "`getByRole('link', { name: /^Security & Trust/i }).first()`, or scope by a "
-    "nearby heading — do not copy the entire text."
+    "nearby heading — do not copy the entire text.\n"
+    "13. To locate or assert a LINK, prefer a STABLE href locator over its accessible "
+    "name: `page.locator('a[href=\"/path\"]')`, taking the href from the link map "
+    "above. Card/tile links wrap a lot of text, so their accessible name is long and "
+    "unstable (it can even change with CSS state) — a name match is unreliable, the "
+    "href is not."
 )
 
 HEAL_SYSTEM = (
