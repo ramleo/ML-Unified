@@ -103,3 +103,7 @@ MAX_PAGE_CONTEXT = 34000
 # combined context stays within MAX_PAGE_CONTEXT (12 * 1800 + start + links < 34000).
 MAX_DEEP_PAGES = 12
 MAX_DEEP_PAGE_CHARS = 1200
+# Deep pages are visited in parallel (separate tabs) in bounded chunks — 4 at a time
+# is the 2-vCPU sweet spot (same as the test runner's workers), cutting a 12-page
+# crawl to ~3 sequential rounds instead of 12.
+MAX_DEEP_CONCURRENCY = 4

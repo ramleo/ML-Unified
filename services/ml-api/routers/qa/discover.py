@@ -49,8 +49,10 @@ def build_explore_spec(url: str, deep: bool = False) -> str:
     deep_js = ""
     if deep:
         deep_js = (
-            "  // One hop deep (opt-in): follow a few same-origin links from THIS\n"
-            "  // page and append each linked page's snapshot.\n"
+            "  // One hop deep (default): follow same-origin links from THIS page and\n"
+            "  // append each linked page's real title + headings. Visited in PARALLEL\n"
+            "  // (bounded concurrency) in separate tabs of the same context, so 12\n"
+            "  // pages take ~1/N the wall time of a sequential crawl.\n"
             "  const startUrl = page.url();\n"
             "  const origin = new URL(startUrl).origin;\n"
             "  const targets = await page.$$eval('a[href]', (els, args) => {\n"
@@ -67,21 +69,29 @@ def build_explore_spec(url: str, deep: bool = False) -> str:
             "    }\n"
             "    return out;\n"
             f"  }}, [origin, startUrl, {config.MAX_DEEP_PAGES}]);\n"
-            "  for (const t of targets) {\n"
+            "  const ctx = page.context();\n"
+            # Capture each page in its OWN tab: real title + headings (not a snapshot
+            # prefix — the real h1 sits past the nav) + a short snapshot for locators.
+            "  const capture = async (t) => {\n"
+            "    const p = await ctx.newPage();\n"
             "    try {\n"
-            "      await page.goto(t, { waitUntil: 'domcontentloaded' });\n"
-            "      await page.waitForTimeout(700);\n"
-            # Capture the title + headings EXPLICITLY (not just a snapshot prefix): the
-            # real h1 can sit past a raw-snapshot slice (nav/header comes first), and
-            # these are exactly what generation needs to assert a page really loaded.
-            "      const title = await page.title();\n"
-            "      const heads = await page.$$eval('h1,h2,h3', hs => hs.slice(0, 10)\n"
+            "      await p.goto(t, { waitUntil: 'domcontentloaded' });\n"
+            "      await p.waitForTimeout(700);\n"
+            "      const title = await p.title();\n"
+            "      const heads = await p.$$eval('h1,h2,h3', hs => hs.slice(0, 10)\n"
             "        .map(h => h.tagName + ' ' + (h.textContent || '').replace(/\\s+/g, ' ').trim())\n"
             "        .filter(s => s.length < 140).join('\\n'));\n"
-            "      const snap = await page.locator('body').ariaSnapshot();\n"
-            f"      sections += '{PAGE_DELIM_JS}' + t + '===\\n' + 'title: ' + title + "
+            "      const snap = await p.locator('body').ariaSnapshot();\n"
+            f"      return '{PAGE_DELIM_JS}' + t + '===\\n' + 'title: ' + title + "
             f"'\\nheadings:\\n' + heads + '\\n' + snap.slice(0, {config.MAX_DEEP_PAGE_CHARS});\n"
-            "    } catch (e) { /* skip an unreachable link */ }\n"
+            "    } catch (e) { return ''; } finally { await p.close(); }\n"
+            "  };\n"
+            # Bounded concurrency: run the targets in chunks so a 2-vCPU runner isn't
+            # overwhelmed, appending results in page order.
+            f"  const CONC = {config.MAX_DEEP_CONCURRENCY};\n"
+            "  for (let i = 0; i < targets.length; i += CONC) {\n"
+            "    const parts = await Promise.all(targets.slice(i, i + CONC).map(capture));\n"
+            "    sections += parts.join('');\n"
             "  }\n"
         )
     return (
