@@ -70,10 +70,17 @@ def build_explore_spec(url: str, deep: bool = False) -> str:
             "  for (const t of targets) {\n"
             "    try {\n"
             "      await page.goto(t, { waitUntil: 'domcontentloaded' });\n"
-            "      await page.waitForTimeout(800);\n"
+            "      await page.waitForTimeout(700);\n"
+            # Capture the title + headings EXPLICITLY (not just a snapshot prefix): the
+            # real h1 can sit past a raw-snapshot slice (nav/header comes first), and
+            # these are exactly what generation needs to assert a page really loaded.
+            "      const title = await page.title();\n"
+            "      const heads = await page.$$eval('h1,h2,h3', hs => hs.slice(0, 10)\n"
+            "        .map(h => h.tagName + ' ' + (h.textContent || '').replace(/\\s+/g, ' ').trim())\n"
+            "        .filter(s => s.length < 140).join('\\n'));\n"
             "      const snap = await page.locator('body').ariaSnapshot();\n"
-            f"      sections += '{PAGE_DELIM_JS}' + t + '===\\n' + "
-            f"snap.slice(0, {config.MAX_DEEP_PAGE_CHARS});\n"
+            f"      sections += '{PAGE_DELIM_JS}' + t + '===\\n' + 'title: ' + title + "
+            f"'\\nheadings:\\n' + heads + '\\n' + snap.slice(0, {config.MAX_DEEP_PAGE_CHARS});\n"
             "    } catch (e) { /* skip an unreachable link */ }\n"
             "  }\n"
         )

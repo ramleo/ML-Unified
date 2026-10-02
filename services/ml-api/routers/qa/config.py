@@ -95,9 +95,11 @@ MAX_LINKS = 80          # links captured from the page
 MAX_LINKS_CHARS = 2500  # cap on the links block carried into code generation
 # Page context (ARIA snapshot + link map) passed from Discover into Author so the
 # generated code's locators and URLs are grounded in the real page.
-MAX_PAGE_CONTEXT = 20000
-# Discover "deep" (opt-in): also visit up to this many same-origin links one hop
-# from the start page in the SAME explore run (no extra CI dispatches). Each extra
-# page's snapshot is capped so the combined context stays within MAX_PAGE_CONTEXT.
-MAX_DEEP_PAGES = 3
-MAX_DEEP_PAGE_CHARS = 3500
+MAX_PAGE_CONTEXT = 34000
+# Discover "deep" (default ON): also visit up to this many same-origin links one hop
+# from the start page in the SAME explore run (no extra CI dispatches). This is how
+# generation SEES the destination pages a test navigates to — so it asserts their
+# real headings instead of guessing. Each extra page's snapshot is capped so the
+# combined context stays within MAX_PAGE_CONTEXT (12 * 1800 + start + links < 34000).
+MAX_DEEP_PAGES = 12
+MAX_DEEP_PAGE_CHARS = 1200

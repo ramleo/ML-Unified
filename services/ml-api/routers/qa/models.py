@@ -70,9 +70,11 @@ class DiscoverStart(BaseModel):
     url: str = Field(..., min_length=1, max_length=config.MAX_BASE_URL)
     # Caller confirms ownership/authorization for a third-party target host.
     authorized: bool = False
-    # Opt-in: also visit a few same-origin links one hop from the page, so
-    # proposals and grounding span linked pages (one dispatch, no extra CI runs).
-    deep: bool = False
+    # Default ON: also visit same-origin links one hop from the page, so generation
+    # SEES the destination pages a test navigates to and asserts their real content
+    # instead of guessing (one dispatch, no extra CI runs). Uncheck for a faster,
+    # single-page scan.
+    deep: bool = True
 
 
 class Proposal(BaseModel):
