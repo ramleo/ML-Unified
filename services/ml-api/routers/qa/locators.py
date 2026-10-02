@@ -103,16 +103,30 @@ def href_link_locators(code: str, page_context: str) -> str:
     for l, h in pairs:
         href_labels.setdefault(h, set()).add(l)
 
+    # Match on an alphanumeric-only, lower-cased form so punctuation and whitespace
+    # differences don't block a match. The link map's label comes from textContent
+    # ("Security & Trust26 tools") while the model writes the ARIA accessible name
+    # ("Security & Trust 26 tools"); normalized, both are "securitytrust26tools".
+    def _norm(s: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", s.lower())
+
+    norm_pairs = [(_norm(l), h) for (l, h) in pairs]
+
     def find_href(x: str) -> str | None:
-        x = x.lower().strip()
+        xn = _norm(x)
+        if not xn:
+            return None
         for test in (
-            lambda l: l == x,
-            lambda l: l.startswith(x) or x.startswith(l),
-            lambda l: x in l or l in x,
+            lambda ln: ln == xn,
+            lambda ln: ln.startswith(xn) or xn.startswith(ln),
+            lambda ln: xn in ln or ln in xn,
         ):
-            hrefs = {h for (l, h) in pairs if test(l)}
+            hrefs = {h for (ln, h) in norm_pairs if ln and test(ln)}
             if len(hrefs) == 1:
                 h = next(iter(hrefs))
+                # Still require the href to belong to exactly ONE distinct label, so a
+                # shared-destination anchor (e.g. two labels -> /#capabilities) keeps
+                # its name locator rather than being collapsed to the wrong element.
                 return h if len(href_labels.get(h, ())) == 1 else None
         return None
 

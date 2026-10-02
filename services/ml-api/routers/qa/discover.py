@@ -91,7 +91,15 @@ def build_explore_spec(url: str, deep: bool = False) -> str:
         "      let nm = a.getAttribute('aria-label') || '';\n"
         "      if (!nm) { const hd = a.querySelector('h1,h2,h3,h4,[role=\\'heading\\']');"
         " if (hd) nm = hd.textContent || ''; }\n"
-        "      if (!nm) nm = a.textContent || '';\n"
+        # Fall back to text, but exclude aria-hidden descendants so the label matches
+        # the link's ACCESSIBLE NAME (what the ARIA snapshot + locators use) rather than
+        # raw textContent. Card/tile links hide a decorative list (e.g. nested tool
+        # names) with aria-hidden; including it buries the real title past the slice.
+        "      if (!nm) {\n"
+        "        const c = a.cloneNode(true);\n"
+        "        c.querySelectorAll('[aria-hidden=\\'true\\']').forEach(function(n){ n.remove(); });\n"
+        "        nm = c.textContent || '';\n"
+        "      }\n"
         "      const name = nm.replace(/\\s+/g, ' ').trim().slice(0, 80);\n"
         "      const href = a.getAttribute('href') || '';\n"
         "      if (!name || !href) continue;\n"
