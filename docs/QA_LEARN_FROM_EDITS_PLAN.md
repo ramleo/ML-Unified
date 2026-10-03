@@ -1,8 +1,23 @@
 # Testwright — "Learn from my edits" (scoped plan)
 
-**Status:** proposed (2026-10-01). Not built. Scopes a feature so Testwright's
-generators improve from a user's own corrections instead of repeating a mistake.
-**Owner doc** for the work below. Companion: `docs/TESTWRIGHT_IMPROVEMENT_PLAN.md`.
+**Status:** Phase 0 (measurement) SHIPPED 2026-10-03 — Phase 1 GATED ON ITS DATA.
+Proposed 2026-10-01. Scopes a feature so Testwright's generators improve from a
+user's own corrections instead of repeating a mistake. **Owner doc** for the work
+below. Companion: `docs/TESTWRIGHT_IMPROVEMENT_PLAN.md`.
+
+> **Phase 0 is live (ml-portfolio `dbb1082`, frontend-only).** Before building the
+> full feature we measure whether corrections are still frequent (see §12). A
+> content-free `TEST_EDITED` analytics event (mirrors `SQL_EDITED`) fires when a
+> user saves a GENERATED test they changed, classifying the edit as **locator /
+> assertion / other** (assertion-precedence, so an `expect()` wrapping a locator
+> counts as assertion and doesn't inflate the "locators still broken" signal).
+> Emits only counts + booleans — no code, host, or text. Files:
+> `src/app/qa/run/corrections.ts` (`editMeta`, `trackEdit`), `RunRunner.tsx`
+> (baseline tracked on Send-to-Run, diffed on Save), `logEvents.ts`.
+> **How to read it:** Realtime Analytics → Live Feed, event `test_edited`.
+> **Decision rule:** `locator_change` near-zero but `assertion_change` /
+> `other_change` common → build Phase 1 below. Corrections rare → park; Save+re-run
+> is enough. Do NOT rebuild Phase 0.
 
 ## 1. Problem
 Generation (Author `/qa/author/generate`, and Discover which calls it) is
@@ -91,9 +106,14 @@ when `page_context`/host matches.
 - **Over-engineering** — if usage is low, Save+re-run already covers the need.
 
 ## 10. Effort & phasing
-- **Phase 1 (MVP):** storage.ts helpers + record-on-Save + attach top-3 on generate
-  + backend block + a Clear control. ~1 focused session. Backend-only deploy for
-  the model/API half; frontend for capture/feed.
+- **Phase 0 (measurement) — DONE 2026-10-03 (`dbb1082`):** content-free `TEST_EDITED`
+  event on Save-of-a-changed-generated-test, classified locator/assertion/other.
+  Frontend-only. Answers §12 with data before any Phase 1 investment. See the status
+  box at the top for how to read it and the decision rule.
+- **Phase 1 (MVP) — gated on Phase 0 data:** storage.ts helpers + record-on-Save +
+  attach top-3 on generate + backend block + a Clear control. ~1 focused session.
+  Backend deploy for the model/API half; frontend for capture/feed. Reuse Phase 0's
+  `editMeta`/baseline plumbing in `corrections.ts` — it already captures the diff.
 - **Phase 2:** record-on-pass (stronger signal), per-correction enable/disable,
   show which corrections influenced a generation.
 
