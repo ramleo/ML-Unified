@@ -68,7 +68,11 @@ _GRAB_CONTROLS_JS = (
     "        }\n"
     "        const ph = (e.getAttribute('placeholder') || '').trim();\n"
     "        const al = (e.getAttribute('aria-label') || '').trim();\n"
-    "        const tx = (e.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 60);\n"
+    # Accessible name, not raw textContent: exclude aria-hidden decoration so a card
+    # link's name is its real title, not a run-on of every nested (hidden) tool name.
+    "        const c = e.cloneNode(true);\n"
+    "        c.querySelectorAll('[aria-hidden=\\'true\\']').forEach(function(n){ n.remove(); });\n"
+    "        const tx = (c.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 60);\n"
     "        const nm = al || tx;\n"
     "        const out = [];\n"
     "        if (nm) out.push('[' + role + '] name=' + JSON.stringify(nm));\n"
