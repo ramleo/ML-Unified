@@ -13,6 +13,7 @@ The allow-list comes from the page context Discover captured: the `[role] name=.
 lines. Assertions (expect(...)) are NEVER touched — only interaction verbs.
 """
 
+import difflib
 import re
 
 
@@ -142,6 +143,57 @@ def _target_grounded(subject: str, var_map: dict, by_role: dict, placeholders: s
         pn = _norm(gbp.group(2))
         return any(pn in p or p in pn for p in placeholders) if placeholders else True
     return True  # locator()/getByTestId/getByText/getByLabel/... — not judged
+
+
+# Roles whose names we repair: everything interactive, plus heading (assertions
+# commonly target a heading by name, and a misread heading name fails just as hard).
+_REPAIR_ROLES = _INTERACTIVE_ROLES | {"heading"}
+
+
+def _parse_original(ctx: str) -> dict:
+    """role -> {normalized_name: ORIGINAL_name} from the CONTROLS blocks and the ARIA
+    snapshot. Keeps the original spelling so a near-miss can be rewritten to it."""
+    by_role: dict[str, dict] = {}
+    for line in ctx.splitlines():
+        m = _CONTROL_LINE.match(line)
+        if m:
+            role, val = m.group(1).lower(), m.group(3)
+            by_role.setdefault(role, {})[_norm(val)] = val
+    for m in _ARIA_ROLE_NAME.finditer(ctx):
+        role = m.group(1).lower()
+        if role in _REPAIR_ROLES:
+            by_role.setdefault(role, {})[_norm(m.group(2))] = m.group(2)
+    return by_role
+
+
+def repair_ungrounded_names(code: str, ctx: str) -> str:
+    """Rewrite a getByRole name that the model MISREAD/misspelled to the real one.
+
+    When a `getByRole(role, { name })` name isn't in the captured context but EXACTLY
+    ONE captured name for that role is a very close match (e.g. 'PDF for print (AA)'
+    vs the real 'PDF for print (A4)'), rewrite it to the real name. Repairs — never
+    drops — so it is safe on assertions too (same spirit as disambiguate_locators,
+    which also edits assertion locators). Acts only on a unique high-confidence match;
+    a genuinely dynamic name (no close captured match) is left untouched."""
+    by_role = _parse_original(ctx)
+    if not by_role:
+        return code
+
+    def _sub(m: re.Match) -> str:
+        role, quote, name = m.group(1).lower(), m.group(2), m.group(3)
+        cands = by_role.get(role)
+        if name is None or not cands:
+            return m.group(0)
+        nn = _norm(name)
+        # Already grounded (exact or substring either way) — leave it to the gate.
+        if not nn or nn in cands or any(nn in c or c in nn for c in cands):
+            return m.group(0)
+        close = difflib.get_close_matches(nn, list(cands.keys()), n=2, cutoff=0.86)
+        if len(close) != 1:
+            return m.group(0)  # no match, or ambiguous — don't risk a wrong rewrite
+        return m.group(0).replace(quote + name + quote, quote + cands[close[0]] + quote, 1)
+
+    return _GBR_ROLE_NAME.sub(_sub, code)
 
 
 def drop_ungrounded_actions(code: str, ctx: str) -> str:

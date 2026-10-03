@@ -20,7 +20,7 @@ from routers.qa.locators import (
     strip_hard_waits, shorten_long_names, href_link_locators,
     disambiguate_locators, first_on_href_locators, strip_junk_locators,
 )
-from routers.qa.action_gate import drop_ungrounded_actions
+from routers.qa.action_gate import drop_ungrounded_actions, repair_ungrounded_names
 from routers.qa.models import (
     GenerateRequest, GenerateResponse,
     AssertRequest, AssertResponse, AssertSuggestion,
@@ -80,6 +80,11 @@ def _postprocess(code: str, ctx: str) -> str:
     code = first_on_href_locators(code)
     code = strip_junk_locators(code)
     if ctx:
+        # Repair a MISREAD getByRole name (e.g. 'PDF for print (AA)' -> the real
+        # 'A4') to the unique close match in the captured context — BEFORE the gate,
+        # so a merely-mistyped interaction is fixed instead of dropped, and a mistyped
+        # assertion targets the real element instead of failing.
+        code = repair_ungrounded_names(code, ctx)
         # Last: drop any test that INTERACTS with a non-interactive / absent element
         # (grounded a real string but invented its role). Runs last so href/exact
         # rewrites have already resolved link locators the gate would otherwise judge.
