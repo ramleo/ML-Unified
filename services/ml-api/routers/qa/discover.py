@@ -51,7 +51,7 @@ _GRAB_CONTROLS_JS = (
     "      'a[href],button,input,textarea,select,[role=button],[role=link],"
     "[role=combobox],[role=searchbox],[role=textbox],[role=listbox],[role=checkbox],"
     "[role=radio],[role=tab],[role=menuitem],[role=switch]',\n"
-    "      els => els.slice(0, 40).map(e => {\n"
+    f"      els => els.slice(0, {config.MAX_CONTROLS}).map(e => {{\n"
     "        let role = (e.getAttribute('role') || '').toLowerCase();\n"
     "        if (!role) {\n"
     "          const tn = e.tagName.toLowerCase();\n"

@@ -93,6 +93,12 @@ MAX_PROPOSALS = 6
 # ground URLs in real destinations instead of guessing from a link's label.
 MAX_LINKS = 80          # links captured from the page
 MAX_LINKS_CHARS = 2500  # cap on the links block carried into code generation
+# Max interactive controls captured per page by grabControls (start + deep pages).
+# 40 was too tight: a page with a theme palette plus a schema-driven form (many
+# selects) pushed the real CTAs (e.g. Fill Sample / Predict) past the cap, so the
+# grounded-action gate could only keep them because the ARIA snapshot happened to
+# carry the names too. 60 keeps the key controls while staying small in context.
+MAX_CONTROLS = 60
 # Page context (ARIA snapshot + link map) passed from Discover into Author so the
 # generated code's locators and URLs are grounded in the real page.
 MAX_PAGE_CONTEXT = 34000
