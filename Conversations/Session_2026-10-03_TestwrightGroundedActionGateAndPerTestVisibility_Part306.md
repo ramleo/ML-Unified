@@ -121,3 +121,81 @@ and Select-Model-combobox tests dropped, grounded nav kept, the orphan assertion
 
 Related: [[project_testwright_run_perf]], [[project_testwright_qa_platform]],
 [[feedback_debug_first]], [[feedback_status_claims_need_evidence]], [[feedback_secret_shaped_test_data]].
+
+---
+
+# Part 307 — testing the live predictor: the "Open the platform" gap was a non-issue, the false-green assertion was the real one
+
+Same day (2026-10-03). Picked up the Part 306 "future work" — testing the real `/ml` predictor
+(pick a model → fill the schema-driven form → predict). The plan assumed we'd have to make Discover
+follow the cross-origin **"Open the platform ↗"** link into the separate ML Unified app. Evidence
+killed that assumption and surfaced a different, realer bug.
+
+## What the evidence run showed
+The predictor app (`https://wram1708-ml-unified.hf.space/?mode=ml`) is **already a first-party
+Discover target** (it's in `FIRST_PARTY_HOSTS`). Pointed Discover straight at it — no cross-app
+plumbing needed:
+- The form **renders on load** (a model is pre-selected), so controls are capturable immediately.
+- Discover **already proposed the golden path**: "click '80 Cereals Gradient Boosting' → click
+  'Fill Sample' → click 'Predict →'." No prompt change needed to *propose* it.
+- The grounded-action gate **kept all three clicks** (grounded via the ARIA snapshot), and the run
+  went **green first try** — `1/1 passed`.
+
+So "reach" was never the gap. The run exposed two real ones.
+
+## Arc A — the false-green assertion (the real bug)
+The generated test clicked `Predict →` but ended with `expect(page.getByRole('main')).toBeVisible()`
+— **true before the prediction even runs**. The test would pass even if prediction were completely
+broken. The model falls back to this because the result is rendered DYNAMICALLY and isn't in the
+captured context, so it can't assert the real value.
+
+Fix (prompt-only, `AUTHOR_GROUNDING` rule 10c): on a submit/predict/run/search action, the result
+is dynamic and unknowable — so NEVER assert a specific result string, and NEVER settle for a
+trivial always-true check. Instead assert a **knowable state change** that proves the result
+rendered: when the context shows an empty-state/placeholder line (e.g. `Fill in the fields and
+click Predict`), assert it becomes `toBeHidden()` after the action. The generated test now ends:
+`await expect(page.getByText('Fill in the fields and click Predict')).toBeHidden()` — which FAILS
+if nothing rendered.
+
+**The trap I avoided by verifying on the live app first:** after prediction the empty-state text
+**stays in the DOM** but becomes visually hidden (`offsetParent: null`). A naive
+`countElementsWithText(...) === 0` check said "still there" — had I encoded *that* as the
+assertion's truth, I'd have shipped a false-RED. Only a real visibility probe
+(`getComputedStyle` + `offsetParent`) confirmed `toBeHidden()` is correct: visible before, hidden
+after. [[feedback_status_claims_need_evidence]]
+
+## Arc B — the CONTROLS 40-element cap
+`grabControls()` capped at `slice(0, 40)`. On the predictor page a theme palette (7 buttons) plus
+the schema form (13 `<select>`s) consumed the budget, pushing the real CTAs (`Fill Sample`,
+`Predict →`, `Clear`) **off the CONTROLS list entirely** — they grounded only because the ARIA
+snapshot happened to also carry the names. On a larger page (snapshot truncated) that safety net
+would vanish. Raised to `config.MAX_CONTROLS = 60`.
+
+## Arc C — skipped on purpose
+The schema `<select>` fields get garbage accessible names (`combobox name="Select… AGKNPQR"`)
+because they're labeled by a sibling `<div>`, not an accessible name — so a test can't fill a
+*specific* field by role+name. Deliberately NOT fixed: the **Fill Sample → Predict** golden path
+sidesteps field-level filling entirely and is model-agnostic (survives switching models, which
+rebuilds the form). Naming selects by their sibling label is real work for little gain.
+
+## Live proof (2026-10-03, after deploy)
+Deployed `4ed2a48`, waited for the Space to serve new code (RUNNING after a clean rebuild cycle),
+then re-ran Discover → generate → run:
+- **B:** `Fill Sample` and `Predict →` now both present in the `===CONTROLS===` block.
+- **A:** generated code uses `toBeHidden()`, no trivial `main`-visible check.
+- **Run: 1/1 passed (2.9s).**
+
+## Key decisions
+- **Don't assume a cross-app flow before checking first-party reach.** The app was directly
+  discoverable; the "follow the CTA across origins" plan was unnecessary complexity.
+- **A green test is not automatically a good test.** An always-true assertion is a false-green —
+  gate against it the same way we gate ungrounded interactions.
+- **Verify a post-action condition on the live app before encoding it** — DOM presence ≠ visibility.
+
+## Commits (Part 307)
+| Repo | Commits |
+|---|---|
+| ML-Unified (backend, HF) | `4ed2a48` (submit/result assertion rule 10c + `MAX_CONTROLS` 40→60) |
+
+Related: [[project_testwright_run_perf]], [[feedback_status_claims_need_evidence]],
+[[feedback_debug_first]].
