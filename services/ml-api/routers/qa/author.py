@@ -20,6 +20,7 @@ from routers.qa.locators import (
     strip_hard_waits, shorten_long_names, href_link_locators,
     disambiguate_locators, first_on_href_locators, strip_junk_locators,
 )
+from routers.qa.action_gate import drop_ungrounded_actions
 from routers.qa.models import (
     GenerateRequest, GenerateResponse,
     AssertRequest, AssertResponse, AssertSuggestion,
@@ -78,6 +79,11 @@ def _postprocess(code: str, ctx: str) -> str:
         code = disambiguate_locators(code, ctx)
     code = first_on_href_locators(code)
     code = strip_junk_locators(code)
+    if ctx:
+        # Last: drop any test that INTERACTS with a non-interactive / absent element
+        # (grounded a real string but invented its role). Runs last so href/exact
+        # rewrites have already resolved link locators the gate would otherwise judge.
+        code = drop_ungrounded_actions(code, ctx)
     return code
 
 
@@ -122,7 +128,13 @@ def generate_test(instructions: str, base_url: str, test_name: str,
         if _has_hedge(code):
             logger.warning("qa/author: %s returned hedge/placeholder code — rejecting", provider)
             continue
-        return _postprocess(code, ctx), provider
+        final = _postprocess(code, ctx)
+        if "test(" not in final:
+            # The grounded-action gate dropped every test (all interactions were
+            # ungrounded). Let the next model try rather than return an empty file.
+            logger.warning("qa/author: %s left no grounded test after gating", provider)
+            continue
+        return final, provider
     logger.error("qa/author: every candidate failed (%s)",
                  ", ".join(p for p, _ in config.GEN_CANDIDATES))
     return None

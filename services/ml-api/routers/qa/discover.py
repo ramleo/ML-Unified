@@ -36,6 +36,49 @@ LINKS_DELIM_JS = LINKS_DELIM.replace("\n", "\\n")
 # the (possibly multi-page) snapshot, so no reader change is needed.
 PAGE_DELIM_JS = "\\n\\n===PAGE "
 
+# Header for the start page's interactive-controls block (stays in the snapshot part).
+CONTROLS_DELIM_JS = "\\n\\n===CONTROLS===\\n"
+
+# Shared JS: a `grabControls(pg)` function declaration (hoisted, so usable from both
+# the start page and the deep-capture closure). It returns a page's REAL interactive
+# elements, one per line as `[role] name="..."` / `[role] placeholder="..."`. This is
+# the single source of truth consumed by generation AND the deterministic
+# grounded-action gate (locators.drop_ungrounded_actions) — so a test can only
+# interact with an element that actually exists and is interactive.
+_GRAB_CONTROLS_JS = (
+    "  async function grabControls(pg) {\n"
+    "    return pg.$$eval(\n"
+    "      'a[href],button,input,textarea,select,[role=button],[role=link],"
+    "[role=combobox],[role=searchbox],[role=textbox],[role=listbox],[role=checkbox],"
+    "[role=radio],[role=tab],[role=menuitem],[role=switch]',\n"
+    "      els => els.slice(0, 40).map(e => {\n"
+    "        let role = (e.getAttribute('role') || '').toLowerCase();\n"
+    "        if (!role) {\n"
+    "          const tn = e.tagName.toLowerCase();\n"
+    "          if (tn === 'a') role = 'link';\n"
+    "          else if (tn === 'button') role = 'button';\n"
+    "          else if (tn === 'select') role = 'combobox';\n"
+    "          else if (tn === 'textarea') role = 'textbox';\n"
+    "          else if (tn === 'input') {\n"
+    "            const ty = (e.getAttribute('type') || 'text').toLowerCase();\n"
+    "            role = ty === 'search' ? 'searchbox' : ty === 'checkbox' ? 'checkbox'"
+    " : ty === 'radio' ? 'radio' : (ty === 'button' || ty === 'submit' || ty === 'reset')"
+    " ? 'button' : 'textbox';\n"
+    "          } else role = tn;\n"
+    "        }\n"
+    "        const ph = (e.getAttribute('placeholder') || '').trim();\n"
+    "        const al = (e.getAttribute('aria-label') || '').trim();\n"
+    "        const tx = (e.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 60);\n"
+    "        const nm = al || tx;\n"
+    "        const out = [];\n"
+    "        if (nm) out.push('[' + role + '] name=' + JSON.stringify(nm));\n"
+    "        if (ph) out.push('[' + role + '] placeholder=' + JSON.stringify(ph));\n"
+    "        return out.join('\\n');\n"
+    "      }).filter(Boolean).join('\\n')\n"
+    "    );\n"
+    "  }\n"
+)
+
 
 def build_explore_spec(url: str, deep: bool = False) -> str:
     """A Playwright test that navigates the URL and writes the page's ARIA snapshot
@@ -81,19 +124,10 @@ def build_explore_spec(url: str, deep: bool = False) -> str:
             "      const heads = await p.$$eval('h1,h2,h3', hs => hs.slice(0, 10)\n"
             "        .map(h => h.tagName + ' ' + (h.textContent || '').replace(/\\s+/g, ' ').trim())\n"
             "        .filter(s => s.length < 140).join('\\n'));\n"
-            # Interactive controls: real placeholders / accessible names / button text so
-            # generation grounds fill()/selectOption()/click() in controls that EXIST,
-            # instead of guessing a placeholder string or emitting a '// Placeholder' hedge.
-            "      const ctrls = await p.$$eval("
-            "'input,textarea,select,[role=combobox],[role=searchbox],[role=textbox],[role=listbox],button,[role=button]',"
-            " els => els.slice(0, 30).map(e => {\n"
-            "        const tag = (e.getAttribute('role') || e.tagName || '').toLowerCase();\n"
-            "        const ph = (e.getAttribute('placeholder') || '').trim();\n"
-            "        const al = (e.getAttribute('aria-label') || '').trim();\n"
-            "        const tx = (e.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40);\n"
-            "        const d = ph ? ('placeholder=' + JSON.stringify(ph)) : al ? ('name=' + JSON.stringify(al)) : tx ? ('name=' + JSON.stringify(tx)) : '';\n"
-            "        return d ? (tag + ' ' + d) : '';\n"
-            "      }).filter(Boolean).join('\\n'));\n"
+            # Interactive controls (via the shared grabControls): real role + name +
+            # placeholder, so generation grounds fill()/selectOption()/click() in
+            # controls that EXIST, and the grounded-action gate can validate them.
+            "      const ctrls = await grabControls(p);\n"
             "      const snap = await p.locator('body').ariaSnapshot();\n"
             f"      return '{PAGE_DELIM_JS}' + t + '===\\n' + 'title: ' + title + "
             f"'\\nheadings:\\n' + heads + '\\ncontrols:\\n' + ctrls.slice(0, 800) + "
@@ -112,9 +146,12 @@ def build_explore_spec(url: str, deep: bool = False) -> str:
         "import { test } from '@playwright/test';\n"
         "import fs from 'fs';\n\n"
         "test('explore', async ({ page }) => {\n"
+        + _GRAB_CONTROLS_JS +
         f"  await page.goto('{safe}', {{ waitUntil: 'domcontentloaded' }});\n"
         "  await page.waitForTimeout(1500);\n"
         "  const snapshot = await page.locator('body').ariaSnapshot();\n"
+        "  const startCtrls = await grabControls(page);\n"
+        f"  const controlsBlock = startCtrls ? '{CONTROLS_DELIM_JS}' + startCtrls : '';\n"
         "  let sections = '';\n"
         f"  const links = await page.$$eval('a[href]', (els, max) => {{\n"
         "    const seen = new Set(); const out = [];\n"
@@ -144,7 +181,7 @@ def build_explore_spec(url: str, deep: bool = False) -> str:
         + deep_js +
         "  const block = links.length"
         f"    ? '{LINKS_DELIM_JS}' + links.join('\\n') : '';\n"
-        "  fs.writeFileSync('aria.txt', snapshot + sections + block);\n"
+        "  fs.writeFileSync('aria.txt', snapshot + controlsBlock + sections + block);\n"
         "});\n"
     )
 
