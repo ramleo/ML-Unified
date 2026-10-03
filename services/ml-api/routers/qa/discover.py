@@ -125,7 +125,15 @@ def build_explore_spec(url: str, deep: bool = False) -> str:
             "      await p.goto(t, { waitUntil: 'domcontentloaded' });\n"
             "      await p.waitForTimeout(700);\n"
             "      const title = await p.title();\n"
-            "      const heads = await p.$$eval('h1,h2,h3', hs => hs.slice(0, 10)\n"
+            # VISIBLE headings only: a page can carry hidden headings (e.g. a print/PDF
+            # layer duplicating the content with display:none / zero-size), which are NOT
+            # on screen. Feeding those to generation makes it assert a heading that exists
+            # but fails toBeVisible() — present != visible (same lesson as the predictor
+            # empty-state). Drop display:none / visibility:hidden / zero-size here.
+            "      const heads = await p.$$eval('h1,h2,h3', hs => hs\n"
+            "        .filter(h => { const r = h.getBoundingClientRect();\n"
+            "          return r.width > 0 && r.height > 0 && getComputedStyle(h).visibility !== 'hidden'; })\n"
+            "        .slice(0, 10)\n"
             "        .map(h => h.tagName + ' ' + (h.textContent || '').replace(/\\s+/g, ' ').trim())\n"
             "        .filter(s => s.length < 140).join('\\n'));\n"
             # Interactive controls (via the shared grabControls): real role + name +
