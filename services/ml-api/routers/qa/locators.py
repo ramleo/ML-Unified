@@ -116,9 +116,18 @@ def href_link_locators(code: str, page_context: str) -> str:
         xn = _norm(x)
         if not xn:
             return None
+        # Directional prefix tiers, in order of confidence. The combined
+        # `startswith` test used to be ONE tier, which made a card link's long
+        # run-on name (e.g. the model's truncated "ML Unified PlatformPlatform ·
+        # Enter…") tie between the card (map label starts WITH the code name) and a
+        # shorter sibling link named just "ML Unified Platform" (code name starts
+        # with THAT) — two hrefs, so it bailed and the brittle name locator shipped.
+        # Splitting them resolves the card case uniquely: the model almost always
+        # TRUNCATES a long name, so "map label starts with code name" wins first.
         for test in (
             lambda ln: ln == xn,
-            lambda ln: ln.startswith(xn) or xn.startswith(ln),
+            lambda ln: ln.startswith(xn),
+            lambda ln: xn.startswith(ln),
             lambda ln: xn in ln or ln in xn,
         ):
             hrefs = {h for (ln, h) in norm_pairs if ln and test(ln)}
