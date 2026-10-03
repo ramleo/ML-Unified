@@ -19,7 +19,9 @@ from routers.qa.deps import complete, resolve_key, record_call, limiter, LLM_LIM
 from routers.qa.locators import (
     strip_hard_waits, shorten_long_names, href_link_locators,
     disambiguate_locators, first_on_href_locators, strip_junk_locators,
+    sanitize_option_punctuation,
 )
+from routers.qa.validate import looks_syntactically_valid
 from routers.qa.action_gate import drop_ungrounded_actions, repair_ungrounded_names
 from routers.qa.models import (
     GenerateRequest, GenerateResponse,
@@ -71,6 +73,9 @@ def _postprocess(code: str, ctx: str) -> str:
     locators and force exact/.first() on provably-ambiguous names. Order matters:
     ground links while names are still exact, shorten long names, disambiguate, then
     the always-on syntactic nets last."""
+    # Repair a `{ name. 'x' }` mis-punctuation first, so the name-based transforms
+    # below (which all require a well-formed `name:`) still see and fix the locator.
+    code = sanitize_option_punctuation(code)
     code = strip_hard_waits(code)
     if ctx:
         code = href_link_locators(code, ctx)
@@ -138,6 +143,11 @@ def generate_test(instructions: str, base_url: str, test_name: str,
             # The grounded-action gate dropped every test (all interactions were
             # ungrounded). Let the next model try rather than return an empty file.
             logger.warning("qa/author: %s left no grounded test after gating", provider)
+            continue
+        if not looks_syntactically_valid(final):
+            # A typo/brace slip would fail the whole spec with "No tests found" — let
+            # the next provider try rather than ship code that cannot compile.
+            logger.warning("qa/author: %s produced unparseable code — trying next", provider)
             continue
         return final, provider
     logger.error("qa/author: every candidate failed (%s)",

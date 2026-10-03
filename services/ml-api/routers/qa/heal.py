@@ -18,7 +18,9 @@ from routers.qa.prompts import HEAL_SYSTEM
 from routers.qa.author import _strip_fences, _looks_like_test
 from routers.qa.locators import (
     strip_hard_waits, shorten_long_names, first_on_href_locators, strip_junk_locators,
+    sanitize_option_punctuation,
 )
+from routers.qa.validate import looks_syntactically_valid
 from routers.qa.models import HealGroupRequest, HealGroupResponse, HealGroup
 
 logger = logging.getLogger(__name__)
@@ -116,12 +118,19 @@ def heal_test(code: str, error: str, snapshot: str) -> tuple[str, str] | None:
             logger.warning("qa/heal: %s failed: %s", provider, exc)
             continue
         fixed = _strip_fences(raw)
-        if _looks_like_test(fixed):
-            # Keep a heal from (re)introducing a flaky hard sleep, a brittle
-            # sentence-long name, an un-narrowed href locator, or a wildcard name.
-            fixed = strip_junk_locators(first_on_href_locators(
-                shorten_long_names(strip_hard_waits(fixed))))
-            return fixed, provider
-        logger.warning("qa/heal: %s returned non-test output", provider)
-    logger.error("qa/heal: every candidate failed")
+        if not _looks_like_test(fixed):
+            logger.warning("qa/heal: %s returned non-test output", provider)
+            continue
+        # Keep a heal from (re)introducing a flaky hard sleep, a brittle
+        # sentence-long name, an un-narrowed href locator, or a wildcard name;
+        # repair a `{ name. 'x' }` mis-punctuation BEFORE the parse check.
+        fixed = sanitize_option_punctuation(strip_junk_locators(first_on_href_locators(
+            shorten_long_names(strip_hard_waits(fixed)))))
+        # Never hand the runner code that won't parse — one typo would fail the WHOLE
+        # spec with "No tests found". Reject it and let the next provider try.
+        if not looks_syntactically_valid(fixed):
+            logger.warning("qa/heal: %s produced unparseable code — trying next", provider)
+            continue
+        return fixed, provider
+    logger.error("qa/heal: every candidate produced no usable fix")
     return None

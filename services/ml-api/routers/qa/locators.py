@@ -36,6 +36,25 @@ _GETBYROLE_NAME = re.compile(
 _LONG_NAME = 60
 _RE_SPECIAL = re.compile(r"[.*+?^${}()|[\]\\/]")
 
+# A model typo that writes `.` where an options-object key needs `:`, e.g.
+# `getByRole('searchbox', { name. 'Search…' })`. A SINGLE such slip makes the whole
+# spec fail to parse (the runner reports "No tests found"), and it slips past every
+# other transform here because they all require a well-formed `name:`. Only known
+# option keys followed by a LITERAL value are matched, so a legitimate method chain
+# (`page.getByRole`, `expect.soft`) is never touched.
+_OPT_KEY_DOT = re.compile(
+    r"\b(name|exact|hasText|hasNotText|level|checked|pressed|selected|expanded"
+    r"|disabled|includeHidden|timeout|setChecked)\s*\.\s*"
+    r"(?=['\"`/]|\d|true\b|false\b)"
+)
+
+
+def sanitize_option_punctuation(code: str) -> str:
+    """Repair `{ <key>. <value> }` -> `{ <key>: <value> }` for known locator option
+    keys the model sometimes mis-punctuates with a period. Deterministic and safe:
+    only a known key immediately followed by a literal value start is rewritten."""
+    return _OPT_KEY_DOT.sub(lambda m: m.group(1) + ": ", code)
+
 
 def strip_hard_waits(code: str) -> str:
     """Remove hard-coded `page.waitForTimeout(...)` sleeps — the #1 cause of flaky
@@ -81,6 +100,10 @@ def _parse_link_map(page_context: str) -> list[tuple[str, str]]:
         if " -> " in line:
             label, _, href = line.partition(" -> ")
             label, href = label.strip().lower(), href.strip()
+            # A `[newtab]` suffix (target=_blank marker) is context for the model, not
+            # part of the href — strip it so the deterministic href match still works.
+            if href.endswith("[newtab]"):
+                href = href[: -len("[newtab]")].strip()
             if label and href and href != "#":
                 pairs.append((label, href))
     return pairs

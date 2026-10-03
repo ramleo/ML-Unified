@@ -183,7 +183,10 @@ def build_explore_spec(url: str, deep: bool = False) -> str:
         "      const name = nm.replace(/\\s+/g, ' ').trim().slice(0, 80);\n"
         "      const href = a.getAttribute('href') || '';\n"
         "      if (!name || !href) continue;\n"
-        "      const k = name + ' -> ' + href;\n"
+        # Mark links that open in a new tab so generation uses popup capture, not a
+        # same-page URL assertion (which can never pass for a target=_blank link).
+        "      const nt = (a.target === '_blank') ? ' [newtab]' : '';\n"
+        "      const k = name + ' -> ' + href + nt;\n"
         "      if (seen.has(k)) continue;\n"
         "      seen.add(k); out.push(k);\n"
         "      if (out.length >= max) break;\n"
