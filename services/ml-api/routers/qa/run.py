@@ -169,6 +169,7 @@ def status(correlation_id: str):
 
     result.screenshot_base64 = art.get("screenshotBase64")
     result.steps = art.get("steps", []) or []
+    result.tests = art.get("tests", []) or []
     result.has_video = bool(art.get("has_video"))
     result.has_trace = bool(art.get("has_trace"))
     result.correlation_id = correlation_id

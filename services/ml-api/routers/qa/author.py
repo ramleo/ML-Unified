@@ -48,6 +48,21 @@ def _looks_like_test(code: str) -> bool:
     return "@playwright/test" in code and "test(" in code
 
 
+_HEDGE_RE = re.compile(
+    r"placeholder selector|actual selector|in a real test|you would need|"
+    r"replace with the|// *TODO|the actual (?:selector|name|value) from",
+    re.IGNORECASE,
+)
+
+
+def _has_hedge(code: str) -> bool:
+    """True when the model admitted it was guessing — e.g. a `// Placeholder selector`
+    or `in a real test you would need the actual selector` hedge. Such code ships a
+    guaranteed-failing guess, so we reject it and let the cascade try another model
+    rather than hand the user a test that cannot pass."""
+    return bool(_HEDGE_RE.search(code))
+
+
 def _postprocess(code: str, ctx: str) -> str:
     """The deterministic reliability net (more reliable than prompt-nudging). Always
     drop hard sleeps, append `.first()` to raw href locators, and remove wildcard/
@@ -101,9 +116,13 @@ def generate_test(instructions: str, base_url: str, test_name: str,
             logger.warning("qa/author: %s failed: %s", provider, exc)
             continue
         code = _strip_fences(raw)
-        if _looks_like_test(code):
-            return _postprocess(code, ctx), provider
-        logger.warning("qa/author: %s returned non-test output", provider)
+        if not _looks_like_test(code):
+            logger.warning("qa/author: %s returned non-test output", provider)
+            continue
+        if _has_hedge(code):
+            logger.warning("qa/author: %s returned hedge/placeholder code — rejecting", provider)
+            continue
+        return _postprocess(code, ctx), provider
     logger.error("qa/author: every candidate failed (%s)",
                  ", ".join(p for p, _ in config.GEN_CANDIDATES))
     return None

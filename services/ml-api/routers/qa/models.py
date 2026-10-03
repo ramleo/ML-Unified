@@ -114,6 +114,15 @@ class RunStep(BaseModel):
     ok: bool = True
 
 
+class RunTest(BaseModel):
+    """One test CASE in the run (a merged suite has many). Lets the UI show which
+    tests passed/failed and each failure's own error, not just a count."""
+    title: str
+    status: str  # passed | failed | timedOut | interrupted | skipped
+    duration: float | int | None = None
+    error: str | None = None
+
+
 class RunStatus(BaseModel):
     # pending (not materialised yet) | queued | in_progress | completed | error
     status: str
@@ -122,6 +131,8 @@ class RunStatus(BaseModel):
     summary: dict | None = None
     screenshot_base64: str | None = None
     steps: list[RunStep] = []
+    # Per-test-case outcomes so a run shows WHICH tests failed, not just a count.
+    tests: list[RunTest] = []
     has_video: bool = False
     has_trace: bool = False
     correlation_id: str | None = None

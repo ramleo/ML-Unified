@@ -81,9 +81,23 @@ def build_explore_spec(url: str, deep: bool = False) -> str:
             "      const heads = await p.$$eval('h1,h2,h3', hs => hs.slice(0, 10)\n"
             "        .map(h => h.tagName + ' ' + (h.textContent || '').replace(/\\s+/g, ' ').trim())\n"
             "        .filter(s => s.length < 140).join('\\n'));\n"
+            # Interactive controls: real placeholders / accessible names / button text so
+            # generation grounds fill()/selectOption()/click() in controls that EXIST,
+            # instead of guessing a placeholder string or emitting a '// Placeholder' hedge.
+            "      const ctrls = await p.$$eval("
+            "'input,textarea,select,[role=combobox],[role=searchbox],[role=textbox],[role=listbox],button,[role=button]',"
+            " els => els.slice(0, 30).map(e => {\n"
+            "        const tag = (e.getAttribute('role') || e.tagName || '').toLowerCase();\n"
+            "        const ph = (e.getAttribute('placeholder') || '').trim();\n"
+            "        const al = (e.getAttribute('aria-label') || '').trim();\n"
+            "        const tx = (e.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40);\n"
+            "        const d = ph ? ('placeholder=' + JSON.stringify(ph)) : al ? ('name=' + JSON.stringify(al)) : tx ? ('name=' + JSON.stringify(tx)) : '';\n"
+            "        return d ? (tag + ' ' + d) : '';\n"
+            "      }).filter(Boolean).join('\\n'));\n"
             "      const snap = await p.locator('body').ariaSnapshot();\n"
             f"      return '{PAGE_DELIM_JS}' + t + '===\\n' + 'title: ' + title + "
-            f"'\\nheadings:\\n' + heads + '\\n' + snap.slice(0, {config.MAX_DEEP_PAGE_CHARS});\n"
+            f"'\\nheadings:\\n' + heads + '\\ncontrols:\\n' + ctrls.slice(0, 800) + "
+            f"'\\n' + snap.slice(0, {config.MAX_DEEP_PAGE_CHARS});\n"
             "    } catch (e) { return ''; } finally { await p.close(); }\n"
             "  };\n"
             # Bounded concurrency: run the targets in chunks so a 2-vCPU runner isn't

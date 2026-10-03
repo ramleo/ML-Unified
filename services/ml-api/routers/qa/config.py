@@ -102,7 +102,10 @@ MAX_PAGE_CONTEXT = 34000
 # real headings instead of guessing. Each extra page's snapshot is capped so the
 # combined context stays within MAX_PAGE_CONTEXT (12 * 1800 + start + links < 34000).
 MAX_DEEP_PAGES = 12
-MAX_DEEP_PAGE_CHARS = 1200
+# Snapshot slice per deep page. Kept modest because each deep page now also carries
+# an explicit `controls:` block (real placeholders / dropdown + button names), so the
+# combined per-page context stays within MAX_PAGE_CONTEXT across 12 pages.
+MAX_DEEP_PAGE_CHARS = 900
 # Deep pages are visited in parallel (separate tabs) in bounded chunks — 4 at a time
 # is the 2-vCPU sweet spot (same as the test runner's workers), cutting a 12-page
 # crawl to ~3 sequential rounds instead of 12.

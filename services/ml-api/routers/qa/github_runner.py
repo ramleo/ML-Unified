@@ -11,17 +11,15 @@ reaches the browser and is never logged. This module is the one place that talks
 to GitHub; swapping execution backends later means replacing just this file.
 """
 
-import base64
 import io
 import json
 import logging
 import os
-import re
 import zipfile
 
 import httpx
 
-from routers.qa import config
+from routers.qa import config, run_report
 
 logger = logging.getLogger(__name__)
 
@@ -132,97 +130,7 @@ def fetch_artifacts(run_id: int) -> dict | None:
     zip_bytes = _download_artifact_zip(run_id)
     if not zip_bytes:
         return None
-    return _parse_zip(zip_bytes)
-
-
-_MAX_STEPS = 60
-
-
-def _read_steps(zf: "zipfile.ZipFile") -> list:
-    """The step timeline, written by our custom reporter into steps.json (the
-    built-in JSON reporter omits steps)."""
-    name = next((n for n in zf.namelist() if n.endswith("steps.json")), None)
-    if not name:
-        return []
-    try:
-        raw = json.loads(zf.read(name))
-    except Exception:
-        return []
-    out = []
-    for st in raw[:_MAX_STEPS]:
-        out.append({
-            "title": (st.get("title") or "")[:200],
-            "category": st.get("category"),
-            "duration": st.get("duration", 0),
-            "ok": bool(st.get("ok", True)),
-        })
-    return out
-
-
-_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
-
-
-def _clean_error(msg: str) -> str:
-    """Strip ANSI colour codes and clip a Playwright error message for display."""
-    if not msg:
-        return ""
-    return _ANSI_RE.sub("", msg).strip()[: config.MAX_ERROR_CHARS]
-
-
-def _count_tests(data: dict) -> int:
-    """Number of DISTINCT test cases in the report (by spec title). `--repeat-each`
-    repeats one spec, so distinct titles stays 1 for a true flakiness run, while a
-    multi-test file yields >1. Lets us tell a repeated single test from a suite."""
-    titles: set[str] = set()
-
-    def walk(suite: dict) -> None:
-        for spec in suite.get("specs", []):
-            t = spec.get("title")
-            if t:
-                titles.add(t)
-        for child in suite.get("suites", []):
-            walk(child)
-
-    for suite in data.get("suites", []):
-        walk(suite)
-    return len(titles)
-
-
-def _parse_zip(zip_bytes: bytes) -> dict:
-    out: dict = {"summary": None, "screenshotBase64": None, "steps": [],
-                 "has_video": False, "has_trace": False, "error": "", "num_tests": 0}
-    try:
-        zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
-    except Exception as exc:
-        logger.warning("qa/run: bad artifact zip: %s", exc)
-        return out
-    names = zf.namelist()
-    out["has_video"] = any(n.endswith(".webm") for n in names)
-    out["has_trace"] = any(n.endswith("trace.zip") for n in names)
-    for name in names:
-        if name.endswith("results.json"):
-            try:
-                data = json.loads(zf.read(name))
-                stats = data.get("stats", {})
-                out["summary"] = {
-                    "expected": stats.get("expected", 0),
-                    "unexpected": stats.get("unexpected", 0),
-                    "flaky": stats.get("flaky", 0),
-                    "skipped": stats.get("skipped", 0),
-                }
-                out["error"] = _clean_error(_first_error(data))
-                out["num_tests"] = _count_tests(data)
-            except Exception:
-                pass
-            break
-    out["steps"] = _read_steps(zf)
-    for name in names:
-        if name.endswith(".png"):
-            data = zf.read(name)
-            if len(data) <= config.MAX_SCREENSHOT_BYTES:
-                out["screenshotBase64"] = base64.b64encode(data).decode()
-            break
-    return out
+    return run_report.parse_zip(zip_bytes)
 
 
 # kind -> (filename suffix, content type, inline?)
@@ -250,27 +158,6 @@ def fetch_artifact_file(run_id: int, kind: str) -> tuple[bytes, str, bool] | Non
     if not member:
         return None
     return zf.read(member), ctype, inline
-
-
-def _first_error(data: dict) -> str:
-    def walk(suite: dict) -> str:
-        for spec in suite.get("specs", []):
-            for test in spec.get("tests", []):
-                for res in test.get("results", []):
-                    msg = (res.get("error") or {}).get("message")
-                    if msg:
-                        return msg
-        for child in suite.get("suites", []):
-            r = walk(child)
-            if r:
-                return r
-        return ""
-
-    for suite in data.get("suites", []):
-        r = walk(suite)
-        if r:
-            return r
-    return ""
 
 
 def fetch_text_artifact(run_id: int, suffix: str) -> str | None:
@@ -306,7 +193,7 @@ def fetch_failure_context(run_id: int) -> dict | None:
     rj = next((n for n in zf.namelist() if n.endswith("results.json")), None)
     if rj:
         try:
-            error = _first_error(json.loads(zf.read(rj)))
+            error = run_report.first_error(json.loads(zf.read(rj)))
         except Exception:
             pass
     ctx = next((n for n in zf.namelist() if n.endswith("error-context.md")), None)
