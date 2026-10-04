@@ -13,7 +13,7 @@ import re
 from fastapi import APIRouter, Request
 
 from routers.qa import config, github_runner
-from routers.qa.deps import complete, resolve_key, limiter, LLM_LIMIT
+from routers.qa.deps import complete, select_candidates, limiter, LLM_LIMIT
 from routers.qa.prompts import HEAL_SYSTEM
 from routers.qa.author import _strip_fences, _looks_like_test
 from routers.qa.locators import (
@@ -97,7 +97,9 @@ def group(request: Request, req: HealGroupRequest):
     return HealGroupResponse(groups=[HealGroup(**buckets[s]) for s in order])
 
 
-def heal_test(code: str, error: str, snapshot: str) -> tuple[str, str] | None:
+def heal_test(code: str, error: str, snapshot: str, provider: str | None = None,
+              model: str | None = None, user_key: str | None = None,
+              owner_token: str | None = None) -> tuple[str, str] | None:
     """Return (healed_code, provider) or None if no provider produced a usable
     corrected test."""
     error = _ANSI.sub("", error or "")[: config.MAX_ERROR_CHARS]
@@ -107,8 +109,7 @@ def heal_test(code: str, error: str, snapshot: str) -> tuple[str, str] | None:
         f"Failure error:\n{error or '(none captured)'}\n\n"
         f"Accessibility snapshot of the page at failure:\n{snapshot or '(none captured)'}"
     )
-    for provider, model in config.GEN_CANDIDATES:
-        key = resolve_key(provider)
+    for provider, model, key in select_candidates(provider, model, user_key, owner_token):
         if not key:
             continue
         try:

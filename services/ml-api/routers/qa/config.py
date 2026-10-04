@@ -8,12 +8,33 @@ its settings without hunting through the code. Env-driven where it matters.
 import os
 
 # Free-provider cascade, tried in order. Cohere leads (free + reliable),
-# mistral is the second opinion. Gemini is deliberately absent — it is the only
-# paid key and these endpoints are public.
+# mistral is the second opinion. This is EVERY visitor's default. Gemini is
+# deliberately absent here — it is the only paid key, so a visitor never triggers
+# it with the server's key: the server's paid providers are owner-only (below),
+# and a visitor who wants another model brings their own key (BYOK).
 GEN_CANDIDATES = [
     ("cohere", "command-a-03-2025"),
     ("mistral", "mistral-small-latest"),
 ]
+
+# --- Model selection: owner-only paid provider + bring-your-own-key (BYOK) ---
+# The owner secret that unlocks the server's PAID provider keys (e.g. Gemini) on
+# these PUBLIC endpoints — and (R8) owner-only monitoring. One secret, both uses.
+# Unset => no owner unlock (the endpoints behave exactly as before).
+OWNER_TOKEN_ENV = "QA_OWNER_TOKEN"
+
+# Providers a caller may select with their OWN key (BYOK). The free cascade is
+# always the default; these are the extra choices the UI offers. Mirrors the
+# shared resolver's known providers (rag.query_helpers._ENV_KEYS).
+BYOK_PROVIDERS = {"cohere", "mistral", "gemini", "groq", "openai", "claude", "perplexity"}
+
+# Fallback model when an owner/BYOK request names a provider but no model (the UI
+# normally sends one). Only the models we've verified; others must send a model.
+PROVIDER_DEFAULT_MODEL = {
+    "cohere": "command-a-03-2025",
+    "mistral": "mistral-small-latest",
+    "gemini": "gemini-3.6-flash",
+}
 
 # Input bounds.
 MAX_INSTRUCTIONS = 4000

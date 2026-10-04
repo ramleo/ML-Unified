@@ -15,7 +15,7 @@ import re
 from fastapi import APIRouter, Request
 
 from routers.qa import config
-from routers.qa.deps import complete, resolve_key, record_call, limiter, LLM_LIMIT
+from routers.qa.deps import complete, select_candidates, record_call, limiter, LLM_LIMIT
 from routers.qa.locators import (
     strip_hard_waits, shorten_long_names, href_link_locators,
     disambiguate_locators, first_on_href_locators, strip_junk_locators,
@@ -98,7 +98,9 @@ def _postprocess(code: str, ctx: str) -> str:
 
 
 def generate_test(instructions: str, base_url: str, test_name: str,
-                  page_context: str = "") -> tuple[str, str] | None:
+                  page_context: str = "", provider: str | None = None,
+                  model: str | None = None, user_key: str | None = None,
+                  owner_token: str | None = None) -> tuple[str, str] | None:
     user_parts = [f"Scenario to test:\n{instructions.strip()}"]
     if base_url.strip():
         user_parts.append(f"\nBase URL of the site under test: {base_url.strip()}")
@@ -118,8 +120,8 @@ def generate_test(instructions: str, base_url: str, test_name: str,
         system = AUTHOR_SYSTEM + AUTHOR_GROUNDING
     user_msg = "\n".join(user_parts)
 
-    for provider, model in config.GEN_CANDIDATES:
-        key = resolve_key(provider)
+    candidates = select_candidates(provider, model, user_key, owner_token)
+    for provider, model, key in candidates:
         if not key:
             continue
         try:
@@ -151,7 +153,7 @@ def generate_test(instructions: str, base_url: str, test_name: str,
             continue
         return final, provider
     logger.error("qa/author: every candidate failed (%s)",
-                 ", ".join(p for p, _ in config.GEN_CANDIDATES))
+                 ", ".join(p for p, _, _ in candidates))
     return None
 
 
@@ -159,7 +161,9 @@ def generate_test(instructions: str, base_url: str, test_name: str,
 @limiter.limit(LLM_LIMIT)
 def generate(request: Request, req: GenerateRequest):
     record_call(config.FEATURE, pool=config.BUDGET_POOL, daily_cap_env=config.DAILY_CAP_ENV)
-    result = generate_test(req.instructions, req.base_url, req.test_name, req.page_context)
+    result = generate_test(req.instructions, req.base_url, req.test_name, req.page_context,
+                           provider=req.provider, model=req.model,
+                           user_key=req.user_key, owner_token=req.owner_token)
     if result is None:
         return GenerateResponse(code="", provider=None)
     code, provider = result
@@ -191,10 +195,11 @@ def _parse_suggestions(raw: str) -> list[AssertSuggestion]:
     return out
 
 
-def suggest_assertions(code: str) -> tuple[list[AssertSuggestion], str] | None:
+def suggest_assertions(code: str, provider: str | None = None, model: str | None = None,
+                       user_key: str | None = None, owner_token: str | None = None
+                       ) -> tuple[list[AssertSuggestion], str] | None:
     user_msg = f"Playwright test to review:\n{code.strip()}"
-    for provider, model in config.GEN_CANDIDATES:
-        key = resolve_key(provider)
+    for provider, model, key in select_candidates(provider, model, user_key, owner_token):
         if not key:
             continue
         try:
@@ -218,7 +223,8 @@ def suggest_assertions(code: str) -> tuple[list[AssertSuggestion], str] | None:
 def assertions(request: Request, req: AssertRequest):
     record_call(config.ASSERT_FEATURE, pool=config.ASSERT_BUDGET_POOL,
                 daily_cap_env=config.ASSERT_DAILY_CAP_ENV)
-    result = suggest_assertions(req.code)
+    result = suggest_assertions(req.code, provider=req.provider, model=req.model,
+                                user_key=req.user_key, owner_token=req.owner_token)
     if result is None:
         return AssertResponse(suggestions=[], provider=None)
     suggestions, provider = result

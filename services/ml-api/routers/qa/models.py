@@ -5,7 +5,17 @@ from pydantic import BaseModel, Field
 from routers.qa import config
 
 
-class GenerateRequest(BaseModel):
+class ModelChoice(BaseModel):
+    """Optional model selection, mixed into the LLM request models. Default (all
+    None) = the free server cascade. `user_key` set = BYOK (caller's own key).
+    `owner_token` valid = unlock the server's paid provider (e.g. Gemini)."""
+    provider: str | None = Field(None, max_length=40)
+    model: str | None = Field(None, max_length=80)
+    user_key: str | None = Field(None, max_length=400)
+    owner_token: str | None = Field(None, max_length=200)
+
+
+class GenerateRequest(ModelChoice):
     instructions: str = Field(..., min_length=1, max_length=config.MAX_INSTRUCTIONS)
     base_url: str = Field("", max_length=config.MAX_BASE_URL)
     test_name: str = Field("", max_length=config.MAX_NAME)
@@ -19,7 +29,7 @@ class GenerateResponse(BaseModel):
     provider: str | None = None
 
 
-class AssertRequest(BaseModel):
+class AssertRequest(ModelChoice):
     code: str = Field(..., min_length=1, max_length=config.MAX_RUN_CODE)
 
 
@@ -55,7 +65,7 @@ class CancelResponse(BaseModel):
     detail: str | None = None
 
 
-class HealRequest(BaseModel):
+class HealRequest(ModelChoice):
     correlation_id: str = Field(..., min_length=1, max_length=64)
     code: str = Field(..., min_length=1, max_length=config.MAX_RUN_CODE)
 

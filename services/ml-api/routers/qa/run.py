@@ -75,7 +75,9 @@ def heal(request: Request, req: HealRequest):
                     "and timing, not assertions (changing it would hide the problem). "
                     "Check 'Why it failed' and update the expected value yourself if "
                     "the new one is correct."))
-    result = heal_test(req.code, ctx.get("error", ""), ctx.get("snapshot", ""))
+    result = heal_test(req.code, ctx.get("error", ""), ctx.get("snapshot", ""),
+                       provider=req.provider, model=req.model,
+                       user_key=req.user_key, owner_token=req.owner_token)
     if not result:
         return HealResponse(healed_code="", provider=None,
                             detail="The model could not produce a corrected test.")
