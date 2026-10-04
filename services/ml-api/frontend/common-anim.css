@@ -1,0 +1,110 @@
+/* Testwright/AIRaML app animation system — split out of common.css to keep it
+   under its size baseline. Imported at the top of common.css (keyframes resolve
+   document-wide, so load order is safe). */
+/* ══ Animation system ═══════════════════════════════════════════ */
+
+/* Keyframes */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes panelIn {
+  from { opacity: 0; transform: translateY(36px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes dotPulse {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(2.2); box-shadow: 0 0 18px var(--active-accent,#818cf8); }
+  100% { transform: scale(1); }
+}
+@keyframes shimmer {
+  from { background-position: 200% center; }
+  to   { background-position: -200% center; }
+}
+@keyframes progressShimmer {
+  0%   { left: -60%; }
+  100% { left: 160%; }
+}
+@keyframes successFlash {
+  0%   { background: linear-gradient(135deg,#34d399,#10b981); box-shadow: 0 4px 22px rgba(52,211,153,0.55); }
+  100% { background: linear-gradient(135deg,#6366f1,#38bdf8); box-shadow: 0 4px 16px rgba(99,102,241,0.35); }
+}
+@keyframes blobDrift1 {
+  0%,100% { transform: translate(0,0) scale(1); }
+  50%      { transform: translate(55px,-40px) scale(1.09); }
+}
+@keyframes blobDrift2 {
+  0%,100% { transform: translate(0,0) scale(1); }
+  50%      { transform: translate(-42px,28px) scale(1.06); }
+}
+
+/* Particle canvas */
+#bg-canvas {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none; z-index: 0;
+}
+
+/* Ambient blobs */
+.bg-blob {
+  position: fixed; border-radius: 50%;
+  pointer-events: none; z-index: 0; filter: blur(72px);
+  transition: background 1.5s ease;
+}
+.bg-blob-1 {
+  width: 560px; height: 560px; top: -150px; left: -150px;
+  background: rgba(99,102,241,0.14);
+  animation: blobDrift1 20s ease-in-out infinite;
+}
+.bg-blob-2 {
+  width: 440px; height: 440px; bottom: 60px; right: -100px;
+  background: rgba(56,189,248,0.11);
+  animation: blobDrift2 26s ease-in-out infinite;
+}
+[data-theme="light"] .bg-blob-1 { background: rgba(99,102,241,0.14); }
+[data-theme="light"] .bg-blob-2 { background: rgba(56,189,248,0.11); }
+
+/* Layer content above canvas/blobs */
+.gradient-top-bar, nav, .layout { position: relative; z-index: 1; }
+
+/* Sidebar item entrance */
+.sb-anim {
+  opacity: 0; transform: translateY(20px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.sb-anim.sb-visible { opacity: 1; transform: translateY(0); }
+
+/* Active dot pulse */
+.dot-pulse { animation: dotPulse 0.45s ease forwards; }
+
+/* Predict button shimmer */
+.btn-shimmer {
+  background: linear-gradient(90deg,#6366f1,#818cf8,#38bdf8,#818cf8,#6366f1) !important;
+  background-size: 300% auto !important;
+  animation: shimmer 1.2s linear infinite !important;
+  box-shadow: 0 4px 24px rgba(99,102,241,0.5) !important;
+}
+
+/* Predict button success flash */
+.btn-success-flash { animation: successFlash 0.85s ease forwards !important; }
+
+/* Result card entrance */
+.result-reveal { animation: panelIn 0.38s cubic-bezier(0.22,1,0.36,1) both; }
+
+@media print {
+  nav, .sidebar, #topbar, .upload-zone, .eda-sticky-nav, #eda-export-btn { display:none !important; }
+  body { background:#fff !important; color:#000 !important; }
+  .eda-panel { max-width:100%; padding:0; }
+  .eda-section-card {
+    background:#fff !important; border:1px solid #ddd !important;
+    box-shadow:none !important; opacity:1 !important; transform:none !important;
+    break-inside:avoid; page-break-inside:avoid;
+  }
+  .eda-section-title { color:#333 !important; }
+  .eda-section-title::before { background:#34d399 !important; }
+  .eda-table th, .eda-table td { color:#333 !important; border-color:#ddd !important; }
+  .eda-chip { border:1px solid #ddd !important; background:#f9f9f9 !important; }
+  .eda-chip-val, .eda-chip-label, .eda-ring-num { color:#111 !important; fill:#111 !important; }
+  .eda-ring-track { stroke:#ddd !important; }
+  .eda-insight { border-left-width:3px !important; }
+  #main { overflow:visible !important; }
+}

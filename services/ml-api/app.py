@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Slim FastAPI entry point — all logic lives in routers/core/."""
+# ruff: noqa: E402 — the decompression-bomb pixel caps below MUST run before the
+# routers import cv2/PIL, so several imports deliberately sit after that setup.
 import logging
 import os
 import time
