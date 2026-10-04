@@ -204,8 +204,8 @@ shipped (§5, P4b) are exactly this; keep doubling down on traceability.
 | **R5** | NEXT | ⏸ **deferred — no authed target** | **Authenticated testing (`storageState`)** — see §9a | Biggest capability unlock, but needs a security decision + a real logged-in app to test (none exists yet) | L |
 | **R6** | NEXT | ✅ shipped+verified `6c76886`·`9784203` | **Discover one hop deep** — opt-in: same explore run visits up to 3 same-origin links and appends their snapshots | Surfaces cases across linked pages, not just the entry page; no extra CI cost | M (discover.py) |
 | **R7** | LATER | ✅ **all shipped+live** — export `98c71fc` + local dashboard `8b7be70` + share permalink (Phase 1) + historical/cross-device dashboard `4bfd4f1`; both Supabase migrations run (live-verified 2026-10-04) — `QA_SHAREABLE_REPORTS_PLAN.md` | **Run reports** — **Excel/PDF export** + **local dashboard** + **share permalink** (`/qa/run/r/[id]`, `qa_shared_runs`) + **historical/cross-device dashboard** (`qa_runs` log+stats) | A run lived in one browser only; now exportable, shareable by link, and trended cross-device. Live: `/api/qa-run/stats`→200 w/ rows; `/api/qa-run/share/<id>`→404 (table exists) | M–L (frontend-only: Next.js routes + Supabase; no HF/backend change) |
-| **R8** | LATER | — | **Scheduled re-runs / monitoring** (tests as uptime checks, Checkly's angle) | Recurring value, but heavy infra | L |
-| **R9** | LATER | — | **API/request testing** | Off-identity (Testwright is browser E2E) | M |
+| **R8** | NOW | 🔨 **in progress** — plan + P0 locked, see §9b | **Scheduled re-runs / monitoring** (tests as uptime checks, Checkly's angle): `qa_monitors` table + "Monitor this test" toggle + scheduled `ml-qa-runner` workflow + failure alerts | Recurring value users ask for; results reuse `qa_runs`/Dashboard-B | L (frontend + Supabase + 1 scheduled workflow; no HF change) |
+| **R9** | LATER | ⏭ **skip for now**, see §9c | **API/request testing** | Off-identity (Testwright is browser E2E); needs different grounding; only win is speed | M |
 | **R10** | LATER | skip | **Warm/self-hosted runner** (= §5 item D) | Only real speed lever, but infra+security cost on a free public portfolio | **skip** |
 
 **Done (2026-10-02):** R1 → R2/R3 → R4 → R6, each shipped and verified live on the
@@ -255,6 +255,65 @@ code; a hard **no** for a password or session cookie. Decide the credential mode
 **Honest caveat.** On this deployment (a public portfolio whose own site needs no login),
 path A mainly benefits the owner testing their own authed apps; broad public auth testing
 isn't safe without path B. Weigh R5 against R4 if there's no authed app to test yet.
+
+### 9b. R8 detail — Scheduled re-runs / monitoring (tests as uptime checks)
+
+**Status: IN PROGRESS (2026-10-04).** Mark a saved test "monitor this" and it re-runs on a
+schedule; a failure (or a pass→fail transition) raises an alert and shows as uptime history.
+The synthetic-monitoring angle (Checkly/Mabl). Results already flow into `qa_runs` (Dashboard-B),
+so the dashboard aggregates monitor runs for free.
+
+**P0 decisions — LOCKED (recommended defaults, 2026-10-04):**
+1. **Cost cap** (the real constraint — each check ≈ 50s GitHub Actions minutes on a free
+   portfolio): **opt-in per test, ≤5 monitors, daily default / hourly max, a global daily-run
+   ceiling.**
+2. **Scheduler: A — a scheduled GitHub workflow** in `ml-qa-runner` (same cron pattern as
+   `nightly-evals.yml`): one batched job reads the due monitors from Supabase and runs them,
+   amortizing the ~50s floor. (Rejected: Vercel Cron — hobby tier is daily-only; `pg_cron` —
+   splits the run path.)
+3. **Alerts: DB + dashboard first** (reuse the `providerAlert.ts` dedup pattern); **email
+   (Resend) deferred** to a later phase.
+
+**The must-fix prerequisite.** A scheduled job cannot read a saved test from a browser's
+`localStorage` — monitored tests must live **server-side**. So the foundation is a
+`qa_monitors` Supabase table (test code + target + schedule + enabled + last_status), same
+service-role/RLS model as `qa_shared_runs`.
+
+**Build steps:**
+1. **`supabase/qa_monitors.sql`** — table + RLS (service-role only), `enabled`, `interval`
+   (`daily`/`hourly`), `last_run_at`, `last_status`, `consecutive_failures`. Run once in the
+   SQL editor (like the other migrations).
+2. **`POST /api/qa-run/monitor`** (upsert/enable/disable) + **`GET /api/qa-run/monitor`**
+   (list) — Next.js routes, service-role key, `analyticsWritesEnabled` gate, ≤5 cap enforced.
+3. **"Monitor this test" toggle** in the Run stage (on a saved/passed run) → upserts the test
+   server-side; shows the cap + "runs in public CI" notice. **Owner-gated** (behind the same
+   ownership gate R5 uses) — monitoring is *recurring* CI cost, so unlike one-shot Share it must
+   not be open to arbitrary visitors. The test **code is stored** here (required to re-run it,
+   unlike Share where code is opt-in) — disclosed on the privacy page.
+4. **Scheduled workflow** in `ml-qa-runner` — cron reads due monitors (`GET …/monitor?due=1`
+   via a shared token), runs them batched, records each to `qa_runs` tagged `source:'monitor'`,
+   updates `last_run_at`/`last_status`/`consecutive_failures`.
+5. **Alerting** — on failure or pass→fail transition, write a dedup'd alert row; a **Monitors**
+   section in `/qa/dashboard` (uptime %, last check, recent failures each linking to its report).
+6. **Phase 4 (optional, later):** email via Resend; snooze/ack.
+7. **Docs + privacy page** (server-side storage of a monitored test is disclosed) + verify
+   (plant a passing + a failing monitor; confirm cap, dedup, dashboard, RLS, writes-gate).
+
+**Honest caveat.** The price is **recurring CI minutes** — that's why the cap is P0, not an
+afterthought. Keep the default frequency low and the monitor count small.
+
+### 9c. R9 decision — API / request testing: SKIP for now
+
+**Status: deprioritized / skip (2026-10-04).** API testing (Playwright's `request` fixture:
+hit an endpoint, assert status/JSON) is **off-identity** — Testwright is browser E2E, and this
+is a different tool bolted on. Three reasons to hold off: (1) users come here to test *screens*,
+not endpoints — adding this makes two half-products; (2) it needs a different grounding model —
+an API has no ARIA snapshot to copy from, so the "never invent anything" safety net mostly
+doesn't apply (the user would hand-feed every endpoint + expected shape); (3) its only real win
+is **speed** (no browser → dodges the ~50s floor), which isn't worth a new surface on a test
+type this product isn't about. **Revisit only as a tiny complement to E2E** (same-origin,
+GET-first, user-supplied endpoint + sample) if real demand appears; otherwise the effort goes
+to R8.
 
 ## 10. References — Phase 2 research
 
