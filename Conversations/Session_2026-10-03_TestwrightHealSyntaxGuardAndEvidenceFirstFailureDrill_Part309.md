@@ -90,20 +90,45 @@ Both are LOGIC failures (wrong assumptions about the site), not syntax, not my c
 - **Laws vs advice.** Be explicit with the user about which fixes are guaranteed (code I run) and
   which are heuristics (advice to the model).
 
-## Open / deferred — TOMORROW
-- **Two more grounding rules** (the user said "we will do it tomorrow"): (1) a control that is a
-  BUTTON, not a link, won't navigate — don't expect it to; (2) a "PDF for print"/print button opens
-  the print dialog, so don't `waitForEvent('download')` on it — only a "Download…" button does.
-- **Gemini comparison** ("we will test with gemini model as well"): a one-off, off-line comparison of
-  heal/author output quality vs the free cascade — NOT wiring the paid key into the public endpoints.
-- Still parked: Learn-from-edits Phase 1 (needs real `test_edited` data); R5 authenticated testing
-  (needs a login-gated app).
+## Follow-up 2026-10-04 — the two deferred items, both closed
+### Arc 6 — the two grounding rules shipped (`e119d8c`, HF)
+Both were LOGIC failures drilled in Arc 5, now turned into grounding help:
+- **10e (button ≠ navigation).** A filter/toggle button (e.g. "Computer Vision" on a tools-listing
+  page) does not navigate — don't click it and assert `toHaveURL` or a destination heading (that was
+  the Security & Trust → Computer Vision 31s timeout). Only names in the link map are navigations.
+- **10f (print ≠ download).** A "PDF for print"/"Print" control opens the print dialog and never fires
+  a `download` event — `waitForEvent('download')` on it times out (the handbook → PDF 34s timeout).
+  Only a link whose map entry ends with `[download]` triggers a real download.
+- The **`[download]` marker** (discover.py) is the one deterministic assist — it marks `<a download>`
+  links so the model can tell a real download from a print button; `locators._parse_link_map` strips
+  both `[newtab]` and `[download]` so href-grounding is unaffected. Same laws-vs-advice split: 10e/10f
+  are heuristics, the marker is a law. Verified: full HF rebuild → RUNNING + QA 200.
+
+### Arc 7 — the Gemini comparison (off-line, NOT wired in)
+A one-off, two-call off-line comparison of heal/author quality vs the free cascade, `gemini-3.6-flash`
+(the backend's standard text model), key read in-memory from `ml-portfolio/.env.local` and never wired
+into the public `/qa` endpoints. Both cases are the exact ones the free cascade fumbled:
+- **Call 1 (Heal — the `name.`-typo case).** Clean: no punctuation typo, parses, grounded to the
+  verbatim `'Search 26 Security & Trust tools…'` (cohere had emitted `{ name. 'Search…' }` + a wrong
+  name missing the count).
+- **Call 2 (Author — the 10e button-vs-nav trap).** Clean: treated Computer Vision as a button, no
+  `toHaveURL` navigation, asserted on-page state (cohere had clicked it as a nav link → 31s timeout).
+- **Verdict:** Gemini is the stronger model on both (it is the paid one), but two samples are not proof
+  of immunity. **Decision UNCHANGED** (same as Arc 1): Gemini stays OFF the public endpoints — it is
+  the only paid key and those endpoints are public, so every visitor's call would bill. The durable,
+  provider-independent fixes (syntax guard, sanitizer, grounding 10a–10f) are the protection, not a
+  model swap. [[project_llm_provider_status]] [[feedback_no_unilateral_provider_swaps]]
+  [[feedback_billed_api_testing]]
+
+Still parked: Learn-from-edits Phase 1 (needs real `test_edited` data); R5 authenticated testing
+(needs a login-gated app).
 
 ## Commits
 | Repo | Commits |
 |---|---|
 | ml-portfolio | `c371fe7` (dashboard: numbered test labels, history-wide captions, skip reason) |
 | ML-Unified (backend, HF) | `918103b` (sanitizer + syntax guard + new-tab/search grounding; new `validate.py`) |
+| ML-Unified (backend, HF) | `e119d8c` (2026-10-04: grounding rules 10e button-vs-nav + 10f print-vs-download; `[download]` marker) |
 
 Related: [[project_testwright_run_perf]], [[project_testwright_qa_platform]],
 [[feedback_status_claims_need_evidence]], [[feedback_debug_first]], [[feedback_document_only_when_needed]].
