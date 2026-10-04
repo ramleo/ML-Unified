@@ -31,7 +31,9 @@ PAID = "gemini"
 # -- Cascade order ------------------------------------------------------------
 
 def test_document_cascade_is_the_agreed_order():
-    assert [name for name, _ in _llm._CASCADE_ORDER] == ["cohere", "mistral", "gemini"]
+    # Mistral was dropped from the document path in 3889bd6 (it always failed);
+    # the free→paid order (Cohere, then the paid Gemini last) is unchanged.
+    assert [name for name, _ in _llm._CASCADE_ORDER] == ["cohere", "gemini"]
 
 
 def test_rag_fallback_is_the_agreed_order():
@@ -92,13 +94,13 @@ def test_first_provider_wins_and_the_paid_one_is_never_called(monkeypatch):
 
 
 def test_an_empty_answer_falls_through_to_the_next_provider(monkeypatch):
-    called = _stub_cascade(monkeypatch, {"cohere": "", "mistral": '{"ok": true}'})
+    called = _stub_cascade(monkeypatch, {"cohere": "", "gemini": '{"ok": true}'})
 
     out = _llm._cascade([{"role": "user", "content": "x"}], "sys")
 
     assert out == '{"ok": true}'
-    assert called == ["cohere", "mistral"]
-    assert _llm.last_provider == "mistral"
+    assert called == ["cohere", "gemini"]
+    assert _llm.last_provider == "gemini"
 
 
 def test_whitespace_is_not_an_answer(monkeypatch):
@@ -106,18 +108,18 @@ def test_whitespace_is_not_an_answer(monkeypatch):
     exception, not a refusal, just nothing. A cascade that treats "   " as
     success returns an empty extraction to the user and reports the wrong
     provider as the one that served it."""
-    called = _stub_cascade(monkeypatch, {"cohere": "   \n ", "mistral": "{}"})
+    called = _stub_cascade(monkeypatch, {"cohere": "   \n ", "gemini": "{}"})
 
     assert _llm._cascade([], "") == "{}"
-    assert called == ["cohere", "mistral"]
-    assert _llm.last_provider == "mistral"
+    assert called == ["cohere", "gemini"]
+    assert _llm.last_provider == "gemini"
 
 
 def test_every_provider_failing_is_reported_as_nobody_served(monkeypatch):
     called = _stub_cascade(monkeypatch, {})
 
     assert _llm._cascade([], "") == ""
-    assert called == ["cohere", "mistral", "gemini"], "the cascade stopped early"
+    assert called == ["cohere", "gemini"], "the cascade stopped early"
     assert _llm.last_provider == "", "a failed cascade must not leave a stale provider name"
 
 
@@ -126,9 +128,9 @@ def test_last_provider_is_not_left_over_from_a_previous_call(monkeypatch):
     extraction to attribute the result in the UI. A stale value means the
     UI names a provider that did not run — the same class of lie as
     reporting the provider asked for instead of the one that answered."""
-    _stub_cascade(monkeypatch, {"mistral": "{}"})
+    _stub_cascade(monkeypatch, {"gemini": "{}"})
     _llm._cascade([], "")
-    assert _llm.last_provider == "mistral"
+    assert _llm.last_provider == "gemini"
 
     _stub_cascade(monkeypatch, {})
     _llm._cascade([], "")
