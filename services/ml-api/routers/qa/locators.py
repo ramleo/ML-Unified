@@ -100,10 +100,11 @@ def _parse_link_map(page_context: str) -> list[tuple[str, str]]:
         if " -> " in line:
             label, _, href = line.partition(" -> ")
             label, href = label.strip().lower(), href.strip()
-            # A `[newtab]` suffix (target=_blank marker) is context for the model, not
-            # part of the href — strip it so the deterministic href match still works.
-            if href.endswith("[newtab]"):
-                href = href[: -len("[newtab]")].strip()
+            # Trailing `[newtab]`/`[download]` markers are context for the model, not
+            # part of the href — strip any of them so the deterministic href match works.
+            while href.endswith("[newtab]") or href.endswith("[download]"):
+                marker = "[newtab]" if href.endswith("[newtab]") else "[download]"
+                href = href[: -len(marker)].strip()
             if label and href and href != "#":
                 pairs.append((label, href))
     return pairs

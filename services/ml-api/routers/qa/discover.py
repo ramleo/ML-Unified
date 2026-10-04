@@ -186,7 +186,11 @@ def build_explore_spec(url: str, deep: bool = False) -> str:
         # Mark links that open in a new tab so generation uses popup capture, not a
         # same-page URL assertion (which can never pass for a target=_blank link).
         "      const nt = (a.target === '_blank') ? ' [newtab]' : '';\n"
-        "      const k = name + ' -> ' + href + nt;\n"
+        # Mark links with a real download attribute so generation uses waitForEvent
+        # ('download') ONLY here — a 'print to PDF' button has no such attribute and
+        # opens the print dialog instead (asserting a download on it would time out).
+        "      const dl = a.hasAttribute('download') ? ' [download]' : '';\n"
+        "      const k = name + ' -> ' + href + nt + dl;\n"
         "      if (seen.has(k)) continue;\n"
         "      seen.add(k); out.push(k);\n"
         "      if (out.length >= max) break;\n"
