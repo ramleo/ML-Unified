@@ -101,6 +101,7 @@ from routers.core.shared import (
 from routers.core.monitoring import _req_log, _SKIP_PATHS
 from security.log_redact import install as _install_log_redaction
 from security.error_reporting import init_error_reporting, error_capture_dispatch
+from security.trace import trace_id_dispatch, TRACE_HEADER
 
 # uvicorn only configures its own loggers — without this every logger.info()
 # in routers/ is silently dropped and never shows up in HF Space logs.
@@ -145,6 +146,12 @@ app = FastAPI(title="ML API", lifespan=_lifespan)
 # store, then re-raises so Sentry (if active) and the default 500 still apply.
 # Only genuine 500s reach it; HTTPException/validation errors are handled upstream.
 app.add_middleware(BaseHTTPMiddleware, dispatch=error_capture_dispatch)
+
+# Request correlation id (security/trace.py) — added just AFTER error_capture so
+# it sits one level OUTSIDE it: the trace id is in the contextvar before
+# error_capture runs, so a reported 500 carries the id that links it to the
+# frontend action. See docs/OBSERVABILITY_PLAN.md (O1).
+app.add_middleware(BaseHTTPMiddleware, dispatch=trace_id_dispatch)
 
 # Was allow_origins=["*"] — a real, confirmed gap (any origin could call
 # every one of this backend's ~50 public routers). Now an explicit
@@ -192,6 +199,9 @@ async def _monitor(request: Request, call_next):
             "method": request.method,
             "status": response.status_code,
             "ms":     ms,
+            # Set by trace_id_dispatch (inner middleware) on the response; read
+            # it here rather than the contextvar, which is already reset by now.
+            "trace_id": response.headers.get(TRACE_HEADER, ""),
         })
     return response
 

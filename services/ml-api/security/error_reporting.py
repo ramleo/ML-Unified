@@ -43,12 +43,17 @@ async def _post_error_to_store(kind: str, message: str, route: str, stack: str) 
     _last_store_send = now
     try:
         import httpx
+        from security.trace import current_trace_id
         payload = {
             "source": "backend",
             "kind": kind,
             "message": (message or "")[:1000],
             "route": route,
             "stack": (stack or "")[:6000],
+            # Correlation id (O1): lands in errors.meta.trace_id — no schema
+            # change — so a backend 500 links to the frontend action that caused
+            # it. Empty when the caller sent no id and none was minted.
+            "meta": {"trace_id": current_trace_id()},
         }
         async with httpx.AsyncClient(timeout=2.0) as client:
             await client.post(f"{_SITE_URL}/api/error", json=payload)
