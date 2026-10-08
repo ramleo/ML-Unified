@@ -1,7 +1,7 @@
 # Observability — plan & roadmap
 
-**Status:** proposed 2026-10-08. Research + gap analysis done; **no code yet — awaiting
-vendor/sampling decisions (see §7, which are the user's).** Builds on what already ships:
+**Status:** proposed 2026-10-08; **§7 decisions made 2026-10-08 — ready to build, starting
+O1 → O2.** Builds on what already ships:
 Sentry (errors), the DIY error store, the Supabase analytics dashboard, and
 `docs/LOGGING_SPEC.md` (the single source of truth for what the site logs — any change
 here changes that file and the privacy page too).
@@ -107,15 +107,27 @@ real-user performance on tooling we already run, no new vendor, no cost. O3/O4 n
 - **Sampling hides rare events** — a 0.1 trace sample will miss some. Errors are always
   captured; traces are sampled for cost.
 
-## 7. Open decisions (the user's call)
+## 7. Decisions (made 2026-10-08)
 
-1. **Vendor** — recommended: **stay on Sentry free tier + Supabase**, telemetry shaped to
-   OTel semconv for portability. Alternatives: add **Grafana Cloud free tier** (more
-   generous traces/metrics, another account to run) or **self-host** (no cost ceiling, but
-   infra + security on a free portfolio — likely not worth it). *No vendor is adopted until
-   you pick one; this doc commits to none.*
-2. **Sampling rates** — `tracesSampleRate` and LLM-span sampling (cost vs coverage).
-3. **Backend `SENTRY_DSN`** — set it (O4) or keep the DIY store only? You hold the account.
+1. **Vendor — Sentry free tier + Supabase (the stack already in use).** No new account,
+   no cost, no lock-in: Sentry's free tier already carries tracing, Web Vitals and LLM
+   monitoring; Supabase is already the metrics store. All new telemetry is shaped to OTel
+   GenAI semconv keys so a later move to Grafana Cloud free or self-host needs no
+   re-instrumentation. Rejected: Datadog/Honeycomb (paid, overkill) and self-host
+   (infra + security burden on a free public site).
+2. **Sampling — errors 100%, traces 10% (`tracesSampleRate: 0.1`), LLM spans 100%.**
+   Errors are rare and always kept; 10% traces is the standard start (enough for patterns
+   and p95, cheap on free-tier quota — tune up if traffic is low); LLM calls are captured
+   in full because they are low-volume, high-value, and the cost/token figures are only
+   trustworthy if complete.
+3. **Backend `SENTRY_DSN` — set it (O4).** Already wired (`error_reporting.py` is a no-op
+   only because the DSN is blank), so it is a one-variable change that lights up backend
+   error capture and lets O1's trace id link a Space failure back to the frontend action —
+   closing the ephemeral-HF-log blind spot LOGGING_SPEC exists to fight. Same Sentry
+   project as the frontend is fine (simpler); a second project is optional.
+
+Standing: telemetry stays **content-free** and **Session Replay stays off** (privacy);
+any new signal updates the privacy page.
 
 Related: `docs/LOGGING_SPEC.md`, `docs/ERROR_TRACKING.md`,
 `Session_2026-10-04_…_Part310.md` (Arc 5 — where agent observability applies).
