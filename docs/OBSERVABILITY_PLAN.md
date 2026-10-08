@@ -1,7 +1,7 @@
 # Observability — plan & roadmap
 
-**Status:** proposed 2026-10-08; **§7 decisions made 2026-10-08 — ready to build, starting
-O1 → O2.** Builds on what already ships:
+**Status:** proposed 2026-10-08; §7 decisions made 2026-10-08. **O1 shipped + verified live,
+O2 shipped (2026-10-08) — O3 (LLM-call telemetry) is next.** Builds on what already ships:
 Sentry (errors), the DIY error store, the Supabase analytics dashboard, and
 `docs/LOGGING_SPEC.md` (the single source of truth for what the site logs — any change
 here changes that file and the privacy page too).
@@ -86,8 +86,8 @@ Ordered by value ÷ effort. Tiers: **NOW** (no blocker) · **NEXT** · **LATER**
 
 | # | Tier | Item | Why | Effort |
 |---|---|---|---|---|
-| **O1** | NOW | **Correlation id across tiers.** Mint a `trace_id` in the browser per user action; send it as a header to every Next API route and on to each HF Space call; stamp it on every log row, error, and `llm_calls` record, and as a Sentry tag. | The correlation spine — turns 4 disconnected rows into one story. No vendor needed; pure plumbing on existing logging. | S–M |
-| **O2** | NOW | **RUM + frontend tracing (Sentry free tier).** Raise `tracesSampleRate` 0 → ~0.1, add `browserTracingIntegration`, report Core Web Vitals (LCP/INP/CLS). **Replay stays off.** Update the privacy page. | Real-user performance we are blind to today; cheap, already-installed SDK. | S |
+| **O1** | NOW | ✅ **shipped + verified live 2026-10-08.** Correlation id across tiers. The per-run id `trackedFetch` already mints now rides `x-trace-id` to the backend (FE `b02df24`); `security/trace.py` middleware captures/echoes it and stamps it on 500s (`errors.meta.trace_id`, no migration) + the request log (BE `fd43ea4`, HF live — echo verified both paths). Next API routes read it onto their error logs + a Sentry tag (`2cb0486`). **Remaining for O3:** a real `trace_id` column on `llm_calls` (deferred with that table's per-call growth). | The correlation spine — turns 4 disconnected rows into one story. No vendor needed; pure plumbing on existing logging. | S–M |
+| **O2** | NOW | ✅ **shipped 2026-10-08 (FE, pending DSN verify).** `tracesSampleRate` 0 → 0.1 on the client (`instrumentation-client.ts`): the default `browserTracingIntegration` records a sampled pageload/navigation transaction and attaches Core Web Vitals (LCP/INP/CLS/FCP/TTFB). Replay stays off; `beforeSendTransaction` strips query strings; privacy page updated. Server tracing left at 0 — deferred to O4 with the outbound trace-propagation decision. | Real-user performance we are blind to today; cheap, already-installed SDK. | S |
 | **O3** | NEXT | **LLM-call telemetry to GenAI semconv.** Promote the existing `llm_calls` logging to first-class per call: provider, model, operation, input/output tokens, cost estimate, latency, outcome. Keys follow OTel GenAI semconv. Dashboard panel: p95 latency, cost/day, success rate by provider. | Closes the LLM-obs gap; makes cost and provider health visible; builds directly on `providerAlert.ts` + `llm_calls`. | M |
 | **O4** | NEXT | **Backend error + trace continuity.** Set backend `SENTRY_DSN` (already wired, no-op without it); propagate O1's `trace_id` into backend errors/events so a Space failure links to the frontend action. Keeps evidence off the ephemeral disk. | Removes the backend blind spot that LOGGING_SPEC exists to fight; low effort once the DSN is decided. | S |
 | **O5** | NEXT | **SLOs + burn-rate alerts.** Define 3–4 SLOs (API route availability, LLM success rate, p95 latency) as Supabase views + a dashboard tile; alert via the existing `providerAlert` dedup pattern. | Moves from "counts" to "are we meeting a target"; alert on burn, not raw thresholds. | M |
