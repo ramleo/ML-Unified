@@ -1,0 +1,121 @@
+# Observability — plan & roadmap
+
+**Status:** proposed 2026-10-08. Research + gap analysis done; **no code yet — awaiting
+vendor/sampling decisions (see §7, which are the user's).** Builds on what already ships:
+Sentry (errors), the DIY error store, the Supabase analytics dashboard, and
+`docs/LOGGING_SPEC.md` (the single source of truth for what the site logs — any change
+here changes that file and the privacy page too).
+
+Through-line: **we already have two of the three pillars in partial form; the missing
+one is correlation.** The value of observability is not more dashboards — it is being
+able to follow one user action from the browser, through the Next API route, into the HF
+Space, down to the LLM provider, as a single linked story. That spine (a trace id) is
+what we lack, and most of it is cheap to add on tooling we already pay nothing for.
+
+---
+
+## 1. What observability is (the 2025 consensus)
+
+Three signal types, correlated by a shared id — the correlation is the product, the
+pillars are just storage formats:
+
+- **Metrics** — time-series numbers: request rate, error rate, latency percentiles. Cheap
+  to store, good for alerting on SLO burn.
+- **Logs** — timestamped structured events, the richest context, the signal of last resort.
+- **Traces** — a tree of spans across service boundaries, linked by a trace id.
+
+Modern practice adds **RUM** (real-user monitoring: Core Web Vitals — LCP, INP, CLS),
+and, for AI apps, **LLM observability**: every model call a span carrying provider, model,
+token counts, dollar cost, latency and a quality/eval score, under the **OpenTelemetry
+GenAI semantic conventions** so the keys are portable across any backend.
+
+Sources: [Three pillars (OneUptime, 2025)](https://oneuptime.com/blog/post/2025-08-20-three-pillars-of-observability-logs-metrics-traces/view),
+[Observability fundamentals (Guance, 2026)](https://www.guance.com/learn/articles/observability-fundamentals-guide),
+[OTel LLM observability](https://opentelemetry.io/blog/2024/llm-observability/),
+[LLM monitoring with OTel (Grafana)](https://grafana.com/blog/ai-observability-llms-in-production),
+[GenAI semantic conventions (OneUptime docs)](https://oneuptime.com/docs/telemetry/ai-llm-observability).
+
+## 2. Can we apply it here? Yes — and partly already is
+
+The site is an LLM-heavy, multi-tier app (browser → Next API routes on Vercel → two HF
+Spaces → LLM providers), which is exactly the shape observability is for. We already run
+error tracking and content-free product analytics. The gap is tracing/correlation, RUM,
+latency/SLOs, and first-class LLM-call telemetry. All of it can be added **without a new
+paid vendor** — see §4.
+
+## 3. What we already have (inventory)
+
+| Pillar | Have today | Where |
+|---|---|---|
+| **Errors** | Sentry (frontend, **errors only**) + DIY error store (Supabase `errors` + `error_groups` RPC + the AnalyticsErrors panel) + `providerAlert.ts` auth-failure rows | `src/sentry.*.config.ts`, `src/app/api/error/route.ts`, `src/lib/providerAlert.ts` |
+| **Logs** | The LOGGING_SPEC vocabulary events → Supabase (client wiring complete); backend `security/events.py` + `error_reporting.py` | `src/lib/logEvents.ts`, `docs/LOGGING_SPEC.md` |
+| **Metrics (partial)** | Realtime Analytics dashboard — usage counts, `llm_calls`, events; budget caps + per-IP/route rate limits enforced | `realtime-analytics`, `src/lib/analytics*.ts` |
+| **Traces** | **none** — `tracesSampleRate: 0` both ends; no trace id crosses tiers | — |
+| **RUM** | **none** — no Web Vitals; Session Replay deliberately off (privacy) | `src/instrumentation-client.ts` |
+| **LLM obs (partial)** | provider/cascade logged; auth-failure alerts; daily budget caps | `providerAlert.ts`, backend cascades |
+| **Synthetic/uptime (partial)** | Testwright R8 monitors re-run saved tests on a schedule | `QA_*` / `ml-qa-runner` |
+
+## 4. Gaps vs best practice, and the stance on each
+
+1. **No correlation id across tiers** — the biggest gap. One click can touch 3–4 services
+   and nothing links the rows. *Fix: O1.*
+2. **No RUM / Web Vitals** — we can't see real users' LCP/INP/CLS. *Fix: O2.*
+3. **No latency percentiles / SLOs / burn-rate alerts** — only counts today. *Fix: O3, O5.*
+4. **LLM telemetry incomplete** — no per-call token/cost/latency/quality span, no GenAI
+   semconv, no multi-hop tracing of the two real agents (`rag/agent.py` LangGraph,
+   `rag/crag.py`). (This is Part 310 Arc 5's finding.) *Fix: O3, O6.*
+5. **Backend blind spots** — `error_reporting.py` is a no-op until `SENTRY_DSN` is set, and
+   HF Space logs are an ephemeral buffer wiped on every upload/restart. *Fix: O4.*
+
+**Design stance (not a vendor commitment — see §7):** do **not** add a paid APM
+(Datadog/Honeycomb). Build on what costs nothing and we already run — **Sentry's free tier**
+(its Performance/tracing, Web Vitals and LLM-monitoring features are available there) plus
+**Supabase** as the metrics store. Shape all new telemetry to **OpenTelemetry GenAI
+semantic conventions** so the keys are portable if we ever move to Grafana Cloud's free
+tier or self-host. That gives the vendor-neutral benefit OTel is prized for without paying
+for or locking into a vendor now.
+
+**Constraints that shape everything below:** Vercel Hobby + free HF Spaces + Supabase free
+(short retention, no always-on collector); HF disk is ephemeral; the privacy posture is
+content-free telemetry and no Replay — any new signal stays content-free and updates the
+privacy page.
+
+## 5. Roadmap
+
+Ordered by value ÷ effort. Tiers: **NOW** (no blocker) · **NEXT** · **LATER**.
+
+| # | Tier | Item | Why | Effort |
+|---|---|---|---|---|
+| **O1** | NOW | **Correlation id across tiers.** Mint a `trace_id` in the browser per user action; send it as a header to every Next API route and on to each HF Space call; stamp it on every log row, error, and `llm_calls` record, and as a Sentry tag. | The correlation spine — turns 4 disconnected rows into one story. No vendor needed; pure plumbing on existing logging. | S–M |
+| **O2** | NOW | **RUM + frontend tracing (Sentry free tier).** Raise `tracesSampleRate` 0 → ~0.1, add `browserTracingIntegration`, report Core Web Vitals (LCP/INP/CLS). **Replay stays off.** Update the privacy page. | Real-user performance we are blind to today; cheap, already-installed SDK. | S |
+| **O3** | NEXT | **LLM-call telemetry to GenAI semconv.** Promote the existing `llm_calls` logging to first-class per call: provider, model, operation, input/output tokens, cost estimate, latency, outcome. Keys follow OTel GenAI semconv. Dashboard panel: p95 latency, cost/day, success rate by provider. | Closes the LLM-obs gap; makes cost and provider health visible; builds directly on `providerAlert.ts` + `llm_calls`. | M |
+| **O4** | NEXT | **Backend error + trace continuity.** Set backend `SENTRY_DSN` (already wired, no-op without it); propagate O1's `trace_id` into backend errors/events so a Space failure links to the frontend action. Keeps evidence off the ephemeral disk. | Removes the backend blind spot that LOGGING_SPEC exists to fight; low effort once the DSN is decided. | S |
+| **O5** | NEXT | **SLOs + burn-rate alerts.** Define 3–4 SLOs (API route availability, LLM success rate, p95 latency) as Supabase views + a dashboard tile; alert via the existing `providerAlert` dedup pattern. | Moves from "counts" to "are we meeting a target"; alert on burn, not raw thresholds. | M |
+| **O6** | LATER | **Multi-hop tracing for the real agents.** Per-node spans for `rag/agent.py` (LangGraph), `rag/crag.py`, `siem_triage.py` (retrieve → rerank → generate → verify), surfaced in the existing MMRAG-08 trace panel. | The only genuinely multi-step flows (Part 310 Arc 5); single-call tools don't need it. | M–H |
+
+**Suggested first slice:** O1 then O2 — together they give end-to-end correlation plus
+real-user performance on tooling we already run, no new vendor, no cost. O3/O4 next.
+
+## 6. Inherent limits (stated, not hidden)
+
+- **Telemetry only shows what is instrumented** — a behavior with no span/log is invisible,
+  the same floor as the doc-coverage check. Observability narrows the dark, it doesn't
+  remove it.
+- **Free-tier retention is short** — Sentry/Supabase free tiers cap history; durable
+  long-term analysis still means rolling our own summary rows (as the analytics dashboard
+  already does).
+- **Sampling hides rare events** — a 0.1 trace sample will miss some. Errors are always
+  captured; traces are sampled for cost.
+
+## 7. Open decisions (the user's call)
+
+1. **Vendor** — recommended: **stay on Sentry free tier + Supabase**, telemetry shaped to
+   OTel semconv for portability. Alternatives: add **Grafana Cloud free tier** (more
+   generous traces/metrics, another account to run) or **self-host** (no cost ceiling, but
+   infra + security on a free portfolio — likely not worth it). *No vendor is adopted until
+   you pick one; this doc commits to none.*
+2. **Sampling rates** — `tracesSampleRate` and LLM-span sampling (cost vs coverage).
+3. **Backend `SENTRY_DSN`** — set it (O4) or keep the DIY store only? You hold the account.
+
+Related: `docs/LOGGING_SPEC.md`, `docs/ERROR_TRACKING.md`,
+`Session_2026-10-04_…_Part310.md` (Arc 5 — where agent observability applies).
