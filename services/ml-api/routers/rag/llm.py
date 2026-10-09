@@ -46,7 +46,8 @@ def _stream_groq_openai_raw(provider: str, model: str, key: str, messages: list[
                 yield content
 
 
-def _stream_claude_raw(model: str, key: str, messages: list[dict], system: str):
+def _stream_claude_raw(model: str, key: str, messages: list[dict], system: str,
+                       usage: dict | None = None):
     import anthropic
     client = anthropic.Anthropic(api_key=key)
     with client.messages.stream(
@@ -57,9 +58,19 @@ def _stream_claude_raw(model: str, key: str, messages: list[dict], system: str):
     ) as stream:
         for text in stream.text_stream:
             yield text
+        # Final message carries the authoritative token counts; read it after the
+        # text has drained, inside the context so the stream is still open.
+        if usage is not None:
+            try:
+                u = stream.get_final_message().usage
+                usage["input"] = getattr(u, "input_tokens", None)
+                usage["output"] = getattr(u, "output_tokens", None)
+            except Exception:
+                pass
 
 
-def _stream_gemini_raw(model: str, key: str, messages: list[dict], system: str):
+def _stream_gemini_raw(model: str, key: str, messages: list[dict], system: str,
+                       usage: dict | None = None):
     import httpx
 
     url = (
@@ -90,6 +101,12 @@ def _stream_gemini_raw(model: str, key: str, messages: list[dict], system: str):
                             for part in cand.get("content", {}).get("parts", []):
                                 if "text" in part:
                                     yield part["text"]
+                        # usageMetadata rides the terminal SSE object; the last
+                        # one seen holds the cumulative totals.
+                        meta = obj.get("usageMetadata")
+                        if meta and usage is not None:
+                            usage["input"] = meta.get("promptTokenCount")
+                            usage["output"] = meta.get("candidatesTokenCount")
                     except json.JSONDecodeError:
                         continue
     except httpx.HTTPStatusError as exc:
@@ -108,7 +125,8 @@ def _stream_gemini_raw(model: str, key: str, messages: list[dict], system: str):
         raise
 
 
-def _stream_cohere_raw(model: str, key: str, messages: list[dict], system: str):
+def _stream_cohere_raw(model: str, key: str, messages: list[dict], system: str,
+                       usage: dict | None = None):
     import httpx
 
     formatted = []
@@ -144,6 +162,13 @@ def _stream_cohere_raw(model: str, key: str, messages: list[dict], system: str):
                             )
                             if text:
                                 yield text
+                        elif obj.get("type") == "message-end" and usage is not None:
+                            # v2 message-end carries usage.tokens (billed_units is
+                            # the same shape); either answers input/output counts.
+                            u = obj.get("delta", {}).get("usage", {})
+                            tok = u.get("tokens") or u.get("billed_units") or {}
+                            usage["input"] = tok.get("input_tokens")
+                            usage["output"] = tok.get("output_tokens")
                     except json.JSONDecodeError:
                         continue
     except httpx.HTTPStatusError as exc:
@@ -199,13 +224,22 @@ def stream_groq_openai(provider: str, model: str, key: str, messages: list[dict]
                       _stream_groq_openai_raw(provider, model, key, messages, max_retries, max_tokens))
 
 
+# The usage dict is shared between the raw generator (which fills it from the
+# provider's terminal chunk) and instrument() (which reads it once the stream has
+# drained). Groq/OpenAI-compat have no usage dict: capturing their counts would
+# need stream_options={"include_usage": True}, a request-shape change not every
+# OpenAI-compatible base accepts — and they run on free tiers, so cost is $0
+# regardless. They still get a row with the trace id and null tokens.
 def stream_claude(model: str, key: str, messages: list[dict], system: str):
-    return instrument("claude", model, _stream_claude_raw(model, key, messages, system))
+    usage: dict = {}
+    return instrument("claude", model, _stream_claude_raw(model, key, messages, system, usage), usage)
 
 
 def stream_gemini(model: str, key: str, messages: list[dict], system: str):
-    return instrument("gemini", model, _stream_gemini_raw(model, key, messages, system))
+    usage: dict = {}
+    return instrument("gemini", model, _stream_gemini_raw(model, key, messages, system, usage), usage)
 
 
 def stream_cohere(model: str, key: str, messages: list[dict], system: str):
-    return instrument("cohere", model, _stream_cohere_raw(model, key, messages, system))
+    usage: dict = {}
+    return instrument("cohere", model, _stream_cohere_raw(model, key, messages, system, usage), usage)

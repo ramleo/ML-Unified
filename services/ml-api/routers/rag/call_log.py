@@ -27,11 +27,35 @@ import threading
 import time
 from typing import Any, Iterator, Optional
 
+from security.trace import current_trace_id
+
 logger = logging.getLogger(__name__)
 
 _SERVICE = "ml-api"
 _DEFAULT_SINK = "https://ml-portfolio-rho.vercel.app/api/llm-log"
 _TIMEOUT_S = 4.0
+
+# Prices in USD per 1,000,000 tokens. **As of 2026-10-08**, mirrored from the
+# frontend's src/lib/llmTelemetry.ts so a backend row and a frontend row for the
+# same model agree. ESTIMATES for the cost dashboard, not a bill — update the
+# date when refreshed. Only the paid models appear; free-tier providers (groq,
+# cohere, mistral) are absent and resolve to $0 in _estimate_cost.
+_PRICE_PER_MTOK = {
+    "claude": {"in": 1.0, "out": 5.0},   # claude-haiku-4-5
+    "gemini": {"in": 0.3, "out": 2.5},   # gemini-2.5-flash
+}
+
+
+def _estimate_cost(provider: str, input_tokens: Optional[int],
+                   output_tokens: Optional[int]) -> Optional[float]:
+    """USD cost for a call, or None when tokens are unknown. A provider absent
+    from the price table (free tier) is a real, known 0.0 — not None."""
+    if input_tokens is None and output_tokens is None:
+        return None
+    rate = _PRICE_PER_MTOK.get(provider.lower())
+    if not rate:
+        return 0.0
+    return ((input_tokens or 0) * rate["in"] + (output_tokens or 0) * rate["out"]) / 1_000_000
 
 # Who the current request belongs to. A ContextVar rather than a parameter on
 # every signature: the call sites are spread across a dozen routers, and the
@@ -68,19 +92,35 @@ def _post(payload: dict) -> None:
 
 def record_call(provider: str, model: str, status: str, *,
                 http_status: Optional[int] = None, error_code: str = "",
-                error_message: str = "", latency_ms: int = 0) -> None:
-    """Queue one row. Returns immediately; never raises."""
+                error_message: str = "", latency_ms: int = 0,
+                usage: Optional[dict] = None, operation: str = "chat") -> None:
+    """Queue one row. Returns immediately; never raises.
+
+    `usage` is the mutable dict filled by an instrumented stream_* generator —
+    {"input": int|None, "output": int|None}. When absent or unknown, tokens and
+    cost are sent as None (a free provider still resolves to a known $0).
+    """
     _, token = _sink()
     if not token:
         return  # fail closed — no secret configured, nothing leaves the Space
     ctx = get_call_context()
+    u = usage or {}
+    input_tokens = u.get("input")
+    output_tokens = u.get("output")
+    # run_id is the trace id spine (O1). Prefer an explicit set_call_context
+    # value; otherwise fall back to the request's trace id so every backend LLM
+    # call joins the same story as the frontend action, with no per-site change.
+    run_id = ctx.get("run_id", "") or current_trace_id()
     payload = {
         "service": _SERVICE, "tool": ctx.get("tool", ""),
         "provider": provider, "model": model,
         "status": status, "http_status": http_status,
         "error_code": error_code, "error_message": str(error_message)[:400],
         "latency_ms": latency_ms,
-        "session_id": ctx.get("session_id", ""), "run_id": ctx.get("run_id", ""),
+        "session_id": ctx.get("session_id", ""), "run_id": run_id,
+        "input_tokens": input_tokens, "output_tokens": output_tokens,
+        "cost_usd": _estimate_cost(provider, input_tokens, output_tokens),
+        "operation": operation,
     }
     try:
         threading.Thread(target=_post, args=(payload,), daemon=True).start()
@@ -108,12 +148,18 @@ def describe_error(exc: BaseException) -> tuple[Optional[int], str, str]:
     return status, code, str(exc)[:400]
 
 
-def instrument(provider: str, model: str, gen: Iterator[Any]) -> Iterator[Any]:
+def instrument(provider: str, model: str, gen: Iterator[Any],
+               usage: Optional[dict] = None) -> Iterator[Any]:
     """Wrap a provider's streaming generator so its outcome is recorded.
 
     Timed to completion rather than to first token: a stream that starts and
     then dies mid-answer is a different failure from one that never started,
     and only the end tells them apart.
+
+    `usage` is a dict shared with the raw generator, which fills it from the
+    provider's terminal usage chunk as the stream drains. It is read here only
+    after the generator is exhausted, so by then it holds the final counts (or
+    stays empty when the provider reports none).
     """
     t0 = time.monotonic()
     try:
@@ -122,8 +168,9 @@ def instrument(provider: str, model: str, gen: Iterator[Any]) -> Iterator[Any]:
     except BaseException as exc:
         status, code, msg = describe_error(exc)
         record_call(provider, model, "error", http_status=status, error_code=code,
-                    error_message=msg, latency_ms=int((time.monotonic() - t0) * 1000))
+                    error_message=msg, latency_ms=int((time.monotonic() - t0) * 1000),
+                    usage=usage)
         raise
     else:
         record_call(provider, model, "ok", http_status=200,
-                    latency_ms=int((time.monotonic() - t0) * 1000))
+                    latency_ms=int((time.monotonic() - t0) * 1000), usage=usage)
