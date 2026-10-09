@@ -69,6 +69,20 @@ async def error_capture_dispatch(request, call_next):
     try:
         return await call_next(request)
     except Exception as exc:
+        # O4: tag the Sentry event with the request's trace id. This must happen
+        # here, not in before_send: the trace middleware is OUTER, so its finally
+        # resets the trace contextvar before the exception reaches Sentry's outer
+        # auto-capture. Here the contextvar is still live (same reason the store
+        # POST below can read it). Mutating the request scope now carries the tag
+        # into that later capture. No-op when Sentry is dormant (no DSN).
+        try:
+            import sentry_sdk
+            from security.trace import current_trace_id
+            tid = current_trace_id()
+            if tid:
+                sentry_sdk.set_tag("trace_id", tid)
+        except Exception:
+            pass
         try:
             await _post_error_to_store(
                 kind=type(exc).__name__,
