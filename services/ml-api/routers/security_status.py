@@ -24,6 +24,7 @@ import os
 
 from fastapi import APIRouter, Header, HTTPException
 
+from security.error_reporting import sentry_active
 from security.events import get_recent_event_counts
 
 router = APIRouter()
@@ -37,4 +38,11 @@ def security_status(x_admin_token: str | None = Header(default=None), window_sec
     if x_admin_token != expected:
         raise HTTPException(status_code=404, detail="Not found")
     counts = get_recent_event_counts(window_seconds)
-    return {"window_seconds": window_seconds, "counts": counts, "total": sum(counts.values())}
+    # sentry_active (O4) tells a correct SENTRY_DSN from a silently-broken one:
+    # a malformed DSN boots fine but leaves Sentry dormant with no other signal.
+    return {
+        "window_seconds": window_seconds,
+        "counts": counts,
+        "total": sum(counts.values()),
+        "sentry_active": sentry_active(),
+    }

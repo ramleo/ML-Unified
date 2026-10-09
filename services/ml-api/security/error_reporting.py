@@ -31,6 +31,18 @@ import traceback
 _SITE_URL = os.environ.get("SITE_URL", "https://ml-portfolio-rho.vercel.app").rstrip("/")
 _last_store_send = 0.0
 
+# Whether sentry_sdk.init() actually succeeded at startup. A wrong or malformed
+# SENTRY_DSN makes init raise, which init_error_reporting() swallows and returns
+# False for — so the Space boots fine but Sentry stays dormant with no visible
+# signal. This flag is what the admin status endpoint reads to tell a correct DSN
+# from a silently-broken one.
+_SENTRY_ACTIVE = False
+
+
+def sentry_active() -> bool:
+    """True only if sentry_sdk.init() ran successfully (valid DSN present)."""
+    return _SENTRY_ACTIVE
+
 
 async def _post_error_to_store(kind: str, message: str, route: str, stack: str) -> None:
     """Best-effort POST of one unhandled backend exception to the site's
@@ -106,8 +118,11 @@ def _scrub(event, _hint):
 
 
 def init_error_reporting() -> bool:
-    """Initialise Sentry if SENTRY_DSN is present. Returns True if active.
+    """Initialise Sentry if SENTRY_DSN is present. Returns True if active, and
+    records that result in _SENTRY_ACTIVE for the status endpoint to read.
     Safe to call unconditionally at startup; never raises."""
+    global _SENTRY_ACTIVE
+    _SENTRY_ACTIVE = False
     dsn = os.environ.get("SENTRY_DSN")
     if not dsn:
         return False
@@ -124,4 +139,5 @@ def init_error_reporting() -> bool:
         )
     except Exception:
         return False
+    _SENTRY_ACTIVE = True
     return True
