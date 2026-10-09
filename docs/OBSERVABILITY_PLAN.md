@@ -96,6 +96,18 @@ Ordered by value ÷ effort. Tiers: **NOW** (no blocker) · **NEXT** · **LATER**
 | **O5** | NEXT | ✅ **shipped 2026-10-09.** Four SLOs via one content-free `/api/slo` scorecard (not Supabase views — single source of truth, reuses `/api/llm-stats` math): LLM success rate (≥98%), LLM p95 (≤12s), backend 5xx count, frontend error count. Dashboard tile `AnalyticsSLO.tsx` (status chip = colour **and** word). Alerting reuses the proven security-watch model, not `providerAlert`: `.github/workflows/slo-watch.yml` polls `/api/slo` every 30 min and fails on any `breach` → GitHub's free failure email (ungated endpoint, no secret). Honest scope: fast-burn (single-window threshold), not SRE multi-window burn-rate; ratio SLOs stay "insufficient" under MIN_SAMPLE calls; count targets scale with the window. All frontend + one workflow — **no HF upload.** | Moves from "counts" to "are we meeting a target"; alert on burn, not raw thresholds. | M |
 | **O6** | LATER | **Multi-hop tracing for the real agents.** Per-node spans for `rag/agent.py` (LangGraph), `rag/crag.py`, `siem_triage.py` (retrieve → rerank → generate → verify), surfaced in the existing MMRAG-08 trace panel. | The only genuinely multi-step flows (Part 310 Arc 5); single-call tools don't need it. | M–H |
 
+**Follow-ons (shipped 2026-10-09, alongside O5):**
+- **(A) Page Inspector** (`ml-portfolio 0c53daf`) — the per-page error log the user asked
+  for ("like HF logs"). `/api/error-detail` returns the pages that had errors, or one
+  page's individual occurrences (time, source, kind, enriched message, trace id), surfaced
+  as the `AnalyticsPageInspector.tsx` dashboard tile. The in-app drill-in that
+  `AnalyticsErrors` (grouped) lacked; raw tails stay in Vercel/HF logs, joined by trace id.
+- **(B) Provider response-body capture** (`ML-Unified 8d1a6ed`, HF) — `describe_error` now
+  folds the provider 4xx/5xx response body (openai/anthropic `.body`, httpx `.text`) into
+  `error_message`, content-free, so the next provider error self-explains instead of
+  leaving only a generic `"Client error 422 for url"` while the reason goes to the
+  ephemeral Space log. Prompted by two undiagnosable Cohere 422s an SLO breach surfaced.
+
 **Suggested first slice:** O1 then O2 — together they give end-to-end correlation plus
 real-user performance on tooling we already run, no new vendor, no cost. O3/O4 next.
 
