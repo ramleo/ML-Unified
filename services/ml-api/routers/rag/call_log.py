@@ -128,12 +128,41 @@ def record_call(provider: str, model: str, status: str, *,
         logger.debug("call_log thread failed: %s", exc)
 
 
+def _response_detail(exc: BaseException) -> str:
+    """The provider's response BODY for an HTTP error — where the real reason
+    lives (a 422's validation message, a 429's quota kind). `str(exc)` only gives
+    the generic "Client error '422 …' for url …", which is why a lost Cohere 422
+    was undiagnosable. Content-free per LOGGING_SPEC §6: this is an API error
+    envelope (the same text the gemini/cohere branches already log to stderr),
+    never the prompt. httpx streaming responses must be .read() before .text, and
+    read() on an already-closed response raises — hence the nested guards.
+    """
+    body = getattr(exc, "body", None)        # openai / anthropic SDK: parsed envelope
+    if body:
+        return str(body)[:350]
+    resp = getattr(exc, "response", None)     # httpx errors: gemini, cohere
+    if resp is not None:
+        try:
+            try:
+                resp.read()
+            except Exception:
+                pass
+            text = getattr(resp, "text", "") or ""
+            if text:
+                return text[:350]
+        except Exception:
+            pass
+    return ""
+
+
 def describe_error(exc: BaseException) -> tuple[Optional[int], str, str]:
     """(http_status, error_code, message) from a provider exception.
 
     Every SDK spells this differently: httpx puts it on .response, the openai
     SDK on the exception itself. Reading whichever exists beats parsing the
-    string, which is what made a 429 indistinguishable from a dead key.
+    string, which is what made a 429 indistinguishable from a dead key. The
+    message now folds in the response body (_response_detail) so the specific
+    reason is captured, not just the generic "Client error 4xx for url".
     """
     status: Optional[int] = None
     code = ""
@@ -142,10 +171,13 @@ def describe_error(exc: BaseException) -> tuple[Optional[int], str, str]:
         status = getattr(resp, "status_code", None)
     if status is None:
         status = getattr(exc, "status_code", None)
-    body = getattr(exc, "code", "") or getattr(exc, "type", "")
-    if body:
-        code = str(body)[:80]
-    return status, code, str(exc)[:400]
+    kind = getattr(exc, "code", "") or getattr(exc, "type", "")
+    if kind:
+        code = str(kind)[:80]
+    base = str(exc)[:150]
+    detail = _response_detail(exc)
+    message = f"{base} | {detail}" if detail and detail not in base else base
+    return status, code, message[:400]
 
 
 def instrument(provider: str, model: str, gen: Iterator[Any],
