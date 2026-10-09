@@ -6,7 +6,6 @@ Max 2 rewrite loops bound latency; generator streams via existing llm.py helpers
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
 import time
@@ -23,6 +22,7 @@ from routers.rag.agent_nodes import (
     node_router, node_decompose, node_retrieve, node_grade, node_rewrite,
     edge_after_router, edge_after_retrieve, edge_after_grade,
 )
+from routers.rag.agent_spans import STEP_MAP as _STEP_MAP, sse as _sse, SpanTimer
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -76,14 +76,8 @@ except Exception as exc:
     logger.error("LangGraph compile error: %s", exc)
 
 # ── SSE helper ─────────────────────────────────────────────────────────────────
-
-_STEP_MAP = {
-    "router":    "routing",
-    "decompose": "decomposing",
-    "retrieve":  "retrieving",
-    "grade":     "grading",
-    "rewrite":   "rewriting",
-}
+# _STEP_MAP and _sse now live in agent_spans.py (imported above) alongside the
+# per-node SpanTimer, so O6's timing and the step vocabulary stay in one place.
 
 _OPENAI_COMPAT_BASES = {
     "groq":       "https://api.groq.com/openai/v1",
@@ -99,10 +93,6 @@ _SERVER_KEY_ENVS = {
     "cohere":  "COHERE_API_KEY",
 }
 
-
-def _sse(obj: dict) -> str:
-    return f"data: {json.dumps(obj)}\n\n"
-
 # ── SSE generator ──────────────────────────────────────────────────────────────
 
 def _agent_generator(
@@ -110,6 +100,7 @@ def _agent_generator(
     provider: str, model: str, user_key: str, session_id: str = "", force_web: bool = False,
 ):
     t0 = time.time()
+    timer = SpanTimer()  # O6: per-node durations for the trace breakdown
 
     initial: AgentState = {
         "query":        query,
@@ -137,6 +128,7 @@ def _agent_generator(
                     yield _sse({
                         "type":  "agent_step",
                         "step":  step,
+                        "ms":    timer.lap(step),  # O6: time this node took
                         "loop":  state_update.get("loop_count",
                                                   final_state.get("loop_count", 0)),
                         "query": state_update.get("final_query",
@@ -153,9 +145,11 @@ def _agent_generator(
             yield _sse({"type": "agent_step", "step": "retrieving", "loop": 0,
                         "query": query})
             final_state.update(node_retrieve(final_state))
+            timer.lap("retrieving")
     else:
         yield _sse({"type": "agent_step", "step": "retrieving", "loop": 0, "query": query})
         final_state.update(node_retrieve(final_state))
+        timer.lap("retrieving")
 
     # ── Web fallback (no chunks or grader said websearch) ─────────────────────
     kb_chunks = final_state.get("chunks", [])
@@ -166,9 +160,11 @@ def _agent_generator(
         web_fallback_tried = True
         try:
             from routers.rag.crag import web_search_fallback
+            _tw = time.monotonic()
             web_chunks = web_search_fallback(
                 final_state.get("final_query") or query
             )
+            timer.add("websearch", round((time.monotonic() - _tw) * 1000))
             if web_chunks:
                 chunks = web_chunks
                 web_used = True
@@ -183,7 +179,9 @@ def _agent_generator(
         web_fallback_tried = True
         try:
             from routers.rag.crag import web_search_fallback
+            _tw = time.monotonic()
             web_chunks = web_search_fallback(final_state.get("final_query") or query)
+            timer.add("websearch", round((time.monotonic() - _tw) * 1000))
             if web_chunks:
                 chunks = web_chunks
                 web_used = True
@@ -228,6 +226,7 @@ def _agent_generator(
     messages.append({"role": "user",
                      "content": final_state.get("final_query") or query})
 
+    _tg = time.monotonic()
     try:
         if provider in ("groq", "openai", "mistral", "perplexity"):
             import openai as _oai
@@ -272,6 +271,7 @@ def _agent_generator(
                     "message": f"Generation failed ({provider}/{model}): {exc}"})
         return
 
+    timer.add("generate", round((time.monotonic() - _tg) * 1000))  # O6
     has_dataset = bool(tool_context.strip())
     from routers.rag.query import _determine_answer_source, _determine_confidence
     answer_source = _determine_answer_source(chunks, web_used, has_dataset)
@@ -293,6 +293,7 @@ def _agent_generator(
         "candidates_retrieved": len(chunks),
         "answer_source":      answer_source,
         "confidence":         confidence,
+        "spans":              timer.spans(),  # O6: per-node ms breakdown
     })
 
 # ── Request schema + endpoint ──────────────────────────────────────────────────
