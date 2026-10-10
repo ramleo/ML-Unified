@@ -72,6 +72,42 @@ into one chronological feed; `AnalyticsActivityLog.tsx` renders it newest-first 
 All/Warnings/Errors filter chips and **clickable rows** that expand to full detail (provider
 error envelope, http, tool, trace id). Live-verified: 144 ok / 23 warn-429 / 0 error today.
 
+## Arc 6 — Activity Log, round 2: the 200-with-broken-payload gap + UX
+A dashboard screenshot showed `Errors 0` while authoring was visibly failing. Two
+distinct problems, both fixed:
+
+**6a — the real blind spot (backend, `ML-Unified 4d2d5dc`, HF-uploaded).** When a
+provider returns bad code, the **HTTP call still succeeds (200)**, so `call_log`
+records it as `ok`. The validator rejects the code a moment later *inside the author
+route*, and that rejection went only to the Space's throwaway run buffer — never to
+`llm_calls`. So the "200-with-a-broken-payload" case the whole Activity Log was built
+for was itself invisible. Fix: `author.py._log_reject()` now logs every in-band
+rejection (non-test output / hedge / no-grounded-test / unparseable) as a content-free
+row — `status=error, http=422, error_code=output_rejected, op=qa-author` — with the
+reason + a short head of the generated code (test code, never user data). The four
+reject sites in `generate_test()` each call it before falling through to the next model.
+Diagnosis was debug-first: traced the flow `author → deps.complete → rag/llm.complete →
+instrument()` and saw `instrument` logs `ok/200` on any successful HTTP, confirming the
+rejection never reached the DB.
+
+**6b — three UX defects (frontend, `ml-portfolio d6a4802`).** The user did not want to
+click to see what's wrong, and filtering jumped the page. Verified clickability live
+first (a row *did* expand — it only *looked* dead because every row was a green `ok`
+with no interesting detail). Fixes in `AnalyticsActivityLog.tsx`:
+1. **Reasons inline, no click** — warning/error rows (`level !== "ok"`, so the new 422
+   rows included) print their reason + http/tool/trace inline; OK rows stay one line.
+2. **No scroll jump** — the list moved into a **fixed-height scroller** and rows are no
+   longer nulled on a filter change, so switching All/Warnings/Errors never resizes the
+   card. Root cause: the old `if (rows === null) return null` unmounted the whole card on
+   every filter click → page collapsed up then re-mounted back.
+3. **`· N err` is a link** — the LLM panel's error badge now dispatches an
+   `airaml:activity-focus` window event; the log listens, sets the Warnings filter and
+   `scrollIntoView`s. Cross-component with no shared store.
+
+**Lesson:** an "ok" from the transport layer is not an "ok" from the application. The
+logger sat at the HTTP funnel (right place for provider errors) but the *usefulness*
+check happens one layer up, so that layer has to emit its own failure row.
+
 ## Key decisions / lessons
 - **Read the logs before theorising.** The validator bug was invisible to reasoning; the raw
   rejected code named it instantly. [[feedback_debug_first]] [[feedback_status_claims_need_evidence]]
@@ -87,8 +123,8 @@ error envelope, http, tool, trace id). Live-verified: 144 ok / 23 warn-429 / 0 e
 ## Commits
 | Repo | Commits |
 |---|---|
-| ML-Unified (Testwright backend, HF) | `ad07f63` v1 · `0289623` v2 · `c860301` base_url · `70c9f5d` heading-fallback · `636b39b` validator-fix + diagnostic |
-| ml-portfolio | `936af5e` handbook obs · `4f52930` config/copy cleanup · `a1e0daa` Run Live button · `7f66d67` Activity Log |
+| ML-Unified (Testwright backend, HF) | `ad07f63` v1 · `0289623` v2 · `c860301` base_url · `70c9f5d` heading-fallback · `636b39b` validator-fix + diagnostic · `4d2d5dc` log in-band author rejections |
+| ml-portfolio | `936af5e` handbook obs · `4f52930` config/copy cleanup · `a1e0daa` Run Live button · `7f66d67` Activity Log · `d6a4802` Activity Log inline reasons + no-jump + err-badge link |
 | ml-qa-runner | `aad6259` local Companion |
 
 ## Open / next
