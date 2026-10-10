@@ -160,6 +160,13 @@ def build_explore_spec(url: str, deep: bool = False) -> str:
         "test('explore', async ({ page }) => {\n"
         + _GRAB_CONTROLS_JS +
         f"  await page.goto('{safe}', {{ waitUntil: 'domcontentloaded' }});\n"
+        # TW-GROUND: a single-page app renders its real controls (and their final
+        # button labels) only AFTER an async data/schema fetch. Wait for the network
+        # to settle so grabControls captures the REAL question input + post-load button
+        # label (e.g. 'Ask', not the pre-load 'Load DB') — without this the controls
+        # block was empty, the grounded-action gate no-op'd, and generation GUESSED a
+        # label that times out at run time. Guarded: pages that never idle fall through.
+        "  await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});\n"
         "  await page.waitForTimeout(1500);\n"
         "  const snapshot = await page.locator('body').ariaSnapshot();\n"
         "  const startCtrls = await grabControls(page);\n"
