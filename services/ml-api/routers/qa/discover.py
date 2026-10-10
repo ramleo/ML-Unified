@@ -36,6 +36,29 @@ LINKS_DELIM_JS = LINKS_DELIM.replace("\n", "\\n")
 # the (possibly multi-page) snapshot, so no reader change is needed.
 PAGE_DELIM_JS = "\\n\\n===PAGE "
 
+# TW-GROUND v2: a first-load overlay (walkthrough tour, cookie banner, welcome modal)
+# shows on a FRESH browser — which every CI run and every first companion run is — and
+# sits on top of the real UI, so a test can't reach the controls underneath until it is
+# dismissed. Discover runs on a fresh browser too, so it SEES the overlay's dismiss
+# control; we surface it here as a ===DISMISS=== hint so generation clicks it FIRST.
+DISMISS_DELIM = "\n\n===DISMISS (first-load overlay — click before interacting)===\n"
+# Conservative, strong dismiss phrases only (avoid bare "close"/"accept"/"continue",
+# which appear on non-overlay buttons and would risk a wrong first click).
+_DISMISS_RE = re.compile(
+    r"\b(skip tour|skip|got it|no thanks|maybe later|dismiss|"
+    r"accept all|accept cookies|don.?t show|get started)\b", re.I)
+
+
+def _overlay_hint(ctx: str) -> str:
+    """Return a ===DISMISS=== block naming dismiss-looking controls found in the
+    captured context (button/link names matching a common dismiss phrase), or ''."""
+    found: list[str] = []
+    for m in re.finditer(r'(?:button|link)[^"\n]{0,12}"([^"\n]{1,60})"', ctx, re.I):
+        name = m.group(1)
+        if _DISMISS_RE.search(name) and name not in found:
+            found.append(name)
+    return DISMISS_DELIM + "\n".join(f'button "{n}"' for n in found[:5]) if found else ""
+
 # Header for the start page's interactive-controls block (stays in the snapshot part).
 CONTROLS_DELIM_JS = "\\n\\n===CONTROLS===\\n"
 
@@ -315,5 +338,7 @@ def status(correlation_id: str):
     page_context = aria_part[: config.MAX_PAGE_CONTEXT]
     if links_part.strip():
         page_context += LINKS_DELIM + links_part.strip()[: config.MAX_LINKS_CHARS]
+    # TW-GROUND v2: prepend a dismiss hint if a first-load overlay's control is present.
+    page_context = _overlay_hint(page_context) + page_context
     return DiscoverStatus(status="completed", correlation_id=correlation_id,
                           run_url=run_url, proposals=proposals, page_context=page_context)
