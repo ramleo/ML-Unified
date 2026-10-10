@@ -57,7 +57,7 @@ def _overlay_hint(ctx: str) -> str:
         name = m.group(1)
         if _DISMISS_RE.search(name) and name not in found:
             found.append(name)
-    return DISMISS_DELIM + "\n".join(f'button "{n}"' for n in found[:5]) if found else ""
+    return DISMISS_DELIM + "\n".join(f'button "{n}"' for n in found[:5]) + "\n" if found else ""
 
 # Header for the start page's interactive-controls block (stays in the snapshot part).
 CONTROLS_DELIM_JS = "\\n\\n===CONTROLS===\\n"
