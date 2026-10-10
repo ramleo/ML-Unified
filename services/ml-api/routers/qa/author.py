@@ -148,8 +148,11 @@ def generate_test(instructions: str, base_url: str, test_name: str,
             continue
         if not looks_syntactically_valid(final):
             # A typo/brace slip would fail the whole spec with "No tests found" — let
-            # the next provider try rather than ship code that cannot compile.
-            logger.warning("qa/author: %s produced unparseable code — trying next", provider)
+            # the next provider try rather than ship code that cannot compile. Log a
+            # content-free head of the rejected code so a recurring reject is diagnosable
+            # (this is generated test code, never user data).
+            logger.warning("qa/author: %s produced unparseable code — trying next | head=%r",
+                           provider, final[:500])
             continue
         return final, provider
     logger.error("qa/author: every candidate failed (%s)",

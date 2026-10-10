@@ -62,12 +62,39 @@ def _unbalanced(code: str) -> bool:
     return bool(stack or quote)
 
 
+def _blank_strings(code: str) -> str:
+    """Replace the CONTENTS of string/template literals with spaces (keeping the quote
+    delimiters and all structure), so a check for code punctuation isn't fooled by
+    punctuation INSIDE a string value — e.g. a heading name that ends in a period right
+    before its closing quote (`'… get a prediction.'`) is not a `name.` option-key typo.
+    Without this, any grounded locator whose text ends in '.' was wrongly rejected."""
+    out = list(code)
+    quote: str | None = None
+    i, n = 0, len(code)
+    while i < n:
+        c = code[i]
+        if quote:
+            if c == "\\":
+                i += 2
+                continue
+            if c == quote:
+                quote = None
+            else:
+                out[i] = " "
+        elif c in ("'", '"', "`"):
+            quote = c
+        i += 1
+    return "".join(out)
+
+
 def looks_syntactically_valid(code: str) -> bool:
     """A best-effort gate: the code defines a test and has no structural break we can
     detect cheaply. False => reject this candidate and let the cascade try another."""
     if not code or "test(" not in code:
         return False
-    if _OPT_KEY_DOT_LEFT.search(code):
+    # Check option-key-dot typos against string-blanked code so a legitimate string
+    # value ending in '.' (a sentence-shaped locator name) is not a false positive.
+    if _OPT_KEY_DOT_LEFT.search(_blank_strings(code)):
         return False
     if _unbalanced(code):
         return False
