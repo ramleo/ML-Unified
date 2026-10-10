@@ -16,6 +16,7 @@ from fastapi import APIRouter, Request
 
 from routers.qa import config
 from routers.qa.deps import complete, select_candidates, record_call, limiter, LLM_LIMIT
+from routers.rag.call_log import record_call as _log_outcome
 from routers.qa.locators import (
     strip_hard_waits, shorten_long_names, href_link_locators,
     disambiguate_locators, first_on_href_locators, strip_junk_locators,
@@ -64,6 +65,26 @@ def _has_hedge(code: str) -> bool:
     guaranteed-failing guess, so we reject it and let the cascade try another model
     rather than hand the user a test that cannot pass."""
     return bool(_HEDGE_RE.search(code))
+
+
+def _log_reject(provider: str, model: str, reason: str, head: str = "") -> None:
+    """Surface an IN-BAND authoring failure in the Activity Log.
+
+    The provider returned HTTP 200, so the plain call log records it as "ok" — but
+    the output was unusable (prose, a hedge, or code that failed validation) and we
+    fell through to the next model. Without this row the dashboard shows a green
+    "ok" and the real reason lives only in the Space's throwaway text buffer, which
+    is exactly the "200-with-a-broken-payload" gap. We log a separate content-free
+    row (status=error, http=422) so the operator sees WHY authoring fell through.
+    Content is generated test code only, never a user prompt or document; truncated.
+    Fire-and-forget — never raises, no-ops when the log token is unset."""
+    try:
+        _log_outcome(provider, model, "error", http_status=422,
+                     error_code="output_rejected",
+                     error_message=reason + (f" | head={head[:160]}" if head else ""),
+                     operation="qa-author")
+    except Exception:
+        pass
 
 
 def _postprocess(code: str, ctx: str) -> str:
@@ -136,15 +157,18 @@ def generate_test(instructions: str, base_url: str, test_name: str,
         code = _strip_fences(raw)
         if not _looks_like_test(code):
             logger.warning("qa/author: %s returned non-test output", provider)
+            _log_reject(provider, model, "non-test output (prose/apology)", code)
             continue
         if _has_hedge(code):
             logger.warning("qa/author: %s returned hedge/placeholder code — rejecting", provider)
+            _log_reject(provider, model, "hedge/placeholder code (model was guessing)", code)
             continue
         final = _postprocess(code, ctx)
         if "test(" not in final:
             # The grounded-action gate dropped every test (all interactions were
             # ungrounded). Let the next model try rather than return an empty file.
             logger.warning("qa/author: %s left no grounded test after gating", provider)
+            _log_reject(provider, model, "no grounded test left after action-gating")
             continue
         if not looks_syntactically_valid(final):
             # A typo/brace slip would fail the whole spec with "No tests found" — let
@@ -153,6 +177,7 @@ def generate_test(instructions: str, base_url: str, test_name: str,
             # (this is generated test code, never user data).
             logger.warning("qa/author: %s produced unparseable code — trying next | head=%r",
                            provider, final[:500])
+            _log_reject(provider, model, "unparseable code (syntax/brace slip)", final)
             continue
         return final, provider
     logger.error("qa/author: every candidate failed (%s)",
