@@ -20,8 +20,11 @@ from routers.rag.call_log import record_call as _log_outcome
 from routers.qa.locators import (
     strip_hard_waits, shorten_long_names, href_link_locators,
     disambiguate_locators, first_on_href_locators, strip_junk_locators,
-    sanitize_option_punctuation, strip_upload_assert_noise,
-    fix_invented_heading_role,
+    sanitize_option_punctuation,
+)
+from routers.qa.name_grounding import (
+    strip_upload_assert_noise, fix_invented_heading_role,
+    stabilize_dynamic_control_names,
 )
 from routers.qa.validate import looks_syntactically_valid
 from routers.qa.action_gate import drop_ungrounded_actions, repair_ungrounded_names
@@ -121,6 +124,11 @@ def _postprocess(code: str, ctx: str) -> str:
         # (grounded a real string but invented its role). Runs last so href/exact
         # rewrites have already resolved link locators the gate would otherwise judge.
         code = drop_ungrounded_actions(code, ctx)
+    # Always last: a name that bakes in a volatile value (a live count like "Warnings 1"
+    # or a "— today/30d" state suffix) can't match once the test changes that state —
+    # match by its stable prefix instead. Runs after the gate (which validated the real
+    # captured string) and after the heading->getByText rewrite.
+    code = stabilize_dynamic_control_names(code)
     return code
 
 
