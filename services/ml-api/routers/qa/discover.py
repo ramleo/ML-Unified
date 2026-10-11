@@ -14,8 +14,9 @@ import uuid
 
 from fastapi import APIRouter, HTTPException, Request
 
-from routers.qa import config, github_runner
+from routers.qa import config, fixtures, github_runner
 from routers.qa.deps import complete, resolve_key, record_call, limiter, LLM_LIMIT
+from routers.qa.fixtures import FILEINPUTS_DELIM_JS
 from routers.qa.prompts import DISCOVER_SYSTEM
 from routers.qa.models import DiscoverStart, DiscoverStatus, RunAccepted
 from routers.qa.urlcheck import validate_target_url
@@ -194,6 +195,18 @@ def build_explore_spec(url: str, deep: bool = False) -> str:
         "  const snapshot = await page.locator('body').ariaSnapshot();\n"
         "  const startCtrls = await grabControls(page);\n"
         f"  const controlsBlock = startCtrls ? '{CONTROLS_DELIM_JS}' + startCtrls : '';\n"
+        # Phase 2: capture this page's FILE INPUTS (accept + a nearby label) so
+        # generation can upload the matching committed fixture instead of stalling.
+        # File inputs are often hidden behind a styled dropzone, so grab them directly.
+        "  const fileInputs = await page.$$eval('input[type=file]', els => els.slice(0, 12).map(e => {\n"
+        "    const accept = (e.getAttribute('accept') || '').trim();\n"
+        "    let label = (e.getAttribute('aria-label') || '').trim();\n"
+        "    if (!label) { const l = e.closest('label'); if (l) label = l.textContent || ''; }\n"
+        "    if (!label) { const b = e.closest('button,[role=button]'); if (b) label = b.textContent || ''; }\n"
+        "    label = label.replace(/\\s+/g, ' ').trim().slice(0, 60);\n"
+        "    return accept + '\\t' + label;\n"
+        "  }).join('\\n'));\n"
+        f"  const fileBlock = fileInputs ? '{FILEINPUTS_DELIM_JS}' + fileInputs : '';\n"
         "  let sections = '';\n"
         f"  const links = await page.$$eval('a[href]', (els, max) => {{\n"
         "    const seen = new Set(); const out = [];\n"
@@ -230,7 +243,7 @@ def build_explore_spec(url: str, deep: bool = False) -> str:
         + deep_js +
         "  const block = links.length"
         f"    ? '{LINKS_DELIM_JS}' + links.join('\\n') : '';\n"
-        "  fs.writeFileSync('aria.txt', snapshot + controlsBlock + sections + block);\n"
+        "  fs.writeFileSync('aria.txt', snapshot + controlsBlock + fileBlock + sections + block);\n"
         "});\n"
     )
 
@@ -333,12 +346,18 @@ def status(correlation_id: str):
         return DiscoverStatus(status="error", correlation_id=correlation_id, run_url=run_url,
                               detail="No test cases could be proposed from this page.")
 
+    # Phase 2: pull the raw ===FILEINPUTS=== block out BEFORE truncation (a deep
+    # multi-page capture could otherwise push it past MAX_PAGE_CONTEXT), then turn it
+    # (plus a camera-control scan) into a concrete ===MEDIA=== fixture hint.
+    aria_core, fileinputs_raw = fixtures.split_fileinputs(aria_part)
     # Page context carried into code generation: the snapshot (so locators are
     # real) plus the link map (so URL assertions use real hrefs, not guesses).
-    page_context = aria_part[: config.MAX_PAGE_CONTEXT]
+    page_context = aria_core[: config.MAX_PAGE_CONTEXT]
     if links_part.strip():
         page_context += LINKS_DELIM + links_part.strip()[: config.MAX_LINKS_CHARS]
     # TW-GROUND v2: prepend a dismiss hint if a first-load overlay's control is present.
     page_context = _overlay_hint(page_context) + page_context
+    # Prepend the upload/camera fixture hint (empty for pages that need neither).
+    page_context = fixtures.media_hint(fileinputs_raw, page_context) + page_context
     return DiscoverStatus(status="completed", correlation_id=correlation_id,
                           run_url=run_url, proposals=proposals, page_context=page_context)

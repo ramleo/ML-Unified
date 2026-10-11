@@ -172,7 +172,25 @@ AUTHOR_GROUNDING = (
     "and unstable (it can even change with CSS state) — a name match is unreliable, the "
     "href is not. ALWAYS end an href locator with `.first()`: the same href is often on "
     "several elements (a nav link repeated in the footer, or two labels sharing one "
-    "anchor), and an un-narrowed match fails strict mode."
+    "anchor), and an un-narrowed match fails strict mode.\n"
+    "14-media. The context MAY contain a `===MEDIA===` block. It means the page needs a "
+    "FILE UPLOAD and/or a CAMERA, and the runner provides real sample files + a fake "
+    "camera stream, so these tools ARE testable — do NOT skip them.\n"
+    "  * FILE UPLOAD: for each `file input ... -> upload with <code>` line, emit that "
+    "EXACT line to upload the sample file — copy the fixture path verbatim (e.g. "
+    "`await page.locator('input[type=\"file\"]').setInputFiles('fixtures/sample.csv');`). "
+    "The file input is often hidden behind a styled dropzone, so target it by "
+    "`input[type=\"file\"]` (NOT the visible 'Choose file'/'Upload' button) and call "
+    "`setInputFiles` on it directly — Playwright sets a hidden input fine. If several "
+    "file inputs are listed, use `.first()` or the one whose label matches the scenario. "
+    "NEVER invent a different filename or a local path; use ONLY a `fixtures/…` path from "
+    "the block.\n"
+    "  * CAMERA: when a `camera:` line is present, a fake stream is already wired up, so "
+    "DO NOT request permissions or call getUserMedia — just click the real capture/start "
+    "control (grounded in the controls list) and assert the result.\n"
+    "  * After uploading or capturing, assert a KNOWABLE state change (rule 10c): the "
+    "empty-state/placeholder text becomes hidden, or a results/preview region named in "
+    "the context appears. Do not assert a specific result value (it is dynamic)."
 )
 
 HEAL_SYSTEM = (
@@ -264,6 +282,11 @@ DISCOVER_SYSTEM = (
     "like 'Open the platform') or asserting its real content instead.\n"
     "3. Prefer meaningful user journeys (navigation, search, forms, key content "
     "being visible) over trivial checks.\n"
+    "3a. If the context has a `===MEDIA===` block, the page accepts a FILE UPLOAD "
+    "and/or a CAMERA, and the runner supplies sample files + a fake camera. PROPOSE a "
+    "journey that exercises it — e.g. 'Upload the sample file and confirm a result/"
+    "preview appears' or 'Start the camera and confirm the capture state' — these are "
+    "the page's primary flow, not an edge case.\n"
     "4. Return a JSON array of at most 6 objects, each "
     '{"title": "<short name>", "steps": "<plain-English steps a teammate could '
     'follow, 1-3 sentences>"}.\n'
