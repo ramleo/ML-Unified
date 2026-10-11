@@ -188,9 +188,17 @@ AUTHOR_GROUNDING = (
     "  * CAMERA: when a `camera:` line is present, a fake stream is already wired up, so "
     "DO NOT request permissions or call getUserMedia — just click the real capture/start "
     "control (grounded in the controls list) and assert the result.\n"
-    "  * After uploading or capturing, assert a KNOWABLE state change (rule 10c): the "
-    "empty-state/placeholder text becomes hidden, or a results/preview region named in "
-    "the context appears. Do not assert a specific result value (it is dynamic)."
+    "  * After uploading or capturing, prove the step REGISTERED with a KNOWABLE check. "
+    "The most reliable post-upload assertion is that the file input now holds the file: "
+    "`await expect(page.locator('input[type=\"file\"]')).toHaveValue(/sample\\.[a-z0-9]+$/);` "
+    "(a file input's value ends with the chosen fixture's filename) — use this as the "
+    "baseline. Only ADD a result assertion when the context has a genuine SHORT "
+    "empty-state/placeholder line (e.g. 'No results yet', 'Run to see output', 'Fill in "
+    "the fields') that a result would replace — then assert it becomes hidden. NEVER "
+    "assert that a long multi-sentence DESCRIPTION/intro paragraph becomes hidden (e.g. "
+    "'Upload a CSV. You get an overview…'): that text is permanent page copy, not an "
+    "empty-state, so `toBeHidden()` on it just times out. And never assert a specific "
+    "dynamic result value."
 )
 
 HEAL_SYSTEM = (

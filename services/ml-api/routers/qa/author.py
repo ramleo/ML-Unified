@@ -20,7 +20,7 @@ from routers.rag.call_log import record_call as _log_outcome
 from routers.qa.locators import (
     strip_hard_waits, shorten_long_names, href_link_locators,
     disambiguate_locators, first_on_href_locators, strip_junk_locators,
-    sanitize_option_punctuation,
+    sanitize_option_punctuation, strip_upload_assert_noise,
 )
 from routers.qa.validate import looks_syntactically_valid
 from routers.qa.action_gate import drop_ungrounded_actions, repair_ungrounded_names
@@ -105,6 +105,7 @@ def _postprocess(code: str, ctx: str) -> str:
         code = disambiguate_locators(code, ctx)
     code = first_on_href_locators(code)
     code = strip_junk_locators(code)
+    code = strip_upload_assert_noise(code)
     if ctx:
         # Repair a MISREAD getByRole name (e.g. 'PDF for print (AA)' -> the real
         # 'A4') to the unique close match in the captured context — BEFORE the gate,

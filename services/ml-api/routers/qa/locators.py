@@ -258,3 +258,33 @@ def strip_junk_locators(code: str) -> str:
     better than hanging, and keeps the rest of the test running."""
     kept = [ln for ln in code.split("\n") if not _JUNK_NAME_LOC.search(ln)]
     return "\n".join(kept)
+
+
+# A `getByText('<long literal>') … .toBeHidden()` assertion. A real empty-state that a
+# result replaces is short ('No results yet', 'Run to see output'); a multi-sentence
+# page DESCRIPTION is permanent copy, so asserting it becomes hidden only times out.
+_HIDDEN_TEXT_LINE = re.compile(
+    r"getByText\(\s*(['\"`])(?P<t>.*?)\1\s*\)[\s\S]*?\.toBeHidden\s*\(")
+# A visibility/enabled assertion ON A FILE INPUT. File inputs are usually hidden behind
+# a styled dropzone, yet setInputFiles works on them anyway — so asserting the input is
+# visible/enabled just times out on those tools. (setInputFiles / toHaveValue stay.)
+_FILE_INPUT_VIS_LINE = re.compile(
+    r"""locator\(\s*['"][^'"]*input\[type=["']?file["']?\][^'"]*['"]\s*\)"""
+    r"[\s\S]*?\.(?:toBeVisible|toBeEnabled)\s*\(")
+
+
+def strip_upload_assert_noise(code: str) -> str:
+    """Drop two always-failing assertions the model emits around uploads, keeping the
+    rest of the test: (1) `.toBeHidden()` on a long (>90-char) description string — a
+    permanent paragraph the model mistook for an empty-state; (2) `.toBeVisible()` /
+    `.toBeEnabled()` on a file input, which is often hidden behind a dropzone. The
+    upload itself (setInputFiles) and the reliable `toHaveValue(/sample…/)` check stay."""
+    kept = []
+    for ln in code.split("\n"):
+        m = _HIDDEN_TEXT_LINE.search(ln)
+        if m and len(m.group("t")) > 90:
+            continue
+        if _FILE_INPUT_VIS_LINE.search(ln):
+            continue
+        kept.append(ln)
+    return "\n".join(kept)
