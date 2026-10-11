@@ -288,3 +288,65 @@ def strip_upload_assert_noise(code: str) -> str:
             continue
         kept.append(ln)
     return "\n".join(kept)
+
+
+# Section/card titles on a dashboard are frequently <p>/<div>, not real <h*> headings,
+# yet the model still writes getByRole('heading', {name}) for them — which matches
+# nothing and times out on scroll/click/assert. These capture, from the page context,
+# which names are REAL headings vs. which are paragraphs/plain text.
+_ARIA_HEADING_NAME = re.compile(r'\bheading\s+"([^"\n]{1,120})"')
+_CTRL_HEADING_NAME = re.compile(r'^\s*\[heading\]\s+name="([^"\n]{1,120})"\s*$', re.M)
+_ARIA_PARA_TEXT = re.compile(r'^\s*-?\s*(?:paragraph|text):\s*(.+?)\s*$', re.M)
+# getByRole('heading', { name: <'str' | "str" | /regex/flags> , exact?: ... })
+_GBR_HEADING_CALL = re.compile(
+    r"getByRole\(\s*['\"]heading['\"]\s*,\s*\{\s*name:\s*"
+    r"(?P<name>/(?:\\.|[^/\n])+/[a-z]*|'[^'\n]*'|\"[^\"\n]*\")"
+    r"[^{}]*\}\s*\)"
+)
+
+
+def _nrm(s: str) -> str:
+    """Normalize to alnum-lowercase for tolerant name comparison."""
+    return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
+
+
+def _name_literal_token(lit: str) -> str:
+    """Comparable text inside a getByRole name literal — a quoted string's contents, or a
+    regex literal's text with anchors/escapes stripped (so /^Activity Log/ -> 'Activity Log')."""
+    s = lit.strip()
+    if s.startswith("/"):
+        end = s.rfind("/")
+        body = s[1:end] if end > 0 else s[1:]
+        body = re.sub(r"\\[a-zA-Z]", "", body).replace("^", "").replace("$", "").replace("\\", "")
+        return body
+    if len(s) >= 2 and s[0] in "'\"`":
+        return s[1:-1]
+    return s
+
+
+def fix_invented_heading_role(code: str, ctx: str) -> str:
+    """Rewrite getByRole('heading', {name}) -> getByText(name).first() when the captured
+    context shows that name as a PARAGRAPH/TEXT, not a heading (a card/section title the
+    model wrongly typed as a heading). A name that IS a captured heading, or that appears
+    nowhere, is left untouched. Fixes scroll/click/assert timeouts on dashboard titles."""
+    if not ctx:
+        return code
+    headings = {_nrm(m) for m in _ARIA_HEADING_NAME.findall(ctx)}
+    headings |= {_nrm(m) for m in _CTRL_HEADING_NAME.findall(ctx)}
+    paras = {_nrm(m) for m in _ARIA_PARA_TEXT.findall(ctx) if m.strip()}
+    paras.discard("")
+    if not paras:
+        return code
+
+    def _repl(m: re.Match) -> str:
+        tok = _nrm(_name_literal_token(m.group("name")))
+        if not tok:
+            return m.group(0)
+        is_heading = any(tok in h or h in tok for h in headings if h)
+        is_para = any(tok in p or p in tok for p in paras if p)
+        if is_heading or not is_para:
+            return m.group(0)  # a real heading, or unknown — don't touch it
+        return f"getByText({m.group('name')}).first()"
+
+    out = _GBR_HEADING_CALL.sub(_repl, code)
+    return out.replace(".first().first(", ".first(")  # collapse a redundant chain
