@@ -207,6 +207,9 @@ shipped (§5, P4b) are exactly this; keep doubling down on traceability.
 | **R8** | NOW | 🔨 **in progress** — plan + P0 locked, see §9b | **Scheduled re-runs / monitoring** (tests as uptime checks, Checkly's angle): `qa_monitors` table + "Monitor this test" toggle + scheduled `ml-qa-runner` workflow + failure alerts | Recurring value users ask for; results reuse `qa_runs`/Dashboard-B | L (frontend + Supabase + 1 scheduled workflow; no HF change) |
 | **R9** | LATER | ⏭ **skip for now**, see §9c | **API/request testing** | Off-identity (Testwright is browser E2E); needs different grounding; only win is speed | M |
 | **R10** | LATER | skip | **Warm/self-hosted runner** (= §5 item D) | Only real speed lever, but infra+security cost on a free public portfolio | **skip** |
+| **R11** | NOW | ✅ **MVP shipped 2026-10-10** (`ml-qa-runner aad6259` + `ml-portfolio a1e0daa`) | **Run Live** — run the authored test **headed on the user's own machine** so they can watch it, via a local **Companion** daemon the web UI talks to over `localhost`; CI stays the headless default. See §9d | Users expect to *see* a test run (like the Playwright VS Code ▶). A website can't launch a local browser, so a tiny local companion bridges it | M (companion package + Run-stage toggle; no HF/backend change) |
+| **R12** | NOW | ✅ **shipped 2026-10-10/11** (`ad07f63`·`0289623`·`c860301`·`70c9f5d`·`636b39b`, all HF-uploaded) | **TW-GROUND — ground authoring in dynamic/stateful controls.** A 5-bug stack found by the Phase-1 self-test; see §9e | Nearly every Phase-1 sweep failure was an authoring-grounding miss, not a tool bug: Author guesses labels Discover didn't capture, so tests on dynamic UIs time out | M (discover/prompts/validate) |
+| **R13** | NOW | ✅ **shipped 2026-10-10/11** (`ML-Unified 4d2d5dc` HF + `ml-portfolio 7f66d67`·`d6a4802`) | **Activity Log — surface in-band authoring failures.** A unified ok/warn/error feed that also logs the **200-with-broken-payload** case (provider returns HTTP 200 but the code fails validation); see §9f | The Dashboard showed "Errors 0" while authoring was visibly failing, because a successful HTTP call with unusable output logged as `ok`. Operators must see recovered 429s and rejected output | S–M (author.py log hook + Next.js `/api/activity` + panel) |
 
 **Done (2026-10-02):** R1 → R2/R3 → R4 → R6, each shipped and verified live on the
 deployed Space (R4 e2e: an assertion-mismatch run heals to an honest refusal; R6 e2e:
@@ -314,6 +317,63 @@ is **speed** (no browser → dodges the ~50s floor), which isn't worth a new sur
 type this product isn't about. **Revisit only as a tiny complement to E2E** (same-origin,
 GET-first, user-supplied endpoint + sample) if real demand appears; otherwise the effort goes
 to R8.
+
+### 9d. R11 detail — Run Live (local Companion)
+
+**Status: MVP shipped 2026-10-10.** A website cannot launch a browser on the user's
+machine (browser sandbox), so "watch it live" needs a small local process — exactly how
+Playwright (VS Code ▶ / `--headed`), Cypress (`cypress open`) and Checkly (`checkly test`)
+all do it. The **Testwright Companion** (`ml-qa-runner/companion/`) is a `127.0.0.1` daemon:
+`GET /health` (the UI detects it) and `POST /run {code, base_url, test_name}` → writes the
+spec, runs `playwright test --headed`, returns pass/fail. CORS locked to the Testwright
+origins; target host allow-listed; runs only the spec the UI sends. The Run stage shows a
+**Run Live** button (`RunLiveButton.tsx`): companion up → click to watch; down → shows the
+one-line `npx @airaml/testwright-companion` to start it. Headless CI stays the default.
+**MVP scope:** run once with `npm start`/`npx`, then click-to-run. **Later:** packaged
+installer (zero-typing), `--ui` time-travel mode, live status over WebSocket.
+
+### 9e. R12 detail — TW-GROUND (author grounding on dynamic controls)
+
+**Status: SHIPPED 2026-10-10/11.** Found by the Phase-1 self-test sweep (Testwright testing our
+own ~29 targets): ~every failure was an **authoring-grounding miss, not a tool bug** — when
+Discover doesn't capture a control, Author *guesses* its label and the test times out waiting
+for something that isn't there. sql-app (`/tools/text-to-sql`) was the adversarial case, and
+each fix exposed the next layer — **five stacked bugs, all generalised, all HF-uploaded:**
+
+| # | Bug | Fix | Commit |
+|---|---|---|---|
+| 1 | Guessed `'Run'` + shortened placeholder (SPA renders controls after async load → Discover captured none → gate no-op → LLM guessed) | `discover.py` network-idle settle before `grabControls`; `prompts.py` `10c-ready` wait-for-ready | `ad07f63` |
+| 2 | First-load **tour overlay** hid the input on a fresh browser | `discover.py` `_overlay_hint` (`===DISMISS===` block); `prompts.py` `10d-overlay` non-fatal dismiss-first | `0289623` |
+| 3 | Navigated to `/sql` (landing) not the given `/tools/text-to-sql` — rule 2 invited `goto(BASE_URL + '<path>')` | rule 2: open the provided base_url **verbatim** | `c860301` |
+| 4 | Grounded author returned **empty** when context had no specific heading | rule 10: generic `getByRole('heading').first()` fallback, never empty | `70c9f5d` |
+| 5 | **Validator rejected any locator name ending in `.`** — `_OPT_KEY_DOT_LEFT` scanned INSIDE strings, so a heading like `'… get a prediction.'` false-matched the `{name.` typo check → "unparseable" → both providers fail → empty | `validate.py` `_blank_strings()` before the option-key-dot check (regression guards keep a real `{name.` typo + brace imbalance rejected) | `636b39b` |
+
+**Bug #5 was the real blocker** behind the ml/eda/vision landing "author-failed" and silently
+broke **every** sentence-style heading site-wide. Found by **reading the Space run logs**
+(`/api/spaces/{id}/logs/run`) after adding a content-free "head of rejected code" diagnostic to
+`author.py` — two prior guesses (tour, regex-brackets) were both wrong; the logs settled it.
+Heal (`heal.py`) timeout-on-action re-resolution was *not* needed once authoring was grounded, so
+it stays on the backlog rather than shipped.
+
+### 9f. R13 detail — Activity Log (surface in-band authoring failures)
+
+**Status: SHIPPED 2026-10-10/11.** A dashboard screenshot showed `Errors 0` while authoring was
+visibly failing. Root cause: a provider that returns **HTTP 200 with unusable output** (prose, a
+hedge, or code the validator rejects) is a success at the transport layer, so `call_log`'s
+`instrument()` records it `ok`; the rejection happens one layer up in `author.py` and only reached
+the Space's throwaway run buffer. **An "ok" from the transport layer is not an "ok" from the
+application** — so that layer now emits its own failure row.
+
+1. **Backend** (`author.py._log_reject`, `4d2d5dc`) — each of the four reject sites in
+   `generate_test()` logs a content-free row (`status=error, http=422, error_code=output_rejected,
+   op=qa-author`) naming the reason + a short head of the generated test code (never user data).
+2. **Feed** (`ml-portfolio /api/activity` + `AnalyticsActivityLog.tsx`, `7f66d67`) — merges
+   `llm_calls` (ok / 429-warn / error) with the `errors` table into one newest-first feed with
+   All/Warnings/Errors filters.
+3. **UX** (`d6a4802`) — warning/error rows show their reason **inline (no click)**; the list is a
+   fixed-height scroller so filtering never resizes the card (the old `return null` unmounted it and
+   jumped the page); the LLM panel's `· N err` badge dispatches `airaml:activity-focus` → the log
+   scrolls into view and selects Warnings.
 
 ## 10. References — Phase 2 research
 
