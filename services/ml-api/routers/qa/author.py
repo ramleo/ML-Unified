@@ -21,6 +21,7 @@ from routers.qa.locators import (
     strip_hard_waits, shorten_long_names, href_link_locators,
     disambiguate_locators, first_on_href_locators, strip_junk_locators,
     sanitize_option_punctuation, stabilize_query_href_locators,
+    stabilize_data_driven_select, guard_noop_visibility_click,
 )
 from routers.qa.name_grounding import (
     strip_upload_assert_noise, fix_invented_heading_role,
@@ -132,6 +133,12 @@ def _postprocess(code: str, ctx: str) -> str:
     # match by its stable prefix instead. Runs after the gate (which validated the real
     # captured string) and after the heading->getByText rewrite.
     code = stabilize_dynamic_control_names(code)
+    # Data-agnostic enforcement for LIVE-DATA controls (the prompt rule alone is ignored
+    # by the weak free model): a data-driven <select> picks its first real option, and a
+    # dead-end "poke a chip then re-check it's visible" click is skipped when the chip is
+    # absent (chips/options generated from live data may not exist at run time).
+    code = stabilize_data_driven_select(code)
+    code = guard_noop_visibility_click(code)
     return code
 
 

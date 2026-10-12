@@ -275,3 +275,64 @@ def strip_junk_locators(code: str) -> str:
     better than hanging, and keeps the rest of the test running."""
     kept = [ln for ln in code.split("\n") if not _JUNK_NAME_LOC.search(ln)]
     return "\n".join(kept)
+
+
+# A `<select>` whose <option>s are built from LIVE DATA (tools/users seen recently) may
+# not contain the specific captured value by run time, so `selectOption('ml-pipeline')`
+# waits for an option that never appears and times out. Select the FIRST real option
+# instead (always present if the select has any options) and relax the paired value
+# assertion to "something is selected". Only a STRING-LITERAL selectOption is rewritten;
+# `{ value/label/index }` and array forms are left alone. The paired `toHaveValue('x')`
+# is relaxed ONLY for a variable that was the target of such a selectOption, so a textbox
+# `fill(...)`+`toHaveValue('exact')` assertion (a real, deterministic check) is untouched.
+_SELECTOPT_LIT = re.compile(r"(\.selectOption\(\s*)(['\"])[^'\"]*\2(\s*\))")
+
+
+def stabilize_data_driven_select(code: str) -> str:
+    """Rewrite `selectOption('literal')` -> `selectOption({ index: 0 })` and the paired
+    `toHaveValue('literal')` -> `toHaveValue(/.+/)` so a data-driven dropdown test is
+    data-agnostic instead of hanging on a value the current data doesn't contain."""
+    sel_vars = set(re.findall(r"(\w+)\.selectOption\(\s*['\"][^'\"]*['\"]\s*\)", code))
+    code = _SELECTOPT_LIT.sub(lambda m: m.group(1) + "{ index: 0 }" + m.group(3), code)
+    for v in sel_vars:
+        code = re.sub(
+            r"(expect\(\s*" + re.escape(v) + r"\s*\)\.toHaveValue\(\s*)(['\"])[^'\"]*\2(\s*\))",
+            lambda m: m.group(1) + "/.+/" + m.group(3),
+            code,
+        )
+    return code
+
+
+_CLICK_LINE = re.compile(r"^(\s*)await\s+(\w+)\.click\(\);\s*$")
+
+
+def guard_noop_visibility_click(code: str) -> str:
+    """When a test clicks a control and its ONLY follow-up is re-asserting that SAME
+    control is still visible (a low-value "poke the chip" step), guard the click so an
+    ABSENT control — e.g. a data-driven filter chip the current data did not create —
+    is SKIPPED instead of hanging the whole test. A control that IS present behaves
+    exactly as before (`isVisible()` -> true), so stable controls are unaffected; only
+    the dead-end poke on a missing control is skipped. Meaningful clicks (followed by a
+    navigation/assertion on something else) are never wrapped."""
+    lines = code.split("\n")
+    out: list[str] = []
+    i, n = 0, len(lines)
+    while i < n:
+        m = _CLICK_LINE.match(lines[i])
+        if m:
+            indent, var = m.group(1), m.group(2)
+            j = i + 1
+            while j < n and (lines[j].strip() == "" or lines[j].strip().startswith("//")):
+                j += 1
+            vis = re.compile(r"^\s*await\s+expect\(\s*" + re.escape(var) +
+                             r"\s*\)\.toBeVisible\(\);\s*$")
+            if j < n and vis.match(lines[j]):
+                out.append(f"{indent}if (await {var}.isVisible()) {{")
+                out.append(f"{indent}  await {var}.click();")
+                out.append(f"{indent}  await expect({var}).toBeVisible();")
+                out.append(f"{indent}}}")
+                i = j + 1
+                continue
+        out.append(lines[i])
+        i += 1
+    return "\n".join(out)
