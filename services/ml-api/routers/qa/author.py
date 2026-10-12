@@ -20,7 +20,7 @@ from routers.rag.call_log import record_call as _log_outcome
 from routers.qa.locators import (
     strip_hard_waits, shorten_long_names, href_link_locators,
     disambiguate_locators, first_on_href_locators, strip_junk_locators,
-    sanitize_option_punctuation,
+    sanitize_option_punctuation, stabilize_query_href_locators,
 )
 from routers.qa.name_grounding import (
     strip_upload_assert_noise, fix_invented_heading_role,
@@ -108,6 +108,9 @@ def _postprocess(code: str, ctx: str) -> str:
     if ctx:
         code = disambiguate_locators(code, ctx)
     code = first_on_href_locators(code)
+    # Ground any query-bearing href (e.g. an export link `/x?range=today`) to its stable
+    # path prefix, so it still resolves after the test changes the state the query encodes.
+    code = stabilize_query_href_locators(code)
     code = strip_junk_locators(code)
     code = strip_upload_assert_noise(code)
     if ctx:

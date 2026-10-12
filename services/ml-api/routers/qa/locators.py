@@ -238,6 +238,23 @@ def first_on_href_locators(code: str) -> str:
     return _HREF_LOC_NO_POS.sub(lambda m: m.group(1) + ".first()", code)
 
 
+# An href that carries a QUERY STRING encodes page state that the test itself may change —
+# e.g. an export link `/api/events/export?range=today` whose `?range=` tracks the selected
+# time range. Discover captures it in the default state, so an exact `href="...?range=today"`
+# locator stops matching the moment the test clicks "7 days". Match by the stable PATH
+# prefix instead (`^=`), which survives any query value. Same class as a volatile control
+# name (see name_grounding.stabilize_dynamic_control_names) — here the volatile value sits
+# in the href's query string. Only the exact-match `href="..."` form is rewritten; an
+# already-prefix `href^=` or a query-less path is left untouched (idempotent).
+_QUERY_HREF = re.compile(r"a\[href=(['\"])([^'\"?\]]+)\?[^'\"\]]*\1\]")
+
+
+def stabilize_query_href_locators(code: str) -> str:
+    """Rewrite `a[href="/path?query"]` -> `a[href^="/path"]` so a link whose href encodes
+    volatile filter/range state still resolves after the test changes that state."""
+    return _QUERY_HREF.sub(lambda m: f"a[href^={m.group(1)}{m.group(2)}{m.group(1)}]", code)
+
+
 # A locator whose name/text argument is a wildcard or placeholder, e.g.
 # `getByRole('button', { name: '*' })` or `getByText('...')`. The model invents these
 # when it can't determine a real name; they match nothing and burn the full timeout.
