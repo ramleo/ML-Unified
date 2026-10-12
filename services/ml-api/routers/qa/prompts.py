@@ -209,7 +209,23 @@ AUTHOR_GROUNDING = (
     "assert that a long multi-sentence DESCRIPTION/intro paragraph becomes hidden (e.g. "
     "'Upload a CSV. You get an overview…'): that text is permanent page copy, not an "
     "empty-state, so `toBeHidden()` on it just times out. And never assert a specific "
-    "dynamic result value."
+    "dynamic result value.\n"
+    "15-livedata. Some controls are GENERATED FROM LIVE DATA, so WHICH ONES EXIST changes "
+    "between capture and run: a `<select>` whose `<option>`s are the tools/users seen "
+    "recently, or a row of filter chips (country codes, tags) built from the current feed. "
+    "NEVER hard-code a specific such value — `selectOption('ml-pipeline')` + "
+    "`toHaveValue('ml-pipeline')`, or `getByRole('button', { name: 'US', exact: true })`, "
+    "fails the moment that value is not in the data. Exercise the control DATA-AGNOSTICALLY, "
+    "reading the value at runtime:\n"
+    "  * data-driven `<select>`: select its FIRST real option and assert it took, e.g. "
+    "`const sel = page.getByRole('combobox', { name: <exact name> }); const v = await "
+    "sel.locator('option').first().getAttribute('value'); await sel.selectOption(v); "
+    "await expect(sel).toHaveValue(v);`.\n"
+    "  * data-driven filter chips: click the FIRST chip in that group after guarding it "
+    "exists (`if (await chips.first().isVisible()) await chips.first().click();`), never a "
+    "chip named by a specific captured value.\n"
+    "  Stable UI controls ('30 days', 'Map', 'Bars', 'Toggle theme', 'Generate Report') "
+    "are NOT live data — keep targeting those by their exact name."
 )
 
 HEAL_SYSTEM = (
@@ -306,6 +322,12 @@ DISCOVER_SYSTEM = (
     "journey that exercises it — e.g. 'Upload the sample file and confirm a result/"
     "preview appears' or 'Start the camera and confirm the capture state' — these are "
     "the page's primary flow, not an edge case.\n"
+    "3b. Do NOT propose a step that depends on a SPECIFIC live-data value — a particular "
+    "country code, user/session id, tool name, tag, or count — because that value may be "
+    "gone by the time the test runs (the dashboard shows live data that changes). To "
+    "exercise a data-driven dropdown or filter, phrase it data-agnostically: 'select the "
+    "first available option', 'click the first country/tag chip' — NOT 'select ml-pipeline' "
+    "or 'click the US filter'. Stable buttons ('30 days', 'Map', 'Toggle theme') are fine.\n"
     "4. Return a JSON array of at most 6 objects, each "
     '{"title": "<short name>", "steps": "<plain-English steps a teammate could '
     'follow, 1-3 sentences>"}.\n'
