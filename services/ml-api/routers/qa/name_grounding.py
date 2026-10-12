@@ -111,6 +111,9 @@ def fix_invented_heading_role(code: str, ctx: str) -> str:
 # leading text via a prefix regex. One transform handles every such case at once.
 _VOLATILE_SUFFIX = re.compile(r"\s*[—–-]\s+\S.*$")              # " — today", " – 30d", " - x"
 _TRAILING_COUNT = re.compile(r"\s+\d[\d,]*(?:\s+[A-Za-z]+){0,2}\s*$")  # " 1", " 26 tools", " 1,204 rows"
+# A disclosure caret flips with open/closed state ("✦ AI Explain ▼" -> "▲"), so a test
+# that toggles the control can no longer match the captured glyph. Strip a trailing caret.
+_TRAILING_CARET = re.compile(r"\s*[▼▲▾▴▸◂►◄▶◀⌄⌃˅˄]\s*$")
 _JS_RE_SPECIAL = re.compile(r"[.*+?^${}()|\[\]\\/]")
 # getByRole('role', { name: 'STRING' [, exact: ...] }) and getByText('STRING') — STRING
 # literals only (a regex name is already stable; skip it).
@@ -123,7 +126,8 @@ _GBT_STR = re.compile(r"getByText\(\s*(['\"])(?P<name>[^'\"\n]*)\1\s*\)")
 def _stable_prefix(name: str) -> str | None:
     """The leading, non-volatile part of a control name, or None if the name has no
     volatile tail to strip (so stable names are left exactly as-is)."""
-    s = _VOLATILE_SUFFIX.sub("", name).strip()
+    s = _TRAILING_CARET.sub("", name).strip()
+    s = _VOLATILE_SUFFIX.sub("", s).strip()
     s = _TRAILING_COUNT.sub("", s).strip()
     return s if (s != name.strip() and len(s) >= 3) else None
 
