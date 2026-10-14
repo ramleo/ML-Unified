@@ -389,7 +389,7 @@ store content at all, and the two pre-existing `events` naming conventions.
 ---
 ## 12. Coverage audit + activation plan (done 2026-09-29)
 
-Per-tool tables + full detail: [LOGGING_COVERAGE.md](LOGGING_COVERAGE.md).
+Per-tool tables + full detail: [LOGGING_COVERAGE.md](LOGGING_COVERAGE.md). Crash-durable click audit (opt-in `data-audit` controls, separate `click_audit` table, gated lookup): [CLICK_AUDIT.md](CLICK_AUDIT.md).
 
 **All client-side wiring done (2026-09-28/29):** steps 1–6 + gap-closers (`error` global
 uncaught/rejection handler; `feedback` RAG thumbs up/down — new event; platform tier
