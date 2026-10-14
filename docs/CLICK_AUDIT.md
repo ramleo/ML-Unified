@@ -32,11 +32,14 @@ An entry leaves the outbox only on an *acked* keepalive send. The beacon path is
 best-effort and deliberately does not clear the outbox — the next load reconciles,
 and the dedupe makes the re-send free.
 
-## Content-free (LOGGING_SPEC §6)
-A record holds: `event_uuid`, `control` (the derived id below), `path`,
-`session_id`/`actor`, `client_ts`, server `created_at`, `country`, and a
-structure-only `meta` (`tag`, `role`, `type`, `aria-label`, `id`, `data-testid`,
-`name`, css `path`). **Never** the element's visible text or any typed/field value.
+## What a record holds (LOGGING_SPEC §6)
+`event_uuid`, `control` (the structural derived id below), `path`, `session_id`/`actor`,
+`client_ts`, server `created_at`, `country`, and `meta`: `tag`, `role`, `type`, `id`,
+`data-testid`, `name`, css `path`, and a readable **`label`** = the control's aria-label
+or its trimmed visible text (capped 80 chars), shown in the viewer's "What was clicked".
+The label CAN include user content for text-labelled links/rows (capped + disclosed on
+the privacy page); **the one hard rule is it never stores what you TYPED/pasted/uploaded
+into a field** — only the control's own label. The `control` id stays purely structural.
 
 ## Every interactive click, tagged or not
 Capture is **not** opt-in: every click on an interactive element — a button, link,
