@@ -65,6 +65,11 @@ The password tool (`§5b`) is excluded from capture entirely.
 - `src/app/api/audit/lookup/route.ts` — the dispute query (the `click_audit_lookup`
   RPC). **Gated** by `AUDIT_ADMIN_KEY` (header `x-audit-key` or `?key=`); with no key
   set it returns 503 (fails closed).
+- `src/app/api/audit/stats/route.ts` — the aggregate feed for the dashboard (the
+  `click_audit_stats` RPC). **Same gate** as the lookup, fails closed. Counts are
+  GROUPed in the DB; the client never pulls raw rows.
+- `src/app/audit/dashboard/page.tsx` + `Panels.tsx` — the internal dashboard viewer
+  (aggregate overview). Split in two to stay under the 400-line file limit.
 - `supabase/click_audit.sql` — the dedicated table (`event_uuid` unique = the dedupe
   key), its indexes, and the `click_audit_lookup(actor, control, start, end)` function.
   Run once in the Supabase SQL editor, like `errors.sql`.
@@ -85,6 +90,20 @@ The password tool (`§5b`) is excluded from capture entirely.
 The `/audit` viewer wraps this: leave Control blank for the timeline, or fill it to
 check one control. On the login-less portfolio `actor` is the random session id; in
 the real app it is the authenticated user id.
+
+## The dashboard (aggregate overview)
+`/audit/dashboard` is the bird's-eye complement to the per-actor lookup: counts
+across *all* actors in a window, for internal use only. It is a thin client over the
+gated `GET /api/audit/stats?start=&end=&bucket=hour|day`, which calls the
+`click_audit_stats(start, end, bucket)` RPC. One round-trip returns: totals
+(clicks / actors / sessions / controls / pages), top controls (with readable
+`label`), top pages, most active actors, clicks by country, a bucketed time series,
+and a 50-row recent feed. Panels: five stat tiles, a single-series area+line time
+chart (hover crosshair), four ranked bar-lists, and the recent table. It shares the
+`AUDIT_ADMIN_KEY` gate and the `ThemeToggle`; the key is remembered in the same
+sessionStorage slot as `/audit`. Not in any public nav. Requires the
+`click_audit_stats` function — re-run `supabase/click_audit.sql` after pulling it in
+(`create or replace` makes it idempotent; the table/lookup are untouched).
 
 ## Verified (2026-10-14)
 Against the live `click_audit` table: local-first write survives a dead network;
