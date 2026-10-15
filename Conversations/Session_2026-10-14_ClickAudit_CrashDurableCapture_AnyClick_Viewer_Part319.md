@@ -103,3 +103,76 @@ ML-Unified `11c7656` docs(spec) · `673c56d` fix: realtime feed dedupe + restore
 `27fe59f` fix: theme /audit with real tokens · `05a06b3` feat: theme toggle on /audit ·
 `9160cc6` fix: default window end to end-of-today · `d690498` feat: capture readable control label ·
 ML-Unified `b469557` docs(label). (Also `8ea99b8` the reverted AGENTS.md delete.)
+
+---
+
+# 2026-10-15 — the aggregate dashboard follow-on (build → redesign → graph-forward → hardening)
+
+The next day the user asked for a **dashboard** on top of the forensic `/audit` lookup. This arc went
+build → "looks dull" redesign → "more text or graphs?" cleanup → a security Q&A that turned into real
+edge hardening. Product detail is in [docs/CLICK_AUDIT.md](../docs/CLICK_AUDIT.md).
+
+## Arc 4 — build the aggregate dashboard (`/audit/dashboard`)
+The bird's-eye complement to the per-actor lookup: counts across **all** actors in a window. Key
+decision (confirmed by the user): **internal-only, gated like the lookup** — not a public page.
+- `click_audit_stats(start,end,bucket)` **RPC** — all GROUP BYs run in Postgres, one round-trip
+  (totals, top controls/pages/actors, by-country, time series, recent feed); client never pulls raw rows.
+  Appended to `supabase/click_audit.sql` (idempotent; user re-ran it).
+- `/api/audit/stats` — **same `AUDIT_ADMIN_KEY` fail-closed gate** as lookup.
+- `src/app/audit/dashboard/{page,Panels,charts}.tsx` — split three ways to stay under 400 lines each.
+- **Verified live** against the real table: RPC shape, gate 401/401/200, all panels render real data,
+  both themes (used the service-role key to call the RPC directly — read-only, no writes).
+
+## Arc 5 — "looks dull" → research-driven redesign
+The user called the first version dull and told me to **research the web**. The recurring best-practice:
+*"a bare figure with no baseline is decoration"* + *design for 5-second scanning*. Rebuilt with:
+- **Every KPI gets a baseline** — delta vs the previous equal-length window (▲/▼ + %, arrow so it's
+  never color-only), fetched in parallel client-side (no new SQL).
+- **Featured Total-clicks card with an inline sparkline**; **gradient area chart** with gridlines +
+  hover crosshair (was a flat line); stroke icons; section eyebrows (Overview/Trend/Breakdown/Activity).
+- Single accent as the one sequential hue → no categorical palette to validate (dataviz).
+
+## Arc 6 — "more text or graphs?" → graph-forward + a real overflow bug
+The user's question was the right instinct but the fix was neither: it was **too much raw text**
+(structural css-path ids dumped in the hero slot) **plus an overflow bug**. The bug: long control ids
+**bled out of the card into the next column**. Root cause — the bar rows used nested `display:grid`
+whose **auto track sized to content**, so the flex `min-width:0` ellipsis clamp never engaged. Fix:
+**flex-column/block rows** (stretch to the card width) → label is bounded; proven **0px overflow** via
+`getBoundingClientRect`. Also: **demoted the structural id to the hover title** (readable label is the
+hero), added a **share-of-total donut** for By-country (single-hue sequential + legend = no palette to
+validate), and **balanced the layout** (3-col breakdown, responsive grids via a scoped `<style>` block
+since inline styles can't media-query).
+
+## Arc 7 — "who are these actors? is it safe?" → edge hardening
+The actor ids are **anonymous session ids** (login-less site → no name/email/PII; a session = a browser,
+not a person). Honest answer: you can only prove *a session* clicked X; naming a person needs auth
+(`actor = user id` in the real app). On "is it safe": **read is already locked** (admin-key gated, fails
+closed, service key server-only). Then hardened the two open edges:
+- **Rate-limit `POST /api/audit`** (120/min per IP; the durable outbox retries a 429, so nothing lost) —
+  the capture endpoint is public by necessity and had no limit.
+- **Basic-auth on the `/audit` pages** via `src/proxy.ts` (Next 16 **`proxy`** convention, not deprecated
+  `middleware`) so strangers can't even reach the key form; enforced only when `AUDIT_ADMIN_KEY` set,
+  **password = that key**. Capture endpoint deliberately **not** matched (stays public).
+- Stated the honest **forgeability** caveat: client mints `event_uuid`/`session_id`/descriptor, so a
+  malicious client could fabricate records; the real app closes this by deriving `actor` server-side.
+- **Verified:** pages 401 no-creds (+ `WWW-Authenticate`) / 200 with; write stays public; rate limit
+  trips at ~120/min; dashboard loads end-to-end behind basic-auth. (Test pitfall caught: creds-in-URL
+  navigation breaks relative `fetch` — not a bug; a real dialog login has no creds in the URL.)
+
+## Lessons (2026-10-15)
+- **"Make it look good" = research first, then build to a rule** — baselines, sparklines, hierarchy, not taste.
+- **Nested auto-grid rows defeat a flex ellipsis clamp.** For a width-bounded row, the container must
+  stretch to its parent (flex-column/block), not size to content (auto grid track).
+- **Verify at the layer that proves the claim:** `curl` for the gate + rate limit, `getBoundingClientRect`
+  for overflow, a credentialed browser flow for basic-auth — a screenshot alone proves none of these.
+- **"Is it safe" has two halves** — reading (locked) vs writing (public-by-necessity, so rate-limit +
+  accept forgeability). Don't conflate them.
+
+## Setup state (production, updated 2026-10-15)
+- SQL re-run for `click_audit_stats` ✅ · `AUDIT_ADMIN_KEY` set in Vercel ✅ · `/audit` + `/audit/dashboard`
+  live, **now behind Basic auth** (username anything, **password = `AUDIT_ADMIN_KEY`**) + the in-page key.
+
+## Commits (2026-10-15, ml-portfolio unless noted)
+`1aa7a1d` feat: aggregate dashboard + stats RPC/endpoint · `3f8c2f0` redesign: KPI baselines + sparkline
++ gradient chart · `b2a7520` fix: graph-forward (overflow fix + country donut) · `ad131ef` feat: rate
+limit + page basic-auth (`proxy.ts`). ML-Unified `5fd1f82` docs(dashboard) · `1622546` docs(hardening).
