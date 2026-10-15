@@ -115,6 +115,25 @@ with a wrong one; empty batch → 400. **Any-click + timeline:** clicking three
 drained the outbox to zero (re-arm fix); the `/audit` viewer's timeline mode (blank
 control) listed every click for the actor. Test rows were deleted afterward.
 
+## Access & hardening
+- **Read is gated, fails closed.** `/api/audit/lookup` and `/api/audit/stats`
+  require `AUDIT_ADMIN_KEY` (401 wrong / 503 unset); the Supabase service key is
+  server-side only. The audit data (who-clicked-what) is never world-readable.
+- **The pages are behind Basic auth too** (`src/proxy.ts`, Next's `proxy`
+  convention): `/audit` and `/audit/dashboard` return 401 without the key, so
+  strangers can't reach the key form. Enforced only when `AUDIT_ADMIN_KEY` is set
+  (prod); password = that key, username ignored. The capture endpoint is **not**
+  matched — it must stay public.
+- **The write path (`POST /api/audit`) is public by necessity** (every visitor's
+  browser posts its own clicks) but hardened: input validated + length-capped,
+  batch ≤ 500, dedupe on `event_uuid`, Vercel-only writes, coarse `country` only
+  (no IP), and a per-IP rate limit (120/min; the durable outbox retries a 429, so
+  nothing is lost).
+- **Not tamper-proof against a malicious client.** Because the browser mints
+  `event_uuid`/`session_id`/descriptor, a determined user could forge a record.
+  The log is strong evidence for a normal user; in the signed-in app you close
+  this by deriving `actor` from the server-side auth session, never the client.
+
 ## Honest limits
 - Power loss in the ~microsecond between click and the local write is the only
   unrecoverable case.
