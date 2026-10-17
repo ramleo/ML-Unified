@@ -243,7 +243,9 @@ def favicon_svg():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "models": list(MODELS.keys())}
+    from security.clamav_scan import clamav_status
+
+    return {"status": "ok", "models": list(MODELS.keys()), "clamav": clamav_status()}
 
 
 @app.get("/system-info")

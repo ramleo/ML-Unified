@@ -51,3 +51,21 @@ def clamav_scan_bytes(data: bytes, path: str = "", client_ip: str = "") -> list[
         log_security_event("clamav_detected", path, client_ip, detail=str(name or "unknown"))
         return [{"rule": f"clamav:{name}", "engine": "clamav"}]
     return []
+
+
+def clamav_status() -> dict:
+    """Live health probe for /health — pings clamd and reports its version string,
+    which includes the loaded signature-DB revision (e.g. "ClamAV 1.4.3/27456/...").
+    `reachable: true` with a version is positive proof the daemon is up and the DB
+    loaded; `reachable: false` means the gate is currently falling open to YARA.
+    Never raises.
+    """
+    if not _ENABLED:
+        return {"enabled": False, "reachable": False}
+    try:
+        import clamd
+
+        client = clamd.ClamdNetworkSocket(host=_HOST, port=_PORT, timeout=5)
+        return {"enabled": True, "reachable": True, "version": client.version()}
+    except Exception as exc:
+        return {"enabled": True, "reachable": False, "error": type(exc).__name__}
