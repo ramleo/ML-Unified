@@ -27,8 +27,27 @@ from __future__ import annotations
 from fastapi import HTTPException
 
 from routers.yara_scan import ADVISORY_RULES, _get_builtin_rules, _run_match
-from security.clamav_scan import clamav_scan_bytes
+from security.clamav_scan import clamav_scan
 from security.events import log_security_event
+
+
+def _yara_scan(data: bytes, path: str = "", client_ip: str = "") -> tuple[bool, list[dict]]:
+    """Run the built-in YARA ruleset, distinguishing "the engine ran" from "the
+    engine could not run at all". Returns `(ran, matches)`: `ran=False` means
+    YARA itself failed (missing binding, broken ruleset) and produced no verdict;
+    `ran=True` means it executed and `matches` is authoritative (possibly empty).
+    Logs a flag event when it finds something. Never raises."""
+    try:
+        rules = _get_builtin_rules()
+        matches = _run_match(rules, data)
+    except Exception:
+        return (False, [])
+    if matches:
+        log_security_event(
+            "file_gate_flagged", path, client_ip,
+            detail=", ".join(m["rule"] for m in matches),
+        )
+    return (True, matches)
 
 
 def scan_upload_bytes(data: bytes, path: str = "", client_ip: str = "") -> list[dict]:
@@ -36,17 +55,10 @@ def scan_upload_bytes(data: bytes, path: str = "", client_ip: str = "") -> list[
     as yara_scan.py's own `/yara-scan/builtin` response's "matches" field.
     Never raises on a scan failure; a broken rule set should not take down
     an unrelated upload feature, so this fails open (returns no matches)
-    rather than blocking legitimate use if YARA itself has a problem."""
-    try:
-        rules = _get_builtin_rules()
-        matches = _run_match(rules, data)
-    except Exception:
-        return []
-    if matches:
-        log_security_event(
-            "file_gate_flagged", path, client_ip,
-            detail=", ".join(m["rule"] for m in matches),
-        )
+    rather than blocking legitimate use if YARA itself has a problem. This is
+    the ADVISORY path (e.g. the malware-in-image analyser); the blocking gate
+    `gate_or_raise` uses `_yara_scan` directly so it can fail CLOSED instead."""
+    _ran, matches = _yara_scan(data, path=path, client_ip=client_ip)
     return matches
 
 
@@ -76,12 +88,33 @@ def gate_or_raise(data: bytes, path: str = "", client_ip: str = "") -> None:
     The rejection message is deliberately generic (no matched-rule names) so it
     can't be used to tune a payload past the scanner.
 
-    Two engines run: the built-in YARA ruleset (instant first pass) and ClamAV
-    with its full signature database (deeper second pass, see `clamav_scan.py`).
-    Either one's blocking hit rejects the file; ClamAV fails open, so when the
-    daemon is not yet ready the YARA pass still protects.
+    Two engines run as a hybrid:
+
+    1. **YARA — mandatory (fail CLOSED).** It runs in-process with no daemon, so a
+       failure to run is a real fault, not a transient one. If YARA cannot execute,
+       the upload is refused with 503 rather than waved through unscanned — every
+       upload is guaranteed at least this baseline scan.
+    2. **ClamAV — enforced once ready.** While the clamd daemon is still warming up
+       (it loads its ~1 GB DB for 20-30 s after boot) it is unreachable and the gate
+       proceeds on YARA alone; once clamd is reachable, a clean verdict is required
+       (a detection OR a scan failure both block). See `clamav_scan.py`.
+
+    Either engine's blocking hit rejects the file with 400.
     """
-    blocked = blocking_matches(scan_upload_bytes(data, path=path, client_ip=client_ip))
-    blocked += clamav_scan_bytes(data, path=path, client_ip=client_ip)
+    # 1) YARA — mandatory. No verdict → refuse (fail closed).
+    yara_ran, yara_matches = _yara_scan(data, path=path, client_ip=client_ip)
+    if not yara_ran:
+        log_security_event("file_gate_unavailable", path, client_ip, detail="yara_unavailable")
+        raise HTTPException(
+            status_code=503,
+            detail="Upload temporarily unavailable: the safety scan could not run. Please retry.",
+        )
+    blocked = blocking_matches(yara_matches)
+
+    # 2) ClamAV — enforced only once the daemon is reachable; warmup falls through.
+    clam_scanned, clam_matches = clamav_scan(data, path=path, client_ip=client_ip)
+    if clam_scanned:
+        blocked += clam_matches
+
     if blocked:
         raise HTTPException(status_code=400, detail="File rejected: it failed a malware safety scan.")

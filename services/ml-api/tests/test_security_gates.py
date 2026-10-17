@@ -188,6 +188,63 @@ def test_a_broken_rule_set_fails_open_rather_than_breaking_uploads(monkeypatch):
     assert file_gate.scan_upload_bytes(b"anything") == []
 
 
+# -- The blocking gate: hybrid fail-closed YARA + enforce-once-ready ClamAV ----
+
+_EICAR = (
+    rb"X5O!P%@AP[4\PZX54(P^)7CC)7}$"
+    rb"EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+)
+
+
+def test_the_blocking_gate_fails_closed_when_yara_cannot_run(monkeypatch):
+    """Gap-3 fix: YARA is mandatory. If the in-process engine cannot run at all,
+    the gate refuses the upload (503) rather than passing it unscanned — the
+    opposite of the advisory `scan_upload_bytes` path above."""
+    pytest.importorskip("yara", reason="yara-python is installed in CI, not always locally")
+    from fastapi import HTTPException
+    from security import file_gate
+
+    monkeypatch.setattr(file_gate, "_get_builtin_rules",
+                        lambda: (_ for _ in ()).throw(RuntimeError("rules failed to compile")))
+
+    with pytest.raises(HTTPException) as exc:
+        file_gate.gate_or_raise(b"anything", path="/test")
+    assert exc.value.status_code == 503
+
+
+def test_the_blocking_gate_blocks_a_real_threat():
+    """EICAR is caught by the mandatory YARA pass → 400, with or without clamd."""
+    pytest.importorskip("yara", reason="yara-python is installed in CI, not always locally")
+    from fastapi import HTTPException
+    from security import file_gate
+
+    with pytest.raises(HTTPException) as exc:
+        file_gate.gate_or_raise(_EICAR, path="/test")
+    assert exc.value.status_code == 400
+
+
+def test_a_clean_file_passes_the_gate_during_clamav_warmup(monkeypatch):
+    """With YARA clean and clamd not yet reachable (warmup), the gate proceeds on
+    YARA alone and does not raise."""
+    pytest.importorskip("yara", reason="yara-python is installed in CI, not always locally")
+    from security import file_gate
+
+    # Simulate clamd still warming up / unreachable → (scanned=False, no matches).
+    monkeypatch.setattr(file_gate, "clamav_scan", lambda *a, **k: (False, []))
+
+    assert file_gate.gate_or_raise(b"a perfectly ordinary clean document", path="/test") is None
+
+
+def test_clamav_scan_reports_not_scanned_when_the_daemon_is_unreachable():
+    """The reachability gate: no clamd listening → (False, []), so the caller
+    knows to fall back to YARA rather than treating silence as a clean verdict."""
+    from security import clamav_scan as cav
+
+    scanned, matches = cav.clamav_scan(b"anything", path="/test")
+    assert scanned is False
+    assert matches == []
+
+
 # -- The app's own origin ------------------------------------------------------
 
 def test_the_apps_own_space_origin_is_allowed(monkeypatch):
