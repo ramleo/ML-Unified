@@ -29,7 +29,7 @@ from ._validate import validate_and_correct
 router = APIRouter(prefix="/document", tags=["document"])
 logger = logging.getLogger(__name__)
 
-MAX_FILE_BYTES = 10 * 1024 * 1024  # 10 MB
+MAX_FILE_BYTES = 50 * 1024 * 1024  # 50 MB (matches _DOCUMENT_CAP in security/body_size.py)
 
 
 def _sse(data: dict) -> str:
@@ -271,7 +271,7 @@ async def analyze_document(
     file_bytes = await file.read()
     gate_or_raise(file_bytes, path="/document/analyze")
     if len(file_bytes) > MAX_FILE_BYTES:
-        raise HTTPException(status_code=400, detail="File too large (max 10 MB)")
+        raise HTTPException(status_code=400, detail="File too large (max 50 MB)")
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Empty file")
     # A .docx is a ZIP — reject a decompression bomb before it is parsed (no-op on PDFs).

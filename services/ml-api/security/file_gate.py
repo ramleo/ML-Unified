@@ -27,6 +27,7 @@ from __future__ import annotations
 from fastapi import HTTPException
 
 from routers.yara_scan import ADVISORY_RULES, _get_builtin_rules, _run_match
+from security.clamav_scan import clamav_scan_bytes
 from security.events import log_security_event
 
 
@@ -74,6 +75,13 @@ def gate_or_raise(data: bytes, path: str = "", client_ip: str = "") -> None:
 
     The rejection message is deliberately generic (no matched-rule names) so it
     can't be used to tune a payload past the scanner.
+
+    Two engines run: the built-in YARA ruleset (instant first pass) and ClamAV
+    with its full signature database (deeper second pass, see `clamav_scan.py`).
+    Either one's blocking hit rejects the file; ClamAV fails open, so when the
+    daemon is not yet ready the YARA pass still protects.
     """
-    if blocking_matches(scan_upload_bytes(data, path=path, client_ip=client_ip)):
+    blocked = blocking_matches(scan_upload_bytes(data, path=path, client_ip=client_ip))
+    blocked += clamav_scan_bytes(data, path=path, client_ip=client_ip)
+    if blocked:
         raise HTTPException(status_code=400, detail="File rejected: it failed a malware safety scan.")

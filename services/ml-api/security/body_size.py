@@ -30,10 +30,16 @@ _MEETING_CAP = int(os.environ.get("MEETING_MAX_BODY_BYTES", str(50 * 1024 * 1024
 # (mm_ingest.MAX_FILE_BYTES); without an entry here the 10MB global default would
 # shadow it and reject 10–20MB media before that check ever runs.
 _MM_INGEST_CAP = int(os.environ.get("MM_INGEST_MAX_BODY_BYTES", str(20 * 1024 * 1024)))  # 20MB
+# Document analysis accepts large scanned/image-heavy PDFs and .docx files; raised
+# from the 10MB global so bigger real documents go through. The malware + ClamAV
+# gate and the zip-bomb check (declared-size based, independent of this cap) still
+# run on every byte, so a larger allowance never weakens dangerous-file detection.
+_DOCUMENT_CAP = int(os.environ.get("DOCUMENT_MAX_BODY_BYTES", str(50 * 1024 * 1024)))  # 50MB
 _ROUTE_CAPS = {
     "/rag/mm-meeting": _MEETING_CAP,
     "/rag/mm-meeting/stream": _MEETING_CAP,
     "/rag/mm-ingest": _MM_INGEST_CAP,
+    "/document/analyze": _DOCUMENT_CAP,
 }
 
 
