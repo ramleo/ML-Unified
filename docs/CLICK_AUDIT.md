@@ -78,6 +78,10 @@ The password tool (`§5b`) is excluded from capture entirely.
 1. Run `supabase/click_audit.sql` in the Supabase SQL editor (once).
 2. Set `AUDIT_ADMIN_KEY` in the environment (Vercel) to enable the lookup endpoint.
 3. Add `data-audit="<id>"` to the controls that matter for disputes.
+4. Run `supabase/rate_limit.sql` (once) to enable the durable, cross-instance rate
+   limit on the capture endpoint. Optional — without it the route falls back to the
+   in-memory limiter. Uses `AIRAML_LOG_TOKEN` to salt the IP hash (shared with the
+   security log).
 
 ## Using the lookup
 `GET /api/audit/lookup?actor=<id>&start=<ISO>&end=<ISO>` with the key, plus an
@@ -127,8 +131,12 @@ control) listed every click for the actor. Test rows were deleted afterward.
 - **The write path (`POST /api/audit`) is public by necessity** (every visitor's
   browser posts its own clicks) but hardened: input validated + length-capped,
   batch ≤ 500, dedupe on `event_uuid`, Vercel-only writes, coarse `country` only
-  (no IP), and a per-IP rate limit (120/min; the durable outbox retries a 429, so
-  nothing is lost).
+  (no IP), and a per-IP rate limit (120/min). The limit is two-layer: a cheap
+  in-memory first pass plus a **durable DB counter** (`rate_limit.sql`'s
+  `rate_limit_hit`, keyed on a salted IP hash) that is **shared across serverless
+  instances** — the in-memory one alone is defeated by spreading requests across
+  warm lambdas or a cold start. The durable outbox retries a 429, so nothing is
+  lost. Fails open if `rate_limit.sql` is not yet applied.
 - **Not tamper-proof against a malicious client.** Because the browser mints
   `event_uuid`/`session_id`/descriptor, a determined user could forge a record.
   The log is strong evidence for a normal user; in the signed-in app you close
