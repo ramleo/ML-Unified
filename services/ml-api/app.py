@@ -92,6 +92,7 @@ from routers.yara_scan import router as yara_scan_router
 from routers.anomaly_detection import router as anomaly_detection_router
 from routers.intrusion_detection import router as intrusion_detection_router
 from routers.public_api import router as public_api_router, meta_router as public_api_meta_router
+from routers.tenant_rag import router as tenant_rag_router
 from routers.qa import router as qa_router
 from routers.security_status import router as security_status_router
 
@@ -344,6 +345,7 @@ app.include_router(anomaly_detection_router, tags=["anomaly-detection"])
 app.include_router(intrusion_detection_router, tags=["intrusion-detection"])
 app.include_router(public_api_router)       # /v1/* — public API (X-API-Key gated)
 app.include_router(public_api_meta_router)   # /v1/openapi.json — public spec (ungated)
+app.include_router(tenant_rag_router)         # /internal/tenant/* — Q3 tenant-RAG compute (internal-token gated)
 app.include_router(qa_router, tags=["qa"])
 app.include_router(security_status_router, tags=["security-status"])
 
