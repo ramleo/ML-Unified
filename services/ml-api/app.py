@@ -139,7 +139,25 @@ async def _lifespan(app: FastAPI):
     yield  # server binds and accepts requests immediately; models load in background
 
 
-app = FastAPI(title="ML API", lifespan=_lifespan)
+# MCP server (Q2) — mounted at /mcp, Streamable HTTP, auth reuses Q1 API keys.
+# http_app(path="/") + mount("/mcp") serves it at /mcp; allowed_hosts satisfies
+# MCP's DNS-rebinding guard for the Space host.
+from mcp_server import mcp as _mcp
+_mcp_app = _mcp.http_app(
+    path="/",
+    allowed_hosts=["wram1708-ml-unified.hf.space", "localhost", "127.0.0.1"],
+)
+
+
+@asynccontextmanager
+async def _combined_lifespan(app: FastAPI):
+    # Enter the app's own startup AND the MCP session-manager lifespan.
+    async with _lifespan(app):
+        async with _mcp_app.lifespan(app):
+            yield
+
+
+app = FastAPI(title="ML API", lifespan=_combined_lifespan)
 
 # DIY error capture (security/error_reporting.py) — added FIRST so it is the
 # INNERMOST middleware, wrapping the routers most closely: it catches an
@@ -328,6 +346,9 @@ app.include_router(public_api_router)       # /v1/* — public API (X-API-Key ga
 app.include_router(public_api_meta_router)   # /v1/openapi.json — public spec (ungated)
 app.include_router(qa_router, tags=["qa"])
 app.include_router(security_status_router, tags=["security-status"])
+
+# Mount the MCP server LAST so the API routes above take precedence.
+app.mount("/mcp", _mcp_app)
 
 
 if __name__ == "__main__":
