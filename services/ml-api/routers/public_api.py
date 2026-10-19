@@ -7,7 +7,7 @@ cheap/no-LLM — zero provider spend — to prove the key + quota + metering lay
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
 from security.api_key import require_api_key
@@ -17,6 +17,36 @@ from routers.anomaly_detection import score as _anomaly_score, ScoreRequest, Sco
 
 # Key check applies to every route in this router.
 router = APIRouter(prefix="/v1", dependencies=[Depends(require_api_key)], tags=["public-api (v1)"])
+
+# A second, UNGATED router just for the public spec — people must be able to read
+# how to call the API before they have a key.
+meta_router = APIRouter(tags=["public-api (v1)"])
+
+
+@meta_router.get("/v1/openapi.json", include_in_schema=False)
+def v1_openapi(request: Request):
+    """Trimmed OpenAPI 3.1 spec covering only the /v1/* public routes, with the
+    X-API-Key security scheme — importable into Postman / client generators."""
+    full = request.app.openapi()
+    paths = {p: v for p, v in full.get("paths", {}).items() if p.startswith("/v1/")}
+    return {
+        "openapi": full.get("openapi", "3.1.0"),
+        "info": {
+            "title": "AIRaML Public API",
+            "version": "1.0.0",
+            "description": "Stable, API-key-authenticated subset of the AIRaML tools. "
+                           "Send your key in the `X-API-Key` header.",
+        },
+        "servers": [{"url": "https://wram1708-ml-unified.hf.space"}],
+        "paths": paths,
+        "components": {
+            **full.get("components", {}),
+            "securitySchemes": {
+                "ApiKeyAuth": {"type": "apiKey", "in": "header", "name": "X-API-Key"},
+            },
+        },
+        "security": [{"ApiKeyAuth": []}],
+    }
 
 
 class TlsHeadersBody(BaseModel):
