@@ -8,6 +8,7 @@ call the same tested logic behind `/v1/`, so there is no second implementation.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 
 from fastmcp import FastMCP
@@ -24,12 +25,14 @@ class ApiKeyVerifier(TokenVerifier):
     """Validates a Bearer token that is an AIRaML API key (ak_live_…) against the
     frontend verify route. Returns None → 401 for the MCP client."""
 
-    def verify_token(self, token: str) -> AccessToken | None:
+    async def verify_token(self, token: str) -> AccessToken | None:
+        # Must be async — FastMCP awaits this. The verify call is blocking httpx,
+        # so run it off the event loop.
         if not token:
             return None
         key_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
         try:
-            result = _verify_key_hash(key_hash)
+            result = await asyncio.to_thread(_verify_key_hash, key_hash)
         except Exception:
             return None
         if not result.get("valid"):
