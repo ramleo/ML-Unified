@@ -50,3 +50,27 @@ Items 1, 2, 5 are one piece of work: **a proper authenticated navbar/profile men
 **information-architecture** decisions (owner landing page; where portfolio + the
 recruiter-link manager live). Research common SaaS/dashboard patterns, propose 2–3
 options with mockups, confirm with the user, then build.
+
+---
+
+## Resolved — 2026-10-19 (auth-UX pass)
+
+Researched SaaS/design-system patterns (Visa, Shopify, WFP, Splunk — converge on
+avatar → dropdown with identity header + Sign out as a menu item), proposed options,
+user chose via AskUserQuestion, then built. Decisions: **avatar + initials** in the
+navbar; **full owner-aware** dropdown; owner **lands on the homepage**; share-links
+get a **dedicated page**.
+
+| # | Item | What shipped |
+|---|---|---|
+| 1 | Sign-out chip styling | Sign out is now a **menu item** inside the dropdown (shares the menu's visual language), not a standalone chip. |
+| 2 | No signed-in identity | Navbar shows an **avatar (initials)**; the dropdown header shows **email + role** (Owner / User). |
+| 3 | Owner landing | Owner now lands on the **homepage** like everyone (post-login router `/app` → `/`); portfolio reached from the menu. |
+| 4 | Recruiter-link placement | Moved off `/portfolio` to a **dedicated `/portfolio/share` page**, opened from the menu (and a "Manage share links" link on `/portfolio`). |
+| 5 | Proper profile menu | Avatar → dropdown: identity header, owner's **My portfolio / Share links**, **Account**, **Settings**, **Sign out**. Click-outside + Escape + ARIA. |
+
+New pages/routes: `/account`, `/settings`, `/portfolio/share`, `/api/me` (serves
+`{email, role, isOwner}` so the client is owner-aware without `OWNER_EMAIL` ever
+reaching the browser). Build + lint green; signed-out navbar verified locally. The
+signed-in dropdown needs the owner password to see live → verify on the Vercel
+deploy. Full operational detail: `ml-portfolio/docs/ACCESS_AND_AUTH.md` (local-only).
