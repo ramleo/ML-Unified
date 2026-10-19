@@ -43,7 +43,9 @@ data.** Everything else hangs off that.
 - **Other libs of note:** `react-markdown` + `remark-gfm` + `rehype-raw` (handbook/
   docs rendering), `@mediapipe/tasks-vision` (in-browser vision demos),
   `@zxcvbn-ts/*` (password-strength tool), `pagedjs` (print/PDF layout),
-  `stemmer` (client-side search matching), `gifenc` (GIF export).
+  `stemmer` (client-side search matching), `gifenc` (GIF export),
+  `@supabase/ssr` + `@supabase/supabase-js` (auth / cookie sessions),
+  `react-easy-crop` (profile-picture crop).
 - **Note:** the three HF Space apps that open from "Open the platform"
   (`index.html` / `eda.html` / `vision.html`) are **plain HTML/CSS/JS**, not React
   — reskinned to match the portfolio design.
@@ -57,7 +59,7 @@ data.** Everything else hangs off that.
   - `ml-qa-runner` — the QA / Testwright platform runner.
 - **Key Python libs:** scikit-learn, pandas, numpy, scipy, XGBoost, LightGBM,
   CatBoost, SHAP (explainability), OpenCV (headless), PyMuPDF / pypdf / python-docx
-  (document parsing), skops (safe model serialization).
+  (document parsing), skops (safe model serialization), `fastmcp` (MCP server at `/mcp`).
 - **Also:** Next.js **server / API routes** on Vercel handle the live LLM features
   and server-only secrets (the site's own lightweight backend).
 
@@ -87,8 +89,20 @@ data.** Everything else hangs off that.
   restart/rebuild without paid persistent storage.
 
 ### 6. Auth
-- **No end-user authentication** — there are no user accounts, logins, or sessions.
-- **What exists instead:**
+- **End-user auth (optional):** **Supabase Auth** via `@supabase/ssr` — email/password
+  with cookie sessions (Next.js App Router; browser/server/edge/admin clients). The
+  public tools still need no account; sign-in is opt-in. A `profiles` table carries a
+  `role` (user/recruiter) under RLS; the single **owner** is identified by an
+  `OWNER_EMAIL` env var, never a DB role. Recruiters view the private portfolio via a
+  no-login, expiring, revocable share-link (`/r/<token>`). Profile pictures live in a
+  public Supabase **Storage** bucket; the crop UI uses `react-easy-crop`.
+- **Public API keys (Q1):** third-party access via `X-API-Key`; only a SHA-256 **hash**
+  is stored (`api_keys` table, RLS service-role-only), with per-key quota + budget. The
+  HF Space holds **no** Supabase key — it validates keys through a token-gated frontend
+  route (`/api/keys/verify`, `API_KEYS_VERIFY_TOKEN`).
+- **MCP (Q2):** a **FastMCP** server at `/mcp` (Streamable HTTP) reuses the same keys as
+  bearer tokens via a custom `TokenVerifier`.
+- **Also:**
   - **Cloudflare Turnstile** (`NEXT_PUBLIC_TURNSTILE_SITE_KEY`) for bot protection
     on abuse-prone endpoints.
   - A Supabase **service-role key** used **server-side only** (never shipped to the

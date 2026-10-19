@@ -14,6 +14,12 @@ machine-learning tools from one codebase.
 directly. The richer Next.js interface most people use is a separate project:
 [ramleo/ML-Portfolio](https://github.com/ramleo/ML-Portfolio).
 
+**Public API & MCP.** Beyond the first-party frontend, `services/ml-api` exposes a
+stable, API-key-authenticated subset under `/v1` (keys minted on the frontend; the
+Space validates them without holding a database key) and an **MCP server** at `/mcp`
+(FastMCP, Streamable HTTP) for AI clients, authenticated with the same keys. The
+trimmed spec is at `/v1/openapi.json`; usage docs are on the site's `/docs` page.
+
 ## Running it
 
 ```bash
