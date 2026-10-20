@@ -86,7 +86,8 @@ def run_mm_eval(qa_path: str = _QA_PATH) -> dict:
 
             ctx = "\n\n".join(c["text"][:400] for c in retrieved[:5])
             prompt = f"Context:\n{ctx}\n\nQuestion: {question}\nAnswer concisely using only the context."
-            answer = complete(provider, model, key, [{"role": "user", "content": prompt}])
+            answer = complete(provider, model, key, [{"role": "user", "content": prompt}],
+                              tool="evaluate-mm")
 
             results.append({
                 "question": question,

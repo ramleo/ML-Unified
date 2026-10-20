@@ -174,6 +174,7 @@ def generate_test(instructions: str, base_url: str, test_name: str,
                 provider, model, key,
                 [{"role": "user", "content": user_msg}],
                 system=system,
+                tool="qa-author",
             )
         except Exception as exc:
             logger.warning("qa/author: %s failed: %s", provider, exc)
@@ -259,6 +260,7 @@ def suggest_assertions(code: str, provider: str | None = None, model: str | None
                 provider, model, key,
                 [{"role": "user", "content": user_msg}],
                 system=ASSERTIONS_SYSTEM,
+                tool="qa-author",
             )
         except Exception as exc:
             logger.warning("qa/assertions: %s failed: %s", provider, exc)

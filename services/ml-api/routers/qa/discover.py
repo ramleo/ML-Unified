@@ -270,7 +270,8 @@ def propose_tests(snapshot: str) -> list[dict]:
             continue
         try:
             raw = complete(provider, model, key,
-                           [{"role": "user", "content": user}], system=DISCOVER_SYSTEM)
+                           [{"role": "user", "content": user}], system=DISCOVER_SYSTEM,
+                           tool="qa-discover")
         except Exception as exc:
             logger.warning("qa/discover: %s failed: %s", provider, exc)
             continue

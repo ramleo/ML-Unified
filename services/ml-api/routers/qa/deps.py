@@ -24,9 +24,13 @@ __all__ = ["complete", "resolve_key", "owner_allowed", "select_candidates",
            "record_call", "limiter", "LLM_LIMIT"]
 
 
-def complete(provider: str, model: str, key: str, messages: list[dict], system: str = "") -> str:
-    """Non-streaming LLM completion. Returns "" on any provider failure."""
-    return _complete(provider, model, key, messages, system=system)
+def complete(provider: str, model: str, key: str, messages: list[dict], system: str = "",
+             tool: str | None = None) -> str:
+    """Non-streaming LLM completion. Returns "" on any provider failure.
+
+    `tool` tags the llm_calls row (O3) for the eval dashboard; QA stages pass
+    their own label (qa-author / qa-discover / qa-heal)."""
+    return _complete(provider, model, key, messages, system=system, tool=tool)
 
 
 def resolve_key(provider: str, user_key: str | None = None) -> str:

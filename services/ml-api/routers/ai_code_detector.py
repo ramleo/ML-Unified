@@ -98,7 +98,8 @@ def run_judge(code: str) -> AiCodeJudgeVerdict | None:
             continue
         try:
             raw = complete(provider, model, key,
-                           [{"role": "user", "content": code}], system=_JUDGE_SYSTEM)
+                           [{"role": "user", "content": code}], system=_JUDGE_SYSTEM,
+                           tool="ai-code-detector")
         except Exception as exc:
             logger.warning("ai-code judge: %s failed: %s", provider, exc)
             continue

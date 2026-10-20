@@ -114,7 +114,8 @@ def heal_test(code: str, error: str, snapshot: str, provider: str | None = None,
             continue
         try:
             raw = complete(provider, model, key,
-                           [{"role": "user", "content": user}], system=HEAL_SYSTEM)
+                           [{"role": "user", "content": user}], system=HEAL_SYSTEM,
+                           tool="qa-heal")
         except Exception as exc:
             logger.warning("qa/heal: %s failed: %s", provider, exc)
             continue

@@ -84,7 +84,8 @@ def _extract(transcript: str) -> dict:
             continue
         try:
             raw = complete(provider, model, key,
-                           [{"role": "user", "content": body}], system=_MEETING_SYSTEM)
+                           [{"role": "user", "content": body}], system=_MEETING_SYSTEM,
+                           tool="meeting-intelligence")
         except Exception as exc:
             logger.warning("mm-meeting extract: %s failed: %s", provider, exc)
             continue
@@ -280,7 +281,8 @@ def meeting_ask(request: Request, req: MeetingAskRequest):
             continue
         try:
             raw = complete(provider, model, key,
-                           [{"role": "user", "content": content}], system=_QA_SYSTEM)
+                           [{"role": "user", "content": content}], system=_QA_SYSTEM,
+                           tool="meeting-intelligence")
         except Exception as exc:
             logger.warning("mm-meeting ask: %s failed: %s", provider, exc)
             continue

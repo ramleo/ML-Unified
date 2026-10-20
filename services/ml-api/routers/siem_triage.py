@@ -123,6 +123,7 @@ def run_triage(groups: list[AlertGroupIn]) -> list[TriageVerdict] | None:
                 provider, model, key,
                 [{"role": "user", "content": json.dumps(payload)}],
                 system=_JUDGE_SYSTEM,
+                tool="siem-triage",
             )
         except Exception as exc:
             logger.warning("siem-triage judge: %s failed: %s", provider, exc)

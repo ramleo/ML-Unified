@@ -215,7 +215,8 @@ def run_judge(text: str) -> tuple[LlmVerdict | None, bool]:
             continue
         try:
             raw = complete(provider, model, key,
-                           [{"role": "user", "content": text}], system=_JUDGE_SYSTEM)
+                           [{"role": "user", "content": text}], system=_JUDGE_SYSTEM,
+                           tool="prompt-injection-check")
         except Exception as exc:
             logger.warning("prompt-injection judge: %s failed: %s", provider, exc)
             continue

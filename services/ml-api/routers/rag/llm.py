@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import logging
 
-from routers.rag.call_log import instrument
+from routers.rag.call_log import instrument, get_call_context, set_call_context
 
 logger = logging.getLogger(__name__)
 
@@ -187,12 +187,22 @@ def _stream_cohere_raw(model: str, key: str, messages: list[dict], system: str,
 
 
 def complete(provider: str, model: str, key: str, messages: list[dict], system: str = "",
-             max_retries: int | None = None) -> str:
+             max_retries: int | None = None, tool: str | None = None) -> str:
     """Non-streaming convenience wrapper — collects a streaming call into one string.
 
     Best-effort: returns "" on any failure rather than raising, since callers
     (e.g. query expansion) treat this as an optional quality boost.
+
+    `tool` tags this call's llm_calls row (O3) for the eval dashboard's "By tool"
+    view — pass it from a standalone tool endpoint that calls complete() directly
+    (a sub-call inside a request that already set a tool context should omit it and
+    inherit the parent's). Only the tool field is set; any session/run_id already
+    in context is preserved.
     """
+    if tool:
+        ctx = get_call_context()
+        set_call_context(session_id=ctx.get("session_id", ""),
+                         run_id=ctx.get("run_id", ""), tool=tool)
     try:
         if provider in ("groq", "openai", "mistral", "perplexity"):
             full_messages = ([{"role": "system", "content": system}] if system else []) + messages

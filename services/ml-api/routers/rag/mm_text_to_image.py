@@ -135,7 +135,8 @@ def enhance_prompt(body: EnhancePromptRequest):
         key = os.environ.get(env_key, "")
         if not key:
             continue
-        result = complete(provider, model, key, [{"role": "user", "content": prompt}], system=_ENHANCE_SYSTEM_PROMPT)
+        result = complete(provider, model, key, [{"role": "user", "content": prompt}], system=_ENHANCE_SYSTEM_PROMPT,
+                          tool="text-to-image")
         result = result.strip()
         if result:
             return {"enhanced_prompt": result[:_MAX_PROMPT_LEN], "ok": True}
