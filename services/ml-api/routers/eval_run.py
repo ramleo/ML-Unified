@@ -120,16 +120,27 @@ def _judge(item: dict, answer: str) -> dict | None:
     return _parse_judge(raw) if raw else None
 
 
-def _post_result(payload: dict) -> None:
+def _post(payload: dict, timeout: float) -> None:
     token = os.environ.get("AIRAML_LOG_TOKEN", "")
     if not token:
         logger.error("eval: AIRAML_LOG_TOKEN unset — cannot post results")
         return
     try:
         import httpx
-        httpx.post(_INGEST_URL, json=payload, headers={"x-log-token": token}, timeout=_INGEST_TIMEOUT_S)
+        httpx.post(_INGEST_URL, json=payload, headers={"x-log-token": token}, timeout=timeout)
     except Exception as exc:
-        logger.error("eval: result post failed: %s", exc)
+        logger.error("eval: post failed: %s", exc)
+
+
+def _post_result(payload: dict) -> None:
+    _post(payload, _INGEST_TIMEOUT_S)
+
+
+def _post_progress(run_id: str, done: int) -> None:
+    """Fire a lightweight n_scored update after each item so the dashboard can
+    show a progress bar. Best-effort with a short timeout; a dropped progress
+    ping never affects the run or the final result."""
+    _post({"run_id": run_id, "kind": "progress", "n_scored": done}, 5.0)
 
 
 def _run(run_id: str) -> None:
@@ -148,6 +159,7 @@ def _run(run_id: str) -> None:
                 "groundedness": grounded,
                 "rationale": (verdict or {}).get("rationale", "judge unavailable" if not verdict else ""),
             })
+            _post_progress(run_id, len(scores))
         judged = [s for s in scores if s["correct"] is not None]
         n = len(judged)
         agg = {
