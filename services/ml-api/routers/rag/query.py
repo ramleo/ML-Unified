@@ -126,6 +126,10 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
         cached_latency_ms = round((time.time() - t0) * 1000)
         from routers.rag.analytics import record_query
         record_query(cached_latency_ms, cache_hit=True, provider=None)
+        from routers.rag.rag_log import record_rag_query
+        record_rag_query(cache_hit=True, answer_source=cached.get("answer_source", "knowledge_base"),
+                         confidence=cached.get("confidence", "medium"), groundedness=cached.get("groundedness"),
+                         low_confidence=False, provider="cache", latency_ms=cached_latency_ms, web_fallback=False)
         yield _sse({
             "type": "done",
             "sources": cached["sources"],
@@ -337,6 +341,10 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
         "groundedness": groundedness,
         "self_corrected": self_corrected,
     })
+    from routers.rag.rag_log import record_rag_query
+    record_rag_query(cache_hit=False, answer_source=answer_source, confidence=confidence,
+                     groundedness=groundedness, low_confidence=low_confidence, provider=served_provider,
+                     latency_ms=final_latency_ms, web_fallback=web_fallback_used)
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
