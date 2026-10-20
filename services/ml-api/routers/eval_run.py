@@ -55,14 +55,25 @@ def _require_internal(token: str) -> None:
         raise HTTPException(status_code=401, detail="unauthorized")
 
 
-def _answer_via_rag(question: str) -> tuple[str, float | None]:
-    """Run the real public RAG pipeline for one question; return (answer, groundedness)."""
+# Neutral, general framing so the eval measures the real site assistant — NOT a
+# narrow "Eval tool". The backend _SCOPE_RULE already allows "this website" + ML;
+# a tool-specific identity here made the chat call itself "the Eval tool" and
+# decline legitimate site questions, which is a harness artifact, not real quality.
+_EVAL_CONTEXT = (
+    "You are the AIRaML website assistant. Answer questions about the AIRaML "
+    "website, its tools and features, and machine learning / data science, using "
+    "the retrieved content."
+)
+
+
+def _answer_via_rag(question: str, provider: str, model: str) -> tuple[str, float | None]:
+    """Run the real public RAG pipeline for one question with the given generation
+    model; return (answer, groundedness)."""
     from routers.rag.query import _sse_generator
     from routers.rag.query_helpers import QueryRequest
 
-    req = QueryRequest(query=question,
-                       tool_context="Tool: Eval\nAutomated quality check over the site knowledge base.",
-                       session_id="eval")
+    req = QueryRequest(query=question, tool_context=_EVAL_CONTEXT, session_id="eval",
+                       provider=provider, model=model)
     parts: list[str] = []
     grounded: float | None = None
     for line in _sse_generator(req):
@@ -143,11 +154,11 @@ def _post_progress(run_id: str, done: int) -> None:
     _post({"run_id": run_id, "kind": "progress", "n_scored": done}, 5.0)
 
 
-def _run(run_id: str) -> None:
+def _run(run_id: str, provider: str, model: str) -> None:
     scores: list[dict] = []
     try:
         for item in GOLDEN:
-            answer, grounded = _answer_via_rag(item["question"])
+            answer, grounded = _answer_via_rag(item["question"], provider, model)
             verdict = _judge(item, answer)
             scores.append({
                 "item_id": item["id"],
@@ -176,6 +187,8 @@ def _run(run_id: str) -> None:
 
 class RunReq(BaseModel):
     run_id: str
+    provider: str = "cohere"
+    model: str = "command-a-03-2025"
 
 
 @router.post("/run")
@@ -183,6 +196,9 @@ def start_run(body: RunReq, x_internal_token: str = Header(default="")):
     _require_internal(x_internal_token)
     if not body.run_id:
         raise HTTPException(status_code=400, detail="run_id required")
-    threading.Thread(target=_run, args=(body.run_id,), daemon=True).start()
+    provider = (body.provider or "cohere").lower()
+    model = body.model or "command-a-03-2025"
+    threading.Thread(target=_run, args=(body.run_id, provider, model), daemon=True).start()
     return {"run_id": body.run_id, "status": "started", "n": len(GOLDEN),
-            "golden_version": VERSION, "judge_model": _JUDGE_MODEL}
+            "golden_version": VERSION, "judge_model": _JUDGE_MODEL,
+            "gen_provider": provider, "gen_model": model}

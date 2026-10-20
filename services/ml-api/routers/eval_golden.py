@@ -14,7 +14,11 @@ redirects to the site, rather than inventing an answer.
 Bump VERSION whenever the set changes, so runs stay comparable over time.
 """
 
-VERSION = "rag_v1"
+# v2 (2026-10-20): scored under the neutral AIRaML-website-assistant context
+# (v1 wrongly ran as a narrow "Eval tool" and declined site questions). Items
+# unchanged; the harness fix is what makes the scores comparable, so the version
+# bumps to keep v1 and v2 runs from being compared directly.
+VERSION = "rag_v2"
 
 GOLDEN = [
     {
