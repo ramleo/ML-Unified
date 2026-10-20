@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import logging
 
-from routers.rag.call_log import instrument, get_call_context, set_call_context
+from routers.rag.call_log import instrument
 
 logger = logging.getLogger(__name__)
 
@@ -196,23 +196,20 @@ def complete(provider: str, model: str, key: str, messages: list[dict], system: 
     `tool` tags this call's llm_calls row (O3) for the eval dashboard's "By tool"
     view — pass it from a standalone tool endpoint that calls complete() directly
     (a sub-call inside a request that already set a tool context should omit it and
-    inherit the parent's). Only the tool field is set; any session/run_id already
-    in context is preserved.
+    inherit the parent's). It is threaded explicitly to instrument() rather than
+    set on the ContextVar, which is unreliable across a streamed response's
+    thread-pool drain (see record_call); passing None here inherits the ContextVar.
     """
-    if tool:
-        ctx = get_call_context()
-        set_call_context(session_id=ctx.get("session_id", ""),
-                         run_id=ctx.get("run_id", ""), tool=tool)
     try:
         if provider in ("groq", "openai", "mistral", "perplexity"):
             full_messages = ([{"role": "system", "content": system}] if system else []) + messages
-            return "".join(stream_groq_openai(provider, model, key, full_messages, max_retries))
+            return "".join(stream_groq_openai(provider, model, key, full_messages, max_retries, tool=tool))
         elif provider == "claude":
-            return "".join(stream_claude(model, key, messages, system))
+            return "".join(stream_claude(model, key, messages, system, tool=tool))
         elif provider == "gemini":
-            return "".join(stream_gemini(model, key, messages, system))
+            return "".join(stream_gemini(model, key, messages, system, tool=tool))
         elif provider == "cohere":
-            return "".join(stream_cohere(model, key, messages, system))
+            return "".join(stream_cohere(model, key, messages, system, tool=tool))
     except Exception as exc:
         logger.warning("llm.complete() failed for provider=%s: %s", provider, exc)
     return ""
@@ -229,9 +226,11 @@ def complete(provider: str, model: str, key: str, messages: list[dict], system: 
 # for free. instrument() re-raises, so failure behaviour is unchanged.
 
 def stream_groq_openai(provider: str, model: str, key: str, messages: list[dict],
-                       max_retries: int | None = None, max_tokens: int | None = None):
+                       max_retries: int | None = None, max_tokens: int | None = None,
+                       tool: str | None = None):
     return instrument(provider, model,
-                      _stream_groq_openai_raw(provider, model, key, messages, max_retries, max_tokens))
+                      _stream_groq_openai_raw(provider, model, key, messages, max_retries, max_tokens),
+                      tool=tool)
 
 
 # The usage dict is shared between the raw generator (which fills it from the
@@ -240,16 +239,16 @@ def stream_groq_openai(provider: str, model: str, key: str, messages: list[dict]
 # need stream_options={"include_usage": True}, a request-shape change not every
 # OpenAI-compatible base accepts — and they run on free tiers, so cost is $0
 # regardless. They still get a row with the trace id and null tokens.
-def stream_claude(model: str, key: str, messages: list[dict], system: str):
+def stream_claude(model: str, key: str, messages: list[dict], system: str, tool: str | None = None):
     usage: dict = {}
-    return instrument("claude", model, _stream_claude_raw(model, key, messages, system, usage), usage)
+    return instrument("claude", model, _stream_claude_raw(model, key, messages, system, usage), usage, tool=tool)
 
 
-def stream_gemini(model: str, key: str, messages: list[dict], system: str):
+def stream_gemini(model: str, key: str, messages: list[dict], system: str, tool: str | None = None):
     usage: dict = {}
-    return instrument("gemini", model, _stream_gemini_raw(model, key, messages, system, usage), usage)
+    return instrument("gemini", model, _stream_gemini_raw(model, key, messages, system, usage), usage, tool=tool)
 
 
-def stream_cohere(model: str, key: str, messages: list[dict], system: str):
+def stream_cohere(model: str, key: str, messages: list[dict], system: str, tool: str | None = None):
     usage: dict = {}
-    return instrument("cohere", model, _stream_cohere_raw(model, key, messages, system, usage), usage)
+    return instrument("cohere", model, _stream_cohere_raw(model, key, messages, system, usage), usage, tool=tool)

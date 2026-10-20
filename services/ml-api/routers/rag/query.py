@@ -89,7 +89,8 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
     # so the answer AND any expansion/judge sub-calls inherit it without per-site
     # changes; otherwise the row's tool column is "" → "unknown" in the dashboard.
     from routers.rag.call_log import set_call_context, tool_label_from_context
-    set_call_context(session_id=req.session_id, tool=tool_label_from_context(req.tool_context))
+    tool_label = tool_label_from_context(req.tool_context)
+    set_call_context(session_id=req.session_id, tool=tool_label)
 
     has_dataset = bool(req.tool_context.strip())
 
@@ -210,7 +211,7 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
     meta: dict = {}
 
     provider_candidates = build_provider_candidates(provider, model, key, _resolve_key)
-    for token in stream_with_fallback(provider_candidates, messages, system_prompt, meta):
+    for token in stream_with_fallback(provider_candidates, messages, system_prompt, meta, tool=tool_label):
         if token.startswith("[") and "error" in token.lower():  # e.g. "[Cohere error 429]" — must not be cached
             generation_failed = True
         full_text_parts.append(token)
@@ -270,7 +271,7 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
             retry_parts: list[str] = []
             retry_meta: dict = {}
             retry_failed = False
-            for token in stream_with_fallback(provider_candidates, messages, retry_system_prompt, retry_meta):
+            for token in stream_with_fallback(provider_candidates, messages, retry_system_prompt, retry_meta, tool=tool_label):
                 if token.startswith("[") and "error" in token.lower():
                     retry_failed = True
                 retry_parts.append(token)

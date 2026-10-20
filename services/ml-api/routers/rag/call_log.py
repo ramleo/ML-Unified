@@ -114,12 +114,19 @@ def _post(payload: dict) -> None:
 def record_call(provider: str, model: str, status: str, *,
                 http_status: Optional[int] = None, error_code: str = "",
                 error_message: str = "", latency_ms: int = 0,
-                usage: Optional[dict] = None, operation: str = "chat") -> None:
+                usage: Optional[dict] = None, operation: str = "chat",
+                tool: Optional[str] = None) -> None:
     """Queue one row. Returns immediately; never raises.
 
     `usage` is the mutable dict filled by an instrumented stream_* generator —
     {"input": int|None, "output": int|None}. When absent or unknown, tokens and
     cost are sent as None (a free provider still resolves to a known $0).
+
+    `tool` is passed explicitly down the call chain for streamed responses, where
+    the ContextVar is unreliable: FastAPI drains a StreamingResponse generator
+    across thread-pool threads, and a ContextVar.set() made inside the generator
+    does not survive to the thread where this row fires. An explicit value wins;
+    None falls back to the ContextVar (still correct for synchronous callers).
     """
     _, token = _sink()
     if not token:
@@ -132,8 +139,9 @@ def record_call(provider: str, model: str, status: str, *,
     # value; otherwise fall back to the request's trace id so every backend LLM
     # call joins the same story as the frontend action, with no per-site change.
     run_id = ctx.get("run_id", "") or current_trace_id()
+    tool_val = tool if tool is not None else ctx.get("tool", "")
     payload = {
-        "service": _SERVICE, "tool": ctx.get("tool", ""),
+        "service": _SERVICE, "tool": tool_val,
         "provider": provider, "model": model,
         "status": status, "http_status": http_status,
         "error_code": error_code, "error_message": str(error_message)[:400],
@@ -202,7 +210,7 @@ def describe_error(exc: BaseException) -> tuple[Optional[int], str, str]:
 
 
 def instrument(provider: str, model: str, gen: Iterator[Any],
-               usage: Optional[dict] = None) -> Iterator[Any]:
+               usage: Optional[dict] = None, tool: Optional[str] = None) -> Iterator[Any]:
     """Wrap a provider's streaming generator so its outcome is recorded.
 
     Timed to completion rather than to first token: a stream that starts and
@@ -222,8 +230,8 @@ def instrument(provider: str, model: str, gen: Iterator[Any],
         status, code, msg = describe_error(exc)
         record_call(provider, model, "error", http_status=status, error_code=code,
                     error_message=msg, latency_ms=int((time.monotonic() - t0) * 1000),
-                    usage=usage)
+                    usage=usage, tool=tool)
         raise
     else:
         record_call(provider, model, "ok", http_status=200,
-                    latency_ms=int((time.monotonic() - t0) * 1000), usage=usage)
+                    latency_ms=int((time.monotonic() - t0) * 1000), usage=usage, tool=tool)

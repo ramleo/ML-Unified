@@ -106,7 +106,8 @@ def _agent_generator(
     # ContextVar propagates it to each graph node's provider call. Without it the
     # row's tool column is "" → bucketed under "unknown" in the eval dashboard.
     from routers.rag.call_log import set_call_context, tool_label_from_context
-    set_call_context(session_id=session_id, tool=tool_label_from_context(tool_context))
+    tool_label = tool_label_from_context(tool_context)
+    set_call_context(session_id=session_id, tool=tool_label)
 
     initial: AgentState = {
         "query":        query,
@@ -251,17 +252,17 @@ def _agent_generator(
                         yield _sse({"type": "token", "text": token})
 
         elif provider == "claude":
-            for token in stream_claude(model, user_key, messages, system_prompt):
+            for token in stream_claude(model, user_key, messages, system_prompt, tool=tool_label):
                 if token:
                     yield _sse({"type": "token", "text": token})
 
         elif provider == "gemini":
-            for token in stream_gemini(model, user_key, messages, system_prompt):
+            for token in stream_gemini(model, user_key, messages, system_prompt, tool=tool_label):
                 if token:
                     yield _sse({"type": "token", "text": token})
 
         elif provider == "cohere":
-            for token in stream_cohere(model, user_key, messages, system_prompt):
+            for token in stream_cohere(model, user_key, messages, system_prompt, tool=tool_label):
                 if token:
                     yield _sse({"type": "token", "text": token})
 

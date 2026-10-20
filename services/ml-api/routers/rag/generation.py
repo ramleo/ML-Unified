@@ -59,20 +59,24 @@ def classify_error(exc: object) -> str:
     return "unavailable"
 
 
-def open_stream(provider: str, model: str, key: str, messages: list[dict], system_prompt: str):
+def open_stream(provider: str, model: str, key: str, messages: list[dict], system_prompt: str,
+                tool: str | None = None):
     """Dispatch to the right streaming client. Raises ValueError for an
     unrecognized provider — caught by stream_with_fallback like any other
-    failure, so a bad/typo'd provider still cascades to a known-good one."""
+    failure, so a bad/typo'd provider still cascades to a known-good one.
+
+    `tool` tags the llm_calls row (O3) — threaded explicitly because the
+    ContextVar is lost across a StreamingResponse's thread-pool drain."""
     if provider in ("groq", "openai", "mistral", "perplexity"):
         full_messages = [{"role": "system", "content": system_prompt}] + messages if system_prompt else messages
         return stream_groq_openai(provider, model, key, full_messages,
-                                  max_tokens=_MAX_TOKENS.get(provider))
+                                  max_tokens=_MAX_TOKENS.get(provider), tool=tool)
     if provider == "claude":
-        return stream_claude(model, key, messages, system_prompt)
+        return stream_claude(model, key, messages, system_prompt, tool=tool)
     if provider == "gemini":
-        return stream_gemini(model, key, messages, system_prompt)
+        return stream_gemini(model, key, messages, system_prompt, tool=tool)
     if provider == "cohere":
-        return stream_cohere(model, key, messages, system_prompt)
+        return stream_cohere(model, key, messages, system_prompt, tool=tool)
     raise ValueError(f"Unknown provider '{provider}'.")
 
 
@@ -93,7 +97,8 @@ def build_provider_candidates(provider: str, model: str, key: str,
 
 
 def stream_with_fallback(provider_candidates: list[tuple[str, str, str]], messages: list[dict],
-                         system_prompt: str, meta: dict) -> Generator[str, None, None]:
+                         system_prompt: str, meta: dict,
+                         tool: str | None = None) -> Generator[str, None, None]:
     """Yields text tokens. Tries each (provider, model, key) candidate in
     order, falling through to the next ONLY if the current one fails before
     producing any token (rate limit, timeout, bad key, unknown provider).
@@ -113,7 +118,7 @@ def stream_with_fallback(provider_candidates: list[tuple[str, str, str]], messag
     last_error: object = "No provider candidates."
     for i, (cand_provider, cand_model, cand_key) in enumerate(provider_candidates):
         try:
-            for token in open_stream(cand_provider, cand_model, cand_key, messages, system_prompt):
+            for token in open_stream(cand_provider, cand_model, cand_key, messages, system_prompt, tool=tool):
                 if token:
                     started = True
                     meta["served_provider"] = cand_provider
