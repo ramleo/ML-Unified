@@ -23,6 +23,7 @@ from __future__ import annotations
 import contextvars
 import logging
 import os
+import re
 import threading
 import time
 from typing import Any, Iterator, Optional
@@ -72,6 +73,26 @@ def set_call_context(session_id: str = "", run_id: str = "", tool: str = "") -> 
 
 def get_call_context() -> dict:
     return dict(_ctx.get())
+
+
+# The frontend's buildToolContext (ml-portfolio chatContext.ts) is the single
+# producer of a RAG request's tool_context, and it always leads with the tool's
+# display name in one of two fixed shapes. Parsing it here lets the backend tag
+# the `tool` column without a new request field — otherwise every RAG row lands
+# as "" and the eval dashboard buckets the lot under "unknown".
+_TOOL_RE_GUIDE = re.compile(r'help assistant for the "(.+?)" tool')
+_TOOL_RE_PREFIX = re.compile(r"^Tool:\s*(.+)$", re.MULTILINE)
+
+
+def tool_label_from_context(tool_context: str, default: str = "rag-chat") -> str:
+    """Best-effort tool name for the llm_calls `tool` column, parsed from the
+    frontend's tool_context string. Content-free (§6): the tool's display name
+    (e.g. "Document Intelligence"), never prompt or document content."""
+    if tool_context:
+        m = _TOOL_RE_GUIDE.search(tool_context) or _TOOL_RE_PREFIX.search(tool_context)
+        if m and m.group(1).strip():
+            return m.group(1).strip()[:60]
+    return default
 
 
 def _sink() -> tuple[str, str]:

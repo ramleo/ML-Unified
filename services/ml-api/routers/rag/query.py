@@ -85,6 +85,12 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
         yield _sse({"type": "error", "message": f"No API key for provider '{provider}'."})
         return
 
+    # Tag every LLM call in this request with the calling tool (O3). A ContextVar,
+    # so the answer AND any expansion/judge sub-calls inherit it without per-site
+    # changes; otherwise the row's tool column is "" → "unknown" in the dashboard.
+    from routers.rag.call_log import set_call_context, tool_label_from_context
+    set_call_context(session_id=req.session_id, tool=tool_label_from_context(req.tool_context))
+
     has_dataset = bool(req.tool_context.strip())
 
     # 0. Semantic cache check (embed with MiniLM regardless of embedding_model setting).

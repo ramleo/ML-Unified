@@ -102,6 +102,12 @@ def _agent_generator(
     t0 = time.time()
     timer = SpanTimer()  # O6: per-node durations for the trace breakdown
 
+    # Tag every LLM call this deep-search run makes with the calling tool (O3);
+    # ContextVar propagates it to each graph node's provider call. Without it the
+    # row's tool column is "" → bucketed under "unknown" in the eval dashboard.
+    from routers.rag.call_log import set_call_context, tool_label_from_context
+    set_call_context(session_id=session_id, tool=tool_label_from_context(tool_context))
+
     initial: AgentState = {
         "query":        query,
         "final_query":  query,
