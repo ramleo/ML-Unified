@@ -32,7 +32,7 @@ router = APIRouter(prefix="/internal/eval", tags=["eval"])
 
 _INTERNAL_TOKEN = os.environ.get("TENANT_INTERNAL_TOKEN", "")
 _JUDGE_PROVIDER = "gemini"
-_JUDGE_MODEL = "gemini-2.5-flash"
+_JUDGE_MODEL = "gemini-3.6-flash"
 _INGEST_URL = os.environ.get("EVAL_INGEST_URL", "https://ml-portfolio-rho.vercel.app/api/eval/ingest")
 _INGEST_TIMEOUT_S = 15.0
 
