@@ -179,7 +179,10 @@ def answer(req: AnswerRequest, x_internal_token: str | None = Header(default=Non
     out = complete(provider, model, key, [{"role": "user", "content": user}],
                    system=system, tool="tenant-chat").strip()
     if not out:
-        raise HTTPException(status_code=502, detail="generation failed")
+        raise HTTPException(
+            status_code=502,
+            detail=f"{provider}/{model} returned no output (likely a rate limit or provider error — retry, or switch the model in Configure)",
+        )
     return AnswerResponse(answer=out, provider=provider, web_used=web_used, sources=web_sources)
 
 
