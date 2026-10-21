@@ -233,3 +233,42 @@ def suggest(req: SuggestRequest, x_internal_token: str | None = Header(default=N
     questions = [_clean_question(ln) for ln in (out or "").splitlines() if ln.strip()]
     questions = [q for q in questions if len(q) > 5][:5]
     return SuggestResponse(questions=questions)
+
+
+class CompleteRequest(BaseModel):
+    prefix: str = ""
+    persona: str = ""
+
+
+class CompleteResponse(BaseModel):
+    completion: str
+
+
+_COMPLETE_SYSTEM = (
+    "You autocomplete the user's partial question for a help assistant. Return ONLY the "
+    "text that continues after the given prefix to form one natural, complete question — "
+    "do NOT repeat the prefix, no quotes, no preface, at most ~12 words. If there is no "
+    "sensible completion, return nothing."
+)
+
+
+@router.post("/complete", response_model=CompleteResponse)
+def complete_text(req: CompleteRequest, x_internal_token: str | None = Header(default=None)) -> CompleteResponse:
+    """Inline ghost-text completion of a partial question (Gmail-style). Cheap + short;
+    the frontend debounces calls and the toggle is off by default."""
+    _require_internal(x_internal_token)
+    prefix = (req.prefix or "").strip()
+    if len(prefix) < 3:
+        return CompleteResponse(completion="")
+    key = os.environ.get(_KEYS["cohere"], "")
+    if not key:
+        return CompleteResponse(completion="")
+    persona = (req.persona or "").strip()[:1000]
+    user = (f"Assistant domain: {persona}\n\n" if persona else "") + f"Prefix: {prefix}"
+    from routers.rag.llm import complete
+    out = complete("cohere", _DEFAULT_MODEL["cohere"], key,
+                   [{"role": "user", "content": user}], system=_COMPLETE_SYSTEM, tool="tenant-complete").strip()
+    out = out.strip().strip('"\'')
+    if out.lower().startswith(prefix.lower()):  # strip accidental prefix echo
+        out = out[len(prefix):]
+    return CompleteResponse(completion=out[:120])
