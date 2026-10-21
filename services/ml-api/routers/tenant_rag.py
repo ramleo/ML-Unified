@@ -39,11 +39,18 @@ _KEYS = {"cohere": "COHERE_API_KEY", "groq": "GROQ_API_KEY",
          "mistral": "MISTRAL_API_KEY", "gemini": "GEMINI_API_KEY"}
 _DEFAULT_MODEL = {"cohere": "command-a-03-2025", "groq": "openai/gpt-oss-20b",
                   "mistral": "mistral-small-latest", "gemini": "gemini-3.6-flash"}
-_GROUNDING = (
-    "Answer the user's question using ONLY the context provided below (knowledge base "
-    "and any web results). If the answer is not in the context, say you don't have that "
-    "information — do not use outside knowledge. When you use a web result, cite its URL "
-    "inline and list the URLs you used under a 'Sources:' line."
+_GROUNDING_KB = (
+    "Answer using ONLY the context below (the bot's knowledge base, plus any web "
+    "results). If the knowledge base doesn't contain the answer but web results are "
+    "provided, answer from the web and make clear the information came from a web search, "
+    "citing the URLs under a 'Sources:' line. If neither has it, say you don't have that "
+    "information. Never use outside knowledge."
+)
+_GROUNDING_WEB_ONLY = (
+    "This bot has NO document knowledge base. Answer ONLY from the web results below, "
+    "citing their URLs under a 'Sources:' line. Do NOT mention or imply that a knowledge "
+    "base was searched. If no web results are provided, say you don't have that "
+    "information. Never use outside knowledge."
 )
 _DEFAULT_PERSONA = "You are a helpful support assistant."
 
@@ -103,6 +110,7 @@ class AnswerRequest(BaseModel):
     provider: str = "cohere"
     model: str = ""
     web_search: bool = False
+    has_kb: bool = False
 
 
 class AnswerResponse(BaseModel):
@@ -146,15 +154,22 @@ def answer(req: AnswerRequest, x_internal_token: str | None = Header(default=Non
             logger.warning("tenant web search failed: %s", exc)
 
     # Nothing to answer from → refuse deterministically (no LLM call = no hallucination).
+    # Wording depends on whether a KB exists at all, so the bot never claims it searched
+    # a knowledge base that was never attached.
     if not contexts:
-        msg = ("I don't have that information in my knowledge base"
-               + (", and a web search returned nothing relevant." if req.web_search
-                  else ". (Web search is turned off for this bot.)"))
+        if req.has_kb:
+            msg = ("I couldn't find that in the knowledge base"
+                   + (", and a web search returned nothing relevant." if req.web_search
+                      else ". (Web search is turned off for this bot.)"))
+        else:
+            msg = ("I couldn't find anything on the web for that." if req.web_search
+                   else "I don't have the information to answer that.")
         return AnswerResponse(answer=msg, provider=provider, web_used=web_used, sources=web_sources)
 
-    # The owner's persona sets the bot's voice; grounding is always enforced on top.
+    # The owner's persona sets the bot's voice; grounding is always enforced on top,
+    # and reflects whether this bot actually has a knowledge base.
     persona = _apply_date_templates((req.system_prompt or "").strip() or _DEFAULT_PERSONA)
-    system = f"{persona}\n\n{_GROUNDING}"
+    system = f"{persona}\n\n{_GROUNDING_KB if req.has_kb else _GROUNDING_WEB_ONLY}"
     context_block = "\n\n".join(
         f"[{i + 1}]{(' ' + url) if url else ''}\n{text}" for i, (url, text) in enumerate(contexts)
     )
@@ -166,3 +181,55 @@ def answer(req: AnswerRequest, x_internal_token: str | None = Header(default=Non
     if not out:
         raise HTTPException(status_code=502, detail="generation failed")
     return AnswerResponse(answer=out, provider=provider, web_used=web_used, sources=web_sources)
+
+
+class SuggestRequest(BaseModel):
+    chunks: list[str] = []
+    persona: str = ""
+
+
+class SuggestResponse(BaseModel):
+    questions: list[str]
+
+
+_SUGGEST_SYSTEM = (
+    "You generate short example questions a visitor might ask a help assistant, based "
+    "ONLY on the content provided. Output 4 to 5 distinct questions, one per line, with "
+    "no numbering, bullets, quotes, or preamble."
+)
+_SUGGEST_SYSTEM_PERSONA = (
+    "Based ONLY on the assistant description below, generate short example questions a "
+    "visitor would ask this assistant. Output 4 to 5 distinct questions, one per line, "
+    "with no numbering, bullets, quotes, or preamble."
+)
+
+
+def _clean_question(line: str) -> str:
+    s = line.strip().lstrip("-*•").strip()
+    while s[:2].rstrip(".").isdigit() and "." in s[:3]:  # "1." / "12."
+        s = s.split(".", 1)[1].strip()
+    return s.strip(' "\'')
+
+
+@router.post("/suggest", response_model=SuggestResponse)
+def suggest(req: SuggestRequest, x_internal_token: str | None = Header(default=None)) -> SuggestResponse:
+    """Generate starter questions from a sample of a tenant's knowledge base, for the
+    chat's suggestion chips + typeahead. Kept cheap: free provider, small input."""
+    _require_internal(x_internal_token)
+    content = "\n\n".join(c.strip() for c in req.chunks if c and c.strip())[:4000]
+    persona = (req.persona or "").strip()[:4000]
+    if content:
+        system, user = _SUGGEST_SYSTEM, content
+    elif persona:  # no KB → base the starters on the bot's persona/domain
+        system, user = _SUGGEST_SYSTEM_PERSONA, persona
+    else:
+        return SuggestResponse(questions=[])
+    key = os.environ.get(_KEYS["cohere"], "")
+    if not key:
+        return SuggestResponse(questions=[])
+    from routers.rag.llm import complete
+    out = complete("cohere", _DEFAULT_MODEL["cohere"], key,
+                   [{"role": "user", "content": user}], system=system, tool="tenant-suggest")
+    questions = [_clean_question(ln) for ln in (out or "").splitlines() if ln.strip()]
+    questions = [q for q in questions if len(q) > 5][:5]
+    return SuggestResponse(questions=questions)
