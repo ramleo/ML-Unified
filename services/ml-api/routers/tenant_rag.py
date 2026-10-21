@@ -18,12 +18,16 @@ rest of the platform uses (free, reliable), with a plain non-streaming call.
 """
 from __future__ import annotations
 
+import logging
 import os
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from routers.rag import get_rag_state
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/internal/tenant", tags=["tenant-rag"])
 
@@ -36,11 +40,28 @@ _KEYS = {"cohere": "COHERE_API_KEY", "groq": "GROQ_API_KEY",
 _DEFAULT_MODEL = {"cohere": "command-a-03-2025", "groq": "openai/gpt-oss-20b",
                   "mistral": "mistral-small-latest", "gemini": "gemini-3.6-flash"}
 _GROUNDING = (
-    "Answer the user's question using ONLY the context provided below. If the answer "
-    "is not in the context, say you don't have that information. Do not use outside "
-    "knowledge."
+    "Answer the user's question using ONLY the context provided below (knowledge base "
+    "and any web results). If the answer is not in the context, say you don't have that "
+    "information — do not use outside knowledge. When you use a web result, cite its URL "
+    "inline and list the URLs you used under a 'Sources:' line."
 )
 _DEFAULT_PERSONA = "You are a helpful support assistant."
+
+
+def _apply_date_templates(s: str) -> str:
+    """Substitute {{CURRENT_DATE}} / {{CURRENT_MONTH_YEAR}} / {{CURRENT_FY}} so a bot's
+    persona can reference 'today' without the owner hand-typing it. FY is the Indian
+    financial year (Apr–Mar), matching how these placeholders are typically used."""
+    now = datetime.now(timezone.utc)
+    fy_start = now.year if now.month >= 4 else now.year - 1
+    reps = {
+        "{{CURRENT_DATE}}": now.strftime("%d %B %Y"),
+        "{{CURRENT_MONTH_YEAR}}": now.strftime("%B %Y"),
+        "{{CURRENT_FY}}": f"{fy_start}-{(fy_start + 1) % 100:02d}",
+    }
+    for k, v in reps.items():
+        s = s.replace(k, v)
+    return s
 
 
 def _require_internal(token: str | None) -> None:
@@ -81,11 +102,14 @@ class AnswerRequest(BaseModel):
     system_prompt: str = ""
     provider: str = "cohere"
     model: str = ""
+    web_search: bool = False
 
 
 class AnswerResponse(BaseModel):
     answer: str
     provider: str
+    web_used: bool = False
+    sources: list[str] = []
 
 
 @router.post("/answer", response_model=AnswerResponse)
@@ -103,21 +127,42 @@ def answer(req: AnswerRequest, x_internal_token: str | None = Header(default=Non
     if not key:
         raise HTTPException(status_code=503, detail=f"no key configured for {provider}")
 
+    # Knowledge-base context (retrieved by the frontend) + optional live web results.
+    contexts: list[tuple[str, str]] = [("", c.strip()) for c in req.contexts if c and c.strip()]
+    web_used = False
+    web_sources: list[str] = []
+    if req.web_search:
+        try:
+            from routers.rag.crag import web_search_fallback
+            for w in web_search_fallback(question):
+                url = (w.get("source", "") or "").replace("web:", "")
+                text = (w.get("text", "") or "").strip()
+                if text:
+                    contexts.append((url, text))
+                    if url:
+                        web_sources.append(url)
+            web_used = bool(web_sources)
+        except Exception as exc:  # web search must never break the answer
+            logger.warning("tenant web search failed: %s", exc)
+
+    # Nothing to answer from → refuse deterministically (no LLM call = no hallucination).
+    if not contexts:
+        msg = ("I don't have that information in my knowledge base"
+               + (", and a web search returned nothing relevant." if req.web_search
+                  else ". (Web search is turned off for this bot.)"))
+        return AnswerResponse(answer=msg, provider=provider, web_used=web_used, sources=web_sources)
+
     # The owner's persona sets the bot's voice; grounding is always enforced on top.
-    persona = (req.system_prompt or "").strip() or _DEFAULT_PERSONA
+    persona = _apply_date_templates((req.system_prompt or "").strip() or _DEFAULT_PERSONA)
     system = f"{persona}\n\n{_GROUNDING}"
     context_block = "\n\n".join(
-        f"[{i + 1}] {c.strip()}" for i, c in enumerate(req.contexts) if c and c.strip()
+        f"[{i + 1}]{(' ' + url) if url else ''}\n{text}" for i, (url, text) in enumerate(contexts)
     )
-    user = (
-        (f"Context:\n{context_block}\n\n" if context_block
-         else "Context: (the knowledge base has no relevant information)\n\n")
-        + f"Question: {question}\n\nAnswer:"
-    )
+    user = f"Context:\n{context_block}\n\nQuestion: {question}\n\nAnswer:"
 
     from routers.rag.llm import complete
     out = complete(provider, model, key, [{"role": "user", "content": user}],
                    system=system, tool="tenant-chat").strip()
     if not out:
         raise HTTPException(status_code=502, detail="generation failed")
-    return AnswerResponse(answer=out, provider=provider)
+    return AnswerResponse(answer=out, provider=provider, web_used=web_used, sources=web_sources)
