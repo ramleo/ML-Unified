@@ -28,7 +28,19 @@ from routers.rag import get_rag_state
 router = APIRouter(prefix="/internal/tenant", tags=["tenant-rag"])
 
 _INTERNAL_TOKEN = os.environ.get("TENANT_INTERNAL_TOKEN", "")
-_COHERE_MODEL = "command-a-03-2025"
+
+# Providers a tenant bot may use (must match the frontend allowlist in
+# src/lib/tenant/config.ts). Each maps to its env key + a safe default model.
+_KEYS = {"cohere": "COHERE_API_KEY", "groq": "GROQ_API_KEY",
+         "mistral": "MISTRAL_API_KEY", "gemini": "GEMINI_API_KEY"}
+_DEFAULT_MODEL = {"cohere": "command-a-03-2025", "groq": "openai/gpt-oss-20b",
+                  "mistral": "mistral-small-latest", "gemini": "gemini-3.6-flash"}
+_GROUNDING = (
+    "Answer the user's question using ONLY the context provided below. If the answer "
+    "is not in the context, say you don't have that information. Do not use outside "
+    "knowledge."
+)
+_DEFAULT_PERSONA = "You are a helpful support assistant."
 
 
 def _require_internal(token: str | None) -> None:
@@ -66,35 +78,14 @@ def embed(req: EmbedRequest, x_internal_token: str | None = Header(default=None)
 class AnswerRequest(BaseModel):
     question: str
     contexts: list[str] = []
+    system_prompt: str = ""
+    provider: str = "cohere"
+    model: str = ""
 
 
 class AnswerResponse(BaseModel):
     answer: str
     provider: str
-
-
-def _answer_cohere(prompt: str) -> str:
-    import httpx
-
-    key = os.environ.get("COHERE_API_KEY", "")
-    if not key:
-        raise HTTPException(status_code=503, detail="no generation key configured")
-    r = httpx.post(
-        "https://api.cohere.com/v2/chat",
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        json={
-            "model": _COHERE_MODEL,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.2,
-        },
-        timeout=30.0,
-    )
-    if r.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"generation failed ({r.status_code})")
-    data = r.json()
-    parts = data.get("message", {}).get("content", [])
-    text = "".join(p.get("text", "") for p in parts if isinstance(p, dict))
-    return text.strip()
 
 
 @router.post("/answer", response_model=AnswerResponse)
@@ -104,22 +95,29 @@ def answer(req: AnswerRequest, x_internal_token: str | None = Header(default=Non
     if not question:
         raise HTTPException(status_code=400, detail="no question")
 
+    provider = (req.provider or "cohere").lower()
+    if provider not in _KEYS:
+        provider = "cohere"
+    model = (req.model or "").strip() or _DEFAULT_MODEL[provider]
+    key = os.environ.get(_KEYS[provider], "")
+    if not key:
+        raise HTTPException(status_code=503, detail=f"no key configured for {provider}")
+
+    # The owner's persona sets the bot's voice; grounding is always enforced on top.
+    persona = (req.system_prompt or "").strip() or _DEFAULT_PERSONA
+    system = f"{persona}\n\n{_GROUNDING}"
     context_block = "\n\n".join(
         f"[{i + 1}] {c.strip()}" for i, c in enumerate(req.contexts) if c and c.strip()
     )
-    if context_block:
-        prompt = (
-            "You are a helpful assistant answering ONLY from the context below. "
-            "If the answer is not in the context, say you don't know. Do not use "
-            "outside knowledge.\n\n"
-            f"Context:\n{context_block}\n\n"
-            f"Question: {question}\n\nAnswer:"
-        )
-    else:
-        prompt = (
-            "You are a helpful assistant. The knowledge base has no relevant "
-            "information for this question, so say you don't have that information.\n\n"
-            f"Question: {question}\n\nAnswer:"
-        )
+    user = (
+        (f"Context:\n{context_block}\n\n" if context_block
+         else "Context: (the knowledge base has no relevant information)\n\n")
+        + f"Question: {question}\n\nAnswer:"
+    )
 
-    return AnswerResponse(answer=_answer_cohere(prompt), provider="cohere")
+    from routers.rag.llm import complete
+    out = complete(provider, model, key, [{"role": "user", "content": user}],
+                   system=system, tool="tenant-chat").strip()
+    if not out:
+        raise HTTPException(status_code=502, detail="generation failed")
+    return AnswerResponse(answer=out, provider=provider)
