@@ -39,6 +39,9 @@ _KEYS = {"cohere": "COHERE_API_KEY", "groq": "GROQ_API_KEY",
          "mistral": "MISTRAL_API_KEY", "gemini": "GEMINI_API_KEY"}
 _DEFAULT_MODEL = {"cohere": "command-a-03-2025", "groq": "openai/gpt-oss-20b",
                   "mistral": "mistral-small-latest", "gemini": "gemini-3.6-flash"}
+# If the chosen provider returns nothing (down / rate-limited), fall back through these
+# so the bot stays up — mirrors the main RAG's provider cascade.
+_FALLBACK_ORDER = ["cohere", "groq", "gemini", "mistral"]
 _GROUNDING_KB = (
     "Answer using ONLY the context below (the bot's knowledge base, plus any web "
     "results). If the knowledge base doesn't contain the answer but web results are "
@@ -69,6 +72,22 @@ def _apply_date_templates(s: str) -> str:
     for k, v in reps.items():
         s = s.replace(k, v)
     return s
+
+
+def _generate(provider: str, model: str, messages: list[dict], system: str, tool: str) -> tuple[str, str]:
+    """Generate with the chosen provider, falling back to other providers if it returns
+    nothing (down / rate-limited). Returns (text, provider_used)."""
+    from routers.rag.llm import complete
+    order = [provider] + [p for p in _FALLBACK_ORDER if p != provider]
+    for p in order:
+        key = os.environ.get(_KEYS.get(p, ""), "")
+        if not key:
+            continue
+        m = model if p == provider else _DEFAULT_MODEL[p]
+        out = complete(p, m, key, messages, system=system, tool=tool).strip()
+        if out:
+            return out, p
+    return "", provider
 
 
 def _require_internal(token: str | None) -> None:
@@ -131,9 +150,6 @@ def answer(req: AnswerRequest, x_internal_token: str | None = Header(default=Non
     if provider not in _KEYS:
         provider = "cohere"
     model = (req.model or "").strip() or _DEFAULT_MODEL[provider]
-    key = os.environ.get(_KEYS[provider], "")
-    if not key:
-        raise HTTPException(status_code=503, detail=f"no key configured for {provider}")
 
     # Knowledge-base context (retrieved by the frontend) + optional live web results.
     contexts: list[tuple[str, str]] = [("", c.strip()) for c in req.contexts if c and c.strip()]
@@ -176,14 +192,13 @@ def answer(req: AnswerRequest, x_internal_token: str | None = Header(default=Non
     user = f"Context:\n{context_block}\n\nQuestion: {question}\n\nAnswer:"
 
     from routers.rag.llm import complete
-    out = complete(provider, model, key, [{"role": "user", "content": user}],
-                   system=system, tool="tenant-chat").strip()
+    out, used = _generate(provider, model, [{"role": "user", "content": user}], system, "tenant-chat")
     if not out:
         raise HTTPException(
             status_code=502,
-            detail=f"{provider}/{model} returned no output (likely a rate limit or provider error — retry, or switch the model in Configure)",
+            detail=f"all providers returned no output (tried {provider}/{model} first) — likely rate limits; retry shortly or switch the model in Configure",
         )
-    return AnswerResponse(answer=out, provider=provider, web_used=web_used, sources=web_sources)
+    return AnswerResponse(answer=out, provider=used, web_used=web_used, sources=web_sources)
 
 
 class SuggestRequest(BaseModel):
@@ -227,12 +242,7 @@ def suggest(req: SuggestRequest, x_internal_token: str | None = Header(default=N
         system, user = _SUGGEST_SYSTEM_PERSONA, persona
     else:
         return SuggestResponse(questions=[])
-    key = os.environ.get(_KEYS["cohere"], "")
-    if not key:
-        return SuggestResponse(questions=[])
-    from routers.rag.llm import complete
-    out = complete("cohere", _DEFAULT_MODEL["cohere"], key,
-                   [{"role": "user", "content": user}], system=system, tool="tenant-suggest")
+    out, _ = _generate("cohere", _DEFAULT_MODEL["cohere"], [{"role": "user", "content": user}], system, "tenant-suggest")
     questions = [_clean_question(ln) for ln in (out or "").splitlines() if ln.strip()]
     questions = [q for q in questions if len(q) > 5][:5]
     return SuggestResponse(questions=questions)
@@ -263,14 +273,9 @@ def complete_text(req: CompleteRequest, x_internal_token: str | None = Header(de
     prefix = (req.prefix or "").strip()
     if len(prefix) < 3:
         return CompleteResponse(completion="")
-    key = os.environ.get(_KEYS["cohere"], "")
-    if not key:
-        return CompleteResponse(completion="")
     persona = (req.persona or "").strip()[:1000]
     user = (f"Assistant domain: {persona}\n\n" if persona else "") + f"Prefix: {prefix}"
-    from routers.rag.llm import complete
-    out = complete("cohere", _DEFAULT_MODEL["cohere"], key,
-                   [{"role": "user", "content": user}], system=_COMPLETE_SYSTEM, tool="tenant-complete").strip()
+    out, _ = _generate("cohere", _DEFAULT_MODEL["cohere"], [{"role": "user", "content": user}], _COMPLETE_SYSTEM, "tenant-complete")
     out = out.strip().strip('"\'')
     if out.lower().startswith(prefix.lower()):  # strip accidental prefix echo
         out = out[len(prefix):]
