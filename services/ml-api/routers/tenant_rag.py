@@ -56,6 +56,15 @@ _GROUNDING_WEB_ONLY = (
     "information. Never use outside knowledge."
 )
 _DEFAULT_PERSONA = "You are a helpful support assistant."
+# Answers render as Markdown in the widget, so nudge the model to use it — especially a
+# real Markdown table for tabular/comparative data (otherwise it prints aligned text that
+# shows as plain lines).
+_FORMAT_HINT = (
+    "Formatting: reply in Markdown. Use **bold** for emphasis and bullet or numbered "
+    "lists where they help. When presenting tabular or comparative data (e.g. rates, "
+    "slabs, feature comparisons), format it as a Markdown table: a header row, a "
+    "|---|---| separator row, then one row per entry."
+)
 
 
 def _apply_date_templates(s: str) -> str:
@@ -185,7 +194,7 @@ def answer(req: AnswerRequest, x_internal_token: str | None = Header(default=Non
     # The owner's persona sets the bot's voice; grounding is always enforced on top,
     # and reflects whether this bot actually has a knowledge base.
     persona = _apply_date_templates((req.system_prompt or "").strip() or _DEFAULT_PERSONA)
-    system = f"{persona}\n\n{_GROUNDING_KB if req.has_kb else _GROUNDING_WEB_ONLY}"
+    system = f"{persona}\n\n{_GROUNDING_KB if req.has_kb else _GROUNDING_WEB_ONLY}\n\n{_FORMAT_HINT}"
     context_block = "\n\n".join(
         f"[{i + 1}]{(' ' + url) if url else ''}\n{text}" for i, (url, text) in enumerate(contexts)
     )
