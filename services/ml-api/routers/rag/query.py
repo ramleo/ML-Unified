@@ -346,6 +346,16 @@ def _sse_generator(req: QueryRequest, client_ip: str = ""):
                      groundedness=groundedness, low_confidence=low_confidence, provider=served_provider,
                      latency_ms=final_latency_ms, web_fallback=web_fallback_used)
 
+    # Q4 M3 — online judge-scoring of a SAMPLE of this live answer (reference-free,
+    # content-free, background). Never blocks or affects the response.
+    try:
+        from routers.rag.online_judge import maybe_judge
+        maybe_judge(question=req.query, answer=full_text, chunks=chunks, groundedness=groundedness,
+                    low_confidence=low_confidence, confidence=confidence, provider=served_provider,
+                    model=served_model, answer_source=answer_source, surface="rag")
+    except Exception:
+        pass
+
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
