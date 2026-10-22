@@ -1,8 +1,6 @@
 # Part 3
 
 
-## ML Pipeline
+## Chatbot builder
 
-Everything between a raw CSV and a trained, explained model — cleaning, feature work, tuning, comparison and drift.
-
-13 of this area's 13 tools have a chapter here. All of them are listed in the appendix.
+Build an AI chatbot grounded in your own documents, with no code, then embed it on your own website. Answers are drawn only from the material you upload — the bot cites it, and declines when a question falls outside it.

@@ -33,8 +33,13 @@ def clean(md: str) -> str:
     md = re.sub(r"<nav\b.*?</nav>", "", md, flags=re.DOTALL | re.IGNORECASE)
     # Unwrap anchor links to their text: <a ...>EDA Explorer</a> -> EDA Explorer
     md = re.sub(r"<a\b[^>]*>(.*?)</a>", r"\1", md, flags=re.DOTALL | re.IGNORECASE)
-    # Remove every remaining HTML tag (the bk-* <div> wrappers, page breaks, etc.).
-    md = re.sub(r"<[^>]+>", "", md)
+    # Remove every remaining HTML tag (the bk-* <div> wrappers, page breaks, etc.) —
+    # but NOT inside fenced code blocks, where angle brackets are real content (e.g.
+    # an embed <script> snippet). Strip tags only in the prose between fences.
+    parts = re.split(r"(```.*?```)", md, flags=re.DOTALL)
+    for i in range(0, len(parts), 2):   # even indices are outside code fences
+        parts[i] = re.sub(r"<[^>]+>", "", parts[i])
+    md = "".join(parts)
     # Collapse runs of blank lines.
     md = re.sub(r"\n{3,}", "\n\n", md)
     return md.strip() + "\n"
