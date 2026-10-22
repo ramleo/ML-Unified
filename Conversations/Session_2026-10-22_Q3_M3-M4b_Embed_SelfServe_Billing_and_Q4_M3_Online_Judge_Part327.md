@@ -114,6 +114,26 @@ M3 scores a **sample of REAL answers users received** so the dashboard shows liv
 - **Verify the right CI run** — a `gh run watch` once latched onto a stale/other run and
   reported a false green; confirmed the actual run before claiming success.
 
+## Handbook — Chatbot builder chapter (follow-up)
+After confirming PRD + memory were already current (but the public handbook was
+not), added a user-facing chapter so the chatbot builder is discoverable like the
+API/MCP are. Owner-only features (eval dashboard, online judge) deliberately stay
+out of the public handbook — their record is the PRD roadmap + the owner nav.
+- **New Part 3 · Chapter 7 "Chatbot builder"** in the handbook: build & test, Free
+  vs Pro plans, the embed `<script>` snippet, the five abuse controls. Extracted the
+  two hand-authored platform chapters (Developer access + Chatbot builder) into
+  `scripts/handbook_platform_chapters.py` so `build-handbook.py` stays under the line
+  limit. Regenerated `public/handbook.md`. ml-portfolio `852d8cf`.
+- **KB re-sync** so the public RAG bot knows the new chapter: ML-Unified `81b5b6a`
+  (+HF `9345655`/`33ea24d`). **Bug fixed in `sync_handbook_kb.py`:** `clean()`
+  stripped every `<…>` tag, which blanked the embed `<script>` snippet inside the
+  fenced code block; now code fences are protected from tag-stripping.
+- Verified end-to-end on the live Space (RUNNING): the public bot answers "how do I
+  embed a chatbot, what plan?" correctly, citing the new sections.
+- **Lesson:** twice this follow-up I stated before checking — called CI "not
+  triggered" (it had run green; the Actions API just lagged) and claimed some tools
+  were appendix-only (all 58 have full chapters). Check the command output first.
+
 ## State of the roadmap
 Q5 ✅ · Q1 ✅ · **Q4 ✅ (M1+M2+M3)** · **Q3 ✅ (M1→M4b)** · Q2 🚧 M1.
 Remaining: Q2 MCP extras (OAuth 2.1 + PKCE, resources/prompts, bigger tool set), Q3 M4c
