@@ -66,3 +66,55 @@ Both commits CI-green.
 Standing requirements saved to memory ([[project_homepage_chat_grounded]]): the homepage
 chat must be grounded (answer any website question), copyable, and must not plaster the
 owner's full name.
+
+---
+
+## Follow-up round (same day) — chat usability + upload affordance
+
+After the grounded rework, the user hit three more chat issues plus a site-wide upload one.
+
+### Chat fixes (`4ae9d1e`, ml-portfolio, frontend-only)
+1. **User messages weren't copyable** — the Copy button only rendered on assistant
+   replies. Now renders on both bubbles (`ChatMessages.tsx`).
+2. **Paths were plain text, not links** — a reply saying `/tools/preprocessing` was dead
+   text. Added a linkifier in `ChatMessages.tsx` that turns internal paths
+   (`/tools/…`, `/platforms/…`, `[label](/path)`) into real `<a>` links, so the user
+   clicks instead of retyping (case/spelling no longer matters). External URLs stay plain.
+3. **Follow-ups jumped to the wrong tool** — "give me the link to go" returned Meeting
+   Intelligence (and later invented `/data-preprocessing`). **Root cause:** `/api/chat`
+   sent only the LAST message, and even passing `history` fixes *generation* but NOT
+   *retrieval* — a contextless "give me the link" embeds to the wrong KB chunks, so the
+   model invents a path. **Fix:** `/api/chat` now (a) passes bounded `history` to the RAG
+   (the Space's `QueryRequest` already has `history: list[dict]`, no backend change), and
+   (b) resolves a short/referential follow-up into a standalone retrieval query by
+   prefixing the prior question. **Proven live:** the exact follow-up now retrieves
+   `15-data-preprocessing.md` and returns the correct `/tools/preprocessing`.
+
+### Chat links open in a new tab (`da772d6`)
+Clicking an in-chat link navigated away and the chat (not persisted) was lost. Links now
+carry `target="_blank" rel="noopener noreferrer"`.
+
+### Upload-affordance audit + fix (`da772d6`, ml-portfolio, frontend-only)
+User: the EDA upload was a **bare native `<input type="file">`** ("Choose file / No file
+chosen") — no visual cue where to click. Audited **all 44 upload controls** across the
+60 tools + shared platform components (AutoML step, pipeline bars, RAG ingest, etc.):
+- **Only 2 were bare:** **Exploratory Data Analysis** and **Multimodal RAG**'s add-image
+  popover. The other 42 already hid the native input behind a styled drop-zone/button.
+- **EDA** → dashed drop-zone (upload icon, "Drop your CSV here / or click to browse",
+  drag-and-drop, 10 MB hint) matching its twin **Preprocessing** tool. Verified live with
+  a production screenshot.
+- **Multimodal RAG** add-image → a styled "Choose an image" button.
+- Audit method gotcha: a naïve regex for the hide-style flagged 4 false positives because
+  `=>` arrows in `onChange` truncated the match at the `>`. Re-checked each by hand —
+  MeetingRunner/TextToImage/FileUploadSection were all already hidden (`className="hidden"`
+  / `display:none`).
+
+### Lessons (added)
+- **History fixes generation, not retrieval.** A referential follow-up must be resolved
+  into a standalone query (prefix the prior turn) or the RAG retrieves the wrong chunks
+  and hallucinates a path. The KB had the right path all along (`Find it at` row).
+- **Audit the whole class, verify each flag.** Regex heuristics over JSX are lossy
+  (`=>`, multiline tags) — confirm every hit/miss before reporting a count.
+- **A file input must have a visible affordance** — hide the native input, put a
+  drop-zone or labeled button in front; the site already did this for 42/44, EDA was the
+  outlier the user actually used.
