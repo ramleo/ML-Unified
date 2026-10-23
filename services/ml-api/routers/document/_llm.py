@@ -1,12 +1,16 @@
 """LLM provider cascade for document field extraction (text path).
 Zero imports from other ml-api routers — self-contained for microservice extraction.
-Cascade order: Cohere → Gemini. Groq dropped from the automatic cascade
-(2026-08-24) and Mistral dropped (2026-09-29) — Mistral 429s on nearly every
-call here (free-tier capacity, no reserved quota) and its large model is 403
-tier-locked, so it was a guaranteed failed round-trip that only delayed the
-working providers (see routers/rag/query.py's _DEFAULT_PROVIDER comment for the
-full history). Both stay selectable manually via BYOK (provider="groq" /
-"mistral"), just never tried automatically. Vision/OCR lives in _vision.py.
+Cascade order: Cohere → Groq → Gemini. Groq was re-added (2026-10-23, now on
+openai/gpt-oss-120b, 8k TPM) as a free fallback between Cohere and the paid Gemini
+key — a Cohere 429 used to fall straight through to Gemini (the Nightly document-
+goldens guard fails when the paid key serves). Groq had been dropped 2026-08-24
+only because its then-models capped output at ~1k tokens/min; gpt-oss-120b does not.
+Mistral dropped (2026-09-29) — it 429s on nearly every call here (free-tier
+capacity, no reserved quota) and its large model is 403 tier-locked, so it was a
+guaranteed failed round-trip that only delayed the working providers (see
+routers/rag/query.py's _DEFAULT_PROVIDER comment for the full history). Mistral
+stays selectable manually via BYOK (provider="mistral"). Vision/OCR lives in
+_vision.py.
 """
 from __future__ import annotations
 
@@ -150,8 +154,18 @@ def _cohere(messages: list[dict], system: str) -> str:
 # Read by the router right after extraction to attribute results in the UI.
 last_provider: str = ""
 
-# Gemini is the only PAID key here and this endpoint is public, so it goes
-# LAST, behind free Cohere. Free Cohere first, paid Gemini last.
+def _groq_doc(messages: list[dict], system: str) -> str:
+    # Free Groq fallback between Cohere and paid Gemini, so a Cohere 429 no longer
+    # falls straight through to the only paid key. Uses openai/gpt-oss-120b: free,
+    # 8k TPM (ample for the text path, which sends extracted text — not a full-page
+    # image — plus the schema prompt), and non-reasoning so it emits clean JSON.
+    # This is why re-adding Groq works now: the models that got it dropped here in
+    # 2026-08 were capped at ~1k output tokens/min; gpt-oss-120b is not.
+    return _groq(messages, system, model="openai/gpt-oss-120b")
+
+
+# Gemini is the only PAID key here and this endpoint is public, so it goes LAST,
+# behind the free providers: free Cohere first, free Groq second, paid Gemini last.
 #
 # Mistral and Cerebras are deliberately absent — both are round trips that
 # cannot succeed here, so they only delay the working providers:
@@ -161,7 +175,7 @@ last_provider: str = ""
 #     every call (the earlier 401 was a stale secret, replaced 2026-09-12).
 # Both stay reachable as provider="mistral"/"cerebras" (BYOK) if those accounts
 # are ever upgraded.
-_CASCADE_ORDER = (("cohere", _cohere), ("gemini", _gemini_text))
+_CASCADE_ORDER = (("cohere", _cohere), ("groq", _groq_doc), ("gemini", _gemini_text))
 
 
 def _cascade(messages: list[dict], system: str) -> str:
