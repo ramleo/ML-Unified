@@ -31,9 +31,11 @@ PAID = "gemini"
 # -- Cascade order ------------------------------------------------------------
 
 def test_document_cascade_is_the_agreed_order():
-    # Mistral was dropped from the document path in 3889bd6 (it always failed);
-    # the free→paid order (Cohere, then the paid Gemini last) is unchanged.
-    assert [name for name, _ in _llm._CASCADE_ORDER] == ["cohere", "gemini"]
+    # Mistral was dropped from the document path in 3889bd6 (it always failed).
+    # Groq (openai/gpt-oss-120b) was re-added 2026-10-23 as a FREE fallback between
+    # Cohere and the paid Gemini, so a Cohere 429 no longer falls straight to the
+    # paid key. Order stays free→free→paid: Cohere, Groq, then Gemini last.
+    assert [name for name, _ in _llm._CASCADE_ORDER] == ["cohere", "groq", "gemini"]
 
 
 def test_rag_fallback_is_the_agreed_order():
@@ -99,7 +101,7 @@ def test_an_empty_answer_falls_through_to_the_next_provider(monkeypatch):
     out = _llm._cascade([{"role": "user", "content": "x"}], "sys")
 
     assert out == '{"ok": true}'
-    assert called == ["cohere", "gemini"]
+    assert called == ["cohere", "groq", "gemini"]
     assert _llm.last_provider == "gemini"
 
 
@@ -111,7 +113,7 @@ def test_whitespace_is_not_an_answer(monkeypatch):
     called = _stub_cascade(monkeypatch, {"cohere": "   \n ", "gemini": "{}"})
 
     assert _llm._cascade([], "") == "{}"
-    assert called == ["cohere", "gemini"]
+    assert called == ["cohere", "groq", "gemini"]
     assert _llm.last_provider == "gemini"
 
 
@@ -119,7 +121,7 @@ def test_every_provider_failing_is_reported_as_nobody_served(monkeypatch):
     called = _stub_cascade(monkeypatch, {})
 
     assert _llm._cascade([], "") == ""
-    assert called == ["cohere", "gemini"], "the cascade stopped early"
+    assert called == ["cohere", "groq", "gemini"], "the cascade stopped early"
     assert _llm.last_provider == "", "a failed cascade must not leave a stale provider name"
 
 
