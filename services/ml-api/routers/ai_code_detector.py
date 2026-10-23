@@ -37,11 +37,13 @@ _MAX_CODE_LEN = 20_000
 # capacity contention). The endpoint answered 200 with a null body, so the
 # "Independent LLM opinion" panel read "unavailable" for real users while
 # the client-side stylometry still ran. Same fix as prompt_injection_check
-# and siem_triage: cohere first (free, reliable), mistral second. Gemini is
-# absent on purpose — the only paid key, on a public endpoint.
+# and siem_triage: cohere first (free, reliable), mistral second, groq third
+# (openai/gpt-oss-120b — free, separate rate-limit pool, runs when the other
+# two 429). Gemini is absent on purpose — the only paid key, on a public endpoint.
 _JUDGE_CANDIDATES = [
     ("cohere", "command-a-03-2025"),
     ("mistral", "mistral-small-latest"),
+    ("groq", "openai/gpt-oss-120b"),
 ]
 
 _JUDGE_SYSTEM = (

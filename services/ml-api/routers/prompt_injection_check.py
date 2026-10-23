@@ -48,12 +48,17 @@ _MAX_TEXT_LEN = 20_000
 # endpoint still answered 200 while HALF THIS TOOL had not run, quietly
 # downgrading a real injection from "high" to "medium".
 #
-# Cohere leads because it is free and reliable; Mistral stays as the second
-# opinion. Gemini is deliberately absent — it is the only paid key, and this
+# Cohere leads because it is free and reliable; Mistral is the second opinion;
+# Groq is a third free fallback on a SEPARATE rate-limit pool, so it still runs
+# when Cohere and Mistral are both 429 (as free tiers often are under load) —
+# openai/gpt-oss-120b, chosen over Groq's Qwen models (they leak <think> and
+# truncate JSON); _parse_judge_response extracts the JSON even if gpt-oss adds a
+# preamble. Gemini is deliberately absent — it is the only paid key, and this
 # endpoint is public and unauthenticated.
 _JUDGE_CANDIDATES = [
     ("cohere", "command-a-03-2025"),
     ("mistral", "mistral-small-latest"),
+    ("groq", "openai/gpt-oss-120b"),
 ]
 
 _JUDGE_SYSTEM = (

@@ -38,12 +38,14 @@ _MAX_EXAMPLE_LEN = 500
 # (free-tier capacity contention — best-effort with no reserved capacity).
 # The endpoint still answered 200 with a null body, so every alert group
 # rendered "Judge unavailable" for real users while the grouping worked.
-# Same fix as routers/prompt_injection_check.py: cohere leads because it is
-# free and reliable, mistral stays as the second opinion. Gemini is
+# Same fix as routers/prompt_injection_check.py: cohere leads (free, reliable),
+# mistral second, and groq (openai/gpt-oss-120b) a third free fallback on a
+# separate rate-limit pool, so it runs when cohere+mistral are both 429. Gemini is
 # deliberately absent — it is the only paid key, and this endpoint is public.
 _JUDGE_CANDIDATES = [
     ("cohere", "command-a-03-2025"),
     ("mistral", "mistral-small-latest"),
+    ("groq", "openai/gpt-oss-120b"),
 ]
 
 _JUDGE_SYSTEM = (
