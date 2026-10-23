@@ -36,7 +36,7 @@ A missing or invalid key returns `401`; over the quota or rate limit returns `42
 
 ## MCP (for AI clients)
 
-The same tools are exposed over the Model Context Protocol (Streamable HTTP), so clients such as Claude Desktop and Cursor can use them. Point the client at the MCP endpoint and pass your key as a Bearer token:
+The tools are exposed over the Model Context Protocol (Streamable HTTP), so clients such as Claude Desktop and Cursor can use them. Point the client at the MCP endpoint and pass your key as a Bearer token:
 
 ```json
 {
@@ -48,3 +48,9 @@ The same tools are exposed over the Model Context Protocol (Streamable HTTP), so
   }
 }
 ```
+
+MCP exposes a little more than the REST API:
+
+- **Tools** — the three REST endpoints above, plus **attack-surface check** (passive recon of a host), **prompt-injection check** (screen untrusted text before acting on it), and **YARA malware scan** (signature scan of file content).
+- **Resources** — read-only context a client can pull: `airaml://tools` (the tool catalog) and `airaml://handbook` (this handbook, section by section).
+- **Prompts** — ready-made workflows: *scan-host*, *check-email-headers* and *check-untrusted-text*.

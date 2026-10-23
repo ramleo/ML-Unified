@@ -72,6 +72,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py .
 COPY mcp_server.py .
+COPY mcp_ext/ mcp_ext/
 COPY routers/ routers/
 COPY security/ security/
 COPY shared/ shared/
