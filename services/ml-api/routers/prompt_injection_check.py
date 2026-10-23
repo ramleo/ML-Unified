@@ -223,7 +223,15 @@ def run_judge(text: str) -> tuple[LlmVerdict | None, bool]:
         verdict = _parse_judge_response(raw)
         if verdict is not None:
             return verdict, True
-        logger.warning("prompt-injection judge: %s returned unparseable output", provider)
+        if not raw or not raw.strip():
+            # complete() swallows provider errors (e.g. HTTP 429) and returns an
+            # empty string rather than raising, so an empty raw here means the
+            # provider was unreachable/rate-limited, NOT that it sent bad JSON.
+            logger.warning("prompt-injection judge: %s returned no output "
+                           "(provider unavailable or rate-limited)", provider)
+        else:
+            logger.warning("prompt-injection judge: %s returned unparseable output: %.200s",
+                           provider, raw)
     logger.error("prompt-injection judge: every candidate failed (%s)",
                  ", ".join(p for p, _ in _JUDGE_CANDIDATES))
     return None, False
