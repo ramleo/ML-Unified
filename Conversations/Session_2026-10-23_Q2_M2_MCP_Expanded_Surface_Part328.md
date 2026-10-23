@@ -65,6 +65,42 @@ provider spend" spirit:
 - HF upload: `mcp_server.py`, `mcp_ext/`, `Dockerfile`, KB `09-public-api-amp-mcp.md`.
 - Live verification: authed `tools/list` → 6 tools / 2 resources / 1 template / 3 prompts.
 
+## Follow-up — Groq fallbacks & document cost-guard (same day)
+Demoing the new MCP tools surfaced a reliability/cost gap: the LLM-judge tools
+no-op'd when Cohere+Mistral free tiers both 429'd, and the Nightly `document-goldens`
+job FAILED because document extraction fell through to **paid Gemini** when free
+providers were throttled (29/29 values still correct — the "failure" is a fall-to-paid
+cost guard). Added a free **Groq** attempt in each place, before the paid key:
+
+- **Judge tools (`e1a5558`, +HF):** `prompt_injection_check`, `siem_triage`,
+  `ai_code_detector` now try cohere → mistral → **groq (`openai/gpt-oss-120b`)**. Groq
+  is free on a SEPARATE rate-limit pool, so it runs when the other two throttle. Cohere
+  stays primary (fallback added, not swapped). Also fixed a misleading judge log
+  (`625b5ef`, +HF): empty output from a 429 was logged as "unparseable" — now "no output
+  (provider unavailable or rate-limited)".
+- **Document text cascade (`d29c310`, +HF; test fix `8213457`):**
+  `routers/document/_llm.py` cohere → **groq (`gpt-oss-120b`)** → gemini. Strictly safe
+  (groq only after cohere fails; still falls to gemini if groq fails). The change broke
+  `test_provider_cascade.py` (hard-coded old order) — CI caught it, tests updated.
+- **Document vision cascade (`bbaa457`, +HF):** `routers/document/_vision.py` **groq
+  (`qwen/qwen3.8-27b`, Groq's only vision model)** → gemini. NOT strictly safe like text:
+  a hallucinating vision model returns confident-but-wrong output used instead of Gemini
+  (qwen3.6 caused EC-007). Shipped qwen-first on the newer 3.8 (user chose "option B"),
+  leaning on the nightly goldens to catch regressions — watch the next nightly.
+
+**Lessons:**
+- **Read your own provider memory before choosing a Groq model.** First picked
+  `llama-3.3-70b-versatile` for the judge fallback — which `project_llm_provider_status`
+  already listed as retired since 2026-09-07. gpt-oss-120b (8k TPM, text, non-reasoning)
+  is the current free Groq text model; qwen3.8-27b is the only vision one.
+- **A "fallback" is only strictly safe when every provider is interchangeable in
+  QUALITY.** For text that holds; for vision it does not (a wrong-but-non-empty answer is
+  used), so qwen-first trades cost for an accuracy risk — a deliberate, user-approved call.
+- **Not witnessed firing:** Cohere stayed healthy, so the Groq *judge* path hasn't been
+  seen serving live yet; it fires only when cohere+mistral both throttle.
+- HF deploys: the first (MCP) upload went as 4 commits; the later ones used a single
+  `create_commit` per rule 5.
+
 ## State of the roadmap
 Q5 ✅ · Q1 ✅ · **Q2 🚧 M1+M2** (only M3 OAuth deferred) · Q4 ✅ · Q3 ✅ (M4c deferred).
 Remaining non-deferred: **autocomplete site-wide**. Owner still owes the one manual step
