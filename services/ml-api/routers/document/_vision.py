@@ -1,7 +1,12 @@
 """Vision + OCR extraction for scanned/image documents.
-Vision cascade: Gemini 3.6 Flash only (Mistral removed from the auto path
-2026-09-29 — 429s on nearly every call, never saved a paid Gemini call). Groq dropped entirely
-(2026-08-24, see routers/rag/query.py's _DEFAULT_PROVIDER comment).
+Vision cascade: Groq (qwen/qwen3.8-27b, free) → Gemini 3.6 Flash (paid, last).
+Groq re-added 2026-10-23 as a free vision attempt before the paid key — every
+vision doc had been going straight to paid Gemini. NOTE: unlike the text path this
+is NOT purely safe — a hallucinating vision model returns confident-but-wrong
+output that is used instead of Gemini; qwen3.6 vision caused EC-007. Shipped
+qwen-first on the newer 3.8 (option B), leaning on the nightly document-goldens to
+catch any accuracy regression. Mistral removed from the auto path 2026-09-29 (429s
+on nearly every call, never saved a paid call).
 OCR-first path: mistral-ocr-latest converts pages to markdown so scanned
 docs can use the same text cascade as digital PDFs.
 """
@@ -161,21 +166,48 @@ def _gemini_vision_raw(b64: str, prompt: str) -> str:
     return ""
 
 
+def _qwen_vision_raw(b64: str, prompt: str) -> str:
+    # Free Groq vision (OpenAI-compatible). qwen/qwen3.8-27b is Groq's only vision
+    # model. Free tier, so a 429 on a large page image is possible — it just falls
+    # through to Gemini (empty return). response_format=json_object forces clean
+    # JSON and suppresses any reasoning preamble. Re-added 2026-10-23 on the newer
+    # 3.8 (3.6 caused EC-007); the nightly document-goldens guard any regression.
+    key = os.environ.get("GROQ_API_KEY", "")
+    if not key:
+        return ""
+    try:
+        import httpx
+        messages = [{"role": "user", "content": [
+            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
+            {"type": "text", "text": prompt},
+        ]}]
+        with httpx.Client(timeout=90) as client:
+            r = client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {key}"},
+                json={"model": "qwen/qwen3.8-27b", "messages": messages,
+                      "max_tokens": 4096, "response_format": {"type": "json_object"},
+                      "temperature": 0},
+            )
+            r.raise_for_status()
+            return r.json()["choices"][0]["message"]["content"] or ""
+    except Exception as exc:
+        logger.warning("Qwen (Groq) vision failed: %s", exc)
+        return ""
+
+
 def _vision_cascade_raw(b64: str, prompt: str) -> str:
     from . import _llm as _llm_state
-    # Groq dropped entirely from vision (2026-08-24, see routers/rag/query.py's
-    # _DEFAULT_PROVIDER comment for the full history) — no BYOK vision-provider
-    # selector exists in this app to keep it around for, and its
-    # qwen/qwen3.6-27b model was the confirmed source of EC-007's
-    # collage-hallucination bug (see mm_caption.py's looks_like_fabricated_
-    # collage), so removed outright rather than left unused.
-    # Mistral vision removed from the auto path 2026-09-29: it 429s on nearly
-    # every call here (free-tier capacity), so it never actually saved a paid
-    # Gemini call — Gemini already handled ~100% of vision — it only added a
-    # failed round-trip that held the single worker and 502-ed concurrent
-    # requests. Gemini vision only now. (_mistral_vision_raw kept for reference /
-    # if a reserved-capacity Mistral key is ever added.)
-    for name, fn in (("gemini", _gemini_vision_raw),):
+    # Groq (qwen/qwen3.8-27b) re-added 2026-10-23 as a FREE vision attempt before
+    # the paid Gemini key — every vision doc had been going straight to paid Gemini.
+    # Groq had been dropped 2026-08-24 because its then-model qwen/qwen3.6-27b caused
+    # EC-007's collage-hallucination bug; 3.8 is the newer, cleaner model, and the
+    # nightly document-goldens catch any accuracy regression (option B, qwen-first).
+    # Mistral vision removed from the auto path 2026-09-29: it 429s on nearly every
+    # call (free-tier capacity), so it never saved a paid call — it only added a
+    # failed round-trip that held the single worker and 502-ed concurrent requests.
+    # (_mistral_vision_raw kept for reference / if a reserved-capacity key is added.)
+    for name, fn in (("groq", _qwen_vision_raw), ("gemini", _gemini_vision_raw)):
         raw = fn(b64, prompt)
         if raw.strip():
             _llm_state.last_provider = f"{name} vision"
