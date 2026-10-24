@@ -32,3 +32,9 @@ services/ml-api/catboost_info/
 services/ml-api/data/chroma_db/
 services/ml-api/models/ci-test-*
 services/ml-api/schemas/ci-test-*.json
+
+# Local-only internal docs — not published to this repo.
+docs/prd/
+
+# Local-only internal reference — not published to this public repo
+docs/SECURITY_REFERENCE.md
