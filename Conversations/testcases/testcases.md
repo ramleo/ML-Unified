@@ -1,9 +1,11 @@
 # Test Cases — ML-Unified + ml-portfolio
 
-**Last updated:** 2026-08-24  
-**Total test cases:** ~1351, covering Parts 1–249+ (full range, no gaps).
-**Open gaps:** none currently known — see "Coverage Gaps" below for
-pre-existing narrower gaps unrelated to Part ranges.
+**Last updated:** 2026-10-24  
+**Total test cases:** ~1798, covering Parts 1–330 (full range, no gaps).
+**Open gaps:** none currently known — see "Coverage Gaps" below for pre-existing
+narrower gaps unrelated to Part ranges. **Next open range, if the project continues
+past Part 330:** any parts beyond 330 have no coverage yet — check `Conversations/`
+for new session logs before assuming this index is current.
 
 ---
 
@@ -50,8 +52,22 @@ the user needs to add manually. Plus 3 verified no-bug fixes.
 | [TC-P9.md](TC-P9.md) | TC-P9 | Parts 173–200 (Text-to-SQL feature sprint, Real-Time Analytics dashboard, index.html split + HF tracking, Vision fixes, Document Intelligence) | 128 | ✅ |
 | [TC-P10.md](TC-P10.md) | TC-P10 | Parts 201–249 (Document Intelligence provider cascade, Multimodal RAG + MMRAG-01→28 backlog, CV forensics, Inpainting, Sharpen/Deblur, homepage redesign, Adversarial Robustness Lab, Face Cloak, Style Cloak, adversarial training, sitewide theme sweep, CI fix, theme toggle, 2026-08-24 multi-doc edge-case pass) | 103 | ✅ |
 | [TC-P11.md](TC-P11.md) | TC-P11 | Parts 158–172 (RAG tiered retrieval + web override, drift data versioning, EDA microservice deploy, full Text-to-SQL Agent build: guardrails, 4-engine DB support, ERD diagram, pagination, MSSQL, NL filter, saved queries, chart build-out-then-removal, follow-up suggestions) | 99 | ✅ |
+| [TC-P12.md](TC-P12.md) | TC-P12 | Parts 250–259 (logging/silent-exception audit, homepage search-bar scroll bug, sitewide theme audit, FFT steganography/moiré shipped + AI-splice rejected, stegomalware payload ID, PRNU, EC-001→008 multi-doc edge-case pass, Groq removal, deepfake A/V, domain NER, face deanonymization, keystroke inference, movement/gait comparison, email auth, extension analyzer, prompt-injection playground, AI-code detector, crime-scene SfM, Grounded-SAM rotoscope, astrophotography, wildlife re-ID, PPE, ASL fingerspelling) | 94 | ✅ |
+| [TC-P13.md](TC-P13.md) | TC-P13 | Parts 260–269 (cybersecurity sprint: password audit/DNS-tunneling/SIEM-triage/phishing-classifier/TLS-headers/malicious-package/attack-surface/keystroke-biometric/YARA/SAST-merge; app-safeguard security/ layer + CORS/rate-limit/budget bugs; site design audit + product/CV split + 50 tool-description rewrite; tools-section rebuild (ranked search, mobile cards, tag chips); globals.css split + 400-line CI gate; area pages + photo thumbnails; handbook-as-book + 50 deep chapters, read-aloud, guided demos, phone PDF, search + rail; the mm-ingest entropy-rejection bug) | 73 | ✅ |
 
-**Total: 17 files written, ~1351 test cases, covering Parts 1–249+ (full range).**
+| [TC-P14.md](TC-P14.md) | TC-P14 | Parts 270–279 (handbook demo markers + 2x-speed audio, return-to-position scrolling, the demo-clip audit + recorder rebuild (headed-Chrome WebGL, hover/drag/range, title/closing cards, audio-offset + dead-air fixes, spotlight `with`), three shipped backend bugs (/models 500, drift invented-baseline, CatBoost never ran), the full provider audit (Mistral best-effort free tier, Groq retired models, Cohere promoted, Gemini demoted) + efficiency work, the logging spec (trackedFetch/instrument, llm_calls, security_log), and the security-log hardening arc (DB rate limit, Turnstile, CSP, IST views)) | 66 | ✅ |
+
+| [TC-P15.md](TC-P15.md) | TC-P15 | Parts 280–289 (last handbook clips + their tool bugs, frontend Playwright/vitest suites + 6 heading-less pages, backend test phases (deterministic shell + nightly golden evals), ml-eda fold-in (NaN-kurtosis 500, retired-model suggest, 500-as-CORS) + self-origin 403, numpy-2/pandas-3/opencv-5 migration fallout, repos public (AGPL) + name-collision + "Mastercard" scope, the E9–E21 security sweep (baseUrl key leak, pickle RCE, DuckDB file-read, SSRF, unauthenticated DELETE, cost caps, provider-auth alerting), WEBSITE_GUIDELINES a11y/CWV pass, clips-as-integration-tests (null judges, OpenCV-5 HoughLinesP 500)) | 54 | ✅ |
+
+| [TC-P16.md](TC-P16.md) | TC-P16 | Parts 290–299 (last demo clips + fade fix + un-clippable tools, six security tools (Log Anomaly/JWT/Secret-PII/Exploit-Payload/Network Intrusion) + forgotten side-registrations, the Testwright platform build (tool-card→/qa world→GitHub-Actions runner→5 stages→flakiness/assertions/visual/ownership, recorder dropped), Text-to-SQL graduating to a platform, /ml /eda /vision native worlds + HF-app reskin, TECH_STACK.md map, API-docs + git-history secret sweep, the HF token leak, handbook rebuild (Platforms Part 1) + MMRAG clear-out (Periodicity Finder, Scan Descreen, Meeting Intelligence)) | 42 | ✅ |
+
+| [TC-P17.md](TC-P17.md) | TC-P17 | Parts 300–309 (logging-vocabulary activation + per-tool feature tracking, the 502 worker-starvation root cause + Mistral removal, observability (DIY error store + Sentry), upload/LLM security hardening (malware block-everywhere, prompt-injection flag+log, decompression bombs, prompt-hardening), and the long Testwright maturation arc — Run perf, Stop/cancel, self-heal grounding, Discover grounding, deterministic locator disambiguation, grounded-action gate, generation-sees-destination-pages, verify-repair loop, syntax guard, durable/interactive dashboard) | 44 | ✅ |
+
+| [TC-P18.md](TC-P18.md) | TC-P18 | Parts 310–319 (Testwright model selection (owner paid + BYOK) + scheduled monitoring, the two-week-stale CI rescue, 15 tool guides wired, the doc-coverage CI gate, the full observability roadmap O1–O6 (trace id, RUM, LLM telemetry front+back, Sentry trace-tag, SLOs, agent spans) + the ts-column bug, Testwright self-testing + Run-Live Companion + TW-GROUND stacked bugs + Activity Log, analytics dashboard redesign, Phase 2 fixtures/fake-media + npm publish + the volatile-control taxonomy (6/6 green) + Node-26 companion crash, and the crash-durable click-audit subsystem) | 40 | ✅ |
+
+| [TC-P19.md](TC-P19.md) | TC-P19 | Parts 320–330 (ClamAV/hybrid-gate/durable-rate-limit hardening; the platform-roadmap arc — Q5 auth + auth-UX + avatars, Q1 public API, Q2 MCP M1+M2 expanded surface, Q4 eval platform M1→M3 (dashboard, golden set, online judge), Q3 chatbot builder M1 isolation → M4b Stripe billing + embed widget; site-search, homepage-chat starter chips, tool-header fix; and the homepage-chat grounded-RAG rework + copy/links/context + upload-affordance follow-up) | 34 | ✅ |
+
+**Total: 25 files written, ~1798 test cases, covering Parts 1–330 (full range, no gaps).**
 
 ---
 
@@ -66,6 +82,7 @@ the user needs to add manually. Plus 3 verified no-bug fixes.
 | Round 5 | 2026-08-22 | TC-P9 (Parts 173–200, complete) | 128 | Inline — no subagents, per explicit user instruction; scoped to Part 200 (not full 249) |
 | Round 6 | 2026-08-22 | TC-P10 (Parts 201–249, complete) | 93 | Inline — no subagents, continuing "keep going" instruction |
 | Round 7 | 2026-08-22 | TC-P11 (Parts 158–172, complete) | 99 | Inline — no subagents; corrected a prior false "no logs exist" claim (logs existed under a different filename prefix, `Conversation_` not `Session_`) |
+| Round 8 | 2026-10-24 | TC-P12 (250–259), TC-P13 (260–269), TC-P14 (270–279), TC-P15 (280–289), TC-P16 (290–299), TC-P17 (300–309), TC-P18 (310–319), TC-P19 (320–330) | 447 | Inline — no subagents; batches of 10 parts per file, full line-by-line re-read of every session log |
 
 ---
 
@@ -135,6 +152,7 @@ CI fix + theme toggle rollout. See TC-P10.md's own Coverage Note: Parts
 that range rather than a fresh line-by-line re-read in this pass; Parts
 244–249 TCs are derived from a direct full re-read.
 
-**Next open range, if the project continues past Part 249**: any parts
-beyond 249 have no coverage yet — check `Conversations/` for new session
-logs before assuming this index is current.
+**Next open range, if the project continues past Part 330**: Parts 1–330 are now
+fully covered (TC-P12→TC-P19 closed Parts 250–330 on 2026-10-24). Any parts beyond
+330 have no coverage yet — check `Conversations/` for new session logs before
+assuming this index is current.
