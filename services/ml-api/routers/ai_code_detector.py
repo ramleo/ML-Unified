@@ -14,7 +14,6 @@ the model to answer "inconclusive" unless there's a genuinely clear tell.
 """
 
 import json
-import logging
 import re
 
 from fastapi import APIRouter, Request
@@ -23,28 +22,11 @@ from security.rate_limit import limiter, LLM_LIMIT
 from security.budget import check_and_record_call
 from pydantic import BaseModel, Field
 
-from routers.rag.llm import complete
-from routers.rag.query_helpers import _resolve_key
-
-logger = logging.getLogger(__name__)
+from routers.judge_cascade import run_judge_cascade
 
 router = APIRouter(prefix="/ai-code-detect")
 
 _MAX_CODE_LEN = 20_000
-
-# Judge cascade, tried in order. Mistral alone was the whole judge until
-# 2026-09-17, when the Space log showed it 429ing every call (free-tier
-# capacity contention). The endpoint answered 200 with a null body, so the
-# "Independent LLM opinion" panel read "unavailable" for real users while
-# the client-side stylometry still ran. Same fix as prompt_injection_check
-# and siem_triage: cohere first (free, reliable), mistral second, groq third
-# (openai/gpt-oss-120b — free, separate rate-limit pool, runs when the other
-# two 429). Gemini is absent on purpose — the only paid key, on a public endpoint.
-_JUDGE_CANDIDATES = [
-    ("cohere", "command-a-03-2025"),
-    ("mistral", "mistral-small-latest"),
-    ("groq", "openai/gpt-oss-120b"),
-]
 
 _JUDGE_SYSTEM = (
     "You are shown a code snippet. There is no reliable, published way to "
@@ -94,24 +76,7 @@ def _parse_judge_response(raw: str) -> AiCodeJudgeVerdict | None:
 
 
 def run_judge(code: str) -> AiCodeJudgeVerdict | None:
-    for provider, model in _JUDGE_CANDIDATES:
-        key = _resolve_key(provider, None)
-        if not key:
-            continue
-        try:
-            raw = complete(provider, model, key,
-                           [{"role": "user", "content": code}], system=_JUDGE_SYSTEM,
-                           tool="ai-code-detector")
-        except Exception as exc:
-            logger.warning("ai-code judge: %s failed: %s", provider, exc)
-            continue
-        verdict = _parse_judge_response(raw)
-        if verdict is not None:
-            return verdict
-        logger.warning("ai-code judge: %s returned unparseable output", provider)
-    logger.error("ai-code judge: every candidate failed (%s)",
-                 ", ".join(p for p, _ in _JUDGE_CANDIDATES))
-    return None
+    return run_judge_cascade(code, _JUDGE_SYSTEM, "ai-code-detector", _parse_judge_response)
 
 
 @router.post("/judge", response_model=AiCodeJudgeVerdict | None)

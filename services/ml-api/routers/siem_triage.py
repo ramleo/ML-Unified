@@ -14,7 +14,6 @@ integration here to actually act on anything.
 """
 
 import json
-import logging
 import re
 
 from fastapi import APIRouter, Request
@@ -23,30 +22,12 @@ from security.rate_limit import limiter, LLM_LIMIT
 from security.budget import check_and_record_call
 from pydantic import BaseModel, Field
 
-from routers.rag.llm import complete
-from routers.rag.query_helpers import _resolve_key
-
-logger = logging.getLogger(__name__)
+from routers.judge_cascade import run_judge_cascade
 
 router = APIRouter(prefix="/siem-triage")
 
 _MAX_GROUPS = 20
 _MAX_EXAMPLE_LEN = 500
-
-# Judge cascade, tried in order. Mistral alone was the whole judge until
-# 2026-09-17, when the Space log showed it returning 429 on every attempt
-# (free-tier capacity contention — best-effort with no reserved capacity).
-# The endpoint still answered 200 with a null body, so every alert group
-# rendered "Judge unavailable" for real users while the grouping worked.
-# Same fix as routers/prompt_injection_check.py: cohere leads (free, reliable),
-# mistral second, and groq (openai/gpt-oss-120b) a third free fallback on a
-# separate rate-limit pool, so it runs when cohere+mistral are both 429. Gemini is
-# deliberately absent — it is the only paid key, and this endpoint is public.
-_JUDGE_CANDIDATES = [
-    ("cohere", "command-a-03-2025"),
-    ("mistral", "mistral-small-latest"),
-    ("groq", "openai/gpt-oss-120b"),
-]
 
 _JUDGE_SYSTEM = (
     "You are a SOC analyst assistant. You are shown a list of already-"
@@ -116,27 +97,10 @@ def run_triage(groups: list[AlertGroupIn]) -> list[TriageVerdict] | None:
         }
         for g in groups
     ]
-    for provider, model in _JUDGE_CANDIDATES:
-        key = _resolve_key(provider, None)
-        if not key:
-            continue
-        try:
-            raw = complete(
-                provider, model, key,
-                [{"role": "user", "content": json.dumps(payload)}],
-                system=_JUDGE_SYSTEM,
-                tool="siem-triage",
-            )
-        except Exception as exc:
-            logger.warning("siem-triage judge: %s failed: %s", provider, exc)
-            continue
-        verdicts = _parse_judge_response(raw, len(groups))
-        if verdicts is not None:
-            return verdicts
-        logger.warning("siem-triage judge: %s returned unparseable output", provider)
-    logger.error("siem-triage judge: every candidate failed (%s)",
-                 ", ".join(p for p, _ in _JUDGE_CANDIDATES))
-    return None
+    return run_judge_cascade(
+        json.dumps(payload), _JUDGE_SYSTEM, "siem-triage",
+        lambda raw: _parse_judge_response(raw, len(groups)),
+    )
 
 
 @router.post("/judge", response_model=list[TriageVerdict] | None)

@@ -23,7 +23,6 @@ one false-confident score:
 """
 
 import json
-import logging
 import re
 
 from fastapi import APIRouter, Request
@@ -32,34 +31,11 @@ from security.rate_limit import limiter, LLM_LIMIT
 from security.budget import check_and_record_call
 from pydantic import BaseModel, Field
 
-from routers.rag.llm import complete
-from routers.rag.query_helpers import _resolve_key
-
-logger = logging.getLogger(__name__)
+from routers.judge_cascade import run_judge_cascade
 
 router = APIRouter(prefix="/prompt-injection")
 
 _MAX_TEXT_LEN = 20_000
-
-# Judge cascade, tried in order. Mistral alone was the whole judge until
-# 2026-09-07, when the Space log showed it returning 429 on every attempt
-# (free-tier capacity contention, which Mistral support confirmed is
-# best-effort with no reserved capacity — not something we can fix). The
-# endpoint still answered 200 while HALF THIS TOOL had not run, quietly
-# downgrading a real injection from "high" to "medium".
-#
-# Cohere leads because it is free and reliable; Mistral is the second opinion;
-# Groq is a third free fallback on a SEPARATE rate-limit pool, so it still runs
-# when Cohere and Mistral are both 429 (as free tiers often are under load) —
-# openai/gpt-oss-120b, chosen over Groq's Qwen models (they leak <think> and
-# truncate JSON); _parse_judge_response extracts the JSON even if gpt-oss adds a
-# preamble. Gemini is deliberately absent — it is the only paid key, and this
-# endpoint is public and unauthenticated.
-_JUDGE_CANDIDATES = [
-    ("cohere", "command-a-03-2025"),
-    ("mistral", "mistral-small-latest"),
-    ("groq", "openai/gpt-oss-120b"),
-]
 
 _JUDGE_SYSTEM = (
     "You are a security classifier. You will be shown a block of text that "
@@ -209,37 +185,15 @@ def _parse_judge_response(raw: str) -> LlmVerdict | None:
 def run_judge(text: str) -> tuple[LlmVerdict | None, bool]:
     """Return (verdict, judge_ran).
 
-    `judge_ran` is the point of the tuple: a None verdict used to be
-    indistinguishable from "the judge read this and found nothing", so an
-    unreachable provider silently made the tool weaker with no way for the
-    caller — or the user — to tell.
+    `judge_ran` is the point of the tuple: a None verdict is indistinguishable
+    from "the judge read this and found nothing", so an unreachable provider
+    would silently make the tool weaker with no way for the caller — or the user
+    — to tell. The cascade returns a verdict only when a provider actually
+    answered with parseable output, so `judge_ran` is exactly "we got a verdict".
     """
-    for provider, model in _JUDGE_CANDIDATES:
-        key = _resolve_key(provider, None)
-        if not key:
-            continue
-        try:
-            raw = complete(provider, model, key,
-                           [{"role": "user", "content": text}], system=_JUDGE_SYSTEM,
-                           tool="prompt-injection-check")
-        except Exception as exc:
-            logger.warning("prompt-injection judge: %s failed: %s", provider, exc)
-            continue
-        verdict = _parse_judge_response(raw)
-        if verdict is not None:
-            return verdict, True
-        if not raw or not raw.strip():
-            # complete() swallows provider errors (e.g. HTTP 429) and returns an
-            # empty string rather than raising, so an empty raw here means the
-            # provider was unreachable/rate-limited, NOT that it sent bad JSON.
-            logger.warning("prompt-injection judge: %s returned no output "
-                           "(provider unavailable or rate-limited)", provider)
-        else:
-            logger.warning("prompt-injection judge: %s returned unparseable output: %.200s",
-                           provider, raw)
-    logger.error("prompt-injection judge: every candidate failed (%s)",
-                 ", ".join(p for p, _ in _JUDGE_CANDIDATES))
-    return None, False
+    verdict = run_judge_cascade(text, _JUDGE_SYSTEM, "prompt-injection-check",
+                                _parse_judge_response)
+    return verdict, verdict is not None
 
 
 def _combine_verdict(hits: list[PatternHit], judge: LlmVerdict | None,
