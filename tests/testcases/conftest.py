@@ -43,9 +43,10 @@ def requirements() -> str:
 
 
 RETIRED = pytest.mark.skip(
-    reason="subject was deleted — the standalone AutoML generator project "
-           "(auto_pipeline.py / start.sh / run.sh / root app.py) and services/ml-eda "
-           "no longer exist in this repo"
+    reason="subject belongs to the predecessor AutoML-generator project "
+           "(auto_pipeline.py / start.sh / run.sh / a root app.py) — that code was never "
+           "in this monorepo. NOTE: services/ml-eda is NOT gone, it was folded into "
+           "ml-api in a0108ec; its cases live on as routers/eda/."
 )
 
 

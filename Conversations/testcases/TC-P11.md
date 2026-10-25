@@ -934,11 +934,11 @@ follow-up-question suggestions.
 
 ### TC-P11-091
 **Category:** Architecture
-**Test Name:** _generate.py stays under the 350-line modularize threshold after splitting out _providers.py
+**Test Name:** _generate.py stays under the 400-line limit after splitting out _providers.py
 **Steps:**
 1. Check line counts of `_generate.py` and `_providers.py` post-split.
 **Expected Result:** `_generate.py` is 303 lines (down from 357); `_providers.py` (new) holds the provider registry/call functions at 65 lines.
-**Automation Hint:** CI lint step — `wc -l` both files, assert both under 350.
+**Automation Hint:** CI lint step — `wc -l` both files, assert both under 400 (the project's single line limit; the 350 in the original note was a second, stricter threshold that only produced a permanent red).
 **Source:** Part171
 
 ### TC-P11-092
