@@ -9,7 +9,7 @@
 **Test Name:** POST /eda — overview fields returned for valid CSV  
 **Steps:**
 1. Upload a CSV with at least 5 rows and 4 columns
-2. `POST https://ml-unified.onrender.com/eda` with multipart CSV upload
+2. `POST https://wram1708-ml-unified.hf.space/eda` with multipart CSV upload
 **Expected Result:** HTTP 200; response contains `overview.rows`, `overview.cols`, `overview.duplicates`, `overview.missing_total`, `overview.missing_pct`  
 **Source:** Part26
 
@@ -20,7 +20,7 @@
 **Test Name:** POST /eda — columns array contains dtype and missing info  
 **Steps:**
 1. Upload a CSV that has at least one column with missing values
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** `columns` array present; each entry has `name`, `dtype`, `is_numeric`, `missing`, `missing_pct`, `nunique`; the missing-value column shows `missing > 0`  
 **Source:** Part26
 
@@ -31,7 +31,7 @@
 **Test Name:** POST /eda — numeric stats include mean, median, std, min, max, q25, q75, outliers  
 **Steps:**
 1. Upload a numeric CSV (e.g. Iris dataset)
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** `stats` object present; each numeric column entry contains `mean`, `median`, `std`, `min`, `max`, `q25`, `q75`, `outliers`  
 **Source:** Part26
 
@@ -42,7 +42,7 @@
 **Test Name:** POST /eda — distributions histogram bins for numeric cols  
 **Steps:**
 1. Upload CSV with numeric columns
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** `distributions` object present; numeric column entries have `type: "histogram"` and `raw_vals` (list of raw values)  
 **Source:** Part26, Part27
 
@@ -53,7 +53,7 @@
 **Test Name:** POST /eda — distributions bar chart for categorical cols  
 **Steps:**
 1. Upload CSV with at least one categorical column
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** Categorical column in `distributions` has `type: "bar"`, `labels` (top-10 values), `counts`  
 **Source:** Part26
 
@@ -64,7 +64,7 @@
 **Test Name:** POST /eda — correlations matrix is Pearson and NaN-safe  
 **Steps:**
 1. Upload a CSV that has at least one column with NaN values and at least 2 numeric columns
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** `correlations.matrix` present; dimensions are N×N for N numeric cols; diagonal values = 1.0; no NaN or Infinity in result  
 **Source:** Part26
 
@@ -75,7 +75,7 @@
 **Test Name:** POST /eda — skew and kurtosis in stats for numeric cols  
 **Steps:**
 1. Upload a numeric CSV with at least one skewed column
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** Each numeric column in `stats` contains `skew` and `kurtosis` float values  
 **Source:** Part27
 
@@ -86,7 +86,7 @@
 **Test Name:** POST /eda — sample preview returns first 5 rows  
 **Steps:**
 1. Upload a CSV with 20+ rows
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** Response includes a `sample` field with `columns` and `rows`; `rows` array has exactly 5 entries  
 **Source:** Part27
 
@@ -97,7 +97,7 @@
 **Test Name:** POST /eda — smart insights detects high missing percentage  
 **Steps:**
 1. Upload a CSV where one column has >20% missing values
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** `insights` array contains an entry with `type: "danger"` referencing the high-missing column  
 **Source:** Part27
 
@@ -108,7 +108,7 @@
 **Test Name:** POST /eda — smart insights detects high correlation pair  
 **Steps:**
 1. Upload a CSV with two nearly identical numeric columns (Pearson ≥ 0.9)
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** `insights` array contains a `type: "danger"` entry mentioning multicollinearity  
 **Source:** Part27
 
@@ -119,7 +119,7 @@
 **Test Name:** POST /eda — quality score between 0 and 100  
 **Steps:**
 1. Upload any valid CSV
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** Response contains `quality_score` (int or float); value is in range [0, 100]  
 **Source:** Part27
 
@@ -130,7 +130,7 @@
 **Test Name:** POST /eda — box plot raw_vals present for numeric cols  
 **Steps:**
 1. Upload a numeric CSV
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** Each numeric column's `stats` entry contains `raw_vals` array; length ≤ 300 (uniformly sampled)  
 **Source:** Part27
 
@@ -141,7 +141,7 @@
 **Test Name:** POST /eda — ML Readiness flags ID-like column as fail  
 **Steps:**
 1. Upload a CSV with a column named `id` or `ID` where each row is unique (`nunique == nrows`)
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** `ml_readiness` array contains an entry for the ID column with `status: "fail"` and recommendation to drop  
 **Source:** Part28 (requirements), Part30 (tests)
 
@@ -152,7 +152,7 @@
 **Test Name:** POST /eda — ML Readiness flags near-constant column  
 **Steps:**
 1. Upload a CSV with a column where all values are the same (or std < 0.01)
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** `ml_readiness` entry for that column has `status: "fail"` with "near-constant" or "useless" verdict  
 **Source:** Part28, Part30
 
@@ -163,7 +163,7 @@
 **Test Name:** POST /eda — ML Readiness flags high-missing column (>20%)  
 **Steps:**
 1. Upload a CSV with a column missing >20% of its values
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** `ml_readiness` entry for that column has `status: "fail"` with "drop" recommendation  
 **Source:** Part28, Part30
 
@@ -174,7 +174,7 @@
 **Test Name:** POST /eda — ML Readiness flags moderate-missing column (5–20%)  
 **Steps:**
 1. Upload a CSV with a column missing 10% of its values
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** `ml_readiness` entry for that column has `status: "warn"` with "impute" recommendation  
 **Source:** Part28, Part30
 
@@ -185,7 +185,7 @@
 **Test Name:** POST /eda — mutual information matrix symmetric and values in [0,1]  
 **Steps:**
 1. Upload a numeric CSV with at least 3 columns
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** `mutual_info.matrix` present; matrix is symmetric (MI[i][j] == MI[j][i]); all values in [0.0, 1.0]  
 **Source:** Part28, Part30
 
@@ -196,7 +196,7 @@
 **Test Name:** POST /eda — mutual information matrix diagonal is 1.0 for non-constant cols  
 **Steps:**
 1. Upload a numeric CSV with non-constant columns
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** Diagonal values of `mutual_info.matrix` are 1.0 for columns with variation (constant columns may have 0.0 on diagonal by convention)  
 **Source:** Part30 (test: skip diagonal check for constant-col entries)
 
@@ -207,7 +207,7 @@
 **Test Name:** POST /eda — PCA returns 3D coordinates and explained variance  
 **Steps:**
 1. Upload a CSV with at least 3 numeric columns
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** `pca.coords` array present; each entry is `[x, y, z]`; `pca.explained_variance` array has 3 floats summing to ≤ 100  
 **Source:** Part28, Part29
 
@@ -218,7 +218,7 @@
 **Test Name:** POST /eda — PCA color_col values are strings (not raw categories)  
 **Steps:**
 1. Upload a CSV that has a categorical column (e.g. manufacturer names)
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** `pca.cat_color_map[<cat_col>]` contains original string labels; the mapping from string → integer is done client-side via `indexOf`  
 **Source:** Part29 (BUG: passing string arrays to Plotly sequential colorscale silently failed)
 
@@ -229,7 +229,7 @@
 **Test Name:** POST /eda — SPLOM returns aligned rows and color_map  
 **Steps:**
 1. Upload a CSV with at least 3 numeric columns and 1 categorical column
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** `splom.color_map` present; `splom.color_map` entries have same length as `splom` coordinates (≤ 400 sampled rows); SPLOM data ≤ 8 columns  
 **Source:** Part29
 
@@ -240,7 +240,7 @@
 **Test Name:** POST /eda — narrative paragraph present and mentions row count  
 **Steps:**
 1. Upload a CSV with known row count (e.g. 100 rows)
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** `narrative` field is a non-empty string; string contains the row count number  
 **Source:** Part28, Part30
 
@@ -378,7 +378,7 @@
 **Test Name:** POST /eda — edge case: single-column CSV handled gracefully  
 **Steps:**
 1. Upload a CSV with exactly 1 column and 10 rows
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** HTTP 200; `overview.cols: 1`; no server error or crash  
 **Source:** Part30 (edge case test: `TestEdgeCases`)
 
@@ -389,7 +389,7 @@
 **Test Name:** POST /eda — edge case: all-missing column handled gracefully  
 **Steps:**
 1. Upload a CSV where one column has 100% null/NaN values
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** HTTP 200; missing-column stats show `missing_pct: 100`; no crash or division-by-zero error  
 **Source:** Part30
 
@@ -400,7 +400,7 @@
 **Test Name:** POST /eda — edge case: empty CSV returns error  
 **Steps:**
 1. Upload a 0-byte or header-only CSV (no data rows)
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** HTTP 400 or 422; error message is plain English describing the empty file  
 **Source:** Part30
 
@@ -411,7 +411,7 @@
 **Test Name:** POST /eda — non-CSV file returns error  
 **Steps:**
 1. Upload a `.txt` or `.json` file to the EDA endpoint
-2. `POST https://ml-unified.onrender.com/eda`
+2. `POST https://wram1708-ml-unified.hf.space/eda`
 **Expected Result:** HTTP 400 or 415; error message indicates file must be CSV  
 **Source:** Part30
 
@@ -421,7 +421,7 @@
 **Category:** Bug-Regression  
 **Test Name:** EDA Live Metrics — ?mode=eda shows only ML Unified stats  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/?mode=eda`
+1. Navigate to `https://wram1708-ml-unified.hf.space/?mode=eda`
 2. Click "Live Metrics"
 **Expected Result:** Panel shows only one section (ML Unified / EDA Explorer); ML Vision section absent; mode=eda falls to ml branch not the `else` branch  
 **Source:** Part26 (BUG: `APP_MODE === 'eda'` fell through to `else` showing both sections)
@@ -432,7 +432,7 @@
 **Category:** Bug-Regression  
 **Test Name:** EDA Live Metrics — label shows "EDA EXPLORER" not "ML UNIFIED"  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/?mode=eda`
+1. Navigate to `https://wram1708-ml-unified.hf.space/?mode=eda`
 2. Open Live Metrics panel
 **Expected Result:** Section header label reads "EDA EXPLORER"; does NOT say "ML UNIFIED"  
 **Source:** Part26
@@ -453,7 +453,7 @@
 **Category:** UI  
 **Test Name:** EDA Explorer — sticky section nav tabs scroll to sections  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/?mode=eda`
+1. Navigate to `https://wram1708-ml-unified.hf.space/?mode=eda`
 2. Upload a CSV and run EDA
 3. Click "Correlations" in the sticky nav strip
 **Expected Result:** Page scrolls to the Correlations section; active tab is highlighted in the nav  
@@ -616,7 +616,7 @@
 1. Navigate to `https://ml-portfolio-rho.vercel.app/`
 2. Find the "ML Vision Platform" card
 3. Click "Launch App"
-**Expected Result:** Browser opens `https://ml-unified.onrender.com/?mode=vision` (or similar); app loads in vision-only mode  
+**Expected Result:** Browser opens `https://wram1708-ml-unified.hf.space/?mode=vision` (or similar); app loads in vision-only mode  
 **Source:** Part22, Part23
 
 ---
@@ -628,7 +628,7 @@
 1. Navigate to `https://ml-portfolio-rho.vercel.app/`
 2. Find the "EDA Explorer" card
 3. Click "Launch App"
-**Expected Result:** Browser opens `https://ml-unified.onrender.com/?mode=eda`; EDA panel loads by default  
+**Expected Result:** Browser opens `https://wram1708-ml-unified.hf.space/?mode=eda`; EDA panel loads by default  
 **Source:** Part26
 
 ---
@@ -640,7 +640,7 @@
 1. Navigate to `https://ml-portfolio-rho.vercel.app/`
 2. Find the "ML Unified Platform" card
 3. Click "Launch App"
-**Expected Result:** Browser opens `https://ml-unified.onrender.com/?mode=ml`; ML Unified sidebar loads  
+**Expected Result:** Browser opens `https://wram1708-ml-unified.hf.space/?mode=ml`; ML Unified sidebar loads  
 **Source:** Part22
 
 ---
@@ -873,7 +873,7 @@
 **Category:** Feature  
 **Test Name:** ml-api — GET /app-config returns vision URL  
 **Steps:**
-1. `GET https://ml-unified.onrender.com/app-config`
+1. `GET https://wram1708-ml-unified.hf.space/app-config`
 **Expected Result:** HTTP 200; JSON contains `vision_url` field with the ml-vision service URL  
 **Source:** Part20 (microservices split: `/app-config` added to ml-api)
 
@@ -895,7 +895,7 @@
 **Category:** E2E  
 **Test Name:** Full vision flow — classify → detect → segment in one session  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/?mode=vision`
+1. Navigate to `https://wram1708-ml-unified.hf.space/?mode=vision`
 2. Click "Image Classifier" — upload a dog photo — classify with MobileNetV2
 3. Click "Object Detection" — upload same photo — detect with threshold 0.3
 4. Click "Image Segmentation" — upload same photo — segment with SegFormer-B0
@@ -908,7 +908,7 @@
 **Category:** E2E  
 **Test Name:** Full EDA flow — upload CSV → view all sections → export HTML  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/?mode=eda`
+1. Navigate to `https://wram1708-ml-unified.hf.space/?mode=eda`
 2. Upload a CSV file (e.g. Iris dataset)
 3. Wait for analysis to complete
 4. Scroll through all sections: Overview, Sample, Columns, Statistics, Distributions, Box Plots, Correlations

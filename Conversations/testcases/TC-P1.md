@@ -476,7 +476,7 @@ Tokens used: ~52,416 | Duration: ~242s
 **Category:** E2E
 **Test Name:** Page loads and sidebar shows model list
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com`
+1. Navigate to `https://wram1708-ml-unified.hf.space`
 2. Wait for sidebar to render
 **Expected Result:** Sidebar contains at least 4 model entries (Iris, Titanic, Diabetes, Insurance)
 **Automation Hint:** Playwright; `await page.locator('.sidebar-item').count() >= 4`
@@ -996,8 +996,8 @@ Tokens used: ~52,416 | Duration: ~242s
 **Test Name:** Portfolio page loads and shows ML-Unified platform card
 **Steps:**
 1. Navigate to `https://ml-portfolio-rho.vercel.app`
-**Expected Result:** Page loads; at least one project card visible; "Launch App" button links to `https://ml-unified.onrender.com`
-**Automation Hint:** Playwright; `await page.locator('a[href*="ml-unified.onrender.com"]').count() >= 1`
+**Expected Result:** Page loads; at least one project card visible; "Launch App" button links to `https://wram1708-ml-unified.hf.space`
+**Automation Hint:** Playwright; `await page.locator('a[href*="wram1708-ml-unified.hf.space"]').count() >= 1`
 **Source:** Part10, Part12
 
 ---
@@ -1021,7 +1021,7 @@ Tokens used: ~52,416 | Duration: ~242s
 1. Navigate to portfolio
 2. Click any "Launch App" button
 **Expected Result:** New browser tab opens to the correct Render URL
-**Automation Hint:** Playwright; `page.expect_popup()`; assert new page URL contains "onrender.com"
+**Automation Hint:** Playwright; `page.expect_popup()`; assert new page URL contains "wram1708-ml-unified.hf.space"
 **Source:** Part10
 
 ---

@@ -425,7 +425,7 @@ Total: 150 test cases
 3. Click Export / Download report
 4. Open the downloaded HTML file
 5. Click the footer link to the ML Unified app
-**Expected Result:** The footer link URL is `ml-unified.onrender.com/?mode=eda` — clicking it opens EDA mode, not the default ML model view
+**Expected Result:** The footer link URL is `wram1708-ml-unified.hf.space/?mode=eda` — clicking it opens EDA mode, not the default ML model view
 **Automation Hint:** Parse the exported HTML file; `expect(html).toContain('?mode=eda')` in the footer anchor `href`
 **Source:** Part37
 

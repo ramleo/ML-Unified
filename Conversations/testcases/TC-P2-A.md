@@ -44,7 +44,7 @@
 **Category:** Backend  
 **Test Name:** GET /health returns 200  
 **Steps:**
-1. `GET https://ml-unified.onrender.com/health`
+1. `GET https://wram1708-ml-unified.hf.space/health`
 **Expected Result:** HTTP 200; response body contains `{"status": "ok"}` or equivalent health payload  
 **Source:** Part16
 
@@ -54,7 +54,7 @@
 **Category:** Backend  
 **Test Name:** GET /models returns expected model fields  
 **Steps:**
-1. `GET https://ml-unified.onrender.com/models`
+1. `GET https://wram1708-ml-unified.hf.space/models`
 **Expected Result:** HTTP 200; JSON array; each item contains at minimum `id`, `name`, and `task` fields  
 **Source:** Part16
 
@@ -64,7 +64,7 @@
 **Category:** Backend  
 **Test Name:** GET /schemas/{id} — valid model returns schema  
 **Steps:**
-1. `GET https://ml-unified.onrender.com/schemas/iris`
+1. `GET https://wram1708-ml-unified.hf.space/schemas/iris`
 **Expected Result:** HTTP 200; JSON schema describing Iris features (sepal_length, sepal_width, petal_length, petal_width)  
 **Source:** Part16
 
@@ -74,7 +74,7 @@
 **Category:** Backend  
 **Test Name:** GET /schemas/{id} — unknown model returns 404  
 **Steps:**
-1. `GET https://ml-unified.onrender.com/schemas/nonexistent_model`
+1. `GET https://wram1708-ml-unified.hf.space/schemas/nonexistent_model`
 **Expected Result:** HTTP 404; JSON with a descriptive error message  
 **Source:** Part16
 
@@ -84,7 +84,7 @@
 **Category:** Backend  
 **Test Name:** POST /predict/iris — valid Setosa input  
 **Steps:**
-1. `POST https://ml-unified.onrender.com/predict/iris`
+1. `POST https://wram1708-ml-unified.hf.space/predict/iris`
 2. Body: `{"sepal_length": 5.1, "sepal_width": 3.5, "petal_length": 1.4, "petal_width": 0.2}`
 **Expected Result:** HTTP 200; `prediction` field = `"Iris-setosa"` (or `"setosa"`)  
 **Source:** Part16
@@ -95,7 +95,7 @@
 **Category:** Backend  
 **Test Name:** POST /predict/iris — valid Virginica input  
 **Steps:**
-1. `POST https://ml-unified.onrender.com/predict/iris`
+1. `POST https://wram1708-ml-unified.hf.space/predict/iris`
 2. Body: `{"sepal_length": 6.3, "sepal_width": 3.3, "petal_length": 6.0, "petal_width": 2.5}`
 **Expected Result:** HTTP 200; `prediction` field = `"Iris-virginica"` (or `"virginica"`)  
 **Source:** Part16
@@ -106,7 +106,7 @@
 **Category:** Backend  
 **Test Name:** POST /predict/{id} — unknown model returns 404  
 **Steps:**
-1. `POST https://ml-unified.onrender.com/predict/fake_model`
+1. `POST https://wram1708-ml-unified.hf.space/predict/fake_model`
 2. Body: `{"feature1": 1.0}`
 **Expected Result:** HTTP 404; error detail describes model not found  
 **Source:** Part16
@@ -118,7 +118,7 @@
 **Test Name:** POST /analyze — valid CSV classification file  
 **Steps:**
 1. Prepare a CSV with a mix of numeric + categorical columns and a binary target
-2. `POST https://ml-unified.onrender.com/analyze` with multipart form-data containing the CSV
+2. `POST https://wram1708-ml-unified.hf.space/analyze` with multipart form-data containing the CSV
 **Expected Result:** HTTP 200; response includes `task`, `rows`, `cols`, and `suggested_models` fields  
 **Source:** Part16
 
@@ -128,7 +128,7 @@
 **Category:** Backend  
 **Test Name:** POST /analyze — invalid file type returns 400  
 **Steps:**
-1. `POST https://ml-unified.onrender.com/analyze` with a `.txt` file instead of CSV
+1. `POST https://wram1708-ml-unified.hf.space/analyze` with a `.txt` file instead of CSV
 **Expected Result:** HTTP 400 or 422; descriptive error message  
 **Source:** Part16
 
@@ -139,7 +139,7 @@
 **Test Name:** POST /unsupervised — KMeans returns cluster assignments  
 **Steps:**
 1. Prepare a numeric-only CSV (e.g. 2-feature dataset)
-2. `POST https://ml-unified.onrender.com/unsupervised` with body `{"algorithm": "kmeans", "n_clusters": 3}` + CSV upload
+2. `POST https://wram1708-ml-unified.hf.space/unsupervised` with body `{"algorithm": "kmeans", "n_clusters": 3}` + CSV upload
 **Expected Result:** HTTP 200; response includes cluster labels and visualization data  
 **Source:** Part16
 
@@ -150,7 +150,7 @@
 **Test Name:** POST /train — classification task trains and registers model  
 **Steps:**
 1. Upload a CSV with a categorical target column
-2. `POST https://ml-unified.onrender.com/train` with `{"target": "<col>", "task": "classification", "algorithm": "random_forest"}`
+2. `POST https://wram1708-ml-unified.hf.space/train` with `{"target": "<col>", "task": "classification", "algorithm": "random_forest"}`
 **Expected Result:** HTTP 200; returns a new `model_id`; new model appears in `GET /models` response  
 **Source:** Part16
 
@@ -160,7 +160,7 @@
 **Category:** Backend  
 **Test Name:** POST /train — invalid task type returns error  
 **Steps:**
-1. `POST https://ml-unified.onrender.com/train` with `{"task": "invalid_task_type"}`
+1. `POST https://wram1708-ml-unified.hf.space/train` with `{"task": "invalid_task_type"}`
 **Expected Result:** HTTP 422 or 400; error describes invalid task  
 **Source:** Part16
 
@@ -171,7 +171,7 @@
 **Test Name:** POST /train — missing target column returns error  
 **Steps:**
 1. Upload a CSV
-2. `POST https://ml-unified.onrender.com/train` with `{"task": "classification"}` (no `target` field)
+2. `POST https://wram1708-ml-unified.hf.space/train` with `{"task": "classification"}` (no `target` field)
 **Expected Result:** HTTP 422; error indicates target column is required  
 **Source:** Part16
 
@@ -233,7 +233,7 @@
 **Category:** UI  
 **Test Name:** Image Classifier — low confidence banner displayed in UI  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/?mode=vision`
+1. Navigate to `https://wram1708-ml-unified.hf.space/?mode=vision`
 2. Click "Image Classifier" in sidebar
 3. Upload an out-of-distribution image (e.g. a handwritten text page)
 4. Click Classify
@@ -246,7 +246,7 @@
 **Category:** UI  
 **Test Name:** Image Classifier — 4 model chips displayed and selectable  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/?mode=vision`
+1. Navigate to `https://wram1708-ml-unified.hf.space/?mode=vision`
 2. Click "Image Classifier" in sidebar
 **Expected Result:** 4 chips visible: MobileNetV2, ResNet50, SqueezeNet 1.1, GoogLeNet; clicking each chip selects it (highlighted)  
 **Source:** Part17
@@ -257,7 +257,7 @@
 **Category:** UI  
 **Test Name:** Image Classifier — category browser shows 1000 categories and is searchable  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/?mode=vision`
+1. Navigate to `https://wram1708-ml-unified.hf.space/?mode=vision`
 2. Click "Image Classifier"
 3. Click "Browse 1,000 categories ▸" toggle
 4. Type "dog" in the search box
@@ -302,7 +302,7 @@
 **Category:** UI  
 **Test Name:** Image Processing — before/after comparison displayed  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/?mode=vision`
+1. Navigate to `https://wram1708-ml-unified.hf.space/?mode=vision`
 2. Click "Image Processing" in sidebar
 3. Upload an image and select "Grayscale" operation
 4. Click Apply
@@ -525,7 +525,7 @@
 **Test Name:** VISION_API defined and used for all vision endpoint calls  
 **Steps:**
 1. Open browser DevTools Network tab
-2. Navigate to `https://ml-unified.onrender.com/?mode=vision`
+2. Navigate to `https://wram1708-ml-unified.hf.space/?mode=vision`
 3. Classify an image, detect objects, segment an image
 **Expected Result:** All vision API calls go to the ml-vision service URL (not ml-api URL); no `Uncaught ReferenceError: VISION_API is not defined` in console  
 **Source:** Part21 (BUG: `index.html` edits never committed; VISION_API undefined)
@@ -536,9 +536,9 @@
 **Category:** Bug-Regression  
 **Test Name:** Server-side ML_VISION_URL injection into HTML  
 **Steps:**
-1. `GET https://ml-unified.onrender.com/` (raw HTML response)
+1. `GET https://wram1708-ml-unified.hf.space/` (raw HTML response)
 2. Inspect the HTML source
-**Expected Result:** `let VISION_API = 'https://ml-vision.onrender.com';` (or equivalent) is present in the HTML, populated server-side with `ML_VISION_URL` env var; not the empty string `''`  
+**Expected Result:** `let VISION_API = 'https://wram1708-ml-unified.hf.space';` (or equivalent) is present in the HTML, populated server-side with `ML_VISION_URL` env var; not the empty string `''`  
 **Source:** Part21 (fix: `index()` endpoint reads env var and replaces placeholder)
 
 ---
@@ -603,7 +603,7 @@
 **Category:** UI  
 **Test Name:** Segmentation panel — subtitle updated from FCN/VOC to SegFormer/ADE20K  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/?mode=vision`
+1. Navigate to `https://wram1708-ml-unified.hf.space/?mode=vision`
 2. Inspect the Image Segmentation sidebar button and panel subtitle
 **Expected Result:** Sidebar shows "SegFormer-B0 · ADE20K 150 classes"; panel subtitle does NOT say "FCN-ResNet50 / Pascal VOC 21" anywhere  
 **Source:** Part22 (stale text fix)
@@ -614,7 +614,7 @@
 **Category:** Feature  
 **Test Name:** ?mode=vision sidebar shows only Vision sections  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/?mode=vision`
+1. Navigate to `https://wram1708-ml-unified.hf.space/?mode=vision`
 2. Inspect the sidebar
 **Expected Result:** Sidebar shows only Vision items (Image Classifier, Image Processing, Object Detection, Image Segmentation); Supervised/Unsupervised ML sections are hidden  
 **Source:** Part22, Part23
@@ -625,7 +625,7 @@
 **Category:** Feature  
 **Test Name:** ?mode=ml sidebar shows only ML sections  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/?mode=ml`
+1. Navigate to `https://wram1708-ml-unified.hf.space/?mode=ml`
 2. Inspect the sidebar
 **Expected Result:** Sidebar shows only Supervised and Unsupervised ML sections; Vision section is hidden; Train button is visible  
 **Source:** Part22, Part23
@@ -636,7 +636,7 @@
 **Category:** Feature  
 **Test Name:** ?mode=vision changes nav title to "ML Vision"  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/?mode=vision`
+1. Navigate to `https://wram1708-ml-unified.hf.space/?mode=vision`
 2. Read the page heading/navbar title
 **Expected Result:** Nav title reads "ML Vision"; subtitle reads "Computer Vision Platform"  
 **Source:** Part22, Part23
@@ -647,7 +647,7 @@
 **Category:** Feature  
 **Test Name:** ?mode=vision default panel is Image Classifier (not Diabetes)  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/?mode=vision`
+1. Navigate to `https://wram1708-ml-unified.hf.space/?mode=vision`
 **Expected Result:** Image Classifier panel loads by default; Diabetes prediction form is NOT shown  
 **Source:** Part24 (BUG: `init()` always called `selectModel(allModels[0].id)` even in vision mode)
 
@@ -657,7 +657,7 @@
 **Category:** Bug-Regression  
 **Test Name:** Theme does not revert to dark on page refresh  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/?mode=vision&theme=light`
+1. Navigate to `https://wram1708-ml-unified.hf.space/?mode=vision&theme=light`
 2. Confirm light theme is applied
 3. Press F5 / Cmd+R to refresh the page
 **Expected Result:** Light theme persists after refresh; `?theme=` parameter has been stripped from URL; `localStorage` retains the theme  
@@ -691,7 +691,7 @@
 **Category:** Feature  
 **Test Name:** GET /metrics — ml-api returns valid schema  
 **Steps:**
-1. `GET https://ml-unified.onrender.com/metrics`
+1. `GET https://wram1708-ml-unified.hf.space/metrics`
 **Expected Result:** HTTP 200; JSON includes `service: "ml-api"`, `uptime_s` (integer), `total_requests` (integer), `avg_ms` (float), `p95_ms` (float), `error_rate` (float), `endpoints` (array)  
 **Source:** Part23
 
@@ -722,7 +722,7 @@
 **Category:** Bug-Regression  
 **Test Name:** ml-vision favicon.ico excluded from metrics error rate  
 **Steps:**
-1. Load `https://ml-unified.onrender.com/?mode=vision` in a browser (triggers automatic favicon.ico request to ml-vision)
+1. Load `https://wram1708-ml-unified.hf.space/?mode=vision` in a browser (triggers automatic favicon.ico request to ml-vision)
 2. Call `GET <VISION_API>/metrics`
 **Expected Result:** `error_rate` is 0.0 (or very low); `/favicon.ico` requests do NOT appear in the error log  
 **Source:** Part25 (BUG: browser auto-requested /favicon.ico → 404 → 100% error rate)
@@ -745,7 +745,7 @@
 **Category:** Feature  
 **Test Name:** Metrics panel — mode-specific: ?mode=ml shows only ML Unified  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/?mode=ml`
+1. Navigate to `https://wram1708-ml-unified.hf.space/?mode=ml`
 2. Click "Live Metrics" in sidebar
 **Expected Result:** Panel shows only "ML UNIFIED" section; ML Vision section is absent  
 **Source:** Part25
@@ -756,7 +756,7 @@
 **Category:** Feature  
 **Test Name:** Metrics panel — mode-specific: ?mode=vision shows only ML Vision  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/?mode=vision`
+1. Navigate to `https://wram1708-ml-unified.hf.space/?mode=vision`
 2. Click "Live Metrics" in sidebar
 **Expected Result:** Panel shows only "ML VISION" section; ML Unified section is absent  
 **Source:** Part25
@@ -801,8 +801,8 @@
 **Category:** Feature  
 **Test Name:** Metrics panel — browser tab title is correct per mode  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/?mode=vision` — check browser tab title
-2. Navigate to `https://ml-unified.onrender.com/?mode=ml` — check browser tab title
+1. Navigate to `https://wram1708-ml-unified.hf.space/?mode=vision` — check browser tab title
+2. Navigate to `https://wram1708-ml-unified.hf.space/?mode=ml` — check browser tab title
 **Expected Result:** vision mode: title = "ML Vision — Computer Vision Platform"; ml mode: title = "ML Unified — Multi-Model Predictor"  
 **Source:** Part25 (BUG: title was always "ML Unified" regardless of mode)
 
@@ -823,7 +823,7 @@
 **Category:** Feature  
 **Test Name:** Metrics panel — pre-fetched on page load, opens instantly  
 **Steps:**
-1. Navigate to `https://ml-unified.onrender.com/`
+1. Navigate to `https://wram1708-ml-unified.hf.space/`
 2. Wait 3 seconds (pre-fetch completes)
 3. Click "Live Metrics"
 **Expected Result:** Panel opens with data visible immediately; no loading spinner on open (data was pre-fetched on `window load`)  
