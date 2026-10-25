@@ -46,24 +46,47 @@ def tc_id_from(node: str) -> str | None:
     return f"TC-{part}-{int(m.group(2)):03d}"
 
 
-def run_pytest(target: str) -> list[tuple[str, str, str]]:
-    """-> [(file, node, outcome)] for every collected test."""
+# "FAILED path::node - AssertionError: the message" from the summary block.
+REASON_RE = re.compile(r"^FAILED\s+\S+::(?P<node>\S+)\s+-\s+(?P<reason>.+)$")
+# "SKIPPED [1] path:line: the reason"
+SKIP_RE = re.compile(r"^SKIPPED\s+\[\d+\]\s+\S+:\d+:\s+(?P<reason>.+)$")
+
+
+def run_pytest(target: str) -> tuple[list[tuple[str, str, str]], dict[str, str], list[str]]:
+    """-> ([(file, node, outcome)], {node: failure reason}, [skip reasons])
+
+    A verdict alone cannot be triaged — the drill-down needs to say WHY. -rs
+    prints skip reasons and the summary line carries the assertion message.
+    """
     r = subprocess.run(
-        [sys.executable, "-m", "pytest", target, "-v", "--tb=no", "-p", "no:cacheprovider"],
+        [sys.executable, "-m", "pytest", target, "-v", "--tb=line", "-rs",
+         "-p", "no:cacheprovider"],
         cwd=REPO, capture_output=True, text=True)
+    text = r.stdout + r.stderr
     out: list[tuple[str, str, str]] = []
-    for line in (r.stdout + r.stderr).splitlines():
-        m = LINE_RE.match(line.strip())
+    reasons: dict[str, str] = {}
+    skips: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        m = LINE_RE.match(stripped)
         if m:
             out.append((m.group("file"), m.group("node"), m.group("outcome")))
+            continue
+        m = REASON_RE.match(stripped)
+        if m:
+            reasons[m.group("node")] = m.group("reason")[:400]
+            continue
+        m = SKIP_RE.match(stripped)
+        if m:
+            skips.append(m.group("reason")[:300])
     if not out:
-        sys.exit(f"pytest produced no parseable results:\n{r.stdout[-1500:]}")
-    return out
+        sys.exit(f"pytest produced no parseable results:\n{text[-1500:]}")
+    return out, reasons, skips
 
 
 def main() -> None:
     target = sys.argv[1] if len(sys.argv) > 1 else "tests/testcases/"
-    results = run_pytest(target)
+    results, reasons, skips = run_pytest(target)
     print(f"{len(results)} tests collected from {target}")
 
     linked: dict[str, dict] = {}
@@ -87,6 +110,7 @@ def main() -> None:
             "last_run_at": "now()",
             "_verdict_rank": _rank(verdict),
             "_node": node,
+            "_reason": reasons.get(node) or (skips.pop(0) if verdict == "SKIPPED" and skips else ""),
         }
 
     print(f"{len(linked)} documented cases linked, {unlinked} test(s) carry no TC id")
@@ -94,11 +118,14 @@ def main() -> None:
     rows, events = [], []
     for tc, d in sorted(linked.items()):
         node = d.pop("_node")
+        reason = d.pop("_reason", "")
         d.pop("_verdict_rank")
         rows.append(d)
+        payload = {"verdict": d["last_verdict"], "node": node, "suite": target}
+        if reason:
+            payload["reason"] = reason
         events.append({"kind": "run_verdict", "tc_id": tc, "actor": "pytest",
-                       "payload": {"verdict": d["last_verdict"], "node": node,
-                                   "suite": target}})
+                       "payload": payload})
 
     # PATCH, not upsert: these cases were created by testops_sync.py and a
     # POST upsert would build a full INSERT, tripping NOT NULL on source_file.
