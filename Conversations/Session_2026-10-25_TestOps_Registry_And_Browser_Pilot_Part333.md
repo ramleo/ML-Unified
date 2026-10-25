@@ -166,5 +166,13 @@ Industry baseline agrees a suite run should be minutes, not hours.
 - `/testops` live: 1,795 cases, coverage 2.4% (43 automated), 27 repo + 16 browser.
 - Commits: `2c8ae78` `6eac9eb` `c736c9a` `3c35a4f` `244762e` `1e47bc3` `31f5b18`
   `222b16d` `2a8676a` `5532141` `bec874b` `1165390` `d92755c` `53d67d4`.
+- **PRD updated — and it is gitignored, so this line is the only record of it.**
+  `docs/prd/02-cross-cutting-systems.md` gained a **TestOps** section (placed with
+  the cross-cutting systems, not the Q-roadmap: it is internal quality
+  infrastructure). It carries the reasoning that would otherwise be lost — why
+  `lane_locked` exists (the 67% classifier), why `testops_events` is one table
+  rather than four, why RLS has no policies, why a skipped test does not count as
+  coverage, and the corrected cost model. **No handbook change**: the handbook is
+  the user-facing tool catalogue and no owner-only page appears in it.
 - Open: batch the pilot (~40 per dispatch) and build the browser lane; the API lane
   (566 cases) is a separate pytest effort; 262 cases remain unclassified.
