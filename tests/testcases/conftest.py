@@ -5,7 +5,6 @@ import re
 import subprocess
 from pathlib import Path
 
-import pytest
 
 UNIFIED = Path(__file__).resolve().parents[2]
 PORTFOLIO = UNIFIED.parent / "ml-portfolio"
@@ -40,13 +39,3 @@ def grep_tracked(root: Path, pattern: str, *globs: str) -> list[str]:
 
 def requirements() -> str:
     return read(API / "requirements.txt")
-
-
-RETIRED = pytest.mark.skip(
-    reason="subject belongs to the predecessor AutoML-generator project "
-           "(auto_pipeline.py / start.sh / run.sh / a root app.py) — that code was never "
-           "in this monorepo. NOTE: services/ml-eda is NOT gone, it was folded into "
-           "ml-api in a0108ec; its cases live on as routers/eda/."
-)
-
-

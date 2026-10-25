@@ -1,62 +1,15 @@
-"""Documented cases whose subject no longer exists here, or that belong to another
-lane (a live API, a rendered page). Kept as explicit skips so the registry stays
-honest about what is covered and what is dead — never silently dropped.
+"""Documented cases that belong to a lane this suite cannot cover — they need a
+live API call or a rendered page. Kept as explicit skips so the registry shows
+them as known-and-waiting rather than silently missing.
+
+Cases whose subject is the predecessor AutoML-generator project are NOT here:
+that code was never in this monorepo, so a skip stub for it is code that can
+never run. They are recorded as lane DEAD in the TestOps registry instead,
+which is where "this is dead" belongs.
 """
 from __future__ import annotations
 
 import pytest
-
-from conftest import RETIRED
-
-
-@RETIRED
-def test_tc_early_050_run_sh_preflight_docker_check():
-    """TC-EARLY-050: run.sh exits with a friendly error when Docker is not running"""
-
-
-@RETIRED
-def test_tc_early_051_pipeline_runs_without_claude_cli():
-    """TC-EARLY-051: auto_pipeline.py executes standalone, no `claude` CLI invocation"""
-
-
-@RETIRED
-def test_tc_early_055_feature_ranges_domain_bounds():
-    """TC-EARLY-055: feature ranges use domain-informed bounds"""
-
-
-@RETIRED
-def test_tc_early_060_feature_importance_normalized():
-    """TC-EARLY-060: feature_importance.json contains normalized values 0-1"""
-
-
-@RETIRED
-def test_tc_p1_039_pydantic_field_alias_in_generated_app():
-    """TC-P1-039: generated app.py uses Field(alias) for column names with spaces"""
-
-
-@RETIRED
-def test_tc_p1_074_generated_app_py_compiles():
-    """TC-P1-074: generated app.py has no syntax errors"""
-
-
-@RETIRED
-def test_tc_p1_076_target_column_prompt_loops():
-    """TC-P1-076: target column prompt re-prompts on empty input"""
-
-
-@RETIRED
-def test_tc_p1_079_pip_install_no_cache_dir():
-    """TC-P1-079: pip install uses --no-cache-dir"""
-
-
-@RETIRED
-def test_tc_p1_082_metrics_json_has_target():
-    """TC-P1-082: metrics.json includes a `target` field for regression models"""
-
-
-@RETIRED
-def test_tc_p1_083_metrics_json_has_algorithm():
-    """TC-P1-083: metrics.json includes an `algorithm` field for regression models"""
 
 
 @pytest.mark.skip(reason="asserts a live API response — belongs to the backend lane, "
