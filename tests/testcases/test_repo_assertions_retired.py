@@ -28,9 +28,3 @@ def test_tc_p13_024_no_unverifiable_performance_claims():
                          "browser lane")
 def test_tc_p13_036_corner_radii_use_tokens():
     """TC-P13-036: corner radii all resolve to the token scale (14/10px)"""
-
-
-@pytest.mark.skip(reason="src/lib/capabilities.ts moved to src/data/capabilities/; the "
-                         "documented path no longer identifies the subject")
-def test_tc_p13_042_chapter_filenames_key_off_capability_id():
-    """TC-P13-042: deep-chapter file names key off capability id, not route"""

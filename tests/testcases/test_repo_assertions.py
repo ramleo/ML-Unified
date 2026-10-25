@@ -144,19 +144,6 @@ def test_tc_p11_096_sql_router_does_not_call_detect_visualization():
     assert '"visualization"' not in body, "sql.py emits a visualization SSE event again"
 
 
-def test_detect_visualization_is_dead_code():
-    """Not from a test case — found while checking TC-P11-096.
-
-    detect_visualization is defined in _explain.py and called from nowhere.
-    """
-    callers = [h for h in grep_tracked(UNIFIED, r"detect_visualization", "services/**/*.py")
-               if not h.endswith("_explain.py:49")]
-    defined = grep_tracked(UNIFIED, r"def detect_visualization", "services/**/*.py")
-    if defined and not callers:
-        pytest.skip("dead code: detect_visualization is defined but never called "
-                    f"({defined[0]}) — delete it or wire it up")
-
-
 def test_tc_p16_014_graduated_tool_left_the_toolkit():
     """TC-P16-014: a graduated tool (text-to-sql) is mapped to its platform, not listed"""
     nav = read(PORTFOLIO / "src" / "lib" / "toolNav.ts")
@@ -224,6 +211,42 @@ def test_tc_p1_032_date_columns_not_form_fields():
     html = read(API / "frontend" / "index.html")
     assert "Policy Start Date" not in html, (
         "a date column is rendered as a form input")
+
+
+def test_tc_p13_042_chapter_filenames_key_off_capability_id():
+    """TC-P13-042: deep-chapter file names key off capability id, not route
+
+    The case named src/lib/capabilities.ts; the data moved to
+    src/data/capabilities/, so this re-points rather than staying skipped.
+    """
+    caps_dir = PORTFOLIO / "src" / "data" / "capabilities"
+    chapters = PORTFOLIO / "docs" / "chapters"
+    if not caps_dir.is_dir() or not chapters.is_dir():
+        pytest.skip("capabilities data or docs/chapters not found")
+
+    ids = set()
+    for f in caps_dir.glob("*.ts"):
+        ids.update(re.findall(r'\bid:\s*"([a-z0-9-]+)"', read(f)))
+    assert ids, "no capability ids found in src/data/capabilities/"
+
+    # The regression this guards: a chapter named after the ROUTE instead of the
+    # id. featureeng is the documented example — /tools/featureeng would 404.
+    assert (chapters / "featureeng.md").exists(), (
+        "docs/chapters/featureeng.md is missing — the generator may be keying "
+        "chapter filenames off the route again")
+
+    # A GRADUATED tool keeps its chapter but loses its capability id: it moved to
+    # its own platform (TC-P16-014). Those are listed in PLATFORM_OF, so they are
+    # expected, not orphans.
+    nav = read(PORTFOLIO / "src" / "lib" / "toolNav.ts")
+    block = re.search(r"PLATFORM_OF[^=]*=\s*\{(.*?)\n\};", nav, re.S)
+    graduated = set(re.findall(r'"([a-z0-9-]+)":', block.group(1))) if block else set()
+
+    stems = {f.stem for f in chapters.glob("*.md")}
+    orphans = sorted(x for x in stems if x not in ids and x not in graduated)
+    assert not orphans, (
+        f"{len(orphans)} chapter file(s) match neither a capability id nor a "
+        f"graduated platform: {orphans[:6]}")
 
 
 # ------------------------------------------------------------------- toolchain gates
