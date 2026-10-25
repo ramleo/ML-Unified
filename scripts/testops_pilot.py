@@ -16,6 +16,18 @@ critical piece. Either answer changes what gets built next.
 Pacing is set by the real ceilings: Groq free is 8,000 tokens/min and an author
 call costs ~5,900, so roughly 1.4 authors/min. The Space caps LLM routes at
 10/min per IP. Nothing here goes faster than that.
+
+KNOWN LIMITATION — do not copy this shape for the full build.
+This dispatches ONE GitHub Actions run per test, which is fine for 20 cases and
+badly wrong for 817: each dispatch pays ~2-3 min of queue, checkout and browser
+install to run a test that takes seconds, which is where the bogus "40 hours for
+817 cases" figure came from.
+
+MAX_RUN_CODE is 60000 and a spec is 1-2 KB, so ~40 tests fit in ONE dispatch, and
+the runner already returns per-test results — merged suites are first class. The
+full build should author per case (the only irreducible per-test cost) and then
+validate in batches: ~21 dispatches for 817 tests, run concurrently, minutes not
+hours. Running a finished suite involves no AI at all.
 """
 from __future__ import annotations
 

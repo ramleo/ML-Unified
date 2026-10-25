@@ -1,7 +1,16 @@
 # Test Cases — ML-Unified + ml-portfolio
 
-**Last updated:** 2026-10-24  
-**Total test cases:** ~1798, covering Parts 1–330 (full range, no gaps).
+**Last updated:** 2026-10-25  
+**Total test cases:** **1,795** (exact — the raw `### TC-` heading count across all
+TC-*.md files), covering Parts 1–330 (full range, no gaps).
+
+> **Live status: /testops** (owner-only). Which of these actually run, what each
+> resolves to, and every verdict is tracked there — the markdown stays the source of
+> truth for a case's TEXT, the registry holds its state. Sync with
+> `.venv/bin/python scripts/testops_sync.py` after editing these files.
+>
+> As of 2026-10-25: 43 automated (2.4%) — 27 repo-assertion, 16 browser.
+
 **Open gaps:** none currently known — see "Coverage Gaps" below for pre-existing
 narrower gaps unrelated to Part ranges. **Next open range, if the project continues
 past Part 330:** any parts beyond 330 have no coverage yet — check `Conversations/`
@@ -67,7 +76,7 @@ the user needs to add manually. Plus 3 verified no-bug fixes.
 
 | [TC-P19.md](TC-P19.md) | TC-P19 | Parts 320–330 (ClamAV/hybrid-gate/durable-rate-limit hardening; the platform-roadmap arc — Q5 auth + auth-UX + avatars, Q1 public API, Q2 MCP M1+M2 expanded surface, Q4 eval platform M1→M3 (dashboard, golden set, online judge), Q3 chatbot builder M1 isolation → M4b Stripe billing + embed widget; site-search, homepage-chat starter chips, tool-header fix; and the homepage-chat grounded-RAG rework + copy/links/context + upload-affordance follow-up) | 34 | ✅ |
 
-**Total: 25 files written, ~1798 test cases, covering Parts 1–330 (full range, no gaps).**
+**Total: 25 files written, 1,795 test cases, covering Parts 1–330 (full range, no gaps).**
 
 ---
 
