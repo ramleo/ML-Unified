@@ -8,6 +8,16 @@ Through-line: **verify, don't assert** — every "failure" in the trial turned o
 test-writing or a URL mistake, not a site bug, and the headline cost number (manual tuning
 hours) was wrong until the real mechanism was proven.
 
+
+> **CORRECTED 2026-10-25 (see Part 333).** The headline numbers in this log are WRONG.
+> The trial below used instructions I wrote by hand, not the TC files — so it proved the
+> pipeline worked, not that the test cases were usable. Parsing the real files next day:
+> **692 browser cases, of which only 25 are runnable as written** (they name a target page
+> and need no setup); **450 name no URL at all**, 217 also need fixture setup. The cost and
+> time model in section 4 is void. Cohere/Mistral free quota is also exhausted; the free
+> route is now Groq via `owner_token`. Lesson: a pipeline trial must use real input from the
+> real source — curated inputs only prove the plumbing is connected.
+
 ---
 
 ## 1. The question — "how do we test the testcases?"
@@ -20,7 +30,7 @@ harness. The Automation Hint field is the bridge. Three ways exist, all already 
 - **Playwright e2e** (`tests/e2e/`) — live UI / per-role flows.
 - **Testwright** (native `/qa` world) — authors + runs + heals UI tests against the live site.
 
-Coverage audit: **1,545 TCs, 0 linked to running test code** yet. Split by what each needs:
+Coverage audit: **1,545 TCs, 0 linked to running test code** yet. (Corrected: 1,787 blocks parse across all TC files; the lane split below was derived from the Automation Hint text alone and overstated what is runnable.) Split by what each needs:
 ~670 browser-automatable, ~449 backend/pytest, ~107 "none (method)" = **lessons** (e.g.
 "don't delete AGENTS.md") with nothing to execute, the rest mixed (mostly browser).
 
@@ -61,7 +71,9 @@ stages, so no external tool is needed.
 Built a driver (`scratchpad/tw_auto.py`) running that loop with no human in it. Re-ran the
 5 earlier failures **feeding a real `page_context`** (the verified site map):
 - **3 passed on the first try — no heal even needed, no manual tuning.** Proper context
-  killed the guessing.
+  killed the guessing. **(Corrected: these were instructions I wrote by hand with the
+  URL already in them. Real TC blocks mostly name no URL, so this result does not
+  generalise to the suite.)**
 - 2 came back `code:""`, `provider:null`. Diagnosed precisely: `record_call` did **not**
   raise (so the daily cap was **not** hit) — `generate_test` returned `None` = **every free
   provider failed at once**, i.e. cohere/mistral **burst rate-limiting** after ~25 rapid
@@ -69,7 +81,7 @@ Built a driver (`scratchpad/tw_auto.py`) running that loop with no human in it. 
 
 ---
 
-## 4. The real cost model
+## 4. The real cost model  — **VOID, see the correction banner above**
 
 Key reframe: **authoring is a one-time cost per test; running a saved test uses no AI at
 all; heal only fires on failures.** So the free LLM limit caps how fast you *build* the
