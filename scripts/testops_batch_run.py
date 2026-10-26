@@ -33,6 +33,7 @@ import os
 import re
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 
@@ -49,7 +50,9 @@ RUNNING = {"queued", "running", "in_progress", "pending", "starting", None}
 IMPORT = "import { test, expect } from '@playwright/test';"
 TC_FROM_FILE = re.compile(r"^(tc-[a-z0-9]+-\d+)-", re.I)
 TC_IN_TITLE = re.compile(r"\[(TC-[A-Z0-9]+-\d+)\]")
-TEST_CALL = re.compile(r"(\btest\s*\(\s*)(['\"])(.*?)(\2)", re.S)
+# Backticks matter: a spec that loops over paths writes test(`... ${path}`), and a
+# title that is not tagged produces a result that maps back to no case at all.
+TEST_CALL = re.compile(r"(\btest\s*\(\s*)(['\"`])(.*?)(\2)", re.S)
 
 CLIENT = httpx.Client(timeout=120)
 
@@ -137,12 +140,23 @@ def record(url: str, key: str, tc: str, v: dict, batch: str) -> None:
                                     "actor": "browser-batch", "payload": payload}))
 
 
+def run_chunk(paths: list[str], n: int) -> tuple[str, list[str], dict]:
+    code, ids = merge(paths)
+    if len(code) > MAX_RUN_CODE:
+        return "", ids, {"status": "error",
+                         "detail": f"chunk is {len(code)} chars, over MAX_RUN_CODE"}
+    cid, st = dispatch(code, f"testops-batch-{n}")
+    return (cid or ""), ids, st
+
+
 def main() -> None:
     do_record = "--record" in sys.argv
-    limit = MAX_PER_DISPATCH
+    per = MAX_PER_DISPATCH
+    if "--per" in sys.argv:
+        per = int(sys.argv[sys.argv.index("--per") + 1])
+    limit = None
     if "--limit" in sys.argv:
         limit = int(sys.argv[sys.argv.index("--limit") + 1])
-
     prior = None
     if "--from" in sys.argv:
         prior = sys.argv[sys.argv.index("--from") + 1]
@@ -150,39 +164,55 @@ def main() -> None:
     paths = sorted(glob.glob(os.path.join(SUITE, "*.spec.ts")))[:limit]
     if not paths:
         sys.exit(f"no specs in {SUITE}")
-    code, ids = merge(paths)
-    print(f"merged {len(ids)} specs -> {len(code):,} chars "
-          f"({len(code) / MAX_RUN_CODE:.0%} of the {MAX_RUN_CODE:,} limit)")
-    if len(code) > MAX_RUN_CODE:
-        sys.exit("merged suite exceeds MAX_RUN_CODE — lower --limit")
 
     t0 = time.time()
-    if prior:
-        cid, st = prior, CLIENT.get(f"{SPACE}/qa/run/status/{prior}").json()
-        elapsed = 0.0
-        print(f"re-reading dispatch {cid} -> {st.get('status')}")
-    else:
-        cid, st = dispatch(code, f"testops-batch-{len(ids)}")
-        elapsed = (time.time() - t0) / 60
-        print(f"dispatch {cid} -> {st.get('status')} in {elapsed:.1f} min")
-    if st.get("status") != "completed":
-        sys.exit(f"run did not complete: {json.dumps(st)[:400]}")
+    res: dict[str, dict] = {}
+    all_ids: list[str] = []
+    batch_of: dict[str, str] = {}
 
-    res = verdicts(st.get("tests") or [], ids)
-    for tc in ids:
+    if prior:
+        code, ids = merge(paths)
+        st = CLIENT.get(f"{SPACE}/qa/run/status/{prior}").json()
+        print(f"re-reading dispatch {prior} -> {st.get('status')}")
+        if st.get("status") != "completed":
+            sys.exit(f"run did not complete: {json.dumps(st)[:400]}")
+        res, all_ids = verdicts(st.get("tests") or [], ids), ids
+        batch_of = {tc: prior for tc in ids}
+    else:
+        chunks = [paths[i:i + per] for i in range(0, len(paths), per)]
+        print(f"{len(paths)} specs -> {len(chunks)} dispatch(es) of up to {per}, "
+              f"run concurrently")
+        # One thread per chunk: the dispatches are independent and the wall-clock
+        # of the whole suite should be the SLOWEST chunk, not their sum.
+        with ThreadPoolExecutor(max_workers=max(len(chunks), 1)) as ex:
+            for cid, ids, st in ex.map(lambda c: run_chunk(c, len(c)), chunks):
+                all_ids += ids
+                if st.get("status") != "completed":
+                    print(f"  dispatch {cid or '?'} did NOT complete: "
+                          f"{json.dumps(st)[:200]}")
+                    for tc in ids:
+                        res[tc] = {"verdict": "NOT_IN_REPORT", "ms": 0,
+                                   "reason": f"dispatch {st.get('status')}"}
+                else:
+                    res.update(verdicts(st.get("tests") or [], ids))
+                batch_of.update({tc: cid for tc in ids})
+
+    elapsed = (time.time() - t0) / 60
+    for tc in all_ids:
         v = res[tc]
         print(f"  {tc:14} {v['verdict']:14} {v['ms'] / 1000:6.1f}s {v['reason'][:60]}")
 
     good = sum(1 for v in res.values() if v["verdict"] == "PASS")
-    print(f"\n{good}/{len(ids)} pass — ONE dispatch, {elapsed:.1f} min wall-clock")
-    print(f"at this density, 817 cases = {-(-817 // MAX_PER_DISPATCH)} dispatches")
+    secs = sum(v["ms"] for v in res.values()) / 1000
+    print(f"\n{good}/{len(all_ids)} pass — {elapsed:.1f} min wall-clock, "
+          f"{secs:.0f}s of actual test time")
+    print(f"at this density, 817 cases = {-(-817 // per)} dispatches")
 
     if do_record:
         db_url, db_key = credentials()
-        batch = cid or "unknown"
-        for tc in ids:
-            record(db_url, db_key, tc, res[tc], batch)
-        print(f"recorded {len(ids)} verdicts to the registry")
+        for tc in all_ids:
+            record(db_url, db_key, tc, res[tc], batch_of.get(tc, "unknown"))
+        print(f"recorded {len(all_ids)} verdicts to the registry")
 
 
 if __name__ == "__main__":
