@@ -38,6 +38,10 @@ free = 200K tokens/day, so the 29-call run (23.9 min) used most of that day's qu
 
 ## 3. The 16 still-red specs, read one by one
 
+This is the **starting diagnosis** of the 16 reds after the §2 run — not the end state. By end
+of session DOC-002, P9-028, P12-012, P6-022, P12-066 and P3-020 were green; the §6 list is
+current.
+
 | group | cases | cause |
 |---|---|---|
 | Hidden, not missing | DOC-002, EARLY-011, EARLY-026, P3-129, P3-020 | snapshot listed controls that are in the DOM but **not visible** (collapsed "Sample Projects" group, closed theme picker). `#btn-iris` text matches, `is_visible()` False; Playwright role locators only match visible nodes |
@@ -107,6 +111,8 @@ was scheduled), not observed wall-clock.
 EARLY-026, P3-023, P3-112, P3-113, P3-129, P4-001, P4-090, P9-066 — all need a
 Groq re-author.
 
+CI green (confirmed by SHA) on `5ae4b8d`, `caacc0e`, `f874b67`.
+
 ## 7. Mistakes made this session (so they are not repeated)
 
 - A `while pgrep -f testops_snapshot` wait loop **matched its own command line** and never
@@ -122,8 +128,7 @@ Groq re-author.
 ## 8. Open
 
 1. Re-author the ten (needs Groq quota reset or the paid tier — the user's decision).
-2. CI for `5ae4b8d` was queued when the session ended (`14c7d04` was green).
-3. Carried from Part 334: heal-by-test-title backend change + one batched HF upload; TC-P2-127 /
+2. Carried from Part 334: heal-by-test-title backend change + one batched HF upload; TC-P2-127 /
    TC-P10-096 authoring empty; TC-P2-132 stale; 91 unclear-page cases need user answers;
    12 "moved" cases → `/about`; 10 NOPAGE cases leave the browser lane; API lane (566) and
    262 unclassified unchanged.
