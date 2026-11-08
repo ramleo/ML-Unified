@@ -4,7 +4,7 @@ Continues Part 334. That part ended with authoring grounded on real page control
 Groq daily cap. This session answered the user's challenge — *"why are you guessing URL or
 button, don't you know where they are?"* — by reading every case, then used the result.
 
-Suite: **25/54 → 38/54 → 43/54** (commits `14c7d04`, `5ae4b8d`).
+Suite: **25/54 → 38/54 → 43/54 → 44/54** (commits `14c7d04`, `5ae4b8d`, and the P3-020 follow-up in §5b).
 
 ---
 
@@ -83,11 +83,29 @@ Every hand-written spec was run in a local Playwright and **mutated to prove it 
 (P6-022 expecting `Saved!!`, P9-028 pressing the wrong key, P12-012 forcing a 100 px
 scroll — all went red). P12-066: 26/26 pass locally.
 
+## 5b. TC-P3-020 (sidebar stagger) — fixed after the first commit
+
+Re-authored spec timed out at 30 s: it waited for every `.sb-anim` to be *visible*, but items in
+collapsed groups never are. Mechanism (common.js `animateSidebarIn`): each item gets `sb-anim`,
+then `sb-visible` via `setTimeout(i*55+30)`.
+
+My first rewrite measured wall-clock gaps between the class additions: 3/3 locally (gaps ≈55 ms,
+12 items) but **red on the runner — median gap 0.1 ms**. On a busy runner the page's timers fire
+back-to-back, and a MutationObserver callback stamps one `performance.now()` for the whole batch.
+Playwright's fake clock did not help (time keeps flowing after `install`). Final spec records the
+delay each `sb-visible` timer is *scheduled* with (wraps `setTimeout` in an init script),
+asserts consecutive delays differ by exactly 55, and separately waits for every `.sb-anim` to be
+`.sb-visible`. Mutated to expect 20 → fails with the real 55. Runner: PASS. White-box: it depends
+on the app using `setTimeout` with `sb-visible` in the callback.
+
+**Lesson:** a timing assertion measured on a shared runner needs a load-independent source (what
+was scheduled), not observed wall-clock.
+
 ## 6. Numbers
 
-`43/54` pass, 2.7 min wall-clock, 317 s test time. Still red (11): DOC-013, EARLY-011,
-EARLY-026, P3-020, P3-023, P3-112, P3-113, P3-129, P4-001, P4-090, P9-066 — all need a
-Groq re-author (ten) or a look (P3-020).
+`44/54` pass (43 before §5b), ~2.5 min wall-clock. Still red (10): DOC-013, EARLY-011,
+EARLY-026, P3-023, P3-112, P3-113, P3-129, P4-001, P4-090, P9-066 — all need a
+Groq re-author.
 
 ## 7. Mistakes made this session (so they are not repeated)
 
@@ -104,9 +122,8 @@ Groq re-author (ten) or a look (P3-020).
 ## 8. Open
 
 1. Re-author the ten (needs Groq quota reset or the paid tier — the user's decision).
-2. P3-020: new spec times out at 30 s; read why.
-3. CI for `5ae4b8d` was queued when the session ended (`14c7d04` was green).
-4. Carried from Part 334: heal-by-test-title backend change + one batched HF upload; TC-P2-127 /
+2. CI for `5ae4b8d` was queued when the session ended (`14c7d04` was green).
+3. Carried from Part 334: heal-by-test-title backend change + one batched HF upload; TC-P2-127 /
    TC-P10-096 authoring empty; TC-P2-132 stale; 91 unclear-page cases need user answers;
    12 "moved" cases → `/about`; 10 NOPAGE cases leave the browser lane; API lane (566) and
    262 unclassified unchanged.
