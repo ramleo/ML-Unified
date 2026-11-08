@@ -1,0 +1,2548 @@
+{
+ "https://ml-portfolio-rho.vercel.app": {
+  "controls": [
+   "[button] name=\"Open chat\"",
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"Browse the tools\"",
+   "[link] name=\"GitHub\"",
+   "[link] name=\"public API & MCP\"",
+   "[link] name=\"the toolkit\"",
+   "[link] name=\"ML Unified PlatformPlatform \u00b7 EnterOne app, four models. Sel\"",
+   "[link] name=\"EDA ExplorerExploratory Analysis \u00b7 Enter\"",
+   "[link] name=\"ML Vision PlatformVision \u00b7 Enter\"",
+   "[link] name=\"TestwrightQA Automation \u00b7 Enter\"",
+   "[link] name=\"Text-to-SQL AgentText to SQL \u00b7 Enter\"",
+   "[link] name=\"full platforms\"",
+   "[searchbox] name=\"Search all 58 tools\"",
+   "[searchbox] placeholder=\"Search 58 tools \u2014 try \\\"malware\\\", \\\"PDF\\\" or \\\"SHAP\\\"\u2026\"",
+   "[link] name=\"Security & Trust26 toolsChecking whether something can be tr\"",
+   "[link] name=\"Computer Vision15 tools\"",
+   "[link] name=\"ML Pipeline13 tools\"",
+   "[link] name=\"Language & Documents4 tools\"",
+   "[button] name=\"\ud83d\udcc4 Research Papers\"",
+   "[button] name=\"\ud83d\udcf0 Industry News\"",
+   "[link] name=\"The Toolkit\"",
+   "[link] name=\"Pipeline\"",
+   "[link] name=\"News\"",
+   "[link] name=\"Docs & API\"",
+   "[link] name=\"Changelog\"",
+   "[link] name=\"Contact\"",
+   "[link] name=\"ML Unified Platform\"",
+   "[link] name=\"EDA Explorer\"",
+   "[link] name=\"Vision Platform\"",
+   "[link] name=\"LinkedIn\"",
+   "[link] name=\"DockerHub\"",
+   "[link] name=\"Privacy & Terms\"",
+   "[link] name=\"Source (MIT)\"",
+   "[link] name=\"Backend (AGPL-3.0)\""
+  ],
+  "headings": [
+   "AIRaML",
+   "5 full platforms \u2014 enter and use",
+   "58 tools, each live and testable",
+   "One request, end to end",
+   "Browser",
+   "Safeguards",
+   "FastAPI",
+   "Models & Stores",
+   "From raw data to live prediction",
+   "What's happening in AI & ML"
+  ],
+  "testids": []
+ },
+ "https://wram1708-ml-unified.hf.space/?mode=ml": {
+  "controls": [
+   "[link] name=\"AI AIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[link] name=\"Source \u00b7 AGPL-3.0\"",
+   "[button] name=\"Dark\"",
+   "[button] name=\"Light\"",
+   "[button] name=\"Midnight\"",
+   "[button] name=\"Ocean\"",
+   "[button] name=\"Sunset\"",
+   "[button] name=\"Forest\"",
+   "[link] name=\"Overview\"",
+   "[button] name=\"80 Cereals Gradient Boosting\"",
+   "[button] name=\"Sample Projects\"",
+   "[button] name=\"Diabetes Risk Predictor Random Forest\"",
+   "[button] name=\"Insurance Premium Predictor Random Forest\"",
+   "[button] name=\"Iris Species Classifier Logistic Regression\"",
+   "[button] name=\"Titanic Random Forest\"",
+   "[button] name=\"K-Means Clustering\"",
+   "[button] name=\"DBSCAN Density Clustering\"",
+   "[button] name=\"t-SNE Visualization\"",
+   "[button] name=\"PCA Dimensionality Reduction\"",
+   "[button] name=\"Train New Model\"",
+   "[button] name=\"AutoML\"",
+   "[button] name=\"SHAP Analyzer\"",
+   "[button] name=\"Live Metrics\"",
+   "[button] name=\"Predict\"",
+   "[button] name=\"Pipeline\"",
+   "[button] name=\"What-if\"",
+   "[button] name=\"Drift\"",
+   "[button] name=\"Performance\"",
+   "[combobox] name=\"Select\u2026 AGKNPQR\"",
+   "[combobox] name=\"Select\u2026 CH\"",
+   "[combobox] name=\"Select\u2026 50708090100110120130140150160\"",
+   "[combobox] name=\"Select\u2026 123456\"",
+   "[combobox] name=\"Select\u2026 01235\"",
+   "[textbox] placeholder=\"0\u2013320\"",
+   "[combobox] name=\"Select\u2026 0.01.01.52.02.52.73.04.05.06.09.010.014.0\"",
+   "[textbox] placeholder=\"-1\u201323\"",
+   "[textbox] placeholder=\"-1\u201315\"",
+   "[textbox] placeholder=\"-1\u2013330\"",
+   "[combobox] name=\"Select\u2026 025100\"",
+   "[combobox] name=\"Select\u2026 123\"",
+   "[combobox] name=\"Select\u2026 0.50.831.01.251.31.331.5\"",
+   "[combobox] name=\"Select\u2026 0.250.330.50.670.750.80.881.01.131.251.331.5\"",
+   "[button] name=\"Fill Sample\"",
+   "[button] name=\"Clear\"",
+   "[button] name=\"Predict \u2192\"",
+   "[button] name=\"80 Cereals\"",
+   "[button] name=\"Diabetes Risk Predictor\"",
+   "[button] name=\"Insurance Premium Predictor\"",
+   "[button] name=\"Iris Species Classifier\"",
+   "[button] name=\"Titanic\"",
+   "[button] name=\"Models\"",
+   "[button] name=\"Vision\"",
+   "[button] name=\"Cluster\"",
+   "[button] name=\"EDA\"",
+   "[button] name=\"Tools\"",
+   "[button] name=\"Cancel\"",
+   "[button] name=\"Delete\""
+  ],
+  "headings": [],
+  "testids": []
+ },
+ "https://wram1708-ml-unified.hf.space/?mode=eda": {
+  "controls": [
+   "[link] name=\"AI AIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[link] name=\"Source \u00b7 AGPL-3.0\"",
+   "[button] name=\"Dark\"",
+   "[button] name=\"Light\"",
+   "[button] name=\"Midnight\"",
+   "[button] name=\"Ocean\"",
+   "[button] name=\"Sunset\"",
+   "[button] name=\"Forest\"",
+   "[link] name=\"Overview\"",
+   "[button] name=\"EDA Explorer Explore any CSV dataset\"",
+   "[button] name=\"Clean & Export Deduplicate, impute, download\""
+  ],
+  "headings": [],
+  "testids": []
+ },
+ "https://wram1708-ml-unified.hf.space/?mode=vision": {
+  "controls": [
+   "[link] name=\"AI AIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[link] name=\"Source \u00b7 AGPL-3.0\"",
+   "[button] name=\"Dark\"",
+   "[button] name=\"Light\"",
+   "[button] name=\"Midnight\"",
+   "[button] name=\"Ocean\"",
+   "[button] name=\"Sunset\"",
+   "[button] name=\"Forest\"",
+   "[link] name=\"Overview\"",
+   "[button] name=\"Image Classifier ImageNet \u00b7 1000 classes\"",
+   "[button] name=\"Image Processing Blur \u00b7 Edges \u00b7 Rotate \u00b7 More\"",
+   "[button] name=\"Object Detection TinyYOLOv3 \u00b7 COCO 80 classes\"",
+   "[button] name=\"Image Segmentation SegFormer-B0 \u00b7 ADE20K 150 classes\"",
+   "[button] name=\"MobileNetV2 Fast & lightweight (14 MB)\"",
+   "[button] name=\"ResNet50 Classic deep residual (98 MB)\"",
+   "[button] name=\"SqueezeNet 1.1 Tiny & fast (5 MB)\"",
+   "[button] name=\"GoogLeNet Multi-scale Inception (28 MB)\"",
+   "[button] name=\"Classify All \u2192\"",
+   "[button] name=\"\u2715 Clear\"",
+   "[button] name=\"Browse 1,000 categories \u25b8\"",
+   "[textbox] placeholder=\"Search categories\u2026\""
+  ],
+  "headings": [],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/about": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"Explore the tools\"",
+   "[link] name=\"Read the handbook\"",
+   "[link] name=\"The Toolkit\"",
+   "[link] name=\"Pipeline\"",
+   "[link] name=\"News\"",
+   "[link] name=\"Docs & API\"",
+   "[link] name=\"Changelog\"",
+   "[link] name=\"Contact\"",
+   "[link] name=\"ML Unified Platform\"",
+   "[link] name=\"EDA Explorer\"",
+   "[link] name=\"Vision Platform\"",
+   "[link] name=\"GitHub\"",
+   "[link] name=\"LinkedIn\"",
+   "[link] name=\"DockerHub\"",
+   "[link] name=\"Privacy & Terms\"",
+   "[link] name=\"Source (MIT)\"",
+   "[link] name=\"Backend (AGPL-3.0)\""
+  ],
+  "headings": [
+   "Fifty machine-learning tools, free and in your browser",
+   "What AIRaML is",
+   "How it works",
+   "Your privacy",
+   "Built to be safe",
+   "What you can do",
+   "AutoML & tabular ML",
+   "Computer vision",
+   "Document intelligence & RAG",
+   "Security & threat analysis",
+   "Data & EDA",
+   "Text, audio & video",
+   "The platforms behind it",
+   "ML Unified",
+   "EDA",
+   "Vision",
+   "Testwright",
+   "Text-to-SQL"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/account": {
+  "controls": [
+   "[button] name=\"Toggle theme\"",
+   "[link] name=\"\u2190 AIRaML\"",
+   "[button] name=\"Sign in\"",
+   "[link] name=\"Forgot password?\"",
+   "[link] name=\"Create one\""
+  ],
+  "headings": [
+   "Sign in"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/app": {
+  "controls": [
+   "[button] name=\"Toggle theme\"",
+   "[link] name=\"\u2190 AIRaML\"",
+   "[button] name=\"Sign in\"",
+   "[link] name=\"Forgot password?\"",
+   "[link] name=\"Create one\""
+  ],
+  "headings": [
+   "Sign in"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/app/billing": {
+  "controls": [
+   "[button] name=\"Toggle theme\"",
+   "[link] name=\"\u2190 AIRaML\"",
+   "[button] name=\"Sign in\"",
+   "[link] name=\"Forgot password?\"",
+   "[link] name=\"Create one\""
+  ],
+  "headings": [
+   "Sign in"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/app/chatbots": {
+  "controls": [
+   "[button] name=\"Toggle theme\"",
+   "[link] name=\"\u2190 AIRaML\"",
+   "[button] name=\"Sign in\"",
+   "[link] name=\"Forgot password?\"",
+   "[link] name=\"Create one\""
+  ],
+  "headings": [
+   "Sign in"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/audit": {
+  "controls": [],
+  "headings": [],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/audit/dashboard": {
+  "controls": [],
+  "headings": [],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/changelog": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"The Toolkit\"",
+   "[link] name=\"Pipeline\"",
+   "[link] name=\"News\"",
+   "[link] name=\"Docs & API\"",
+   "[link] name=\"Changelog\"",
+   "[link] name=\"Contact\"",
+   "[link] name=\"ML Unified Platform\"",
+   "[link] name=\"EDA Explorer\"",
+   "[link] name=\"Vision Platform\"",
+   "[link] name=\"GitHub\"",
+   "[link] name=\"LinkedIn\"",
+   "[link] name=\"DockerHub\"",
+   "[link] name=\"Privacy & Terms\"",
+   "[link] name=\"Source (MIT)\"",
+   "[link] name=\"Backend (AGPL-3.0)\""
+  ],
+  "headings": [
+   "What changed, and when",
+   "MCP support for AI clients",
+   "A public API you can call with a key",
+   "Accounts, sign-in and profile pictures",
+   "Docs, changelog and a privacy page",
+   "Two tools described themselves as running locally when they do not",
+   "The site is now a product, with the CV on its own page",
+   "Performance figures that could not be substantiated were removed",
+   "Phones no longer scroll sideways",
+   "Headings were hard to read in light mode",
+   "Typography, and a diagram of the request path",
+   "YARA File Scanner",
+   "Keystroke Biometric Auth-Risk Demo",
+   "Hardening against abuse"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/docs": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"Privacy & Terms\"",
+   "[link] name=\"home page\"",
+   "[link] name=\"Public API (/v1)\"",
+   "[link] name=\"Public OpenAPI schema (/v1) \u2192\"",
+   "[link] name=\"Interactive API reference (Swagger UI) \u2192\"",
+   "[link] name=\"OpenAPI schema (JSON) \u2192\"",
+   "[link] name=\"GitHub\"",
+   "[link] name=\"changelog\"",
+   "[link] name=\"The Toolkit\"",
+   "[link] name=\"Pipeline\"",
+   "[link] name=\"News\"",
+   "[link] name=\"Docs & API\"",
+   "[link] name=\"Changelog\"",
+   "[link] name=\"Contact\"",
+   "[link] name=\"ML Unified Platform\"",
+   "[link] name=\"EDA Explorer\"",
+   "[link] name=\"Vision Platform\"",
+   "[link] name=\"LinkedIn\"",
+   "[link] name=\"DockerHub\"",
+   "[link] name=\"Source (MIT)\"",
+   "[link] name=\"Backend (AGPL-3.0)\""
+  ],
+  "headings": [
+   "How this actually works",
+   "The shape of it",
+   "Calling the API",
+   "Public API (v1)",
+   "MCP (for AI clients)",
+   "Full endpoint reference",
+   "Limits you will hit",
+   "Source"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/eda": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"EDA Explorer\"",
+   "[link] name=\"Overview\"",
+   "[link] name=\"Open the explorer\"",
+   "[link] name=\"See how it works\"",
+   "[button] name=\"User Guide\""
+  ],
+  "headings": [
+   "Upload a CSV. Understand itin one scroll.",
+   "Everything you need to understand a dataset",
+   "Overview & columns",
+   "Distributions",
+   "Correlations & MI",
+   "3D PCA & SPLOM",
+   "Auto insights",
+   "Downloadable report",
+   "Upload \u2192 explore \u2192 export",
+   "Upload a CSV",
+   "Explore the sections",
+   "Export a report",
+   "A full profile, with the caveats stated",
+   "LiveWhat it does",
+   "CaveatsWhat to keep in mind",
+   "Profile your first dataset."
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/eval": {
+  "controls": [
+   "[button] name=\"Toggle theme\"",
+   "[link] name=\"\u2190 AIRaML\"",
+   "[button] name=\"Sign in\"",
+   "[link] name=\"Forgot password?\"",
+   "[link] name=\"Create one\""
+  ],
+  "headings": [
+   "Sign in"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/handbook": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[button] name=\"PDF for print (A4)\"",
+   "[button] name=\"PDF for phone\"",
+   "[button] name=\"Download Markdown\"",
+   "[searchbox] name=\"Search the handbook\"",
+   "[searchbox] placeholder=\"Search the handbook\u2026\"",
+   "[button] name=\"Previous match\"",
+   "[button] name=\"Next match\"",
+   "[link] name=\"Part 1 \u00b7 Platforms\"",
+   "[link] name=\"1. ML Unified Platform\"",
+   "[link] name=\"2. EDA Explorer\"",
+   "[link] name=\"3. ML Vision Platform\"",
+   "[link] name=\"4. Testwright\"",
+   "[link] name=\"5. Text-to-SQL Agent\"",
+   "[link] name=\"Part 2 \u00b7 Developer access\"",
+   "[link] name=\"6. Public API & MCP\"",
+   "[link] name=\"Part 3 \u00b7 Chatbot builder\"",
+   "[link] name=\"7. Chatbot builder\"",
+   "[link] name=\"Part 4 \u00b7 ML Pipeline\"",
+   "[link] name=\"8. AutoML Pipeline\"",
+   "[link] name=\"9. Data Drift Detection\"",
+   "[link] name=\"10. Data Preprocessing\"",
+   "[link] name=\"11. Ensemble Methods\"",
+   "[link] name=\"12. Exploratory Data Analysis\"",
+   "[link] name=\"13. Feature Engineering\"",
+   "[link] name=\"14. Feature Selection\"",
+   "[link] name=\"15. Optuna Tuning\"",
+   "[link] name=\"16. Periodicity Finder\"",
+   "[link] name=\"17. Pipeline Builder\"",
+   "[link] name=\"18. Pipeline Cinema\"",
+   "[link] name=\"19. Real-Time Analytics\"",
+   "[link] name=\"20. SHAP Explainability\"",
+   "[link] name=\"Part 5 \u00b7 Language & Documents\"",
+   "[link] name=\"21. Contract/Invoice Reconciliation Assistant\"",
+   "[link] name=\"22. Document Intelligence\"",
+   "[link] name=\"23. Meeting Intelligence\"",
+   "[link] name=\"24. Multimodal RAG\"",
+   "[link] name=\"Part 6 \u00b7 Computer Vision\"",
+   "[link] name=\"25. ASL Fingerspelling Recognition\"",
+   "[link] name=\"26. Astrophotography Anomaly Detector\"",
+   "[link] name=\"27. Crime Scene Reconstruction\"",
+   "[link] name=\"28. Depth Parallax\"",
+   "[link] name=\"29. Face Liveness Detector\"",
+   "[link] name=\"30. Gait Pattern Comparison\"",
+   "[link] name=\"31. Movement Form Comparison\"",
+   "[link] name=\"32. PPE Compliance Check\"",
+   "[link] name=\"33. Photo Library Visual Search\"",
+   "[link] name=\"34. Plant Growth Quantification\"",
+   "[link] name=\"35. Pose VJ Visuals\"",
+   "[link] name=\"36. Scan Descreen\"",
+   "[link] name=\"37. Text-Prompted Video Object Tracking\"",
+   "[link] name=\"38. Text-to-Image Generator\"",
+   "[link] name=\"39. Wildlife Re-Identification\"",
+   "[link] name=\"Part 7 \u00b7 Security & Trust\"",
+   "[link] name=\"40. AI-Generated Code Detector\"",
+   "[link] name=\"41. Adversarial Robustness Lab\"",
+   "[link] name=\"42. Attack-Surface / Exposed-Path Scanner\"",
+   "[link] name=\"43. Binary Byte-Plot & Entropy Triage\"",
+   "[link] name=\"44. Browser Extension Permission Risk Analyzer\"",
+   "[link] name=\"45. CAPTCHA Hardening Lab\"",
+   "[link] name=\"46. DNS Tunneling / Exfiltration Detector\"",
+   "[link] name=\"47. Email Header Authentication Checker\"",
+   "[link] name=\"48. Exploit / Attack-Payload Detector\"",
+   "[link] name=\"49. Face Cloak\"",
+   "[link] name=\"50. Face Deanonymization Risk Demo\"",
+   "[link] name=\"51. JWT / Token Security Analyzer\"",
+   "[link] name=\"52. Keystroke Biometric Auth-Risk Demo\"",
+   "[link] name=\"53. LLM Prompt Injection Detection Playground\"",
+   "[link] name=\"54. Log Anomaly Detector\"",
+   "[link] name=\"55. Malicious Package Scanner\"",
+   "[link] name=\"56. Network Intrusion Classifier\"",
+   "[link] name=\"57. Password Strength & Breach Checker\"",
+   "[link] name=\"58. Phishing Email Body Classifier\"",
+   "[link] name=\"59. QR Phishing Detector\"",
+   "[link] name=\"60. SIEM Alert Triage Agent\"",
+   "[link] name=\"61. Secret & PII Leak Scanner\"",
+   "[link] name=\"62. Style Cloak\"",
+   "[link] name=\"63. TLS / Security-Headers Scanner\"",
+   "[link] name=\"64. Video-Call Keystroke Inference\"",
+   "[link] name=\"65. YARA File Scanner\"",
+   "[link] name=\"Appendix \u00b7 Every tool\"",
+   "[link] name=\"Movement Form Comparison\"",
+   "[button] name=\"Listen\"",
+   "[combobox] name=\"Voice\"",
+   "[combobox] name=\"Reading speed\"",
+   "[button] name=\"Part 1: Platforms\"",
+   "[button] name=\"Chapter 1: ML Unified Platform\"",
+   "[button] name=\"Chapter 2: EDA Explorer\"",
+   "[button] name=\"Chapter 3: ML Vision Platform\"",
+   "[button] name=\"Chapter 4: Testwright\"",
+   "[button] name=\"Chapter 5: Text-to-SQL Agent\"",
+   "[button] name=\"Part 2: Developer access\"",
+   "[button] name=\"Chapter 6: Public API & MCP\"",
+   "[button] name=\"Part 3: Chatbot builder\"",
+   "[button] name=\"Chapter 7: Chatbot builder\"",
+   "[button] name=\"Part 4: ML Pipeline\"",
+   "[button] name=\"Chapter 8: AutoML Pipeline\"",
+   "[button] name=\"Chapter 9: Data Drift Detection\"",
+   "[button] name=\"Chapter 10: Data Preprocessing\"",
+   "[button] name=\"Chapter 11: Ensemble Methods\"",
+   "[button] name=\"Chapter 12: Exploratory Data Analysis\"",
+   "[button] name=\"Chapter 13: Feature Engineering\"",
+   "[button] name=\"Chapter 14: Feature Selection\"",
+   "[button] name=\"Chapter 15: Optuna Tuning\"",
+   "[button] name=\"Chapter 16: Periodicity Finder\"",
+   "[button] name=\"Chapter 17: Pipeline Builder\"",
+   "[button] name=\"Chapter 18: Pipeline Cinema\"",
+   "[button] name=\"Chapter 19: Real-Time Analytics\"",
+   "[button] name=\"Chapter 20: SHAP Explainability\"",
+   "[button] name=\"Part 5: Language & Documents\"",
+   "[button] name=\"Chapter 21: Contract/Invoice Reconciliation Assistant\"",
+   "[button] name=\"Chapter 22: Document Intelligence\"",
+   "[button] name=\"Chapter 23: Meeting Intelligence\"",
+   "[button] name=\"Chapter 24: Multimodal RAG\"",
+   "[button] name=\"Part 6: Computer Vision\"",
+   "[button] name=\"Chapter 25: ASL Fingerspelling Recognition\"",
+   "[button] name=\"Chapter 26: Astrophotography Anomaly Detector\"",
+   "[button] name=\"Chapter 27: Crime Scene Reconstruction\"",
+   "[button] name=\"Chapter 28: Depth Parallax\"",
+   "[button] name=\"Chapter 29: Face Liveness Detector\"",
+   "[button] name=\"Chapter 30: Gait Pattern Comparison\"",
+   "[button] name=\"Chapter 31: Movement Form Comparison\"",
+   "[button] name=\"Chapter 32: PPE Compliance Check\"",
+   "[button] name=\"Chapter 33: Photo Library Visual Search\"",
+   "[button] name=\"Chapter 34: Plant Growth Quantification\"",
+   "[button] name=\"Chapter 35: Pose VJ Visuals\"",
+   "[button] name=\"Chapter 36: Scan Descreen\"",
+   "[button] name=\"Chapter 37: Text-Prompted Video Object Tracking\"",
+   "[button] name=\"Chapter 38: Text-to-Image Generator\"",
+   "[button] name=\"Chapter 39: Wildlife Re-Identification\"",
+   "[button] name=\"Part 7: Security & Trust\"",
+   "[button] name=\"Chapter 40: AI-Generated Code Detector\"",
+   "[button] name=\"Chapter 41: Adversarial Robustness Lab\"",
+   "[button] name=\"Chapter 42: Attack-Surface / Exposed-Path Scanner\"",
+   "[button] name=\"Chapter 43: Binary Byte-Plot & Entropy Triage\"",
+   "[button] name=\"Chapter 44: Browser Extension Permission Risk Analyzer\"",
+   "[button] name=\"Chapter 45: CAPTCHA Hardening Lab\"",
+   "[button] name=\"Chapter 46: DNS Tunneling / Exfiltration Detector\"",
+   "[button] name=\"Chapter 47: Email Header Authentication Checker\"",
+   "[button] name=\"Chapter 48: Exploit / Attack-Payload Detector\"",
+   "[button] name=\"Chapter 49: Face Cloak\"",
+   "[button] name=\"Chapter 50: Face Deanonymization Risk Demo\"",
+   "[button] name=\"Chapter 51: JWT / Token Security Analyzer\"",
+   "[button] name=\"Chapter 52: Keystroke Biometric Auth-Risk Demo\"",
+   "[button] name=\"Chapter 53: LLM Prompt Injection Detection Playground\"",
+   "[button] name=\"Chapter 54: Log Anomaly Detector\"",
+   "[button] name=\"Chapter 55: Malicious Package Scanner\"",
+   "[button] name=\"Chapter 56: Network Intrusion Classifier\"",
+   "[button] name=\"Chapter 57: Password Strength & Breach Checker\"",
+   "[button] name=\"Chapter 58: Phishing Email Body Classifier\"",
+   "[button] name=\"Chapter 59: QR Phishing Detector\"",
+   "[button] name=\"Chapter 60: SIEM Alert Triage Agent\"",
+   "[button] name=\"Chapter 61: Secret & PII Leak Scanner\"",
+   "[button] name=\"Chapter 62: Style Cloak\"",
+   "[button] name=\"Chapter 63: TLS / Security-Headers Scanner\"",
+   "[button] name=\"Chapter 64: Video-Call Keystroke Inference\"",
+   "[button] name=\"Chapter 65: YARA File Scanner\"",
+   "[link] name=\"The Toolkit\"",
+   "[link] name=\"Pipeline\"",
+   "[link] name=\"News\"",
+   "[link] name=\"Docs & API\"",
+   "[link] name=\"Changelog\"",
+   "[link] name=\"Contact\"",
+   "[link] name=\"ML Unified Platform\"",
+   "[link] name=\"EDA Explorer\"",
+   "[link] name=\"Vision Platform\"",
+   "[link] name=\"GitHub\"",
+   "[link] name=\"LinkedIn\"",
+   "[link] name=\"DockerHub\"",
+   "[link] name=\"Privacy & Terms\"",
+   "[link] name=\"Source (MIT)\"",
+   "[link] name=\"Backend (AGPL-3.0)\""
+  ],
+  "headings": [
+   "The handbook",
+   "The AIRaML Handbook",
+   "58 tools for machine learning, documents, vision and security",
+   "About this edition",
+   "Finding your way around",
+   "Contents",
+   "Part 1",
+   "Platforms",
+   "Chapter 1ML Unified Platform",
+   "At a glance",
+   "What the ML Unified Platform is",
+   "The four models",
+   "Using the platform (step by step)",
+   "What makes it interesting",
+   "Honest limits",
+   "FAQ",
+   "Why it matters",
+   "Chapter 2EDA Explorer",
+   "What EDA Explorer is",
+   "What you get, section by section",
+   "Using EDA Explorer (step by step)",
+   "Chapter 3ML Vision Platform",
+   "What the ML Vision Platform is",
+   "The three tasks",
+   "Chapter 4Testwright",
+   "What Testwright is",
+   "The five stages",
+   "Choosing a model (free \u00b7 your own key \u00b7 owner)"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/login": {
+  "controls": [
+   "[button] name=\"Toggle theme\"",
+   "[link] name=\"\u2190 AIRaML\"",
+   "[button] name=\"Sign in\"",
+   "[link] name=\"Forgot password?\"",
+   "[link] name=\"Create one\""
+  ],
+  "headings": [
+   "Sign in"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/ml": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"ML Unified\"",
+   "[link] name=\"Overview\"",
+   "[link] name=\"Open the platform\"",
+   "[link] name=\"See how it works\"",
+   "[button] name=\"User Guide\""
+  ],
+  "headings": [
+   "Four trained models. One app.Fill a form, get a prediction.",
+   "Pick a model, get a prediction",
+   "Iris Species",
+   "Titanic Survival",
+   "Diabetes Risk",
+   "Insurance Premium",
+   "Pick \u2192 fill \u2192 predict",
+   "Pick a model",
+   "Fill the form",
+   "Predict and read",
+   "Real models, with the caveats stated",
+   "LiveWhat it does",
+   "CaveatsWhat to keep in mind",
+   "Make your first prediction."
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/portfolio": {
+  "controls": [
+   "[button] name=\"Toggle theme\"",
+   "[link] name=\"\u2190 AIRaML\"",
+   "[button] name=\"Sign in\"",
+   "[link] name=\"Forgot password?\"",
+   "[link] name=\"Create one\""
+  ],
+  "headings": [
+   "Sign in"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/portfolio/chatbots": {
+  "controls": [
+   "[button] name=\"Toggle theme\"",
+   "[link] name=\"\u2190 AIRaML\"",
+   "[button] name=\"Sign in\"",
+   "[link] name=\"Forgot password?\"",
+   "[link] name=\"Create one\""
+  ],
+  "headings": [
+   "Sign in"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/portfolio/keys": {
+  "controls": [
+   "[button] name=\"Toggle theme\"",
+   "[link] name=\"\u2190 AIRaML\"",
+   "[button] name=\"Sign in\"",
+   "[link] name=\"Forgot password?\"",
+   "[link] name=\"Create one\""
+  ],
+  "headings": [
+   "Sign in"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/portfolio/share": {
+  "controls": [
+   "[button] name=\"Toggle theme\"",
+   "[link] name=\"\u2190 AIRaML\"",
+   "[button] name=\"Sign in\"",
+   "[link] name=\"Forgot password?\"",
+   "[link] name=\"Create one\""
+  ],
+  "headings": [
+   "Sign in"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/privacy": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"Turnstile Privacy Addendum\"",
+   "[link] name=\"GitHub\"",
+   "[link] name=\"contact form\"",
+   "[link] name=\"The Toolkit\"",
+   "[link] name=\"Pipeline\"",
+   "[link] name=\"News\"",
+   "[link] name=\"Docs & API\"",
+   "[link] name=\"Changelog\"",
+   "[link] name=\"Contact\"",
+   "[link] name=\"ML Unified Platform\"",
+   "[link] name=\"EDA Explorer\"",
+   "[link] name=\"Vision Platform\"",
+   "[link] name=\"LinkedIn\"",
+   "[link] name=\"DockerHub\"",
+   "[link] name=\"Privacy & Terms\"",
+   "[link] name=\"Source (MIT)\"",
+   "[link] name=\"Backend (AGPL-3.0)\""
+  ],
+  "headings": [
+   "What happens to your data",
+   "Tools that never send your data anywhere",
+   "Tools that do send your file to a server",
+   "Third parties that may see your content",
+   "What is recorded about your visit",
+   "If you create an account",
+   "Terms of use",
+   "Questions"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/qa": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"Testwright\"",
+   "[link] name=\"Author\"",
+   "[link] name=\"Run\"",
+   "[link] name=\"Discover\"",
+   "[link] name=\"Heal\"",
+   "[link] name=\"Visual\"",
+   "[link] name=\"Open the Author\"",
+   "[link] name=\"See how it works\"",
+   "[button] name=\"User Guide\"",
+   "[link] name=\"\u25cf LiveAuthorPlain English or an imported test case \u2192 a Playw\"",
+   "[link] name=\"\u25cf LiveRunExecute against a live site on an isolated CI runne\"",
+   "[link] name=\"\u25cf LiveDiscoverGive a URL \u2192 it renders the page, reads the ac\"",
+   "[link] name=\"\u25cf LiveHealRun your saved tests as a suite, group the failure\"",
+   "[link] name=\"\u25cf LiveVisualScreenshot a page on isolated CI, save it as a b\"",
+   "[link] name=\"Start with the Author\"",
+   "[link] name=\"Explore the five stages\""
+  ],
+  "headings": [
+   "Write a test in plain English.Get real Playwright code.",
+   "The QA lifecycle, end to end",
+   "Author",
+   "Run",
+   "Discover",
+   "Heal",
+   "Visual",
+   "Describe \u2192 generate \u2192 run \u2192 heal",
+   "Describe or discover",
+   "Generate the test",
+   "Run, then heal",
+   "What it does, and what it doesn't",
+   "In scopeWhat Testwright does",
+   "Out of scopeWhat it doesn't do",
+   "The whole loop, in one workspace."
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/qa/author": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"Testwright\"",
+   "[link] name=\"Author\"",
+   "[link] name=\"Run\"",
+   "[link] name=\"Discover\"",
+   "[link] name=\"Heal\"",
+   "[link] name=\"Visual\"",
+   "[button] name=\"User Guide\"",
+   "[textbox] placeholder=\"https://your-site.example\"",
+   "[textbox] placeholder=\"e.g. Home page smoke test\"",
+   "[textbox] placeholder=\"Describe the steps in plain English, e.g. Open the pricing page, click Sign up, and check the email field is required.\"",
+   "[button] name=\"Use a sample\"",
+   "[button] name=\"Model\u00b7 Free (default)Change\"",
+   "[button] name=\"Generate test\""
+  ],
+  "headings": [
+   "Author"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/qa/dashboard": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"Testwright\"",
+   "[link] name=\"Author\"",
+   "[link] name=\"Run\"",
+   "[link] name=\"Discover\"",
+   "[link] name=\"Heal\"",
+   "[link] name=\"Visual\"",
+   "[link] name=\"\u2190 Back to Run\"",
+   "[button] name=\"This device\"",
+   "[button] name=\"All runs\"",
+   "[button] name=\"Refresh\"",
+   "[button] name=\"Clear history\""
+  ],
+  "headings": [
+   "Dashboard"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/qa/discover": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"Testwright\"",
+   "[link] name=\"Author\"",
+   "[link] name=\"Run\"",
+   "[link] name=\"Discover\"",
+   "[link] name=\"Heal\"",
+   "[link] name=\"Visual\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Discover test cases\""
+  ],
+  "headings": [
+   "Discover"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/qa/heal": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"Testwright\"",
+   "[link] name=\"Author\"",
+   "[link] name=\"Run\"",
+   "[link] name=\"Discover\"",
+   "[link] name=\"Heal\"",
+   "[link] name=\"Visual\"",
+   "[button] name=\"User Guide\""
+  ],
+  "headings": [
+   "Heal"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/qa/run": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"Testwright\"",
+   "[link] name=\"Author\"",
+   "[link] name=\"Run\"",
+   "[link] name=\"Discover\"",
+   "[link] name=\"Heal\"",
+   "[link] name=\"Visual\"",
+   "[button] name=\"User Guide\"",
+   "[textbox] placeholder=\"https://your-site.example\"",
+   "[textbox] placeholder=\"e.g. Home page smoke test\"",
+   "[textbox] placeholder=\"Paste a @playwright/test file, or click 'Use a sample'.\"",
+   "[button] name=\"Use a sample\"",
+   "[button] name=\"Run test\"",
+   "[combobox] name=\"1 (normal)3\u00d7\"",
+   "[button] name=\"Save test\"",
+   "[button] name=\"Run Live \u25b6\"",
+   "[button] name=\"recheck\"",
+   "[button] name=\"copy\""
+  ],
+  "headings": [
+   "Run"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/qa/visual": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"Testwright\"",
+   "[link] name=\"Author\"",
+   "[link] name=\"Run\"",
+   "[link] name=\"Discover\"",
+   "[link] name=\"Heal\"",
+   "[link] name=\"Visual\"",
+   "[button] name=\"User Guide\"",
+   "[textbox] placeholder=\"https://your-site.example/page\"",
+   "[button] name=\"Capture baseline\"",
+   "[button] name=\"Compare to baseline\"",
+   "[combobox] name=\"0.1% (strict)0.5%1%2% (lenient)\""
+  ],
+  "headings": [
+   "Visual"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/reset": {
+  "controls": [
+   "[button] name=\"Toggle theme\"",
+   "[link] name=\"\u2190 AIRaML\"",
+   "[button] name=\"Send reset link\"",
+   "[link] name=\"Back to sign in\""
+  ],
+  "headings": [
+   "Reset password"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/settings": {
+  "controls": [
+   "[button] name=\"Toggle theme\"",
+   "[link] name=\"\u2190 AIRaML\"",
+   "[button] name=\"Sign in\"",
+   "[link] name=\"Forgot password?\"",
+   "[link] name=\"Create one\""
+  ],
+  "headings": [
+   "Sign in"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/signup": {
+  "controls": [
+   "[button] name=\"Toggle theme\"",
+   "[link] name=\"\u2190 AIRaML\"",
+   "[button] name=\"Create account\"",
+   "[link] name=\"Sign in\""
+  ],
+  "headings": [
+   "Create account"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/sql": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"Text-to-SQL\"",
+   "[link] name=\"Overview\"",
+   "[link] name=\"Open the tool\"",
+   "[link] name=\"See how it works\"",
+   "[button] name=\"User Guide\""
+  ],
+  "headings": [
+   "Ask your database in plain English.Get SQL, results, and the reasoning.",
+   "Question in, answer out",
+   "Ask",
+   "Run",
+   "Explain",
+   "Connect",
+   "Pick \u2192 ask \u2192 understand",
+   "Pick a database",
+   "Ask in plain English",
+   "Run and understand",
+   "Real queries, with the caveats stated",
+   "LiveWhat it does",
+   "CaveatsWhat to keep in mind",
+   "Ask your first question."
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/testops": {
+  "controls": [
+   "[button] name=\"Toggle theme\"",
+   "[link] name=\"\u2190 AIRaML\"",
+   "[button] name=\"Sign in\"",
+   "[link] name=\"Forgot password?\"",
+   "[link] name=\"Create one\""
+  ],
+  "headings": [
+   "Sign in"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/adversarial-robustness-lab": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Choose photo\"",
+   "[button] name=\"Bundled samples\"",
+   "[button] name=\"Upload your own\"",
+   "[button] name=\"Attack both models\""
+  ],
+  "headings": [
+   "Adversarial Robustness Lab",
+   "Defense #3: Adversarial training (a digit-classifier demo)"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/ai-code-detector": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[textbox] placeholder=\"Paste a function or short script...\"",
+   "[button] name=\"Analyze code\"",
+   "[button] name=\"AI-style snippet\"",
+   "[button] name=\"Messy human snippet\"",
+   "[button] name=\"Clean human snippet (should NOT flag)\""
+  ],
+  "headings": [
+   "AI-Generated Code Detector",
+   "Paste a code snippet"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/anomaly-detection": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Run detection\""
+  ],
+  "headings": [
+   "Log Anomaly Detector",
+   "Live request feed"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/asl-fingerspelling-recognition": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Computer Vision\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Start camera\""
+  ],
+  "headings": [
+   "ASL Fingerspelling Recognition",
+   "Supported letters"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/astrophotography-anomaly-detector": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Computer Vision\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"+ Add\"",
+   "[button] name=\"Detect anomalies\""
+  ],
+  "headings": [
+   "Astrophotography Anomaly Detector",
+   "Upload 5-30 photos from one fixed-tripod night-sky session, in order"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/attack-surface-scanner": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[textbox] placeholder=\"example.com\"",
+   "[button] name=\"Scan\""
+  ],
+  "headings": [
+   "Attack-Surface / Exposed-Path Scanner"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/automl": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"ML Pipeline\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"New Run\"",
+   "[button] name=\"Saved\"",
+   "[link] name=\"Open in ML Unified\"",
+   "[link] name=\"View on GitHub\""
+  ],
+  "headings": [
+   "AutoML Pipeline"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/captcha-hardening-lab": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Choose CAPTCHA image\""
+  ],
+  "headings": [
+   "CAPTCHA Hardening Lab"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/contract-invoice-reconciliation": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Language & Documents\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Upload a document, image, video, or audio file\""
+  ],
+  "headings": [
+   "Contract/Invoice Reconciliation"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/crime-scene-reconstruction": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Computer Vision\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"+ Add photo\"",
+   "[button] name=\"Reconstruct scene\"",
+   "[button] name=\"Pick two points on photo 1\"",
+   "[textbox] placeholder=\"Real-world distance (cm)\""
+  ],
+  "headings": [
+   "Crime Scene Reconstruction",
+   "Upload 2-6 photos of the same static scene, taken while walking around it",
+   "Optional: calibrate to approximate real-world units"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/depth-parallax": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Computer Vision\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Upload a photo\""
+  ],
+  "headings": [
+   "Depth Parallax"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/dns-tunneling-detector": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[textbox] placeholder=\"one hostname per line, e.g.:\\nwww.example.com\\napi.example.com\\n...\"",
+   "[button] name=\"Analyze log\"",
+   "[button] name=\"Try a sample log\"",
+   "[textbox] placeholder=\"e.g. suspicious-looking-subdomain.example.com\"",
+   "[button] name=\"Check\""
+  ],
+  "headings": [
+   "DNS Tunneling / Exfiltration Detector"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/document-intelligence": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Language & Documents\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Auto-detect\"",
+   "[button] name=\"Invoice\"",
+   "[button] name=\"Receipt\"",
+   "[button] name=\"Contract\"",
+   "[button] name=\"Resume / CV\"",
+   "[button] name=\"Medical Report\"",
+   "[button] name=\"Bank Statement\"",
+   "[button] name=\"ID Card\"",
+   "[button] name=\"Purchase Order\"",
+   "[textbox] placeholder=\"e.g. GST Number, HSN Code, PO Reference\""
+  ],
+  "headings": [
+   "Document Intelligence"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/drift": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"ML Pipeline\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[combobox] name=\"80 Cereals (regression)Diabetes Risk Predictor (classificati\"",
+   "[textbox] placeholder=\"e.g. Week 3 production batch\""
+  ],
+  "headings": [
+   "Data Drift Detection",
+   "Configure"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/email-auth-checker": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[textbox] placeholder=\"Paste the full raw headers of an email (View Source / Show Original in most mail clients)...\"",
+   "[button] name=\"Check authentication\"",
+   "[button] name=\"Load sample headers\""
+  ],
+  "headings": [
+   "Email Header Authentication Checker",
+   "Paste raw email headers"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/ensemble": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"ML Pipeline\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\""
+  ],
+  "headings": [
+   "Ensemble Methods"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/exploit-payload-detector": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[textbox] placeholder=\"Paste a suspicious URL, an HTTP request, a WAF/access-log line, a query-string value\u2026\"",
+   "[button] name=\"Scan payload\"",
+   "[button] name=\"Try a sample\""
+  ],
+  "headings": [
+   "Exploit / Attack-Payload Detector"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/exploratory-data-analysis": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"ML Pipeline\"",
+   "[button] name=\"User guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Upload a CSV file \u2014 click to browse or drop a file here\"",
+   "[button] name=\"Use a sample\""
+  ],
+  "headings": [
+   "Exploratory Data Analysis"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/extension-permission-analyzer": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[textbox] placeholder=\"Paste the full contents of an extension's manifest.json...\"",
+   "[button] name=\"Analyze permissions\"",
+   "[button] name=\"Load sample manifest\""
+  ],
+  "headings": [
+   "Browser Extension Permission Risk Analyzer",
+   "Paste a manifest.json"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/face-cloak": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Choose photo\""
+  ],
+  "headings": [
+   "Face Cloak"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/face-deanonymization-demo": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Choose target photo\""
+  ],
+  "headings": [
+   "Face Deanonymization Risk Demo"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/face-liveness": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Computer Vision\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Start camera\"",
+   "[button] name=\"Upload a photo instead\""
+  ],
+  "headings": [
+   "Face Liveness Detector"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/feature-engineering": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"ML Pipeline\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\""
+  ],
+  "headings": [
+   "Feature Engineering"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/feature-selection": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"ML Pipeline\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\""
+  ],
+  "headings": [
+   "Feature Selection"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/gait-pattern-comparison": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Computer Vision\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Choose video\""
+  ],
+  "headings": [
+   "Gait Pattern Comparison"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/intrusion-detection": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Classify test traffic\""
+  ],
+  "headings": [
+   "Network Intrusion Classifier"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/jwt-analyzer": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[textbox] placeholder=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.\u2026\"",
+   "[button] name=\"Analyze\"",
+   "[button] name=\"Try a weak token\"",
+   "[button] name=\"Try a strong token\"",
+   "[button] name=\"+ Add your own wordlist (optional)\""
+  ],
+  "headings": [
+   "JWT / Token Security Analyzer"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/keystroke-biometric-auth-risk": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[textbox] placeholder=\"Type: \\\"the quick fox\\\"\""
+  ],
+  "headings": [
+   "Keystroke Biometric Auth-Risk Demo"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/malicious-package-scanner": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Manifest (package.json / requirements.txt)\"",
+   "[button] name=\"Source code (JS/TS or Python)\"",
+   "[textbox] placeholder=\"Paste package.json or requirements.txt content\u2026\"",
+   "[button] name=\"Try a suspicious example\""
+  ],
+  "headings": [
+   "Malicious Package Scanner"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/malware-image-triage": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Choose file\""
+  ],
+  "headings": [
+   "Binary Byte-Plot & Entropy Triage"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/meeting-intelligence": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Language & Documents\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Choose recording\"",
+   "[button] name=\"Analyze meeting\""
+  ],
+  "headings": [
+   "Meeting Intelligence"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/movement-form-comparison": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Computer Vision\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Choose video\""
+  ],
+  "headings": [
+   "Movement Form Comparison"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Language & Documents\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Usage stats\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Upload a document, image, video, or audio file\""
+  ],
+  "headings": [
+   "Multimodal RAG"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/optuna": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"ML Pipeline\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\""
+  ],
+  "headings": [
+   "Optuna Tuning"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/password-audit": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[textbox] placeholder=\"Type a password to audit\u2026\"",
+   "[button] name=\"Show\""
+  ],
+  "headings": [
+   "Password Strength & Breach Checker"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/periodicity-finder": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"ML Pipeline\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[textbox] placeholder=\"12\\n15\\n9\\n...\\n\\nor\\n\\n2026-01-05T09:00:00Z\\n2026-01-05T14:00:00Z\\n...\"",
+   "[button] name=\"Find periodicity\"",
+   "[button] name=\"Load sample\""
+  ],
+  "headings": [
+   "Periodicity Finder"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/phishing-email-classifier": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[textbox] placeholder=\"Paste the body text of an email here\u2026\"",
+   "[button] name=\"Try a phishing example\"",
+   "[button] name=\"Try a safe example\""
+  ],
+  "headings": [
+   "Phishing Email Body Classifier"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/photo-search": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Computer Vision\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Add photo(s)\""
+  ],
+  "headings": [
+   "Photo Library Visual Search"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/pipeline-builder": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"ML Pipeline\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\""
+  ],
+  "headings": [
+   "How would you like to build your pipeline?"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/pipeline-cinema": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"ML Pipeline\"",
+   "[link] name=\"\u2190 Pipeline Builder\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Preprocess\"",
+   "[button] name=\"Feature Eng\"",
+   "[button] name=\"Feature Select\"",
+   "[button] name=\"AutoML\"",
+   "[button] name=\"Run Cinema\"",
+   "[button] name=\"Reset\""
+  ],
+  "headings": [
+   "Pipeline Cinema"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/plant-growth": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Computer Vision\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"I know the plants/order\"",
+   "[button] name=\"Unordered batch \u2014 figure it out\"",
+   "[button] name=\"Choose photos\"",
+   "[button] name=\"Take photo\""
+  ],
+  "headings": [
+   "Plant Growth Quantification"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/pose-vj-visuals": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Computer Vision\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Start camera\"",
+   "[button] name=\"Turn on mic\""
+  ],
+  "headings": [
+   "Pose VJ Visuals"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/ppe-compliance-check": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Computer Vision\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Choose photo\""
+  ],
+  "headings": [
+   "PPE Compliance Check"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/preprocessing": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"ML Pipeline\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\""
+  ],
+  "headings": [
+   "Clean your dataset before training"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/prompt-injection-playground": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[textbox] placeholder=\"Paste a prompt, or a document/web page an AI might be asked to read...\"",
+   "[button] name=\"Check for prompt injection\"",
+   "[button] name=\"Direct override\"",
+   "[button] name=\"Indirect (hidden in a document)\"",
+   "[button] name=\"Jailbreak roleplay\"",
+   "[button] name=\"Benign control (should NOT flag)\""
+  ],
+  "headings": [
+   "LLM Prompt Injection Detection Playground",
+   "Paste text to analyze"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/qr-phishing-detector": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Choose photo(s)\"",
+   "[textbox] placeholder=\"https://example.com/...\"",
+   "[button] name=\"Check URL\""
+  ],
+  "headings": [
+   "QR Phishing Detector"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/rag-analytics": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Multimodal RAG\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Refresh\""
+  ],
+  "headings": [
+   "RAG Usage Analytics",
+   "Provider mix (non-cached answers)",
+   "Uploads by file type"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/realtime-analytics": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"ML Pipeline\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Today\"",
+   "[button] name=\"Yesterday\"",
+   "[button] name=\"7 days\"",
+   "[button] name=\"30 days\"",
+   "[button] name=\"Custom\"",
+   "[button] name=\"User Guide\"",
+   "[link] name=\"Export CSV\"",
+   "[button] name=\"\u2193 Generate Report\"",
+   "[button] name=\"\u2726 AI Explain \u25bc\"",
+   "[button] name=\"Bars\"",
+   "[button] name=\"Map\"",
+   "[combobox] name=\"Tool\"",
+   "[button] name=\"\u00b7 12 err\"",
+   "[button] name=\"All\"",
+   "[button] name=\"Warnings 0\"",
+   "[button] name=\"Errors 0\"",
+   "[button] name=\"run_success\"",
+   "[button] name=\"tool_open\"",
+   "[button] name=\"page_view\"",
+   "[button] name=\"c6d9d4bf\"",
+   "[button] name=\"trace\""
+  ],
+  "headings": [
+   "Real-Time Analytics",
+   "Overview",
+   "Trends",
+   "Tool Usage",
+   "Audience",
+   "Quality & Errors",
+   "LLM Observability",
+   "Engagement"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/scan-descreen": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Computer Vision\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Choose image\"",
+   "[button] name=\"Descreen\""
+  ],
+  "headings": [
+   "Scan Descreen"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/secret-scanner": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[textbox] placeholder=\"Paste a .env file, a code snippet, a log line\u2026\"",
+   "[button] name=\"Scan\"",
+   "[button] name=\"Try a sample\""
+  ],
+  "headings": [
+   "Secret & PII Leak Scanner"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/shap": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"ML Pipeline\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\""
+  ],
+  "headings": [
+   "SHAP Explainability"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/siem-alert-triage": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[textbox] placeholder=\"one alert per line, e.g.:\\nFailed login for user admin from 10.0.0.5\\n...\"",
+   "[button] name=\"Triage alerts\"",
+   "[button] name=\"Try a sample log\""
+  ],
+  "headings": [
+   "SIEM Alert Triage Agent"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/style-cloak": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Choose image\""
+  ],
+  "headings": [
+   "Style Cloak"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/text-prompted-video-tracking": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Computer Vision\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Choose video\"",
+   "[textbox] placeholder=\"e.g. the red backpack\"",
+   "[button] name=\"Track & mask\""
+  ],
+  "headings": [
+   "Text-Prompted Video Object Tracking",
+   "Upload a short video and describe the object to track"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/text-to-image": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Computer Vision\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[textbox] placeholder=\"Describe the image you want \u2014 e.g. a lighthouse at sunset\"",
+   "[button] name=\"Enhance prompt\"",
+   "[button] name=\"Photorealistic\"",
+   "[button] name=\"Watercolor\"",
+   "[button] name=\"Anime\"",
+   "[button] name=\"Cyberpunk\"",
+   "[button] name=\"Oil Painting\"",
+   "[button] name=\"3D Render\"",
+   "[button] name=\"Sketch\"",
+   "[button] name=\"Square\"",
+   "[button] name=\"Landscape\"",
+   "[button] name=\"Portrait\"",
+   "[textbox] placeholder=\"e.g. blurry, text, watermark\"",
+   "[button] name=\"1\"",
+   "[button] name=\"2\"",
+   "[button] name=\"4\"",
+   "[button] name=\"Generate\""
+  ],
+  "headings": [
+   "Text-to-Image Generator"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/text-to-sql": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Text-to-SQL\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Skip tour\"",
+   "[button] name=\"Next \u2192\"",
+   "[button] name=\"Schema11 tables\"",
+   "[button] name=\"View ER Diagram\"",
+   "[textbox] placeholder=\"Search tables / columns\u2026\"",
+   "[button] name=\"Album347\"",
+   "[button] name=\"Artist275\"",
+   "[button] name=\"Customer59\"",
+   "[button] name=\"Employee8\"",
+   "[button] name=\"Genre25\"",
+   "[button] name=\"Invoice412\"",
+   "[button] name=\"InvoiceLine2,240\"",
+   "[button] name=\"MediaType5\"",
+   "[button] name=\"Playlist18\"",
+   "[button] name=\"PlaylistTrack8,715\"",
+   "[button] name=\"Track3,503\"",
+   "[button] name=\"\u203aShow me the top 5 artists by total album count\"",
+   "[button] name=\"\u203aWhat is the total revenue for each year?\"",
+   "[button] name=\"\u203aShow the top 6 genres by number of tracks\"",
+   "[button] name=\"\u203aList the top 10 customers by total spending\"",
+   "[button] name=\"\u203aWhat is the average track length in milliseconds vs average\"",
+   "[button] name=\"Glossary\"",
+   "[button] name=\"Templates\"",
+   "[button] name=\"Saved\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Chinook Demo\"",
+   "[button] name=\"Upload File\"",
+   "[button] name=\"PostgreSQL\"",
+   "[button] name=\"MySQL\"",
+   "[button] name=\"SQL Server\"",
+   "[button] name=\"Load Schema\"",
+   "[button] name=\"Schema & Tools\"",
+   "[button] name=\"View Diagram\"",
+   "[textbox] placeholder=\"Ask a question about your data\u2026 (Enter to run)\"",
+   "[combobox] name=\"GroqGeminiCohere\"",
+   "[button] name=\"Ask\"",
+   "[button] name=\"Surprise me\""
+  ],
+  "headings": [
+   "Text-to-SQL Agent"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/tls-security-headers-scanner": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[textbox] placeholder=\"example.com\"",
+   "[button] name=\"Scan\""
+  ],
+  "headings": [
+   "TLS / Security-Headers Scanner"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/video-keystroke-inference": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Choose video\""
+  ],
+  "headings": [
+   "Video-Call Keystroke Inference"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/wildlife-reidentification": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Computer Vision\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Choose photo\""
+  ],
+  "headings": [
+   "Wildlife Re-Identification"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/yara-file-scanner": {
+  "controls": [
+   "[link] name=\"Home\"",
+   "[link] name=\"Security & Trust\"",
+   "[button] name=\"User Guide\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Built-in rules\"",
+   "[button] name=\"Write your own rule\"",
+   "[button] name=\"Choose file\""
+  ],
+  "headings": [
+   "YARA File Scanner"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/vision": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"ML Vision\"",
+   "[link] name=\"Overview\"",
+   "[link] name=\"Open the platform\"",
+   "[link] name=\"See how it works\"",
+   "[button] name=\"User Guide\""
+  ],
+  "headings": [
+   "Upload an image. Let it see.Classify, detect, segment.",
+   "Classify, detect, segment",
+   "Classification",
+   "Detection",
+   "Segmentation",
+   "Pick \u2192 upload \u2192 read",
+   "Pick a task",
+   "Upload an image",
+   "Read the result",
+   "Real models, with the caveats stated",
+   "LiveWhat it does",
+   "CaveatsWhat to keep in mind",
+   "See your first image."
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/security-trust": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"All areas\"",
+   "[searchbox] name=\"Search Security & Trust tools\"",
+   "[searchbox] placeholder=\"Search 26 Security & Trust tools\u2026\"",
+   "[button] name=\"Local Compute\"",
+   "[button] name=\"Computer Vision\"",
+   "[button] name=\"Client-Side\"",
+   "[button] name=\"Live Engine\"",
+   "[button] name=\"Privacy\"",
+   "[button] name=\"Security Research\"",
+   "[button] name=\"Static Analysis\"",
+   "[button] name=\"Adversarial Robustness Lab\"",
+   "[button] name=\"See more\"",
+   "[button] name=\"Try it\"",
+   "[link] name=\"Source code for Adversarial Robustness Lab on GitHub\"",
+   "[button] name=\"AI-Generated Code Detector\"",
+   "[link] name=\"Source code for AI-Generated Code Detector on GitHub\"",
+   "[button] name=\"Attack-Surface / Exposed-Path Scanner\"",
+   "[link] name=\"Source code for Attack-Surface / Exposed-Path Scanner on GitHub\"",
+   "[button] name=\"Binary Byte-Plot & Entropy Triage\"",
+   "[link] name=\"Source code for Binary Byte-Plot & Entropy Triage on GitHub\"",
+   "[button] name=\"Browser Extension Permission Risk Analyzer\"",
+   "[link] name=\"Source code for Browser Extension Permission Risk Analyzer on GitHub\"",
+   "[button] name=\"CAPTCHA Hardening Lab\"",
+   "[link] name=\"Source code for CAPTCHA Hardening Lab on GitHub\"",
+   "[button] name=\"DNS Tunneling / Exfiltration Detector\"",
+   "[link] name=\"Source code for DNS Tunneling / Exfiltration Detector on GitHub\"",
+   "[button] name=\"Email Header Authentication Checker\"",
+   "[link] name=\"Source code for Email Header Authentication Checker on GitHub\"",
+   "[button] name=\"Exploit / Attack-Payload Detector\"",
+   "[link] name=\"Source code for Exploit / Attack-Payload Detector on GitHub\"",
+   "[button] name=\"Face Cloak\"",
+   "[link] name=\"Source code for Face Cloak on GitHub\"",
+   "[button] name=\"Face Deanonymization Risk Demo\"",
+   "[link] name=\"Source code for Face Deanonymization Risk Demo on GitHub\"",
+   "[button] name=\"JWT / Token Security Analyzer\"",
+   "[link] name=\"Source code for JWT / Token Security Analyzer on GitHub\"",
+   "[button] name=\"Keystroke Biometric Auth-Risk Demo\"",
+   "[link] name=\"Source code for Keystroke Biometric Auth-Risk Demo on GitHub\"",
+   "[button] name=\"LLM Prompt Injection Detection Playground\"",
+   "[link] name=\"Source code for LLM Prompt Injection Detection Playground on GitHub\"",
+   "[button] name=\"Log Anomaly Detector\"",
+   "[link] name=\"Source code for Log Anomaly Detector on GitHub\"",
+   "[button] name=\"Malicious Package Scanner\"",
+   "[link] name=\"Source code for Malicious Package Scanner on GitHub\"",
+   "[button] name=\"Network Intrusion Classifier\"",
+   "[link] name=\"Source code for Network Intrusion Classifier on GitHub\"",
+   "[button] name=\"Password Strength & Breach Checker\"",
+   "[link] name=\"Source code for Password Strength & Breach Checker on GitHub\"",
+   "[button] name=\"Phishing Email Body Classifier\"",
+   "[link] name=\"Source code for Phishing Email Body Classifier on GitHub\"",
+   "[button] name=\"QR Phishing Detector\"",
+   "[link] name=\"Source code for QR Phishing Detector on GitHub\"",
+   "[button] name=\"Secret & PII Leak Scanner\"",
+   "[link] name=\"Source code for Secret & PII Leak Scanner on GitHub\"",
+   "[button] name=\"SIEM Alert Triage Agent\"",
+   "[link] name=\"Source code for SIEM Alert Triage Agent on GitHub\"",
+   "[button] name=\"Style Cloak\"",
+   "[link] name=\"Source code for Style Cloak on GitHub\"",
+   "[button] name=\"TLS / Security-Headers Scanner\"",
+   "[link] name=\"Source code for TLS / Security-Headers Scanner on GitHub\"",
+   "[button] name=\"Video-Call Keystroke Inference\"",
+   "[link] name=\"Source code for Video-Call Keystroke Inference on GitHub\"",
+   "[button] name=\"YARA File Scanner\"",
+   "[link] name=\"Source code for YARA File Scanner on GitHub\"",
+   "[link] name=\"The Toolkit\"",
+   "[link] name=\"Pipeline\"",
+   "[link] name=\"News\"",
+   "[link] name=\"Docs & API\"",
+   "[link] name=\"Changelog\"",
+   "[link] name=\"Contact\"",
+   "[link] name=\"ML Unified Platform\"",
+   "[link] name=\"EDA Explorer\"",
+   "[link] name=\"Vision Platform\"",
+   "[link] name=\"GitHub\"",
+   "[link] name=\"LinkedIn\"",
+   "[link] name=\"DockerHub\"",
+   "[link] name=\"Privacy & Terms\"",
+   "[link] name=\"Source (MIT)\"",
+   "[link] name=\"Backend (AGPL-3.0)\""
+  ],
+  "headings": [
+   "Security & Trust",
+   "Adversarial Robustness Lab",
+   "AI-Generated Code Detector",
+   "Attack-Surface / Exposed-Path Scanner",
+   "Binary Byte-Plot & Entropy Triage",
+   "Browser Extension Permission Risk Analyzer",
+   "CAPTCHA Hardening Lab",
+   "DNS Tunneling / Exfiltration Detector",
+   "Email Header Authentication Checker",
+   "Exploit / Attack-Payload Detector",
+   "Face Cloak",
+   "Face Deanonymization Risk Demo",
+   "JWT / Token Security Analyzer",
+   "Keystroke Biometric Auth-Risk Demo",
+   "LLM Prompt Injection Detection Playground",
+   "Log Anomaly Detector",
+   "Malicious Package Scanner",
+   "Network Intrusion Classifier",
+   "Password Strength & Breach Checker",
+   "Phishing Email Body Classifier",
+   "QR Phishing Detector"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/computer-vision": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"All areas\"",
+   "[searchbox] name=\"Search Computer Vision tools\"",
+   "[searchbox] placeholder=\"Search 15 Computer Vision tools\u2026\"",
+   "[button] name=\"Local Compute\"",
+   "[button] name=\"Client-Side\"",
+   "[button] name=\"ASL Fingerspelling Recognition\"",
+   "[button] name=\"See more\"",
+   "[button] name=\"Try it\"",
+   "[link] name=\"Source code for ASL Fingerspelling Recognition on GitHub\"",
+   "[button] name=\"Astrophotography Anomaly Detector\"",
+   "[link] name=\"Source code for Astrophotography Anomaly Detector on GitHub\"",
+   "[button] name=\"Crime Scene Reconstruction\"",
+   "[link] name=\"Source code for Crime Scene Reconstruction on GitHub\"",
+   "[button] name=\"Depth Parallax\"",
+   "[link] name=\"Source code for Depth Parallax on GitHub\"",
+   "[button] name=\"Face Liveness Detector\"",
+   "[link] name=\"Source code for Face Liveness Detector on GitHub\"",
+   "[button] name=\"Gait Pattern Comparison\"",
+   "[link] name=\"Source code for Gait Pattern Comparison on GitHub\"",
+   "[button] name=\"Movement Form Comparison\"",
+   "[link] name=\"Source code for Movement Form Comparison on GitHub\"",
+   "[button] name=\"Photo Library Visual Search\"",
+   "[link] name=\"Source code for Photo Library Visual Search on GitHub\"",
+   "[button] name=\"Plant Growth Quantification\"",
+   "[link] name=\"Source code for Plant Growth Quantification on GitHub\"",
+   "[button] name=\"Pose VJ Visuals\"",
+   "[link] name=\"Source code for Pose VJ Visuals on GitHub\"",
+   "[button] name=\"PPE Compliance Check\"",
+   "[link] name=\"Source code for PPE Compliance Check on GitHub\"",
+   "[button] name=\"Scan Descreen\"",
+   "[link] name=\"Source code for Scan Descreen on GitHub\"",
+   "[button] name=\"Text-Prompted Video Object Tracking\"",
+   "[link] name=\"Source code for Text-Prompted Video Object Tracking on GitHub\"",
+   "[button] name=\"Text-to-Image Generator\"",
+   "[link] name=\"Source code for Text-to-Image Generator on GitHub\"",
+   "[button] name=\"Wildlife Re-Identification\"",
+   "[link] name=\"Source code for Wildlife Re-Identification on GitHub\"",
+   "[link] name=\"The Toolkit\"",
+   "[link] name=\"Pipeline\"",
+   "[link] name=\"News\"",
+   "[link] name=\"Docs & API\"",
+   "[link] name=\"Changelog\"",
+   "[link] name=\"Contact\"",
+   "[link] name=\"ML Unified Platform\"",
+   "[link] name=\"EDA Explorer\"",
+   "[link] name=\"Vision Platform\"",
+   "[link] name=\"GitHub\"",
+   "[link] name=\"LinkedIn\"",
+   "[link] name=\"DockerHub\"",
+   "[link] name=\"Privacy & Terms\"",
+   "[link] name=\"Source (MIT)\"",
+   "[link] name=\"Backend (AGPL-3.0)\""
+  ],
+  "headings": [
+   "Computer Vision",
+   "ASL Fingerspelling Recognition",
+   "Astrophotography Anomaly Detector",
+   "Crime Scene Reconstruction",
+   "Depth Parallax",
+   "Face Liveness Detector",
+   "Gait Pattern Comparison",
+   "Movement Form Comparison",
+   "Photo Library Visual Search",
+   "Plant Growth Quantification",
+   "Pose VJ Visuals",
+   "PPE Compliance Check",
+   "Scan Descreen",
+   "Text-Prompted Video Object Tracking",
+   "Text-to-Image Generator",
+   "Wildlife Re-Identification"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/ml-pipeline": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"All areas\"",
+   "[searchbox] name=\"Search ML Pipeline tools\"",
+   "[searchbox] placeholder=\"Search 13 ML Pipeline tools\u2026\"",
+   "[button] name=\"AutoML Pipeline\"",
+   "[button] name=\"See more\"",
+   "[button] name=\"Try it\"",
+   "[link] name=\"Source code for AutoML Pipeline on GitHub\"",
+   "[button] name=\"Data Drift Detection\"",
+   "[link] name=\"Source code for Data Drift Detection on GitHub\"",
+   "[button] name=\"Data Preprocessing\"",
+   "[link] name=\"Source code for Data Preprocessing on GitHub\"",
+   "[button] name=\"Ensemble Methods\"",
+   "[link] name=\"Source code for Ensemble Methods on GitHub\"",
+   "[button] name=\"Exploratory Data Analysis\"",
+   "[link] name=\"Source code for Exploratory Data Analysis on GitHub\"",
+   "[button] name=\"Feature Engineering\"",
+   "[link] name=\"Source code for Feature Engineering on GitHub\"",
+   "[button] name=\"Feature Selection\"",
+   "[link] name=\"Source code for Feature Selection on GitHub\"",
+   "[button] name=\"Optuna Tuning\"",
+   "[link] name=\"Source code for Optuna Tuning on GitHub\"",
+   "[button] name=\"Periodicity Finder\"",
+   "[link] name=\"Source code for Periodicity Finder on GitHub\"",
+   "[button] name=\"Pipeline Builder\"",
+   "[link] name=\"Source code for Pipeline Builder on GitHub\"",
+   "[button] name=\"Pipeline Cinema\"",
+   "[link] name=\"Source code for Pipeline Cinema on GitHub\"",
+   "[button] name=\"Real-Time Analytics\"",
+   "[link] name=\"Source code for Real-Time Analytics on GitHub\"",
+   "[button] name=\"SHAP Explainability\"",
+   "[link] name=\"Source code for SHAP Explainability on GitHub\"",
+   "[link] name=\"The Toolkit\"",
+   "[link] name=\"Pipeline\"",
+   "[link] name=\"News\"",
+   "[link] name=\"Docs & API\"",
+   "[link] name=\"Changelog\"",
+   "[link] name=\"Contact\"",
+   "[link] name=\"ML Unified Platform\"",
+   "[link] name=\"EDA Explorer\"",
+   "[link] name=\"Vision Platform\"",
+   "[link] name=\"GitHub\"",
+   "[link] name=\"LinkedIn\"",
+   "[link] name=\"DockerHub\"",
+   "[link] name=\"Privacy & Terms\"",
+   "[link] name=\"Source (MIT)\"",
+   "[link] name=\"Backend (AGPL-3.0)\""
+  ],
+  "headings": [
+   "ML Pipeline",
+   "AutoML Pipeline",
+   "Data Drift Detection",
+   "Data Preprocessing",
+   "Ensemble Methods",
+   "Exploratory Data Analysis",
+   "Feature Engineering",
+   "Feature Selection",
+   "Optuna Tuning",
+   "Periodicity Finder",
+   "Pipeline Builder",
+   "Pipeline Cinema",
+   "Real-Time Analytics",
+   "SHAP Explainability"
+  ],
+  "testids": []
+ },
+ "https://ml-portfolio-rho.vercel.app/tools/language-documents": {
+  "controls": [
+   "[link] name=\"AIAIRaML\"",
+   "[link] name=\"Tools\"",
+   "[link] name=\"Platforms\"",
+   "[link] name=\"How it works\"",
+   "[link] name=\"Handbook\"",
+   "[link] name=\"Docs\"",
+   "[link] name=\"About\"",
+   "[button] name=\"Search the site\"",
+   "[link] name=\"Sign in\"",
+   "[button] name=\"Change color palette\"",
+   "[button] name=\"Toggle theme\"",
+   "[button] name=\"Toggle menu\"",
+   "[link] name=\"All areas\"",
+   "[searchbox] name=\"Search Language & Documents tools\"",
+   "[searchbox] placeholder=\"Search 4 Language & Documents tools\u2026\"",
+   "[button] name=\"LLM\"",
+   "[button] name=\"Contract/Invoice Reconciliation Assistant\"",
+   "[button] name=\"See more\"",
+   "[button] name=\"Try it\"",
+   "[link] name=\"Source code for Contract/Invoice Reconciliation Assistant on GitHub\"",
+   "[button] name=\"Document Intelligence\"",
+   "[link] name=\"Source code for Document Intelligence on GitHub\"",
+   "[button] name=\"Meeting Intelligence\"",
+   "[link] name=\"Source code for Meeting Intelligence on GitHub\"",
+   "[button] name=\"Multimodal RAG\"",
+   "[link] name=\"Source code for Multimodal RAG on GitHub\"",
+   "[link] name=\"The Toolkit\"",
+   "[link] name=\"Pipeline\"",
+   "[link] name=\"News\"",
+   "[link] name=\"Docs & API\"",
+   "[link] name=\"Changelog\"",
+   "[link] name=\"Contact\"",
+   "[link] name=\"ML Unified Platform\"",
+   "[link] name=\"EDA Explorer\"",
+   "[link] name=\"Vision Platform\"",
+   "[link] name=\"GitHub\"",
+   "[link] name=\"LinkedIn\"",
+   "[link] name=\"DockerHub\"",
+   "[link] name=\"Privacy & Terms\"",
+   "[link] name=\"Source (MIT)\"",
+   "[link] name=\"Backend (AGPL-3.0)\""
+  ],
+  "headings": [
+   "Language & Documents",
+   "Contract/Invoice Reconciliation Assistant",
+   "Document Intelligence",
+   "Meeting Intelligence",
+   "Multimodal RAG"
+  ],
+  "testids": []
+ },
+ "https://wram1708-ml-unified.hf.space/v1/openapi.json": {
+  "controls": [],
+  "headings": [],
+  "testids": []
+ },
+ "https://wram1708-ml-unified.hf.space/docs": {
+  "controls": [
+   "[link] name=\"/openapi.json\"",
+   "[link] name=\"default\"",
+   "[button] name=\"GET/Index\"",
+   "[link] name=\"/\"",
+   "[button] name=\"Copy path to clipboard\"",
+   "[button] name=\"get \u200b/\"",
+   "[button] name=\"GET/healthHealth\"",
+   "[link] name=\"/health\"",
+   "[button] name=\"get \u200b/health\"",
+   "[button] name=\"GET/system-infoSystem Info\"",
+   "[link] name=\"/system-info\"",
+   "[button] name=\"get \u200b/system-info\"",
+   "[button] name=\"GET/app-configApp Config\"",
+   "[link] name=\"/app-config\"",
+   "[button] name=\"get \u200b/app-config\"",
+   "[button] name=\"POST/predict/{model_id}Predict\"",
+   "[link] name=\"/predict/{model_id}\"",
+   "[button] name=\"post \u200b/predict\u200b/{model_id}\"",
+   "[button] name=\"POST/analyzeAnalyze Csv\"",
+   "[link] name=\"/analyze\"",
+   "[button] name=\"post \u200b/analyze\"",
+   "[button] name=\"POST/explainExplain Automl\"",
+   "[link] name=\"/explain\"",
+   "[button] name=\"post \u200b/explain\"",
+   "[button] name=\"GET/models/{model_id}/exportExport Model\"",
+   "[link] name=\"/models/{model_id}/export\"",
+   "[button] name=\"get \u200b/models\u200b/{model_id}\u200b/export\"",
+   "[button] name=\"POST/feature-engineerFeature Engineer\"",
+   "[link] name=\"/feature-engineer\"",
+   "[button] name=\"post \u200b/feature-engineer\"",
+   "[button] name=\"POST/optuna-explainOptuna Explain\"",
+   "[link] name=\"/optuna-explain\"",
+   "[button] name=\"post \u200b/optuna-explain\"",
+   "[button] name=\"POST/automl/preprocessAutoml Preprocess\"",
+   "[link] name=\"/automl/preprocess\"",
+   "[button] name=\"post \u200b/automl\u200b/preprocess\"",
+   "[button] name=\"POST/trainTrain Model\"",
+   "[link] name=\"/train\"",
+   "[button] name=\"post \u200b/train\"",
+   "[button] name=\"GET/model/{model_id}/downloadDownload Model\"",
+   "[link] name=\"/model/{model_id}/download\"",
+   "[button] name=\"get \u200b/model\u200b/{model_id}\u200b/download\"",
+   "[button] name=\"GET/metricsGet Metrics\"",
+   "[link] name=\"/metrics\"",
+   "[button] name=\"get \u200b/metrics\"",
+   "[button] name=\"GET/modelsList Models\"",
+   "[link] name=\"/models\"",
+   "[button] name=\"get \u200b/models\"",
+   "[button] name=\"GET/schemas/{model_id}Get Schema\"",
+   "[link] name=\"/schemas/{model_id}\"",
+   "[button] name=\"get \u200b/schemas\u200b/{model_id}\"",
+   "[button] name=\"Schemas\"",
+   "[button] name=\"AgentRequest\"",
+   "[button] name=\"Expand all\"",
+   "[button] name=\"AiCodeJudgeRequest\"",
+   "[button] name=\"AiCodeJudgeVerdict\"",
+   "[button] name=\"AiFillRequest\"",
+   "[button] name=\"AlertGroupIn\"",
+   "[button] name=\"AnalyzeRequest\"",
+   "[button] name=\"AnswerRequest\"",
+   "[button] name=\"AnswerResponse\"",
+   "[button] name=\"AssertRequest\"",
+   "[button] name=\"AssertResponse\"",
+   "[button] name=\"AssertSuggestion\"",
+   "[button] name=\"AttackSurfaceScanRequest\"",
+   "[button] name=\"AutoMLConfig\"",
+   "[button] name=\"AutoMLRequest\"",
+   "[button] name=\"Body_analyze_csv_analyze_post\""
+  ],
+  "headings": [
+   "ML API 0.1.0 OAS 3.1",
+   "default"
+  ],
+  "testids": []
+ },
+ "https://wram1708-ml-unified.hf.space/openapi.json": {
+  "controls": [],
+  "headings": [],
+  "testids": []
+ }
+}

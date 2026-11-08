@@ -170,6 +170,10 @@ def main() -> None:
     limit = int(sys.argv[sys.argv.index("--limit") + 1]) if "--limit" in sys.argv else 999
 
     snaps = json.load(open(CACHE, encoding="utf-8"))
+    # Page per case, read from the case text one by one (see Part 335). Where it
+    # holds ONE page, that page is used as-is — no word-overlap guessing.
+    pm_path = os.path.join(os.path.dirname(CACHE), "pagemap.json")
+    pagemap = json.load(open(pm_path, encoding="utf-8")) if os.path.exists(pm_path) else {}
     db_url, db_key = credentials()
     red = red_cases(db_url, db_key)
 
@@ -181,14 +185,15 @@ def main() -> None:
         if not os.path.exists(path):
             continue
         prior = spec_pages(open(path, encoding="utf-8").read())
-        cands = rank_pages(c, snaps, prior)
+        known = (pagemap.get(c["tc_id"]) or {}).get("url")
+        cands = [known] if known in snaps else rank_pages(c, snaps, prior)
         ctx, page = context_for(cands, snaps)
         work_items.append((c, path, ctx, page, cands))
     work_items = work_items[:limit]
 
     grounded = sum(1 for it in work_items if it[2])
     print(f"{len(work_items)} red cases — {grounded} matched a captured page, "
-          f"{len(work_items) - grounded} did not")
+          f"{len(work_items) - grounded} did not", flush=True)
     if dry:
         for c, _, ctx, _page, cands in work_items:
             short = [u.replace("https://ml-portfolio-rho.vercel.app", "")
@@ -216,7 +221,7 @@ def main() -> None:
             done["ok" if ok else "fail"] += 1
             record(db_url, db_key, c["tc_id"], ok, provider, "" if ok else "empty")
             print(f"  [{done['ok'] + done['fail']:>2}/{len(work_items)}] {c['tc_id']:14} "
-                  f"{'re-authored' if ok else 'FAILED'}  {page}")
+                  f"{'re-authored' if ok else 'FAILED'}  {page}", flush=True)
 
     t0 = time.time()
     with ThreadPoolExecutor(max_workers=WORKERS) as ex:

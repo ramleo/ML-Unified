@@ -1,0 +1,3270 @@
+{
+ "TC-DOC-001": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-DOC-002": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-DOC-003": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-DOC-004": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-DOC-005": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-DOC-006": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-DOC-008": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-DOC-009": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-DOC-010": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-DOC-011": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-DOC-012": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-DOC-013": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-DOC-015": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-DOC-016": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-DOC-017": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-DOC-018": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-DOC-067": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-DOC-068": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-DOC-069": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-DOC-071": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-DOC-075": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-001": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-002": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-003": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-004": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-005": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-011": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-012": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-013": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-015": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-016": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-017": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-018": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-019": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-020": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-021": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-022": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-023": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-024": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-025": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-026": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-027": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-028": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-029": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-030": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-031": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-032": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-035": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-036": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-037": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-038": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-039": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-040": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-041": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-042": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-043": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-044": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-045": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-048": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-049": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-054": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-056": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-057": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-EARLY-058": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-HIST-001": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-002": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-003": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-004": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-005": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-006": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-HIST-007": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-008": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-HIST-009": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-HIST-010": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-011": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-012": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-013": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-014": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-015": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-016": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-017": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-018": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-019": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-HIST-020": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-HIST-021": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-HIST-022": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-HIST-023": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-HIST-024": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-HIST-025": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-026": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-027": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-028": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-029": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-030": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-031": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-032": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-HIST-033": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-034": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/automl"
+ },
+ "TC-HIST-035": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-036": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-HIST-037": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-038": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-039": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-HIST-040": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-041": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-042": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-043": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-HIST-044": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-P1-042": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-043": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-044": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-045": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-046": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-047": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-048": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-049": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-050": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-051": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-052": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-053": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-054": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-055": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-056": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-057": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-058": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-059": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-060": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-061": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-062": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-063": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-064": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-065": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-066": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-067": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-068": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-069": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-070": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-071": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-073": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P1-084": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P1-085": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P1-086": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P1-088": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P10-004": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/document-intelligence"
+ },
+ "TC-P10-012": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag"
+ },
+ "TC-P10-013": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag"
+ },
+ "TC-P10-018": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag"
+ },
+ "TC-P10-032": {
+  "kind": "?",
+  "url": null
+ },
+ "TC-P10-038": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P10-039": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P10-040": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P10-041": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P10-042": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P10-043": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P10-044": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P10-055": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/adversarial-robustness-lab"
+ },
+ "TC-P10-056": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/adversarial-robustness-lab"
+ },
+ "TC-P10-059": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/face-cloak"
+ },
+ "TC-P10-061": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/face-cloak"
+ },
+ "TC-P10-070": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/adversarial-robustness-lab"
+ },
+ "TC-P10-071": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/adversarial-robustness-lab"
+ },
+ "TC-P10-073": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P10-074": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P10-075": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-P10-076": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P10-077": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/pipeline-builder"
+ },
+ "TC-P10-078": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P10-079": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag"
+ },
+ "TC-P10-080": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P10-081": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P10-082": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P10-083": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/preprocessing"
+ },
+ "TC-P10-084": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P10-085": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/pipeline-cinema"
+ },
+ "TC-P10-087": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P10-088": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/pipeline-builder"
+ },
+ "TC-P10-089": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/automl"
+ },
+ "TC-P10-090": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P10-091": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P10-094": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag"
+ },
+ "TC-P10-095": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag"
+ },
+ "TC-P10-096": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag"
+ },
+ "TC-P10-099": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag"
+ },
+ "TC-P11-005": {
+  "kind": "?",
+  "url": null
+ },
+ "TC-P11-010": {
+  "kind": "?",
+  "url": null
+ },
+ "TC-P11-013": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P11-026": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-033": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-034": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-037": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-040": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-041": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-046": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-047": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-048": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-049": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-050": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-051": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-052": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-053": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-054": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-055": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-056": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-057": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-058": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-059": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-064": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-065": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-066": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-067": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-070": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-071": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-072": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-074": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-075": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-076": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-077": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-080": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-083": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-084": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-085": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-086": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-087": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-088": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-089": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-095": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-097": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P11-098": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P12-010": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P12-011": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P12-012": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P12-013": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P12-014": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P12-015": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P12-016": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P12-017": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P12-018": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P12-019": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P12-020": {
+  "kind": "?",
+  "url": null
+ },
+ "TC-P12-021": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P12-033": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag"
+ },
+ "TC-P12-036": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag"
+ },
+ "TC-P12-037": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag"
+ },
+ "TC-P12-038": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag"
+ },
+ "TC-P12-042": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag"
+ },
+ "TC-P12-050": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P12-052": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag"
+ },
+ "TC-P12-053": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag"
+ },
+ "TC-P12-054": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag"
+ },
+ "TC-P12-055": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag"
+ },
+ "TC-P12-057": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/face-deanonymization-demo"
+ },
+ "TC-P12-058": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/video-keystroke-inference"
+ },
+ "TC-P12-066": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P12-069": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/ai-code-detector"
+ },
+ "TC-P12-072": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/crime-scene-reconstruction"
+ },
+ "TC-P12-077": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-prompted-video-tracking"
+ },
+ "TC-P12-084": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P12-085": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P12-090": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/captcha-hardening-lab"
+ },
+ "TC-P12-092": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/password-audit"
+ },
+ "TC-P12-093": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/multimodal-rag"
+ },
+ "TC-P13-001": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/password-audit"
+ },
+ "TC-P13-014": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/keystroke-biometric-auth-risk"
+ },
+ "TC-P13-025": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P13-026": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P13-027": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P13-029": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/about"
+ },
+ "TC-P13-032": {
+  "kind": "?",
+  "url": null
+ },
+ "TC-P13-033": {
+  "kind": "?",
+  "url": null
+ },
+ "TC-P13-037": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P13-038": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/security-trust"
+ },
+ "TC-P13-048": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/handbook"
+ },
+ "TC-P13-052": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/handbook"
+ },
+ "TC-P13-053": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/automl"
+ },
+ "TC-P13-066": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/handbook"
+ },
+ "TC-P14-005": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/handbook"
+ },
+ "TC-P14-007": {
+  "kind": "?",
+  "url": null
+ },
+ "TC-P14-014": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/handbook"
+ },
+ "TC-P14-018": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/pipeline-cinema"
+ },
+ "TC-P14-020": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/realtime-analytics"
+ },
+ "TC-P14-030": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/handbook"
+ },
+ "TC-P14-035": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/contract-invoice-reconciliation"
+ },
+ "TC-P14-049": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P14-053": {
+  "kind": "?",
+  "url": null
+ },
+ "TC-P14-055": {
+  "kind": "?",
+  "url": null
+ },
+ "TC-P15-006": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P15-017": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P15-040": {
+  "kind": "T",
+  "url": null
+ },
+ "TC-P15-042": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P16-012": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P16-019": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/qa/run"
+ },
+ "TC-P16-024": {
+  "kind": "?",
+  "url": null
+ },
+ "TC-P16-025": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P16-036": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/meeting-intelligence"
+ },
+ "TC-P17-013": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/qa/run"
+ },
+ "TC-P17-014": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/qa/run"
+ },
+ "TC-P17-015": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/qa/run"
+ },
+ "TC-P17-019": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P17-022": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/qa/run"
+ },
+ "TC-P17-040": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/qa/author"
+ },
+ "TC-P18-002": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P18-013": {
+  "kind": "?",
+  "url": null
+ },
+ "TC-P18-023": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P19-015": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/eval"
+ },
+ "TC-P19-017": {
+  "kind": "?",
+  "url": null
+ },
+ "TC-P19-020": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/portfolio/chatbots"
+ },
+ "TC-P19-022": {
+  "kind": "I",
+  "url": null
+ },
+ "TC-P19-024": {
+  "kind": "?",
+  "url": null
+ },
+ "TC-P2-001": {
+  "kind": "NOPAGE",
+  "url": null
+ },
+ "TC-P2-022": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-023": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-024": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-028": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-029": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-030": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-037": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-039": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-040": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-047": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-048": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-053": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-054": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-055": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-056": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-057": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P2-058": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-059": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-060": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-061": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P2-062": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P2-066": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-067": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P2-068": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P2-069": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-070": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P2-071": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P2-072": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P2-073": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P2-074": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P2-075": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P2-098": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-099": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-100": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-101": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-102": {
+  "kind": "NOPAGE",
+  "url": null
+ },
+ "TC-P2-103": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-104": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-105": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-106": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-107": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-108": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-113": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-114": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-116": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-119": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-120": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-121": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-122": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-124": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-126": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-127": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-128": {
+  "kind": "NOPAGE",
+  "url": null
+ },
+ "TC-P2-130": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P2-131": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P2-132": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P2-133": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P2-134": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P2-135": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P2-136": {
+  "kind": "M",
+  "url": "https://ml-portfolio-rho.vercel.app/about"
+ },
+ "TC-P2-137": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P2-138": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P2-139": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P2-140": {
+  "kind": "M",
+  "url": "https://ml-portfolio-rho.vercel.app/about"
+ },
+ "TC-P2-141": {
+  "kind": "M",
+  "url": "https://ml-portfolio-rho.vercel.app/about"
+ },
+ "TC-P2-142": {
+  "kind": "M",
+  "url": "https://ml-portfolio-rho.vercel.app/about"
+ },
+ "TC-P2-143": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P2-144": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P2-145": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P2-146": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P2-147": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P2-148": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P2-149": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P2-150": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P2-151": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P2-154": {
+  "kind": "NOPAGE",
+  "url": null
+ },
+ "TC-P2-155": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P2-156": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P2-157": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P3-001": {
+  "kind": "M",
+  "url": "https://ml-portfolio-rho.vercel.app/about"
+ },
+ "TC-P3-002": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-003": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-004": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-005": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-006": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P3-007": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P3-008": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-009": {
+  "kind": "M",
+  "url": "https://ml-portfolio-rho.vercel.app/about"
+ },
+ "TC-P3-010": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-011": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-012": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-013": {
+  "kind": "M",
+  "url": "https://ml-portfolio-rho.vercel.app/about"
+ },
+ "TC-P3-014": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-015": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-016": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-017": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-018": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P3-019": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-020": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-021": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-023": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-024": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-025": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-028": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-029": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-030": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-031": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-032": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P3-033": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-038": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-040": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-042": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-043": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-044": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-045": {
+  "kind": "M",
+  "url": "https://ml-portfolio-rho.vercel.app/about"
+ },
+ "TC-P3-046": {
+  "kind": "M",
+  "url": "https://ml-portfolio-rho.vercel.app/about"
+ },
+ "TC-P3-048": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-049": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-050": {
+  "kind": "M",
+  "url": "https://ml-portfolio-rho.vercel.app/about"
+ },
+ "TC-P3-051": {
+  "kind": "M",
+  "url": "https://ml-portfolio-rho.vercel.app/about"
+ },
+ "TC-P3-052": {
+  "kind": "M",
+  "url": "https://ml-portfolio-rho.vercel.app/about"
+ },
+ "TC-P3-055": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-056": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-057": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-058": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-059": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-060": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-061": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-062": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-063": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-064": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P3-065": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-066": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-067": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-071": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-072": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-073": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-074": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-075": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-076": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-077": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-078": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-080": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-081": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-083": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-084": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-085": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-086": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P3-087": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P3-090": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P3-092": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P3-093": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-094": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-095": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-096": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-097": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-102": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-103": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-104": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-105": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-106": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-108": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-109": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-110": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-112": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-113": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-115": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-116": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-118": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-119": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-124": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P3-126": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-127": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-128": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-129": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-130": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-132": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-133": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-134": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-136": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-138": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P3-139": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-140": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-141": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-142": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-143": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-144": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P3-145": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-001": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-002": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-003": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-004": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-005": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-006": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-007": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-008": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-009": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-010": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-012": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-015": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-016": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-017": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-018": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-019": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-020": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-021": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-022": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-026": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-027": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-028": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-029": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-030": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-031": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-032": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-033": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-034": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-035": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-036": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-037": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-038": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-039": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-040": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-041": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-042": {
+  "kind": "NOPAGE",
+  "url": null
+ },
+ "TC-P4-044": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-045": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P4-053": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-054": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-056": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-057": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-058": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-059": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-060": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-061": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-062": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-063": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-064": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-071": {
+  "kind": "NOPAGE",
+  "url": null
+ },
+ "TC-P4-078": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-089": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P4-090": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-P5-005": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-006": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-009": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-010": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-013": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-014": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-015": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-016": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-017": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-018": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-019": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-021": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-026": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-027": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-028": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-031": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-032": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P5-034": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-035": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-036": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-037": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-038": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-039": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-040": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-041": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-042": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-044": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-046": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-050": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-051": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-055": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-056": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-057": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-060": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-061": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-063": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P5-065": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-067": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-068": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-069": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P5-070": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P5-071": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P5-072": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ },
+ "TC-P6-004": {
+  "kind": "NOPAGE",
+  "url": null
+ },
+ "TC-P6-011": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P6-012": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P6-013": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P6-014": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P6-015": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P6-016": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P6-019": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P6-020": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P6-021": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P6-022": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P6-024": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P6-025": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P6-026": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P6-028": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P6-029": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P6-030": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P6-031": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/preprocessing"
+ },
+ "TC-P6-032": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/preprocessing"
+ },
+ "TC-P6-033": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/preprocessing"
+ },
+ "TC-P6-034": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/preprocessing"
+ },
+ "TC-P6-035": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/preprocessing"
+ },
+ "TC-P6-036": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/preprocessing"
+ },
+ "TC-P6-037": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/preprocessing"
+ },
+ "TC-P6-038": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P6-039": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/preprocessing"
+ },
+ "TC-P6-040": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-P6-041": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-P6-042": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/preprocessing"
+ },
+ "TC-P6-045": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-P6-046": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-P6-049": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-P6-050": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-P6-051": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-P6-052": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-P6-053": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P6-054": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-P6-057": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-P6-058": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-P6-059": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-P6-060": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-P6-061": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-P6-062": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-P6-063": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-P6-064": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-P7-001": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P7-002": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P7-005": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P7-007": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P7-011": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P7-012": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P7-013": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P7-014": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P7-026": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P7-028": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P7-029": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P7-031": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P7-033": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P7-034": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P7-036": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P7-037": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P7-040": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P7-041": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P7-042": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P7-043": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P7-045": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P7-046": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P7-047": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P7-051": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P7-052": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P8-016": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P8-017": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P8-018": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P8-019": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P8-020": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P8-021": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P8-022": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P8-023": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P8-024": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P8-025": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P8-030": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-P8-031": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P8-033": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/drift"
+ },
+ "TC-P8-034": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P8-035": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P8-036": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P8-037": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P8-038": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P8-039": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/pipeline-builder"
+ },
+ "TC-P8-040": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-P8-041": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-P8-044": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/ensemble"
+ },
+ "TC-P8-045": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/ensemble"
+ },
+ "TC-P8-046": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/ensemble"
+ },
+ "TC-P8-047": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/ensemble"
+ },
+ "TC-P8-059": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P8-060": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P8-061": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P8-062": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P8-063": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P8-067": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P8-068": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P8-069": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P8-070": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P8-072": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/pipeline-builder"
+ },
+ "TC-P8-073": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/pipeline-builder"
+ },
+ "TC-P8-074": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-P8-075": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-P8-084": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/shap"
+ },
+ "TC-P8-085": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/shap"
+ },
+ "TC-P8-086": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P8-087": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P8-089": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P8-090": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-P9-002": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-004": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-005": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-007": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/realtime-analytics"
+ },
+ "TC-P9-009": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P9-011": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-012": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-013": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-014": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-015": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P9-016": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-018": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-019": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-020": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-021": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-023": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-024": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-026": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-027": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-028": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-030": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-031": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-032": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-033": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-034": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-035": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-036": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-037": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-040": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-043": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-044": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-052": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/text-to-sql"
+ },
+ "TC-P9-057": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/realtime-analytics"
+ },
+ "TC-P9-058": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/realtime-analytics"
+ },
+ "TC-P9-059": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/realtime-analytics"
+ },
+ "TC-P9-063": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/realtime-analytics"
+ },
+ "TC-P9-065": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/realtime-analytics"
+ },
+ "TC-P9-066": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/realtime-analytics"
+ },
+ "TC-P9-068": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/realtime-analytics"
+ },
+ "TC-P9-069": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/realtime-analytics"
+ },
+ "TC-P9-070": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/realtime-analytics"
+ },
+ "TC-P9-073": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/realtime-analytics"
+ },
+ "TC-P9-074": {
+  "kind": "ANY",
+  "url": null
+ },
+ "TC-P9-079": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P9-081": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P9-089": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-P9-090": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-P9-094": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/realtime-analytics"
+ },
+ "TC-P9-100": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-P9-101": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/document-intelligence"
+ },
+ "TC-P9-102": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/document-intelligence"
+ },
+ "TC-P9-108": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/document-intelligence"
+ },
+ "TC-P9-114": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/document-intelligence"
+ },
+ "TC-P9-119": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/document-intelligence"
+ },
+ "TC-P9-120": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/document-intelligence"
+ },
+ "TC-P9-126": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/document-intelligence"
+ },
+ "TC-PEND-001": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-PEND-002": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-PEND-003": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-PEND-004": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-PEND-005": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-PEND-006": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-PEND-007": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-engineering"
+ },
+ "TC-PEND-008": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-PEND-009": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-PEND-010": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-PEND-011": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-PEND-012": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/optuna"
+ },
+ "TC-PEND-013": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/shap"
+ },
+ "TC-PEND-014": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/ensemble"
+ },
+ "TC-PEND-015": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-PEND-016": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-PEND-017": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-PEND-018": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-PEND-019": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-PEND-020": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-PEND-022": {
+  "kind": "FEW",
+  "url": null
+ },
+ "TC-PEND-023": {
+  "kind": "NOPAGE",
+  "url": null
+ },
+ "TC-PEND-024": {
+  "kind": "NOPAGE",
+  "url": null
+ },
+ "TC-PEND-025": {
+  "kind": "NOPAGE",
+  "url": null
+ },
+ "TC-PEND-026": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=vision"
+ },
+ "TC-BUG-001": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-BUG-002": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-BUG-003": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-BUG-004": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-BUG-005": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-BUG-006": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-BUG-007": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-BUG-008": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-BUG-009": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-BUG-010": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-BUG-011": {
+  "kind": "I",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=eda"
+ },
+ "TC-REC-001": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-REC-002": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-REC-003": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-REC-004": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-REC-005": {
+  "kind": "T",
+  "url": "https://wram1708-ml-unified.hf.space/?mode=ml"
+ },
+ "TC-REC-006": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/automl"
+ },
+ "TC-REC-007": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/automl"
+ },
+ "TC-REC-008": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/automl"
+ },
+ "TC-REC-009": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/automl"
+ },
+ "TC-REC-010": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/automl"
+ },
+ "TC-REC-011": {
+  "kind": "I",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/automl"
+ },
+ "TC-REC-012": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/automl"
+ },
+ "TC-REC-014": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/automl"
+ },
+ "TC-REC-016": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/automl"
+ },
+ "TC-REC-020": {
+  "kind": "MULTI",
+  "url": null
+ },
+ "TC-REC-021": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/feature-selection"
+ },
+ "TC-REC-022": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app/tools/preprocessing"
+ },
+ "TC-REC-023": {
+  "kind": "T",
+  "url": "https://ml-portfolio-rho.vercel.app"
+ }
+}
