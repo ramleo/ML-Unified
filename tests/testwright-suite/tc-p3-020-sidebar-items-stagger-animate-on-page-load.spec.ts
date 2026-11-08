@@ -3,38 +3,51 @@ import { test, expect } from '@playwright/test';
 const BASE_URL = 'https://wram1708-ml-unified.hf.space/?mode=ml';
 
 test.describe('tc-p3-020-sidebar-items-stagger-animate-on-page-load', () => {
-  test('Sidebar items animate with staggered timing', async ({ page }) => {
+  test('Sidebar items stagger-animate on page load', async ({ page }) => {
     await page.goto(BASE_URL);
+    await page.waitForLoadState('load');
 
-    // Dismiss potential first‑load overlay if present
-    const dismiss = page.getByRole('button', { name: /skip|got it|no thanks|accept all|dismiss|get started/i });
-    if (await dismiss.isVisible().catch(() => false)) {
-      await dismiss.click();
-    }
+    // Ensure there are sidebar elements with the expected animation class.
+    const sbCount = await page.evaluate(() => document.querySelectorAll('.sb-anim').length);
+    expect(sbCount).toBeGreaterThan(0);
 
-    // Locator for sidebar items that have the animation class
-    const sidebarItems = page.locator('.sb-anim'); // uses the specific animation class from the page
+    // Record the timestamps when each .sb-anim element becomes visible.
+    const timestamps = await page.evaluate(() => {
+      const elements = Array.from(document.querySelectorAll('.sb-anim'));
+      const times: number[] = [];
 
-    // Ensure at least one item is present
-    await expect(sidebarItems.first()).toBeVisible();
+      return new Promise<number[]>((resolve) => {
+        let pending = elements.length;
 
-    const itemCount = await sidebarItems.count();
-    const timestamps: number[] = [];
+        elements.forEach((el) => {
+          const checkVisibility = () => {
+            const style = getComputedStyle(el);
+            const rect = el.getBoundingClientRect();
+            const visible =
+              style.visibility !== 'hidden' &&
+              parseFloat(style.opacity) > 0 &&
+              rect.width > 0 &&
+              rect.height > 0;
 
-    for (let i = 0; i < itemCount; i++) {
-      const item = sidebarItems.nth(i);
-      // Wait for the individual item to become visible (staggered animation)
-      await expect(item).toBeVisible();
+            if (visible) {
+              times.push(performance.now());
+              pending--;
+              if (pending === 0) {
+                resolve(times);
+              }
+            } else {
+              requestAnimationFrame(checkVisibility);
+            }
+          };
+          requestAnimationFrame(checkVisibility);
+        });
+      });
+    });
 
-      // Record the high‑resolution timestamp at the moment the item is visible
-      const now = await page.evaluate(() => performance.now());
-      timestamps.push(now);
-    }
-
-    // Verify that each successive item appears at least ~40 ms after the previous one
+    // Verify that each stagger interval exceeds 40 ms.
     for (let i = 1; i < timestamps.length; i++) {
-      const diff = timestamps[i] - timestamps[i - 1];
-      expect(diff).toBeGreaterThan(40);
+      const interval = timestamps[i] - timestamps[i - 1];
+      expect(interval).toBeGreaterThan(40);
     }
   });
 });

@@ -34,6 +34,7 @@ from testops_sync import credentials, headers
 from testops_author import author, record, PORTFOLIO
 from testops_pilot import slug, SUITE
 from testops_snapshot import CACHE
+from testops_lint import violations
 
 MAX_CONTEXT = 4200          # chars; keeps the call under Groq's 8,000 TPM ceiling
 WORKERS = 2
@@ -134,7 +135,7 @@ def page_block(url: str, s: dict, budget: int) -> str:
     block = f"=== {url} ===\n"
     if s["headings"]:
         block += "HEADINGS: " + " | ".join(s["headings"][:12]) + "\n"
-    block += "CONTROLS:\n" + "\n".join(s["controls"][:40])
+    block += "CONTROLS (#id = use locator('#id'); HIDDEN = not on screen until you open what contains it):\n" + "\n".join(s["controls"][:70])
     if s["testids"]:
         block += "\nTEST IDS: " + ", ".join(s["testids"][:20])
     return block[:budget] + "\n"
@@ -176,6 +177,10 @@ def main() -> None:
     pagemap = json.load(open(pm_path, encoding="utf-8")) if os.path.exists(pm_path) else {}
     db_url, db_key = credentials()
     red = red_cases(db_url, db_key)
+    if "--ids" in sys.argv:                  # re-author just these, in this order
+        want = sys.argv[sys.argv.index("--ids") + 1].split(",")
+        red = set(want)
+        order = {t: i for i, t in enumerate(want)}
 
     work_items = []
     for c in reg.load():
@@ -189,6 +194,8 @@ def main() -> None:
         cands = [known] if known in snaps else rank_pages(c, snaps, prior)
         ctx, page = context_for(cands, snaps)
         work_items.append((c, path, ctx, page, cands))
+    if "--ids" in sys.argv:
+        work_items.sort(key=lambda it: order[it[0]["tc_id"]])
     work_items = work_items[:limit]
 
     grounded = sum(1 for it in work_items if it[2])
@@ -213,6 +220,18 @@ def main() -> None:
             return
         code, provider = author(c, token, page_context=ctx,
                                 base_url=page or PORTFOLIO)
+        bad = violations(code, snaps[page]) if code and page in snaps else []
+        if bad:                              # one retry, told exactly what was wrong
+            with lock:
+                print(f"  {c['tc_id']:14} lint: {'; '.join(bad)[:200]}", flush=True)
+            fix = ctx + ("\nYOUR PREVIOUS ATTEMPT WAS REJECTED:\n- " + "\n- ".join(bad)
+                         + "\nFix every point using only the list above.\n")
+            code2, provider2 = author(c, token, page_context=fix,
+                                      base_url=page or PORTFOLIO)
+            if code2 and not violations(code2, snaps[page]):
+                code, provider = code2, provider2
+            else:
+                code = ""                    # still invented — do not overwrite the old spec
         if code and "test(" in code:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(code)

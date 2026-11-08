@@ -75,8 +75,14 @@ GRAB = """() => {
   for (const e of document.querySelectorAll(sel)) {
     const r = roleOf(e), n = name(e);
     const ph = (e.getAttribute('placeholder') || '').trim();
-    if (n) out.push('[' + r + '] name=' + JSON.stringify(n));
-    if (ph) out.push('[' + r + '] placeholder=' + JSON.stringify(ph));
+    // A control can be in the DOM yet not on screen (collapsed sidebar group,
+    // closed picker). Playwright's role locators only match visible nodes, so
+    // the author must be told which ones need something opened first.
+    const hid = e.checkVisibility && !e.checkVisibility({ visibilityProperty: true })
+      ? ' HIDDEN' : '';
+    const id = e.id ? ' #' + e.id : '';
+    if (n) out.push('[' + r + '] name=' + JSON.stringify(n) + id + hid);
+    if (ph) out.push('[' + r + '] placeholder=' + JSON.stringify(ph) + id + hid);
   }
   const heads = [...document.querySelectorAll('h1,h2,h3')]
     .map((h) => (h.textContent || '').replace(/\\s+/g, ' ').trim())
