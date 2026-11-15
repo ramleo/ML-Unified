@@ -1,32 +1,33 @@
 import { test, expect } from '@playwright/test';
 
+// Grounded on the live homepage (2026-11-15). The "News" section (<section id="news">)
+// has a "📄 Research Papers" tab that fetches arXiv papers client-side with NO API
+// key, rendering each as an <a href*="arxiv.org"> card. A successful load shows those
+// links and no error/alert element; a failure would show a gate/error state instead
+// of papers.
 const BASE_URL = 'https://ml-portfolio-rho.vercel.app';
 
 test.describe('tc-p2-138-airaml-website-arxiv-papers-tab-loads-without-api-key', () => {
   test('Research Papers tab loads arXiv papers without API key', async ({ page }) => {
-    // Navigate to the main page
     await page.goto(BASE_URL);
 
-    // Scroll to the News section using the "News" link (stable anchor)
-    const newsLink = page.getByRole('link', { name: 'News' });
-    await newsLink.scrollIntoViewIfNeeded();
+    // Scroll the News section into view and open the Research Papers tab.
+    await page.getByRole('link', { name: 'News' }).scrollIntoViewIfNeeded();
+    const tab = page.getByRole('button', { name: '📄 Research Papers', exact: true });
+    await expect(tab).toBeVisible();
+    await tab.click();
 
-    // Click the "Research Papers" tab button (exact match to avoid ambiguity)
-    const researchPapersButton = page.getByRole('button', { name: '📄 Research Papers', exact: true });
-    await expect(researchPapersButton).toBeVisible();
-    await researchPapersButton.click();
+    // Success contract: the tab renders arXiv papers with no API key. Rendered arXiv
+    // links are the proof — if a key were required or the fetch errored, there would
+    // be no papers, only a gate/error state.
+    const papers = page.locator('#news a[href*="arxiv.org"]');
+    await expect(papers.first()).toBeVisible({ timeout: 15000 });
+    expect(await papers.count()).toBeGreaterThan(0);
 
-    // Verify that content appears after clicking the tab.
-    // Generic check: a heading is visible (ensures the tab switched content)
-    await expect(page.getByRole('heading').first()).toBeVisible();
-
-    // Generic check: at least one link (e.g., a paper title) is visible
-    await expect(page.getByRole('link').first()).toBeVisible();
-
-    // Ensure no error message is displayed (looking for common error text)
-    const errorMessage = page.getByText(/error|api key/i);
-    if (await errorMessage.isVisible().catch(() => false)) {
-      throw new Error('Unexpected error message displayed after loading Research Papers tab');
-    }
+    // NOTE: the earlier whole-page getByText(/error|api key/i) guard was removed. It
+    // scanned the ENTIRE page and false-failed on live arXiv ABSTRACTS containing the
+    // word "error" (ubiquitous in ML papers) — the "guard matches the wrong element"
+    // anti-pattern. Papers-present is the correct, non-flaky signal that the tab
+    // loaded without a key or error.
   });
 });

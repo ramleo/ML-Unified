@@ -1,25 +1,24 @@
 import { test, expect } from '@playwright/test';
 
+// Grounded on the live ?mode=ml page (2026-11-15). The theme options live in a
+// dropdown that is HIDDEN until the picker is opened — the old spec clicked the
+// Midnight button while it was hidden, which the action-gate rejected. Open the
+// picker first (#themePickerLabel sits inside the toggle button), then pick
+// Midnight. setThemeChoice('midnight') sets data-theme and --bg:#000000.
 const BASE_URL = 'https://wram1708-ml-unified.hf.space/?mode=ml';
 
-test.describe('tc-p3-129-midnight-theme-applies-black-background', () => {
-  test('Midnight theme sets body background to pure black', async ({ page }) => {
-    // Navigate to the application
-    await page.goto(BASE_URL);
+test('Midnight theme sets data-theme and a pure-black body background', async ({ page }) => {
+  await page.goto(BASE_URL);
 
-    // Dismiss possible overlay if present (guarded)
-    const dismissButton = page.getByRole('button', { name: /skip|got it|no thanks|accept all|dismiss|get started/i });
-    if (await dismissButton.isVisible().catch(() => false)) {
-      await dismissButton.click();
-    }
+  // Open the theme picker (the options are hidden until it opens).
+  await page.locator('button:has(#themePickerLabel)').click();
 
-    // Ensure the Midnight theme button is visible and click it
-    const midnightButton = page.getByRole('button', { name: 'Midnight', exact: true });
-    await expect(midnightButton).toBeVisible();
-    await midnightButton.click();
+  const midnight = page.locator('.theme-option[data-theme-opt="midnight"]');
+  await expect(midnight).toBeVisible();
+  await midnight.click();
 
-    // Verify the body background color is pure black
-    const bgColor = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
-    expect(bgColor).toBe('rgb(0, 0, 0)');
-  });
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'midnight');
+
+  const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  expect(bg).toBe('rgb(0, 0, 0)');
 });

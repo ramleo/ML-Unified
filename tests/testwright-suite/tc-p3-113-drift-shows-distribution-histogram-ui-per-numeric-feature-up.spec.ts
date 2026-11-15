@@ -1,28 +1,43 @@
 import { test, expect } from '@playwright/test';
 
+// Grounded on the live ?mode=ml page (2026-11-15). Each numeric feature card
+// renders a .drift-hist with 12 .drift-hist-bin bars and a .drift-hist-legend
+// ("Expected" / "Actual"). Verified live with a 40-row cereals CSV (4 numeric
+// features × 12 bins = 48 bins total).
 const BASE_URL = 'https://wram1708-ml-unified.hf.space/?mode=ml';
 
-test.describe('tc-p3-113-drift-shows-distribution-histogram-ui-per-numeric-feature-up', () => {
-  test('Drift shows distribution histogram UI per numeric feature (upload mode)', async ({ page }) => {
-    await page.goto(BASE_URL);
+function cerealsCSV(): string {
+  const cols = ['mfr','type','calories','protein','fat','sodium','fiber','carbo','sugars','potass','vitamins','shelf','weight','cups'];
+  const mfr = ['A','G','K','N','P','Q','R'], typ = ['C','H'];
+  const rows = [cols.join(',')];
+  for (let i = 0; i < 40; i++) {
+    rows.push([mfr[i % 7], typ[i % 2], 50 + (i * 10) % 120, 1 + i % 6, i % 5,
+      (i * 17) % 320, (i % 14).toFixed(1), (i * 3) % 23, (i * 2) % 15,
+      (i * 23) % 330, [0, 25, 100][i % 3], 1 + i % 3,
+      (1 + (i % 3) * 0.25).toFixed(2), (0.5 + (i % 4) * 0.25).toFixed(2)].join(','));
+  }
+  return rows.join('\n') + '\n';
+}
 
-    // Dismiss possible first‑load overlay if it appears
-    const dismissOverlay = page.getByRole('button', { name: /skip|got it|no thanks|accept all|dismiss|get started/i });
-    if (await dismissOverlay.isVisible().catch(() => false)) {
-      await dismissOverlay.click();
-    }
+test('Drift upload shows a 12-bin distribution histogram with an Expected/Actual legend', async ({ page }) => {
+  test.setTimeout(90000);
+  await page.goto(BASE_URL);
 
-    // Open the Drift tab
-    const driftTab = page.getByRole('button', { name: 'Drift' });
-    await expect(driftTab).toBeVisible();
-    await driftTab.click();
+  await page.getByRole('button', { name: /80 Cereals/ }).click();
+  await page.getByRole('button', { name: 'Drift' }).click();
+  await page.getByRole('button', { name: /Upload dataset/ }).click();
 
-    // Verify the histogram container is present
-    const histogram = page.locator('[class*="drift-hist"]').first();
-    await expect(histogram).toBeVisible();
-
-    // Verify that the histogram contains bar elements (generic check for any child elements)
-    const barElements = histogram.locator('[class*="bar"]');
-    await expect(barElements.first()).toBeVisible();
+  await page.locator('#driftFileInput').setInputFiles({
+    name: 'cereals.csv', mimeType: 'text/csv', buffer: Buffer.from(cerealsCSV()),
   });
+
+  await expect(page.locator('#driftBody')).toContainText(/OVERALL DRIFT/i, { timeout: 30000 });
+
+  const hist = page.locator('.drift-hist').first();
+  await expect(hist).toBeVisible();
+  await expect(hist.locator('.drift-hist-bin')).toHaveCount(12);
+
+  const legend = page.locator('.drift-hist-legend').first();
+  await expect(legend).toContainText('Expected');
+  await expect(legend).toContainText('Actual');
 });

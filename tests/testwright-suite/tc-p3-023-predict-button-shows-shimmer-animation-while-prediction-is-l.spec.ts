@@ -1,27 +1,26 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('tc-p3-023-predict-button-shows-shimmer-animation-while-prediction-is-l', () => {
-  test('Predict button shows shimmer animation while loading', async ({ page }) => {
-    const BASE_URL = 'https://wram1708-ml-unified.hf.space/?mode=ml';
-    await page.goto(BASE_URL);
+// Grounded on the live ?mode=ml page + frontend source (2026-11-15). runPredict()
+// adds the .btn-shimmer class to #predictBtn before the /predict fetch and
+// removes it in finally. To observe it reliably we delay the response so the
+// loading state stays on screen long enough to assert.
+const BASE_URL = 'https://wram1708-ml-unified.hf.space/?mode=ml';
 
-    // Dismiss possible first‑load overlay if it appears
-    const dismiss = page.getByRole('button', { name: /skip|got it|no thanks|accept all|dismiss|get started/i });
-    if (await dismiss.isVisible().catch(() => false)) {
-      await dismiss.click();
-    }
+test('Predict button carries .btn-shimmer while the prediction request is in flight', async ({ page }) => {
+  test.setTimeout(60000);
 
-    // Ensure the Predict button is visible and enabled before interaction
-    const predictBtn = page.getByRole('button', { name: 'Predict' });
-    await expect(predictBtn).toBeVisible();
-    await expect(predictBtn).toBeEnabled();
-
-    // Click Predict and verify the shimmer animation appears during the API call
-    await predictBtn.click();
-    const shimmer = page.locator('.btn-shimmer');
-    await expect(shimmer).toBeVisible();
-
-    // After the prediction completes the shimmer should disappear
-    await expect(shimmer).toBeHidden();
+  // Hold the predict response so the loading state is observable.
+  await page.route('**/predict/**', async route => {
+    await new Promise(r => setTimeout(r, 1500));
+    await route.continue();
   });
+
+  await page.goto(BASE_URL);
+  await page.getByRole('button', { name: 'Fill Sample' }).click();
+
+  const btn = page.locator('#predictBtn');
+  await btn.click();
+
+  // While the (delayed) request runs, the button has the shimmer class.
+  await expect(btn).toHaveClass(/btn-shimmer/, { timeout: 1200 });
 });

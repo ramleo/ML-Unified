@@ -1,30 +1,25 @@
 import { test, expect } from '@playwright/test';
 
+// Grounded on the live ?mode=ml page (2026-11-15). After a prediction the
+// Feature Impact (SHAP) panel renders per-feature rows; each feature name is a
+// .shap-feat-name inside .shap-panel. The labels must be clean feature names —
+// never the raw ColumnTransformer prefixes num__ / cat__.
 const BASE_URL = 'https://wram1708-ml-unified.hf.space/?mode=ml';
 
-test.describe('tc-early-011-key-factors-bar-chart-displays-feature-labels-without-num', () => {
-  test('Key Factors bar labels are clean after prediction', async ({ page }) => {
-    // Navigate to the main page
-    await page.goto(BASE_URL);
+test('Feature Impact bar labels are clean — no num__ / cat__ prefix', async ({ page }) => {
+  test.setTimeout(60000);
+  await page.goto(BASE_URL);
 
-    // Click a predictor button (using exact accessible name for resilience)
-    const predictorButton = page.getByRole('button', { name: 'Diabetes Risk Predictor Random Forest', exact: true });
-    await expect(predictorButton).toBeVisible();
-    await predictorButton.click();
+  await page.getByRole('button', { name: 'Fill Sample' }).click();
+  await page.locator('#predictBtn').click();
 
-    // Click the Predict button to submit a prediction
-    const predictBtn = page.getByRole('button', { name: 'Predict', exact: true });
-    await expect(predictBtn).toBeVisible();
-    await predictBtn.click();
+  // SHAP is fetched asynchronously after the prediction resolves.
+  const names = page.locator('.shap-panel .shap-feat-name');
+  await expect(names.first()).toBeVisible({ timeout: 40000 });
 
-    // Wait for the key‑factors bar chart to appear (identified by its container)
-    const barLabels = page.locator('#fiBars span');
-    await expect(barLabels.first()).toBeVisible();
-
-    // Collect all label texts and assert they do not contain the unwanted prefixes
-    const labels = await barLabels.allTextContents();
-    for (const label of labels) {
-      expect(label).not.toMatch(/^(num|cat)[\s_]/i);
-    }
-  });
+  const labels = await names.allTextContents();
+  expect(labels.length).toBeGreaterThan(0);
+  for (const label of labels) {
+    expect(label).not.toMatch(/\b(num__|cat__)/);
+  }
 });
