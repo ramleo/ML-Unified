@@ -31,6 +31,15 @@ import traceback
 _SITE_URL = os.environ.get("SITE_URL", "https://ml-portfolio-rho.vercel.app").rstrip("/")
 _last_store_send = 0.0
 
+# Exceptions that mean "the client hung up mid-request", not "the app failed".
+# Starlette raises ClientDisconnect from request.body()/.stream() when the peer
+# closes the connection before the body finishes arriving — routine on the
+# streamed /mcp/ endpoint (an MCP client times out, a probe drops) and raised
+# INSIDE the MCP SDK before any handler runs, so there is nothing to report.
+# CancelledError is the same event seen as task cancellation. Matched by class
+# name so no Starlette/anyio internals need importing here.
+_DISCONNECT_EXC = {"ClientDisconnect", "CancelledError"}
+
 # Whether sentry_sdk.init() actually succeeded at startup. A wrong or malformed
 # SENTRY_DSN makes init raise, which init_error_reporting() swallows and returns
 # False for — so the Space boots fine but Sentry stays dormant with no visible
@@ -81,6 +90,12 @@ async def error_capture_dispatch(request, call_next):
     try:
         return await call_next(request)
     except Exception as exc:
+        # Client hung up mid-request (ClientDisconnect / CancelledError): no
+        # handler failed, and the peer is gone so a response can't be sent.
+        # Re-raise so the ASGI stack unwinds normally, but don't log it to the
+        # DIY store (Sentry is dropped in _scrub for the same reason).
+        if type(exc).__name__ in _DISCONNECT_EXC:
+            raise
         # O4: tag the Sentry event with the request's trace id. This must happen
         # here, not in before_send: the trace middleware is OUTER, so its finally
         # resets the trace contextvar before the exception reaches Sentry's outer
@@ -107,8 +122,12 @@ async def error_capture_dispatch(request, call_next):
         raise
 
 
-def _scrub(event, _hint):
-    """Drop anything that could carry user content or PII before send."""
+def _scrub(event, hint):
+    """Drop client-disconnect noise, then strip anything that could carry user
+    content or PII before send. Returning None cancels the event."""
+    exc = (hint or {}).get("exc_info", (None, None, None))[1]
+    if exc is not None and type(exc).__name__ in _DISCONNECT_EXC:
+        return None  # peer closed the connection mid-request — not an app error
     event.pop("user", None)
     req = event.get("request")
     if isinstance(req, dict):
